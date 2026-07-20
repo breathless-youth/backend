@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./gradlew spotlessApply compileJava compileTestJava -q 2>&1 | tail -20 || echo 'BUILD FAILED - fix before finishing'"
+          }
+        ]
+      }
+    ]
+  }
+}
