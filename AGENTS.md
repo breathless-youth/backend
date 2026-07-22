@@ -8,6 +8,7 @@ Spring Boot 4.1 + Java 25(LTS) + PostgreSQL. Spring Security(OAuth2 클라이언
 
 ## 자주 쓰는 명령어
 ```bash
+cp src/main/resources/application-local.yaml{.example,}     # 최초 세팅: 로컬 설정 생성 (gitignore 대상)
 docker compose up -d                                        # PostgreSQL 기동
 ./gradlew check                                             # 전체 검증 (테스트+포맷+린트+아키텍처)
 ./gradlew test --tests "project.study.<도메인>.*"           # 특정 패키지 테스트만
