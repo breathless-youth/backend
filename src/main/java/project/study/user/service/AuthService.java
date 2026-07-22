@@ -84,8 +84,9 @@ public class AuthService {
     }
 
     @Transactional
-    public void logout(Long userId) {
-        refreshTokenRepository.deleteByUserId(userId);
+    public void logout(String refreshToken) {
+        // DB에는 해시만 저장되므로 원문을 해시로 변환해서 삭제해야 한다
+        refreshTokenRepository.deleteByTokenHash(sha256(refreshToken));
     }
 
     private OAuthTokenVerifier verifierFor(Provider provider) {

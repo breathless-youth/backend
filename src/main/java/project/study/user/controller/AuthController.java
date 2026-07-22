@@ -3,7 +3,6 @@ package project.study.user.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,7 +33,7 @@ public class AuthController {
 
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(@AuthenticationPrincipal Long userId) {
-        authService.logout(userId);
+    public void logout(@Valid @RequestBody RefreshRequest request) {
+        authService.logout(request.refreshToken());
     }
 }

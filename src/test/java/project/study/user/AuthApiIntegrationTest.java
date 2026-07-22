@@ -62,8 +62,18 @@ class AuthApiIntegrationTest {
     void 액세스_토큰으로_보호된_API에_접근할_수_있다() throws Exception {
         LoginResponse tokens = login("sub-access");
 
-        mockMvc.perform(post("/api/auth/logout").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokens.accessToken()))
+        mockMvc.perform(logoutRequest(tokens.accessToken(), tokens.refreshToken()))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void 로그아웃하면_해당_refresh_토큰으로_재발급할_수_없다() throws Exception {
+        LoginResponse tokens = login("sub-logout");
+
+        mockMvc.perform(logoutRequest(tokens.accessToken(), tokens.refreshToken()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(refreshRequest(tokens.refreshToken())).andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -126,6 +136,13 @@ class AuthApiIntegrationTest {
 
     private org.springframework.test.web.servlet.RequestBuilder refreshRequest(String refreshToken) {
         return post("/api/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"" + refreshToken + "\"}");
+    }
+
+    private org.springframework.test.web.servlet.RequestBuilder logoutRequest(String accessToken, String refreshToken) {
+        return post("/api/auth/logout")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"refreshToken\":\"" + refreshToken + "\"}");
     }

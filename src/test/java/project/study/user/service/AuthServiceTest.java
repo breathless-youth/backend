@@ -157,9 +157,12 @@ class AuthServiceTest {
     }
 
     @Test
-    void 로그아웃은_해당_유저의_refresh_토큰을_삭제한다() {
-        authService.logout(5L);
+    void 로그아웃은_전달된_refresh_토큰의_해시로_삭제한다() {
+        authService.logout("refresh-uuid");
 
-        verify(refreshTokenRepository).deleteByUserId(5L);
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(refreshTokenRepository).deleteByTokenHash(captor.capture());
+        assertThat(captor.getValue()).isNotEqualTo("refresh-uuid");
+        assertThat(captor.getValue()).hasSize(64); // SHA-256 hex
     }
 }
