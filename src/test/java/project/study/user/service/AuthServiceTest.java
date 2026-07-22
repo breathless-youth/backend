@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,7 +20,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 import project.study.user.dto.LoginRequest;
 import project.study.user.dto.LoginResponse;
 import project.study.user.dto.RefreshRequest;
@@ -48,14 +53,24 @@ class AuthServiceTest {
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private final JwtUtil jwtUtil = new JwtUtil("test-secret-key-that-is-at-least-32-chars-long", 3_600_000L);
 
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
+        // login의 TransactionTemplate 실행용 — refresh/logout 테스트는 안 쓰므로 lenient
+        lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         authService = new AuthService(
-                List.of(tokenVerifier), userRepository, refreshTokenRepository, jwtUtil, REFRESH_EXPIRATION_MS);
+                List.of(tokenVerifier),
+                userRepository,
+                refreshTokenRepository,
+                jwtUtil,
+                transactionManager,
+                REFRESH_EXPIRATION_MS);
     }
 
     @Test
@@ -115,25 +130,29 @@ class AuthServiceTest {
     @Test
     void refresh는_기존_토큰을_사용_처리하고_새_토큰쌍을_발급한다() {
         RefreshToken saved = new RefreshToken(1L, "hash", Instant.now().plusSeconds(3600));
+        ReflectionTestUtils.setField(saved, "id", 10L);
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(saved));
+        when(refreshTokenRepository.markUsedIfUnused(eq(10L), any())).thenReturn(1);
 
         TokenResponse response = authService.refresh(new RefreshRequest("refresh-uuid"));
 
-        assertThat(saved.isUsed()).isTrue();
         assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("1");
         assertThat(response.refreshToken()).isNotEqualTo("refresh-uuid");
         verify(refreshTokenRepository).save(any(RefreshToken.class));
     }
 
     @Test
-    void 사용된_refresh_토큰이_다시_오면_해당_유저의_토큰을_전부_폐기한다() {
+    void 이미_사용_처리된_토큰이_오면_해당_유저의_토큰을_전부_폐기한다() {
+        // 재사용이든 동시 요청 패배든, 조건부 UPDATE가 0을 반환하면 탈취 의심으로 처리
         RefreshToken saved = new RefreshToken(1L, "hash", Instant.now().plusSeconds(3600));
-        saved.markUsed();
+        ReflectionTestUtils.setField(saved, "id", 10L);
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(saved));
+        when(refreshTokenRepository.markUsedIfUnused(eq(10L), any())).thenReturn(0);
 
         assertThatThrownBy(() -> authService.refresh(new RefreshRequest("refresh-uuid")))
                 .isInstanceOf(InvalidRefreshTokenException.class);
         verify(refreshTokenRepository).deleteByUserId(1L);
+        verify(refreshTokenRepository, never()).save(any());
     }
 
     @Test
@@ -153,7 +172,26 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.refresh(new RefreshRequest("refresh-uuid")))
                 .isInstanceOf(InvalidRefreshTokenException.class);
         verify(refreshTokenRepository).delete(saved);
+        verify(refreshTokenRepository, never()).markUsedIfUnused(anyLong(), any());
         verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void 동시_첫_로그인_경쟁에서_지면_상대가_만든_유저로_재시도한다() {
+        User winner = new User(Provider.GOOGLE, "sub-123");
+        ReflectionTestUtils.setField(winner, "id", 3L);
+        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
+        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
+        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
+                .thenReturn(Optional.empty(), Optional.of(winner));
+        when(userRepository.save(any())).thenThrow(new DataIntegrityViolationException("중복 유저"));
+
+        LoginResponse response = authService.login(new LoginRequest(Provider.GOOGLE, ID_TOKEN));
+
+        assertThat(response.isNewUser()).isFalse();
+        assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("3");
+        // 재시도는 DB 트랜잭션만 다시 실행 — 구글 검증을 반복하지 않는다
+        verify(tokenVerifier).verify(ID_TOKEN);
     }
 
     @Test

@@ -47,14 +47,6 @@ public class RefreshToken {
         this.expiresAt = expiresAt;
     }
 
-    public void markUsed() {
-        this.usedAt = Instant.now();
-    }
-
-    public boolean isUsed() {
-        return usedAt != null;
-    }
-
     public boolean isExpired(Instant now) {
         return expiresAt.isBefore(now);
     }

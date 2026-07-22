@@ -9,8 +9,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import project.study.user.dto.LoginRequest;
 import project.study.user.dto.LoginResponse;
 import project.study.user.dto.RefreshRequest;
@@ -32,6 +35,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtUtil jwtUtil;
+    private final TransactionTemplate transactionTemplate;
     private final long refreshExpirationMs;
 
     public AuthService(
@@ -39,18 +43,29 @@ public class AuthService {
             UserRepository userRepository,
             RefreshTokenRepository refreshTokenRepository,
             JwtUtil jwtUtil,
+            PlatformTransactionManager transactionManager,
             @Value("${refresh-token.expiration}") long refreshExpirationMs) {
         this.tokenVerifiers = tokenVerifiers;
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.jwtUtil = jwtUtil;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.refreshExpirationMs = refreshExpirationMs;
     }
 
-    @Transactional
     public LoginResponse login(LoginRequest request) {
+        // 외부 HTTP 호출(구글 검증)은 DB 트랜잭션 밖에서 수행한다
         OAuthUserInfo userInfo = verifierFor(request.provider()).verify(request.idToken());
+        try {
+            return transactionTemplate.execute(status -> loginTransaction(userInfo));
+        } catch (DataIntegrityViolationException e) {
+            // 동일 유저의 동시 첫 로그인 경쟁에서 패배 → 상대가 만든 유저를 새 트랜잭션에서 조회해 재시도
+            // (트랜잭션 안에서 catch하면 rollback-only 때문에 실패하므로 반드시 실행 단위를 분리)
+            return transactionTemplate.execute(status -> loginTransaction(userInfo));
+        }
+    }
 
+    private LoginResponse loginTransaction(OAuthUserInfo userInfo) {
         Optional<User> existing =
                 userRepository.findByProviderAndProviderUserId(userInfo.provider(), userInfo.providerUserId());
         boolean isNewUser = existing.isEmpty();
@@ -68,17 +83,17 @@ public class AuthService {
                 .findByTokenHash(sha256(request.refreshToken()))
                 .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
 
-        if (saved.isUsed()) {
-            // 회전된 토큰의 재사용 = 탈취 의심 → 해당 유저 토큰 전체 폐기
-            refreshTokenRepository.deleteByUserId(saved.getUserId());
-            throw new InvalidRefreshTokenException("이미 사용된 refresh 토큰입니다");
-        }
         if (saved.isExpired(Instant.now())) {
             refreshTokenRepository.delete(saved);
             throw new InvalidRefreshTokenException("만료된 refresh 토큰입니다");
         }
+        // 조건부 UPDATE의 행 잠금이 동시 요청을 직렬화한다 — 정확히 한쪽만 사용 처리에 성공
+        if (refreshTokenRepository.markUsedIfUnused(saved.getId(), Instant.now()) == 0) {
+            // 이미 사용된 토큰의 재등장 = 재사용(탈취 의심) → 해당 유저 토큰 전체 폐기
+            refreshTokenRepository.deleteByUserId(saved.getUserId());
+            throw new InvalidRefreshTokenException("이미 사용된 refresh 토큰입니다");
+        }
 
-        saved.markUsed();
         TokenPair tokens = issueTokens(saved.getUserId());
         return new TokenResponse(tokens.accessToken(), tokens.refreshToken());
     }
