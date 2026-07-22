@@ -31,6 +31,9 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
   - Flyway는 `flyway-core`만으론 자동설정 안 됨 → `spring-boot-starter-flyway` 필수 (없으면 조용히 무시됨)
   - ArchUnit은 1.4.2+ 사용 (구버전은 Java 25+ 클래스 파일을 못 읽음)
   - Spotless의 palantir-java-format은 버전 명시 필수 (기본 내장 버전은 JDK 25+의 javac 내부 API 변경으로 깨짐)
+  - JWT는 jjwt 사용 시 `jjwt-jackson` 대신 `jjwt-gson` 사용 (jjwt-jackson이 아직 Jackson 2 의존이라 Jackson 3와 충돌)
+  - QueryDSL은 `com.querydsl` 대신 `io.github.openfeign.querydsl` 사용 (원본은 유지보수 중단, Boot 3/4에서 깨짐).
+    APT 프로세서는 classifier `jpa` 사용 (`querydsl-apt:${버전}:jpa`)
   - 확실치 않으면 공식 문서/마이그레이션 가이드 확인 후 작성
 - DB 스키마는 Flyway 마이그레이션(`src/main/resources/db/migration/`)으로만 변경. `ddl-auto`는 validate 고정
 - DTO는 Java record 사용. 엔티티에는 Lombok 사용 가능하되 `@Data` 금지 (`@Getter` + 명시적 생성자 권장)
