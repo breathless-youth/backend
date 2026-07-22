@@ -11,6 +11,7 @@ import com.tngtech.archunit.lang.ArchRule;
 @AnalyzeClasses(packages = "project.study", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureTest {
 
+    // allowEmptyShould: 해당 접미사의 클래스가 아직 없는 시점에도 규칙이 실패하지 않게 한다
     @ArchTest
     static final ArchRule controllerShouldNotAccessRepository = noClasses()
             .that()
@@ -18,7 +19,8 @@ class ArchitectureTest {
             .should()
             .dependOnClassesThat()
             .haveSimpleNameEndingWith("Repository")
-            .because("컨트롤러는 서비스를 거쳐야 한다");
+            .because("컨트롤러는 서비스를 거쳐야 한다")
+            .allowEmptyShould(true);
 
     @ArchTest
     static final ArchRule noFieldInjection = noClasses()
@@ -33,5 +35,6 @@ class ArchitectureTest {
             .haveSimpleNameEndingWith("Service")
             .should()
             .resideInAPackage("project.study..")
-            .because("서비스는 도메인 패키지 안에 있어야 한다");
+            .because("서비스는 도메인 패키지 안에 있어야 한다")
+            .allowEmptyShould(true);
 }
