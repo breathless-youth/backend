@@ -1,8 +1,8 @@
 package project.study.studysession.entity;
 
 import jakarta.persistence.*;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -22,9 +22,10 @@ public class StudySession {
     @JoinColumn(name = "user_id")
     private User userId;
 
+    // statDate는 "한국 기준 무슨 날짜의 공부인가"라는 날짜 개념이므로 LocalDate 유지
     private LocalDate statDate;
-    private LocalDateTime startedAt;
-    private LocalDateTime endedAt;
+    private Instant startedAt;
+    private Instant endedAt;
     private Integer sessionSec;
     private Integer focusSec;
 }

@@ -1,7 +1,7 @@
 package project.study.user.entity;
 
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -41,7 +41,7 @@ public class User extends BaseTimeEntity {
     private UserStatus status;
 
     private boolean notifyEnabled;
-    private LocalDateTime deleteAt;
+    private Instant deleteAt;
 
     private Integer streak;
     private Integer maxStreak;
@@ -49,7 +49,6 @@ public class User extends BaseTimeEntity {
     public User(Provider provider, String providerUserId) {
         this.provider = provider;
         this.providerUserId = providerUserId;
-        // DB DEFAULT는 Hibernate가 컬럼을 항상 INSERT에 포함하므로 적용되지 않는다
         this.status = UserStatus.ACTIVE;
     }
 }

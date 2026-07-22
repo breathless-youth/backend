@@ -1,7 +1,7 @@
 package project.study.report.entity;
 
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -30,5 +30,5 @@ public class Report {
     private User targetUser;
 
     private String reason;
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 }
