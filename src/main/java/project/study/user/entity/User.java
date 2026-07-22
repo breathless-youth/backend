@@ -5,22 +5,30 @@ import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import project.study.common.BaseTimeEntity;
 
 @Table(
         name = "users",
-        indexes = {@Index(name = "users", columnList = "provider, provider_user_id", unique = true)})
+        indexes = {
+            @Index(
+                    name = "idx_users_provider_provider_user_id",
+                    columnList = "provider, provider_user_id",
+                    unique = true)
+        })
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class User {
+public class User extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Enumerated(value = EnumType.STRING)
+    @Column(nullable = false)
     private Provider provider;
 
+    @Column(nullable = false)
     private String providerUserId;
 
     @Column(unique = true)
@@ -35,8 +43,13 @@ public class User {
     private boolean notifyEnabled;
     private LocalDateTime deleteAt;
 
+    private Integer streak;
+    private Integer maxStreak;
+
     public User(Provider provider, String providerUserId) {
         this.provider = provider;
         this.providerUserId = providerUserId;
+        // DB DEFAULT는 Hibernate가 컬럼을 항상 INSERT에 포함하므로 적용되지 않는다
+        this.status = UserStatus.ACTIVE;
     }
 }
