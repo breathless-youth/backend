@@ -26,7 +26,7 @@ class StudySessionTest {
     @Test
     void 세션_시간과_집중_시간을_계산한다() {
         List<StatusEvent> events = List.of(
-                event(EventStatus.READY, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
+                event(EventStatus.DEVICE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
                 event(EventStatus.PHONE, "2026-07-24T08:30:00Z", "2026-07-24T08:40:00Z"),
                 event(EventStatus.AWAY, "2026-07-24T09:00:00Z", "2026-07-24T09:10:00Z"));
 
@@ -60,18 +60,18 @@ class StudySessionTest {
     void 순서가_뒤섞인_이벤트는_시작_시각_기준으로_정렬된다() {
         List<StatusEvent> events = List.of(
                 event(EventStatus.AWAY, "2026-07-24T09:00:00Z", "2026-07-24T09:10:00Z"),
-                event(EventStatus.READY, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"));
+                event(EventStatus.DEVICE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"));
 
         StudySession session = StudySession.create(1L, START, END, events, CLOCK);
 
-        assertThat(session.getEvents().get(0).getStatus()).isEqualTo(EventStatus.READY);
+        assertThat(session.getEvents().get(0).getStatus()).isEqualTo(EventStatus.DEVICE);
         assertThat(session.getEvents().get(1).getStatus()).isEqualTo(EventStatus.AWAY);
     }
 
     @Test
     void 이벤트가_맞닿아_이어지는_것은_허용된다() {
         List<StatusEvent> events = List.of(
-                event(EventStatus.READY, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
+                event(EventStatus.DEVICE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
                 event(EventStatus.PHONE, "2026-07-24T08:05:00Z", "2026-07-24T08:10:00Z"));
 
         StudySession session = StudySession.create(1L, START, END, events, CLOCK);
@@ -121,7 +121,7 @@ class StudySessionTest {
     @Test
     void 겹치는_이벤트는_거부한다() {
         List<StatusEvent> events = List.of(
-                event(EventStatus.READY, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"),
+                event(EventStatus.DEVICE, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"),
                 event(EventStatus.PHONE, "2026-07-24T08:05:00Z", "2026-07-24T08:15:00Z"));
 
         assertThatThrownBy(() -> StudySession.create(1L, START, END, events, CLOCK))

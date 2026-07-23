@@ -112,7 +112,7 @@ class StudySessionApiTest {
     @Test
     void 겹치는_이벤트가_있으면_400을_반환한다() {
         String events = "["
-                + eventJson("READY", sessionStart, sessionStart.plusSeconds(600))
+                + eventJson("DEVICE", sessionStart, sessionStart.plusSeconds(600))
                 + ","
                 + eventJson("PHONE", sessionStart.plusSeconds(300), sessionStart.plusSeconds(900))
                 + "]";
