@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -53,9 +54,18 @@ public class StudySessionController {
                     - 세션 종료 시각은 미래일 수 없다 (기기 시계 오차 5분까지 허용)
                     - 이벤트는 세션 구간 안에 있어야 하고, 서로 겹칠 수 없다 (끝과 시작이 맞닿는 것은 허용)
                     - 이벤트는 순서가 뒤섞여 와도 된다 — 서버가 시작 시각 기준으로 정렬한다
+                    - 검증은 자정 분할 전의 원본 제출 기준이다 (예: 자정을 걸친 25시간 세션은 거절)
 
-                    자정을 걸친 세션은 시작 시각의 한국 날짜에 통째로 귀속된다.""")
-    @ApiResponse(responseCode = "201", description = "저장 성공 — 서버가 계산한 sessionSec/focusSec/statDate를 포함한 세션이 내려온다")
+                    **자정 분할 — 응답은 항상 배열이다.** 세션이 한국 시간 자정(00:00)을 넘으면 \
+                    날짜별 세션으로 나뉘어 저장된다. 예: 24일 23시~25일 01시 제출 → 24일 세션(23~00시)과 \
+                    25일 세션(00~01시) 2개가 만들어지고 응답 배열에 둘 다 담긴다. 자정에 걸친 이벤트도 \
+                    시각 기준으로 나뉘어 각 세션에 귀속된다 (이 때문에 기간 조회의 `eventCounts`에는 \
+                    2건으로 집계되는데, 각 날짜에 1건씩 귀속되는 의도된 동작이다). \
+                    자정을 넘지 않으면 요소가 1개인 배열이 내려온다. \
+                    정확히 자정에 시작하거나 끝나는 세션은 분할되지 않는다.""")
+    @ApiResponse(
+            responseCode = "201",
+            description = "저장 성공 — 서버가 계산한 sessionSec/focusSec/focusRate/statDate를 포함한 세션 배열 (자정 분할 시 2개)")
     @ApiResponse(
             responseCode = "400",
             description = "검증 실패 — 시간 규칙 위반, 이벤트 겹침, 필수 값 누락 등",
@@ -84,7 +94,7 @@ public class StudySessionController {
                                     @ExampleObject(name = "유저 없음", value = "{\"message\": \"존재하지 않는 사용자입니다: 999\"}")))
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public StudySessionResponse create(@Valid @RequestBody StudySessionCreateRequest request) {
+    public List<StudySessionResponse> create(@Valid @RequestBody StudySessionCreateRequest request) {
         return studySessionService.create(request);
     }
 

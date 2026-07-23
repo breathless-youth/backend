@@ -28,14 +28,16 @@ public class StudySessionService {
     private final Clock clock;
 
     @Transactional
-    public StudySessionResponse create(StudySessionCreateRequest request) {
+    public List<StudySessionResponse> create(StudySessionCreateRequest request) {
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
-        StudySession session =
-                StudySession.create(request.userId(), request.startedAt(), request.endedAt(), events, clock);
+        List<StudySession> sessions =
+                StudySession.createAll(request.userId(), request.startedAt(), request.endedAt(), events, clock);
         try {
-            // FK 위반을 트랜잭션 커밋 전에 감지하기 위해 즉시 flush
-            return StudySessionResponse.from(studySessionRepository.saveAndFlush(session));
+            List<StudySession> saved = studySessionRepository.saveAll(sessions);
+            // FK 위반을 트랜잭션 커밋 전에 감지하기 위해 즉시 flush (한 트랜잭션이라 분할 저장도 원자적)
+            studySessionRepository.flush();
+            return saved.stream().map(StudySessionResponse::from).toList();
         } catch (DataIntegrityViolationException e) {
             throw new NotFoundException("존재하지 않는 사용자입니다: " + request.userId());
         }

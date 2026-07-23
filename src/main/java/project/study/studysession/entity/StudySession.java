@@ -86,11 +86,54 @@ public class StudySession {
 
         long sessionSec = Duration.between(startedAt, endedAt).toSeconds();
         long nonFocusSec = sorted.stream().mapToLong(StatusEvent::durationSec).sum();
-        // 자정을 걸친 세션은 시작 시각의 KST 날짜에 통째로 귀속한다 (MVP 단순화)
+        // 구간 시작 시각의 KST 날짜에 귀속한다 — 자정을 넘는 제출의 분할은 createAll이 담당
         LocalDate statDate = startedAt.atZone(KST).toLocalDate();
 
         return new StudySession(
                 userId, statDate, startedAt, endedAt, (int) sessionSec, (int) (sessionSec - nonFocusSec), sorted);
+    }
+
+    /**
+     * 세션을 KST 자정 경계로 분할해 생성한다. 자정을 넘지 않으면 세션 1개가 담긴 리스트를 반환하고,
+     * 자정에 걸친 이벤트는 시각 기준으로 나뉘어 각 세션에 귀속된다.
+     */
+    public static List<StudySession> createAll(
+            Long userId, Instant startedAt, Instant endedAt, List<StatusEvent> events, Clock clock) {
+        // 분할 후 조각은 항상 24시간 이내가 되므로, 24시간 한도 등은 반드시 분할 전 원본 기준으로 먼저 검증한다
+        validatePeriod(startedAt, endedAt, clock);
+        List<StatusEvent> sorted = events.stream()
+                .sorted(Comparator.comparing(StatusEvent::getStartedAt))
+                .toList();
+        validateEvents(startedAt, endedAt, sorted);
+
+        List<StudySession> sessions = new ArrayList<>();
+        Instant segmentStart = startedAt;
+        Instant boundary = nextKstMidnight(startedAt);
+        while (boundary.isBefore(endedAt)) {
+            sessions.add(create(userId, segmentStart, boundary, clip(sorted, segmentStart, boundary), clock));
+            segmentStart = boundary;
+            boundary = nextKstMidnight(boundary);
+        }
+        sessions.add(create(userId, segmentStart, endedAt, clip(sorted, segmentStart, endedAt), clock));
+        return sessions;
+    }
+
+    private static Instant nextKstMidnight(Instant instant) {
+        return instant.atZone(KST).toLocalDate().plusDays(1).atStartOfDay(KST).toInstant();
+    }
+
+    /** 이벤트들을 [segmentStart, segmentEnd) 구간으로 잘라낸다. 0초 조각은 버린다. */
+    private static List<StatusEvent> clip(List<StatusEvent> sortedEvents, Instant segmentStart, Instant segmentEnd) {
+        List<StatusEvent> clipped = new ArrayList<>();
+        for (StatusEvent event : sortedEvents) {
+            Instant start = event.getStartedAt().isAfter(segmentStart) ? event.getStartedAt() : segmentStart;
+            Instant end = event.getEndedAt().isBefore(segmentEnd) ? event.getEndedAt() : segmentEnd;
+            if (start.isBefore(end)) {
+                // 조각 세션들이 같은 이벤트 엔티티를 공유하면 cascade 저장 시 한쪽이 행을 가져가므로 항상 새로 만든다
+                clipped.add(new StatusEvent(event.getStatus(), start, end));
+            }
+        }
+        return clipped;
     }
 
     /** 집중률(%) — 순공시간 ÷ 총시간 × 100, 소수 1자리 반올림. */

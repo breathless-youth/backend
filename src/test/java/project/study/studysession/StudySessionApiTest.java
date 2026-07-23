@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,10 +35,13 @@ class StudySessionApiTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
     private Long userId;
 
-    // 검증 규칙(미래 시각 금지)을 지키도록 항상 최근 과거의 세션을 만든다
-    private final Instant sessionStart = Instant.now().minusSeconds(7200).truncatedTo(ChronoUnit.SECONDS);
+    // 미래 시각 검증과 자정 분할을 모두 피하도록 어제 KST 낮 12~14시의 세션을 만든다
+    private final Instant sessionStart =
+            LocalDate.now(KST).minusDays(1).atStartOfDay(KST).plusHours(12).toInstant();
     private final Instant sessionEnd = sessionStart.plusSeconds(7200);
 
     @BeforeEach
@@ -74,13 +76,15 @@ class StudySessionApiTest {
         assertThat(result)
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
-                .hasPathSatisfying("$.id", id -> assertThat(id).isNotNull())
-                .hasPathSatisfying("$.userId", uid -> assertThat(uid).isEqualTo(userId.intValue()))
-                .hasPathSatisfying("$.sessionSec", sec -> assertThat(sec).isEqualTo(7200))
-                .hasPathSatisfying("$.focusSec", sec -> assertThat(sec).isEqualTo(6600))
-                .hasPathSatisfying("$.focusRate", rate -> assertThat(rate).isEqualTo(91.7));
+                .hasPathSatisfying("$.length()", length -> assertThat(length).isEqualTo(1))
+                .hasPathSatisfying("$[0].id", id -> assertThat(id).isNotNull())
+                .hasPathSatisfying("$[0].userId", uid -> assertThat(uid).isEqualTo(userId.intValue()))
+                .hasPathSatisfying("$[0].sessionSec", sec -> assertThat(sec).isEqualTo(7200))
+                .hasPathSatisfying("$[0].focusSec", sec -> assertThat(sec).isEqualTo(6600))
+                .hasPathSatisfying("$[0].focusRate", rate -> assertThat(rate).isEqualTo(91.7));
         long sessionId = objectMapper
                 .readTree(result.getResponse().getContentAsByteArray())
+                .get(0)
                 .get("id")
                 .asLong();
 
@@ -135,6 +139,65 @@ class StudySessionApiTest {
                 .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying("$.eventCounts.AWAY", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying("$.eventCounts.DEVICE", v -> assertThat(v).isEqualTo(0));
+    }
+
+    // 어제 KST 자정을 걸치는 세션 (그저께 23시 ~ 어제 01시), PHONE 이벤트가 자정에 걸침
+    private void submitCrossMidnightSession() {
+        Instant midnight = LocalDate.now(KST).minusDays(1).atStartOfDay(KST).toInstant();
+        String phoneEvent = eventJson("PHONE", midnight.minusSeconds(600), midnight.plusSeconds(600));
+        String body = """
+                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "events": [%s]}""".formatted(userId, midnight.minusSeconds(3600), midnight.plusSeconds(3600), phoneEvent);
+
+        assertThat(mvc.post()
+                        .uri("/api/study-sessions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .hasStatus(HttpStatus.CREATED)
+                .bodyJson()
+                .hasPathSatisfying("$.length()", length -> assertThat(length).isEqualTo(2))
+                .hasPathSatisfying(
+                        "$[0].statDate",
+                        d -> assertThat(d)
+                                .isEqualTo(LocalDate.now(KST).minusDays(2).toString()))
+                .hasPathSatisfying("$[0].sessionSec", v -> assertThat(v).isEqualTo(3600))
+                .hasPathSatisfying("$[0].focusSec", v -> assertThat(v).isEqualTo(3000))
+                .hasPathSatisfying("$[0].focusRate", v -> assertThat(v).isEqualTo(83.3))
+                .hasPathSatisfying(
+                        "$[1].statDate",
+                        d -> assertThat(d)
+                                .isEqualTo(LocalDate.now(KST).minusDays(1).toString()))
+                .hasPathSatisfying("$[1].sessionSec", v -> assertThat(v).isEqualTo(3600))
+                .hasPathSatisfying("$[1].focusSec", v -> assertThat(v).isEqualTo(3000));
+    }
+
+    @Test
+    void 자정을_넘는_세션은_두_개로_분할_저장된다() {
+        submitCrossMidnightSession();
+
+        Integer sessionRows = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM study_session WHERE user_id = ?", Integer.class, userId);
+        Integer eventRows = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM status_event e JOIN study_session s ON e.session_id = s.id WHERE s.user_id = ?",
+                Integer.class,
+                userId);
+        assertThat(sessionRows).isEqualTo(2);
+        assertThat(eventRows).isEqualTo(2);
+    }
+
+    @Test
+    void 분할된_이벤트는_기간_조회에서_2건으로_집계된다() {
+        submitCrossMidnightSession();
+
+        LocalDate today = LocalDate.now(KST);
+        assertThat(listRequest(today.minusDays(2), today))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.sessions.length()", v -> assertThat(v).isEqualTo(2))
+                .hasPathSatisfying("$.totalSessionSec", v -> assertThat(v).isEqualTo(7200))
+                .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(6000))
+                .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(83.3))
+                // 자정에 걸친 이벤트 1건이 날짜별 세션에 나뉘어 2건으로 집계된다 (의도된 동작)
+                .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(2));
     }
 
     @Test

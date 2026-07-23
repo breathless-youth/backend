@@ -79,6 +79,113 @@ class StudySessionTest {
         assertThat(session.getFocusSec()).isEqualTo(7200 - 600);
     }
 
+    // KST 23일 23:00 ~ 24일 01:00 (자정 경계 = 2026-07-23T15:00:00Z)
+    private static final Instant CROSS_START = Instant.parse("2026-07-23T14:00:00Z");
+    private static final Instant CROSS_END = Instant.parse("2026-07-23T16:00:00Z");
+    private static final Instant MIDNIGHT = Instant.parse("2026-07-23T15:00:00Z");
+
+    @Test
+    void 자정을_넘지_않으면_세션_한_개가_생성된다() {
+        List<StudySession> sessions = StudySession.createAll(1L, START, END, List.of(), CLOCK);
+
+        assertThat(sessions).hasSize(1);
+        assertThat(sessions.get(0).getSessionSec()).isEqualTo(7200);
+        assertThat(sessions.get(0).getStatDate()).isEqualTo(LocalDate.of(2026, 7, 24));
+    }
+
+    @Test
+    void 자정을_넘으면_두_개로_분할된다() {
+        List<StudySession> sessions = StudySession.createAll(1L, CROSS_START, CROSS_END, List.of(), CLOCK);
+
+        assertThat(sessions).hasSize(2);
+        assertThat(sessions.get(0).getStartedAt()).isEqualTo(CROSS_START);
+        assertThat(sessions.get(0).getEndedAt()).isEqualTo(MIDNIGHT);
+        assertThat(sessions.get(0).getStatDate()).isEqualTo(LocalDate.of(2026, 7, 23));
+        assertThat(sessions.get(0).getSessionSec()).isEqualTo(3600);
+        assertThat(sessions.get(1).getStartedAt()).isEqualTo(MIDNIGHT);
+        assertThat(sessions.get(1).getEndedAt()).isEqualTo(CROSS_END);
+        assertThat(sessions.get(1).getStatDate()).isEqualTo(LocalDate.of(2026, 7, 24));
+        assertThat(sessions.get(1).getSessionSec()).isEqualTo(3600);
+    }
+
+    @Test
+    void 자정에_걸친_이벤트는_두_조각으로_나뉜다() {
+        // KST 23:50 ~ 00:10 폰 사용 → 각 세션에 10분씩 귀속
+        List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-23T14:50:00Z", "2026-07-23T15:10:00Z"));
+
+        List<StudySession> sessions = StudySession.createAll(1L, CROSS_START, CROSS_END, events, CLOCK);
+
+        assertThat(sessions.get(0).getEvents()).hasSize(1);
+        assertThat(sessions.get(0).getEvents().get(0).getEndedAt()).isEqualTo(MIDNIGHT);
+        assertThat(sessions.get(0).getFocusSec()).isEqualTo(3600 - 600);
+        assertThat(sessions.get(1).getEvents()).hasSize(1);
+        assertThat(sessions.get(1).getEvents().get(0).getStartedAt()).isEqualTo(MIDNIGHT);
+        assertThat(sessions.get(1).getFocusSec()).isEqualTo(3600 - 600);
+    }
+
+    @Test
+    void 분할_후_총시간과_순공시간의_합이_보존된다() {
+        List<StatusEvent> events = List.of(
+                event(EventStatus.PHONE, "2026-07-23T14:50:00Z", "2026-07-23T15:10:00Z"),
+                event(EventStatus.AWAY, "2026-07-23T15:30:00Z", "2026-07-23T15:40:00Z"));
+
+        List<StudySession> sessions = StudySession.createAll(1L, CROSS_START, CROSS_END, events, CLOCK);
+
+        long totalSessionSec =
+                sessions.stream().mapToLong(StudySession::getSessionSec).sum();
+        long totalFocusSec =
+                sessions.stream().mapToLong(StudySession::getFocusSec).sum();
+        assertThat(totalSessionSec).isEqualTo(7200);
+        assertThat(totalFocusSec).isEqualTo(7200 - 1200 - 600);
+    }
+
+    @Test
+    void 정확히_자정에_끝나면_분할되지_않는다() {
+        List<StudySession> sessions = StudySession.createAll(1L, CROSS_START, MIDNIGHT, List.of(), CLOCK);
+
+        assertThat(sessions).hasSize(1);
+        assertThat(sessions.get(0).getStatDate()).isEqualTo(LocalDate.of(2026, 7, 23));
+    }
+
+    @Test
+    void 정확히_자정에_시작하면_분할되지_않는다() {
+        List<StudySession> sessions = StudySession.createAll(1L, MIDNIGHT, CROSS_END, List.of(), CLOCK);
+
+        assertThat(sessions).hasSize(1);
+        assertThat(sessions.get(0).getStatDate()).isEqualTo(LocalDate.of(2026, 7, 24));
+    }
+
+    @Test
+    void 자정에_정확히_끝나는_이벤트는_둘째_세션에_조각을_남기지_않는다() {
+        List<StatusEvent> events = List.of(event(EventStatus.AWAY, "2026-07-23T14:50:00Z", "2026-07-23T15:00:00Z"));
+
+        List<StudySession> sessions = StudySession.createAll(1L, CROSS_START, CROSS_END, events, CLOCK);
+
+        assertThat(sessions.get(0).getEvents()).hasSize(1);
+        assertThat(sessions.get(1).getEvents()).isEmpty();
+        assertThat(sessions.get(1).getFocusSec()).isEqualTo(3600);
+    }
+
+    @Test
+    void 자정을_걸친_이십오시간_세션은_원본_기준으로_거부된다() {
+        // KST 23일 19:00 ~ 24일 20:00 (25시간) — 조각별로는 24시간 이내지만 원본이 한도 초과
+        Instant start = Instant.parse("2026-07-23T10:00:00Z");
+        Instant end = Instant.parse("2026-07-24T11:00:00Z");
+
+        assertThatThrownBy(() -> StudySession.createAll(1L, start, end, List.of(), CLOCK))
+                .isInstanceOf(InvalidSessionException.class);
+    }
+
+    @Test
+    void 겹치는_이벤트는_createAll에서도_거부된다() {
+        List<StatusEvent> events = List.of(
+                event(EventStatus.PHONE, "2026-07-23T14:10:00Z", "2026-07-23T14:30:00Z"),
+                event(EventStatus.AWAY, "2026-07-23T14:20:00Z", "2026-07-23T14:40:00Z"));
+
+        assertThatThrownBy(() -> StudySession.createAll(1L, CROSS_START, CROSS_END, events, CLOCK))
+                .isInstanceOf(InvalidSessionException.class);
+    }
+
     @Test
     void 세션의_집중률을_계산한다() {
         List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-24T08:30:00Z", "2026-07-24T08:40:00Z"));
