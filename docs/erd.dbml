@@ -57,7 +57,7 @@ Table study_session {
 Table status_event {
   id bigint [primary key, increment]
   session_id bigint [ref: > study_session.id, not null]
-  status varchar [not null] // AWAY, PHONE
+  status varchar [not null] // AWAY, PHONE, DEVICE
   started_at timestamptz
   ended_at timestamptz
 
