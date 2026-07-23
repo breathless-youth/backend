@@ -39,9 +39,12 @@ class StudySessionApiTest {
 
     private Long userId;
 
+    // 기준 날짜를 한 번만 읽어 고정 — 테스트 도중 KST 자정이 지나도 입력과 기대값이 같은 기준을 쓴다
+    private final LocalDate today = LocalDate.now(KST);
+
     // 미래 시각 검증과 자정 분할을 모두 피하도록 어제 KST 낮 12~14시의 세션을 만든다
     private final Instant sessionStart =
-            LocalDate.now(KST).minusDays(1).atStartOfDay(KST).plusHours(12).toInstant();
+            today.minusDays(1).atStartOfDay(KST).plusHours(12).toInstant();
     private final Instant sessionEnd = sessionStart.plusSeconds(7200);
 
     @BeforeEach
@@ -109,7 +112,6 @@ class StudySessionApiTest {
     void 기간으로_세션_목록을_조회한다() {
         assertThat(submitRequest(userId.toString(), "[]")).hasStatus(HttpStatus.CREATED);
 
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
         assertThat(listRequest(today.minusDays(1), today.plusDays(1)))
                 .hasStatusOk()
                 .bodyJson()
@@ -128,7 +130,6 @@ class StudySessionApiTest {
                 + "]";
         assertThat(submitRequest(userId.toString(), events)).hasStatus(HttpStatus.CREATED);
 
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
         assertThat(listRequest(today.minusDays(1), today.plusDays(1)))
                 .hasStatusOk()
                 .bodyJson()
@@ -143,7 +144,7 @@ class StudySessionApiTest {
 
     // 어제 KST 자정을 걸치는 세션 (그저께 23시 ~ 어제 01시), PHONE 이벤트가 자정에 걸침
     private void submitCrossMidnightSession() {
-        Instant midnight = LocalDate.now(KST).minusDays(1).atStartOfDay(KST).toInstant();
+        Instant midnight = today.minusDays(1).atStartOfDay(KST).toInstant();
         String phoneEvent = eventJson("PHONE", midnight.minusSeconds(600), midnight.plusSeconds(600));
         String body = """
                 {"userId": %s, "startedAt": "%s", "endedAt": "%s", "events": [%s]}""".formatted(userId, midnight.minusSeconds(3600), midnight.plusSeconds(3600), phoneEvent);
@@ -157,15 +158,13 @@ class StudySessionApiTest {
                 .hasPathSatisfying("$.length()", length -> assertThat(length).isEqualTo(2))
                 .hasPathSatisfying(
                         "$[0].statDate",
-                        d -> assertThat(d)
-                                .isEqualTo(LocalDate.now(KST).minusDays(2).toString()))
+                        d -> assertThat(d).isEqualTo(today.minusDays(2).toString()))
                 .hasPathSatisfying("$[0].sessionSec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying("$[0].focusSec", v -> assertThat(v).isEqualTo(3000))
                 .hasPathSatisfying("$[0].focusRate", v -> assertThat(v).isEqualTo(83.3))
                 .hasPathSatisfying(
                         "$[1].statDate",
-                        d -> assertThat(d)
-                                .isEqualTo(LocalDate.now(KST).minusDays(1).toString()))
+                        d -> assertThat(d).isEqualTo(today.minusDays(1).toString()))
                 .hasPathSatisfying("$[1].sessionSec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying("$[1].focusSec", v -> assertThat(v).isEqualTo(3000));
     }
@@ -188,7 +187,6 @@ class StudySessionApiTest {
     void 분할된_이벤트는_기간_조회에서_2건으로_집계된다() {
         submitCrossMidnightSession();
 
-        LocalDate today = LocalDate.now(KST);
         assertThat(listRequest(today.minusDays(2), today))
                 .hasStatusOk()
                 .bodyJson()
