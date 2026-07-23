@@ -36,8 +36,6 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # 임시(디버깅): 어떤 도구가 권한 거부되는지 확인용 — 원인 파악 후 제거
-          show_full_output: true
           # 기본 브랜치(main)와 워크플로우 파일이 달라도 실행되도록 GitHub App 토큰 교환을 우회
           # (검증이 서버에서 강제돼, dev 기반 PR은 main에 같은 파일이 없으면 전부 스킵됨)
           github_token: ${{ secrets.GITHUB_TOKEN }}
