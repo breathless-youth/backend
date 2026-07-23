@@ -37,7 +37,7 @@ public class GoogleTokenVerifier implements OAuthTokenVerifier {
         if (tokenInfo == null || !clientId.equals(tokenInfo.aud())) {
             throw new InvalidOAuthTokenException("구글 ID 토큰의 대상(aud)이 일치하지 않습니다");
         }
-        return new OAuthUserInfo(Provider.GOOGLE, tokenInfo.sub(), tokenInfo.email());
+        return new OAuthUserInfo(Provider.GOOGLE, tokenInfo.sub());
     }
 
     record GoogleTokenInfo(String aud, String sub, String email) {}

@@ -33,7 +33,6 @@ class GoogleTokenVerifierTest {
 
         assertThat(userInfo.provider()).isEqualTo(Provider.GOOGLE);
         assertThat(userInfo.providerUserId()).isEqualTo("12345");
-        assertThat(userInfo.email()).isEqualTo("a@b.com");
     }
 
     @Test
