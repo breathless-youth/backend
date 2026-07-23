@@ -2,9 +2,6 @@ package project.study.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,9 +10,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.assertj.MockMvcTester;
+import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
 import project.study.user.dto.LoginResponse;
 import project.study.user.dto.TokenResponse;
@@ -31,7 +30,7 @@ import tools.jackson.databind.ObjectMapper;
 class AuthApiIntegrationTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private MockMvcTester mvc;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -45,115 +44,123 @@ class AuthApiIntegrationTest {
     }
 
     @Test
-    void 첫_로그인은_유저를_생성하고_isNewUser가_true_재로그인은_false다() throws Exception {
+    void 첫_로그인은_유저를_생성하고_isNewUser가_true_재로그인은_false다() {
         stubVerifier("sub-new");
 
-        mockMvc.perform(loginRequest("sub-new"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
-                .andExpect(jsonPath("$.isNewUser").value(true));
+        assertThat(loginRequest("sub-new"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.accessToken", token -> assertThat(token).asString().isNotEmpty())
+                .hasPathSatisfying(
+                        "$.refreshToken", token -> assertThat(token).asString().isNotEmpty())
+                .extractingPath("$.isNewUser")
+                .isEqualTo(true);
 
-        mockMvc.perform(loginRequest("sub-new"))
-                .andExpect(jsonPath("$.isNewUser").value(false));
+        assertThat(loginRequest("sub-new"))
+                .bodyJson()
+                .extractingPath("$.isNewUser")
+                .isEqualTo(false);
     }
 
     @Test
-    void 액세스_토큰으로_보호된_API에_접근할_수_있다() throws Exception {
+    void 액세스_토큰으로_보호된_API에_접근할_수_있다() {
         LoginResponse tokens = login("sub-access");
 
-        mockMvc.perform(logoutRequest(tokens.accessToken(), tokens.refreshToken()))
-                .andExpect(status().isNoContent());
+        assertThat(logoutRequest(tokens.accessToken(), tokens.refreshToken())).hasStatus(HttpStatus.NO_CONTENT);
     }
 
     @Test
-    void 로그아웃하면_해당_refresh_토큰으로_재발급할_수_없다() throws Exception {
+    void 로그아웃하면_해당_refresh_토큰으로_재발급할_수_없다() {
         LoginResponse tokens = login("sub-logout");
 
-        mockMvc.perform(logoutRequest(tokens.accessToken(), tokens.refreshToken()))
-                .andExpect(status().isNoContent());
+        assertThat(logoutRequest(tokens.accessToken(), tokens.refreshToken())).hasStatus(HttpStatus.NO_CONTENT);
 
-        mockMvc.perform(refreshRequest(tokens.refreshToken())).andExpect(status().isUnauthorized());
+        assertThat(refreshRequest(tokens.refreshToken())).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
-    void 토큰_없이_보호된_API에_접근하면_401이다() throws Exception {
-        mockMvc.perform(post("/api/auth/logout")).andExpect(status().isUnauthorized());
+    void 토큰_없이_보호된_API에_접근하면_401이다() {
+        assertThat(mvc.post().uri("/api/auth/logout")).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
-    void refresh_토큰으로는_보호된_API에_접근할_수_없다() throws Exception {
+    void refresh_토큰으로는_보호된_API에_접근할_수_없다() {
         LoginResponse tokens = login("sub-category");
 
-        mockMvc.perform(post("/api/auth/logout").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokens.refreshToken()))
-                .andExpect(status().isUnauthorized());
+        assertThat(mvc.post()
+                        .uri("/api/auth/logout")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokens.refreshToken()))
+                .hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
-    void refresh는_새_토큰쌍을_발급하고_구_토큰_재사용_시_전체를_폐기한다() throws Exception {
+    void refresh는_새_토큰쌍을_발급하고_구_토큰_재사용_시_전체를_폐기한다() {
         LoginResponse tokens = login("sub-rotate");
 
-        String body = mockMvc.perform(refreshRequest(tokens.refreshToken()))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        TokenResponse rotated = objectMapper.readValue(body, TokenResponse.class);
+        MvcTestResult result = refreshRequest(tokens.refreshToken()).exchange();
+        assertThat(result).hasStatusOk();
+        TokenResponse rotated = readBody(result, TokenResponse.class);
         assertThat(rotated.refreshToken()).isNotEqualTo(tokens.refreshToken());
 
         // 회전된 구 토큰 재사용 → 거부 + 탈취 의심으로 전체 폐기
-        mockMvc.perform(refreshRequest(tokens.refreshToken())).andExpect(status().isUnauthorized());
-        mockMvc.perform(refreshRequest(rotated.refreshToken())).andExpect(status().isUnauthorized());
+        assertThat(refreshRequest(tokens.refreshToken())).hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(refreshRequest(rotated.refreshToken())).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
-    void access_토큰으로는_refresh할_수_없다() throws Exception {
+    void access_토큰으로는_refresh할_수_없다() {
         LoginResponse tokens = login("sub-wrong-category");
 
-        mockMvc.perform(refreshRequest(tokens.accessToken())).andExpect(status().isUnauthorized());
+        assertThat(refreshRequest(tokens.accessToken())).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
-    void 구글이_거부한_ID_토큰이면_401이다() throws Exception {
+    void 구글이_거부한_ID_토큰이면_401이다() {
         when(googleTokenVerifier.verify("bad-token")).thenThrow(new InvalidOAuthTokenException("검증 실패"));
 
-        mockMvc.perform(post("/api/auth/login")
+        assertThat(mvc.post()
+                        .uri("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"provider\":\"GOOGLE\",\"idToken\":\"bad-token\"}"))
-                .andExpect(status().isUnauthorized());
+                .hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     private void stubVerifier(String sub) {
-        when(googleTokenVerifier.verify("id-token-" + sub))
-                .thenReturn(new OAuthUserInfo(Provider.GOOGLE, sub, sub + "@test.com"));
+        when(googleTokenVerifier.verify("id-token-" + sub)).thenReturn(new OAuthUserInfo(Provider.GOOGLE, sub));
     }
 
-    private org.springframework.test.web.servlet.RequestBuilder loginRequest(String sub) {
-        return post("/api/auth/login")
+    private MockMvcTester.MockMvcRequestBuilder loginRequest(String sub) {
+        return mvc.post()
+                .uri("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"provider\":\"GOOGLE\",\"idToken\":\"id-token-" + sub + "\"}");
     }
 
-    private org.springframework.test.web.servlet.RequestBuilder refreshRequest(String refreshToken) {
-        return post("/api/auth/refresh")
+    private MockMvcTester.MockMvcRequestBuilder refreshRequest(String refreshToken) {
+        return mvc.post()
+                .uri("/api/auth/refresh")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"refreshToken\":\"" + refreshToken + "\"}");
     }
 
-    private org.springframework.test.web.servlet.RequestBuilder logoutRequest(String accessToken, String refreshToken) {
-        return post("/api/auth/logout")
+    private MockMvcTester.MockMvcRequestBuilder logoutRequest(String accessToken, String refreshToken) {
+        return mvc.post()
+                .uri("/api/auth/logout")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"refreshToken\":\"" + refreshToken + "\"}");
     }
 
-    private LoginResponse login(String sub) throws Exception {
+    private LoginResponse login(String sub) {
         stubVerifier(sub);
-        String body = mockMvc.perform(loginRequest(sub))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        return objectMapper.readValue(body, LoginResponse.class);
+        MvcTestResult result = loginRequest(sub).exchange();
+        assertThat(result).hasStatusOk();
+        return readBody(result, LoginResponse.class);
+    }
+
+    // getContentAsString과 달리 getContentAsByteArray는 checked 예외가 없어 테스트에 throws가 안 번진다
+    private <T> T readBody(MvcTestResult result, Class<T> type) {
+        return objectMapper.readValue(result.getResponse().getContentAsByteArray(), type);
     }
 }
