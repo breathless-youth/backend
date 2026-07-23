@@ -1,4 +1,4 @@
-package project.study.studysession;
+package project.study.studysession.service;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -8,6 +8,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.NotFoundException;
+import project.study.studysession.dto.StatusEventRequest;
+import project.study.studysession.dto.StudySessionCreateRequest;
+import project.study.studysession.dto.StudySessionResponse;
+import project.study.studysession.dto.StudySessionSummaryResponse;
+import project.study.studysession.entity.StatusEvent;
+import project.study.studysession.entity.StudySession;
+import project.study.studysession.repository.StudySessionRepository;
 
 @Service
 @RequiredArgsConstructor

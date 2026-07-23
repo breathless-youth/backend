@@ -1,4 +1,4 @@
-package project.study.studysession;
+package project.study.studysession.entity;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;

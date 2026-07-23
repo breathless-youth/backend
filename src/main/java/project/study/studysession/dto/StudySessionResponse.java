@@ -1,8 +1,9 @@
-package project.study.studysession;
+package project.study.studysession.dto;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import project.study.studysession.entity.StudySession;
 
 public record StudySessionResponse(
         Long id,

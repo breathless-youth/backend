@@ -1,4 +1,4 @@
-package project.study.studysession;
+package project.study.studysession.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;

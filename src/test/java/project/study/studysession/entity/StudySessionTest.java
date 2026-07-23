@@ -1,4 +1,4 @@
-package project.study.studysession;
+package project.study.studysession.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

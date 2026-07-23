@@ -1,4 +1,4 @@
-package project.study.studysession;
+package project.study.studysession.controller;
 
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -14,6 +14,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import project.study.studysession.dto.StudySessionCreateRequest;
+import project.study.studysession.dto.StudySessionResponse;
+import project.study.studysession.dto.StudySessionSummaryResponse;
+import project.study.studysession.service.StudySessionService;
 
 @RestController
 @RequestMapping("/api/study-sessions")
