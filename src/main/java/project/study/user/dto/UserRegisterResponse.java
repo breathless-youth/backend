@@ -1,3 +1,10 @@
 package project.study.user.dto;
 
-public record UserRegisterResponse(Long userId, boolean isNew) {}
+import io.swagger.v3.oas.annotations.media.Schema;
+
+public record UserRegisterResponse(
+        @Schema(description = "발급된 유저 ID — 이후 모든 API 호출에 이 값을 사용한다", example = "1")
+        Long userId,
+
+        @Schema(description = "이번 요청으로 유저가 새로 생성됐으면 true, 이미 등록된 기기의 재등록이면 false", example = "true")
+        boolean isNew) {}
