@@ -25,6 +25,9 @@ public record StudySessionResponse(
         @Schema(description = "순공 시간(초) — 서버가 계산: sessionSec - 비공부 이벤트 구간 합", example = "6600")
         Integer focusSec,
 
+        @Schema(description = "집중률(%) — 순공시간 ÷ 총시간 × 100, 소수 1자리 반올림", example = "91.7")
+        Double focusRate,
+
         @Schema(description = "비공부 상태 이벤트 목록 — 시작 시각 오름차순") List<StatusEventResponse> events) {
 
     public static StudySessionResponse from(StudySession session) {
@@ -36,6 +39,7 @@ public record StudySessionResponse(
                 session.getEndedAt(),
                 session.getSessionSec(),
                 session.getFocusSec(),
+                session.focusRate(),
                 session.getEvents().stream().map(StatusEventResponse::from).toList());
     }
 }

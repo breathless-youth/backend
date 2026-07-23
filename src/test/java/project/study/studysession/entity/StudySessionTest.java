@@ -80,6 +80,29 @@ class StudySessionTest {
     }
 
     @Test
+    void 세션의_집중률을_계산한다() {
+        List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-24T08:30:00Z", "2026-07-24T08:40:00Z"));
+
+        StudySession session = StudySession.create(1L, START, END, events, CLOCK);
+
+        // 6600 / 7200 × 100 = 91.66... → 91.7
+        assertThat(session.focusRate()).isEqualTo(91.7);
+    }
+
+    @Test
+    void 집중률은_소수_한_자리로_반올림된다() {
+        assertThat(StudySession.focusRate(1, 3)).isEqualTo(33.3);
+        assertThat(StudySession.focusRate(2, 3)).isEqualTo(66.7);
+        assertThat(StudySession.focusRate(7200, 7200)).isEqualTo(100.0);
+        assertThat(StudySession.focusRate(0, 7200)).isEqualTo(0.0);
+    }
+
+    @Test
+    void 총시간이_0이면_집중률은_0이다() {
+        assertThat(StudySession.focusRate(0, 0)).isEqualTo(0.0);
+    }
+
+    @Test
     void 종료가_시작보다_빠르거나_같으면_거부한다() {
         assertThatThrownBy(() -> StudySession.create(1L, START, START, List.of(), CLOCK))
                 .isInstanceOf(InvalidSessionException.class);

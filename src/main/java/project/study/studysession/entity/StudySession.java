@@ -93,6 +93,18 @@ public class StudySession {
                 userId, statDate, startedAt, endedAt, (int) sessionSec, (int) (sessionSec - nonFocusSec), sorted);
     }
 
+    /** 집중률(%) — 순공시간 ÷ 총시간 × 100, 소수 1자리 반올림. */
+    public static double focusRate(long focusSec, long sessionSec) {
+        if (sessionSec <= 0) {
+            return 0.0;
+        }
+        return Math.round(focusSec * 1000.0 / sessionSec) / 10.0;
+    }
+
+    public double focusRate() {
+        return focusRate(focusSec, sessionSec);
+    }
+
     private static void validatePeriod(Instant startedAt, Instant endedAt, Clock clock) {
         if (!endedAt.isAfter(startedAt)) {
             throw new InvalidSessionException("세션 종료 시각은 시작 시각 이후여야 합니다");

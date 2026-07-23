@@ -21,7 +21,10 @@ public record StudySessionSummaryResponse(
         @Schema(description = "총 세션 시간(초)", example = "7200")
         Integer sessionSec,
 
-        @Schema(description = "순공 시간(초)", example = "6600") Integer focusSec) {
+        @Schema(description = "순공 시간(초)", example = "6600") Integer focusSec,
+
+        @Schema(description = "집중률(%) — 순공시간 ÷ 총시간 × 100, 소수 1자리 반올림", example = "91.7")
+        Double focusRate) {
 
     public static StudySessionSummaryResponse from(StudySession session) {
         return new StudySessionSummaryResponse(
@@ -30,6 +33,7 @@ public record StudySessionSummaryResponse(
                 session.getStartedAt(),
                 session.getEndedAt(),
                 session.getSessionSec(),
-                session.getFocusSec());
+                session.getFocusSec(),
+                session.focusRate());
     }
 }

@@ -77,7 +77,8 @@ class StudySessionApiTest {
                 .hasPathSatisfying("$.id", id -> assertThat(id).isNotNull())
                 .hasPathSatisfying("$.userId", uid -> assertThat(uid).isEqualTo(userId.intValue()))
                 .hasPathSatisfying("$.sessionSec", sec -> assertThat(sec).isEqualTo(7200))
-                .hasPathSatisfying("$.focusSec", sec -> assertThat(sec).isEqualTo(6600));
+                .hasPathSatisfying("$.focusSec", sec -> assertThat(sec).isEqualTo(6600))
+                .hasPathSatisfying("$.focusRate", rate -> assertThat(rate).isEqualTo(91.7));
         long sessionId = objectMapper
                 .readTree(result.getResponse().getContentAsByteArray())
                 .get("id")
