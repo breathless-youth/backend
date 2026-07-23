@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -24,8 +23,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.ErrorResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
+import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionResponse;
-import project.study.studysession.dto.StudySessionSummaryResponse;
 import project.study.studysession.service.StudySessionService;
 
 @Tag(name = "StudySession", description = "공부 세션 기록 API 모음 — 방 퇴장 시 세션 전체를 한 번에 제출받아 검증·계산·저장한다 (ADR-0003)")
@@ -110,12 +109,17 @@ public class StudySessionController {
                     한 유저의 세션을 통계 날짜(`statDate`) 기준 `from`~`to` 기간(양 끝 포함)으로 조회한다. \
                     캘린더·일별 기록 화면에서 사용한다.
 
-                    - 정렬: 시작 시각 내림차순 (최근 세션이 먼저)
-                    - 각 항목은 상태 이벤트 목록을 포함하지 않는 요약이다 — 상세는 단건 조회 사용
-                    - 존재하지 않는 userId거나 기록 없는 기간이면 빈 배열이 내려온다""")
-    @ApiResponse(responseCode = "200", description = "조회 성공 — 기간 내 세션 요약 목록 (없으면 빈 배열)")
+                    응답은 세션 목록과 기간 전체 통계를 함께 담은 객체다.
+                    - `sessions` — 세션 요약 목록, 시작 시각 내림차순. 이벤트 목록은 미포함(상세는 단건 조회 사용)
+                    - `totalSessionSec` / `totalFocusSec` — 기간 전체 총 시간·순공 시간 합계(초)
+                    - `focusRate` — 기간 전체 집중률(%). 세션별 집중률의 평균이 아니라 합계 기준으로 계산한다
+                    - `eventCounts` — 상태별 이벤트 발생 건수. 없는 상태도 0으로 내려간다
+
+                    존재하지 않는 userId거나 기록 없는 기간이면 sessions는 빈 배열, \
+                    합계는 0, focusRate는 0.0, eventCounts는 모든 상태 0인 객체가 내려온다.""")
+    @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 목록 + 기간 전체 합계·집중률·상태별 이벤트 건수")
     @GetMapping
-    public List<StudySessionSummaryResponse> list(
+    public StudySessionListResponse list(
             @Parameter(description = "조회할 유저 ID (POST /api/users 로 발급받은 값)") @RequestParam Long userId,
             @Parameter(description = "조회 시작 날짜 (ISO-8601, 예: 2026-07-01) — statDate 기준, 포함")
                     @RequestParam

@@ -93,21 +93,60 @@ class StudySessionApiTest {
                 .isEqualTo("PHONE");
     }
 
+    private MockMvcTester.MockMvcRequestBuilder listRequest(LocalDate from, LocalDate to) {
+        return mvc.get()
+                .uri("/api/study-sessions")
+                .param("userId", userId.toString())
+                .param("from", from.toString())
+                .param("to", to.toString());
+    }
+
     @Test
     void 기간으로_세션_목록을_조회한다() {
         assertThat(submitRequest(userId.toString(), "[]")).hasStatus(HttpStatus.CREATED);
 
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
-        assertThat(mvc.get()
-                        .uri("/api/study-sessions")
-                        .param("userId", userId.toString())
-                        .param("from", today.minusDays(1).toString())
-                        .param("to", today.plusDays(1).toString()))
+        assertThat(listRequest(today.minusDays(1), today.plusDays(1)))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.length()", length -> assertThat(length).isEqualTo(1))
-                .extractingPath("$[0].sessionSec")
+                .hasPathSatisfying(
+                        "$.sessions.length()", length -> assertThat(length).isEqualTo(1))
+                .extractingPath("$.sessions[0].sessionSec")
                 .isEqualTo(7200);
+    }
+
+    @Test
+    void 목록_응답에_기간_합계와_상태별_이벤트_건수가_내려온다() {
+        String events = "["
+                + eventJson("PHONE", sessionStart.plusSeconds(600), sessionStart.plusSeconds(1200))
+                + ","
+                + eventJson("AWAY", sessionStart.plusSeconds(1800), sessionStart.plusSeconds(2100))
+                + "]";
+        assertThat(submitRequest(userId.toString(), events)).hasStatus(HttpStatus.CREATED);
+
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        assertThat(listRequest(today.minusDays(1), today.plusDays(1)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.totalSessionSec", v -> assertThat(v).isEqualTo(7200))
+                // 7200 - 600(PHONE) - 300(AWAY) = 6300 → 집중률 87.5%
+                .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(6300))
+                .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(87.5))
+                .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying("$.eventCounts.AWAY", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying("$.eventCounts.DEVICE", v -> assertThat(v).isEqualTo(0));
+    }
+
+    @Test
+    void 기록_없는_기간은_빈_래퍼가_내려온다() {
+        assertThat(listRequest(LocalDate.of(2000, 1, 1), LocalDate.of(2000, 1, 2)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.sessions.length()", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.totalSessionSec", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(0.0))
+                .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(0));
     }
 
     @Test
