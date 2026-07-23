@@ -12,16 +12,17 @@ spring:
     hibernate:
       ddl-auto: validate
 
-oauth:
-  google:
-    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
-    # 값은 구글 클라우드 콘솔 > API 및 서비스 > 사용자 인증 정보에서 확인
-    client-id: <웹-클라이언트-ID>.apps.googleusercontent.com
-
-jwt:
-  # 로컬 전용 — 32자 이상 아무 문자열이면 됨 (dev/prod는 환경변수 JWT_SECRET 주입)
-  secret: local-dev-secret-change-me-at-least-32-chars
-  access-expiration: 1800000 # 30분
-
-refresh-token:
-  expiration: 2592000000 # 한달 (opaque UUID, DB 저장)
+# AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
+#oauth:
+#  google:
+#    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
+#    # 값은 구글 클라우드 콘솔 > API 및 서비스 > 사용자 인증 정보에서 확인
+#    client-id: <웹-클라이언트-ID>.apps.googleusercontent.com
+#
+#jwt:
+#  # 로컬 전용 — 32자 이상 아무 문자열이면 됨 (dev/prod는 환경변수 JWT_SECRET 주입)
+#  secret: local-dev-secret-change-me-at-least-32-chars
+#  access-expiration: 1800000 # 30분
+#
+#refresh-token:
+#  expiration: 2592000000 # 한달 (opaque UUID, DB 저장)

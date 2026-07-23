@@ -1,12 +1,13 @@
 # 테스트 전용 설정: @SpringBootTest 컨텍스트 기동에 필요한 최소값
+# AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
 # (JwtUtil은 jwt.* 프로퍼티, GoogleTokenVerifier는 oauth.google.client-id 필요)
-oauth:
-  google:
-    client-id: test-google-client-id
-
-jwt:
-  secret: test-secret-key-that-is-at-least-32-chars-long
-  access-expiration: 3600000
-
-refresh-token:
-  expiration: 1209600000
+#oauth:
+#  google:
+#    client-id: test-google-client-id
+#
+#jwt:
+#  secret: test-secret-key-that-is-at-least-32-chars-long
+#  access-expiration: 3600000
+#
+#refresh-token:
+#  expiration: 1209600000
