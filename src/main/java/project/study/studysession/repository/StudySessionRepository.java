@@ -22,4 +22,12 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             group by e.status""")
     List<EventStatusCount> countEventsByStatus(
             @Param("userId") Long userId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    // 스트릭 계산용 — 유저의 공부한 날짜 목록 (중복 없음, 최신순)
+    @Query("""
+            select distinct s.statDate
+            from StudySession s
+            where s.userId = :userId
+            order by s.statDate desc""")
+    List<LocalDate> findDistinctStatDates(@Param("userId") Long userId);
 }

@@ -31,7 +31,7 @@ public class StudySession {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(name = "stat_date")
+    @Column(name = "stat_date", nullable = false)
     private LocalDate statDate;
 
     @Column(name = "started_at")

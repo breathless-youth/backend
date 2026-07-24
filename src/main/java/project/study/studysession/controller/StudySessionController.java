@@ -25,6 +25,7 @@ import project.study.common.ErrorResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionResponse;
+import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.service.StudySessionService;
 
 @Tag(name = "StudySession", description = "공부 세션 기록 API 모음 — 방 퇴장 시 세션 전체를 한 번에 제출받아 검증·계산·저장한다 (ADR-0003)")
@@ -124,5 +125,22 @@ public class StudySessionController {
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate date) {
         return studySessionService.list(userId, date);
+    }
+
+    @Operation(summary = "연속 공부일(스트릭) 조회", description = """
+                    통계 날짜(`statDate`) 기준으로 세션이 하루라도 있으면 그날은 공부한 날로 친다. \
+                    유저에 저장된 값이 아니라 세션 이력에서 매번 계산한다.
+
+                    - `streak` — 오늘(오늘 기록이 아직 없으면 어제)부터 거꾸로 이어진 연속 공부일. \
+                    오늘 기록이 없어도 어제까지 이어졌으면 유지 중으로 본다 — 오늘이 지나기 전엔 끊긴 게 아니다. \
+                    어제도 오늘도 기록이 없으면 0
+                    - `maxStreak` — 전체 이력에서 가장 길었던 연속 공부일
+
+                    기록이 없거나 존재하지 않는 userId면 둘 다 0이다 (목록 조회와 같은 계약).""")
+    @ApiResponse(responseCode = "200", description = "조회 성공 — 현재 스트릭과 역대 최장 스트릭")
+    @GetMapping("/streak")
+    public StudySessionStreakResponse streak(
+            @Parameter(description = "조회할 유저 ID (POST /api/users 로 발급받은 값)") @RequestParam Long userId) {
+        return studySessionService.streak(userId);
     }
 }

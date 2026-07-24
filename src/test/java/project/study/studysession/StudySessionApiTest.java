@@ -222,6 +222,44 @@ class StudySessionApiTest {
                 .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(0));
     }
 
+    private MockMvcTester.MockMvcRequestBuilder streakRequest() {
+        return mvc.get().uri("/api/study-sessions/streak").param("userId", userId.toString());
+    }
+
+    @Test
+    void 어제_세션을_제출하면_스트릭이_1이다() {
+        // 세션은 어제 KST 낮 12~14시 — 오늘 기록이 없어도 어제까지 이어진 스트릭은 유지된다
+        assertThat(submitRequest(userId.toString(), 7200, "[]")).hasStatus(HttpStatus.CREATED);
+
+        assertThat(streakRequest())
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.streak", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying("$.maxStreak", v -> assertThat(v).isEqualTo(1));
+    }
+
+    @Test
+    void 같은_날_여러_세션과_자정_분할은_스트릭에_하루씩만_잡힌다() {
+        // 그저께~어제 자정 분할(날짜 2개) + 어제 낮 세션(중복 날짜) → 실제 JPQL의 distinct·정렬 검증
+        submitCrossMidnightSession();
+        assertThat(submitRequest(userId.toString(), 7200, "[]")).hasStatus(HttpStatus.CREATED);
+
+        assertThat(streakRequest())
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.streak", v -> assertThat(v).isEqualTo(2))
+                .hasPathSatisfying("$.maxStreak", v -> assertThat(v).isEqualTo(2));
+    }
+
+    @Test
+    void 기록_없는_유저는_스트릭이_0이다() {
+        assertThat(streakRequest())
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.streak", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.maxStreak", v -> assertThat(v).isEqualTo(0));
+    }
+
     @Test
     void date_없이_조회하면_400을_반환한다() {
         // 필수 파라미터 누락은 Spring 기본 처리라 본문 없이 상태 코드만 내려온다

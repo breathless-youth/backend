@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionResponse;
+import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.dto.StudySessionSummaryResponse;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
@@ -211,5 +213,45 @@ public class StudySessionService {
             }
             previous = event;
         }
+    }
+
+    /**
+     * 연속 공부일(스트릭) 조회 — 유저에 상태로 저장하지 않고 세션 이력(statDate)에서 매번 계산한다.
+     * 저장 방식은 갱신 시점(제출·조회 순서)에 따라 어긋날 수 있지만, 이력 계산은 항상 정합하다.
+     * 기록이 없거나 존재하지 않는 userId면 0/0 — 목록 조회와 같은 계약이다.
+     */
+    @Transactional(readOnly = true)
+    public StudySessionStreakResponse streak(Long userId) {
+        LocalDate today = clock.instant().atZone(KST).toLocalDate();
+        // 시계 오차 허용(5분) 탓에 자정 직후 조각이 내일 날짜로 저장될 수 있다 — 공부일은 오늘까지만 센다
+        List<LocalDate> statDates = studySessionRepository.findDistinctStatDates(userId).stream()
+                .filter(date -> !date.isAfter(today))
+                .toList();
+        return new StudySessionStreakResponse(currentStreak(statDates, today), maxStreak(statDates));
+    }
+
+    /** 오늘(기록이 아직 없으면 어제)부터 거꾸로 이어진 연속 공부일. 오늘이 지나기 전엔 스트릭이 끊긴 게 아니다. */
+    private static int currentStreak(List<LocalDate> statDates, LocalDate today) {
+        Set<LocalDate> dates = Set.copyOf(statDates);
+        LocalDate day = dates.contains(today) ? today : today.minusDays(1);
+        int streak = 0;
+        while (dates.contains(day)) {
+            streak++;
+            day = day.minusDays(1);
+        }
+        return streak;
+    }
+
+    /** 전체 이력에서 가장 길었던 연속 공부일 — statDates는 내림차순 정렬·중복 없음을 전제한다. */
+    private static int maxStreak(List<LocalDate> statDates) {
+        int max = 0;
+        int run = 0;
+        LocalDate previous = null;
+        for (LocalDate date : statDates) {
+            run = previous != null && previous.minusDays(1).equals(date) ? run + 1 : 1;
+            max = Math.max(max, run);
+            previous = date;
+        }
+        return max;
     }
 }
