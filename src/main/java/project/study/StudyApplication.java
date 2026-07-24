@@ -1,5 +1,6 @@
 package project.study;
 
+import java.time.Clock;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -19,5 +20,10 @@ public class StudyApplication {
     @Bean
     public RestClient.Builder restClientBuilder() {
         return RestClient.builder();
+    }
+    // 시간 고정
+    @Bean
+    public Clock systemClock() {
+        return Clock.systemUTC();
     }
 }
