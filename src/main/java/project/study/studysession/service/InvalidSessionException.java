@@ -1,4 +1,4 @@
-package project.study.studysession.entity;
+package project.study.studysession.service;
 
 import project.study.common.BadRequestException;
 

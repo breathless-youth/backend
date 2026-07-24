@@ -30,7 +30,8 @@ public record StudySessionResponse(
 
         @Schema(description = "비공부 상태 이벤트 목록 — 시작 시각 오름차순") List<StatusEventResponse> events) {
 
-    public static StudySessionResponse from(StudySession session) {
+    // focusRate 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다
+    public static StudySessionResponse from(StudySession session, double focusRate) {
         return new StudySessionResponse(
                 session.getId(),
                 session.getUserId(),
@@ -39,7 +40,7 @@ public record StudySessionResponse(
                 session.getEndedAt(),
                 session.getSessionSec(),
                 session.getFocusSec(),
-                session.focusRate(),
+                focusRate,
                 session.getEvents().stream().map(StatusEventResponse::from).toList());
     }
 }

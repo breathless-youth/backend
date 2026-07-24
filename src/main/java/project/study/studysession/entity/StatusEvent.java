@@ -8,7 +8,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.time.Duration;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -38,9 +37,5 @@ public class StatusEvent {
         this.status = status;
         this.startedAt = startedAt;
         this.endedAt = endedAt;
-    }
-
-    public long durationSec() {
-        return Duration.between(startedAt, endedAt).toSeconds();
     }
 }
