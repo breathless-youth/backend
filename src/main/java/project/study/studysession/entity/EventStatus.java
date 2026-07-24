@@ -4,5 +4,6 @@ package project.study.studysession.entity;
 public enum EventStatus {
     PHONE,
     DEVICE,
-    AWAY
+    AWAY,
+    STOP
 }

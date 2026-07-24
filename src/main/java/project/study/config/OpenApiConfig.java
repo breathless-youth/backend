@@ -2,11 +2,28 @@ package project.study.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
 @Configuration
+@RequiredArgsConstructor
 public class OpenApiConfig {
+
+    // DevDataSeeder가 시딩하는 내용과 함께 유지한다
+    private static final String DEV_MOCK_DATA_GUIDE = """
+
+            **목데이터 안내 (dev 전용)** — 서버 시작 시 데모 데이터가 자동 시딩된다 (재시작하면 오늘 기준 날짜로 새로 생성).
+            - 데모 유저: `POST /api/users` 에 deviceId `%s` 로 등록하면 userId를 얻는다 (멱등)
+            - 오늘: 2시간 세션 (PHONE 10분 + AWAY 10분, 집중률 83.3%%)
+            - 어제 14~17시: 3시간 세션 (DEVICE 20분 + STOP 10분)
+            - 2일 전 20:00~21:30: 이벤트 없는 세션 (집중률 100%%)
+            - 3일 전 23시~2일 전 1시: 자정을 넘겨 두 세션으로 분할 저장 (PHONE 20분이 자정에 10분씩 걸침)
+            - 4일 전 09:00~09:45: 45분 세션 (PHONE 5분)
+            """.formatted(DevDataSeeder.DEMO_DEVICE_ID);
+
+    private final Environment environment;
 
     // AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 아래 주석 해제
     // 필요 import (Spotless가 import 블록 내 주석을 지워 여기에 보존):
@@ -18,21 +35,13 @@ public class OpenApiConfig {
     // AUTH-DISABLED: description의 인증 흐름 안내는 현재 스테일 (인증 재도입 시까지 유지)
     @Bean
     public OpenAPI openApi() {
-        return new OpenAPI().info(new Info().title("Study API").version("v1").description("""
-                                공부 기록 앱 백엔드 API 문서.
-
-                                **용어 안내**
-                                - **access 토큰**: API를 호출할 때 신분 증명으로 쓰는 입장권. 발급 후 30분간 유효하다.
-                                - **refresh 토큰**: 입장권이 만료됐을 때 새것으로 바꾸는 교환권. 30일 유효, 1회용.
-
-                                **인증 흐름 (순서대로)**
-                                1. 앱이 구글 로그인으로 받은 ID 토큰을 `POST /api/auth/login`에 보내면 위 토큰 두 개를 받는다.
-                                2. 이후 API 호출 시 access 토큰을 `Authorization: Bearer` 헤더에 담아 보낸다.
-                                   (이 문서에서는 우측 상단 **Authorize** 버튼에 access 토큰을 넣으면 된다)
-                                3. access 토큰이 만료되면 `POST /api/auth/refresh`로 새 토큰 쌍을 받는다.
-
-                                인증 관련 실패는 모두 `401` 상태코드로 내려가며,
-                                본문이 있는 경우 `{"error": "사유"}` 형태로 실패 이유가 담긴다."""));
+        String description = """
+                공부 기록 앱 백엔드 API 문서.
+                """;
+        if (environment.matchesProfiles("dev")) {
+            description += DEV_MOCK_DATA_GUIDE;
+        }
+        return new OpenAPI().info(new Info().title("Study API").version("v1").description(description));
         // AUTH-DISABLED
         // .components(new Components()
         //         .addSecuritySchemes(

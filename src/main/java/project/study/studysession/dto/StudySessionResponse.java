@@ -22,7 +22,7 @@ public record StudySessionResponse(
         @Schema(description = "총 세션 시간(초) — 서버가 계산: 종료 - 시작", example = "7200")
         Integer sessionSec,
 
-        @Schema(description = "순공 시간(초) — 서버가 계산: sessionSec - 비공부 이벤트 구간 합", example = "6600")
+        @Schema(description = "순공 시간(초) — 앱이 제출한 값 그대로 (자정 분할 시 조각 길이에 비례해 배분)", example = "6600")
         Integer focusSec,
 
         @Schema(description = "집중률(%) — 순공시간 ÷ 총시간 × 100, 소수 1자리 반올림", example = "91.7")
@@ -30,7 +30,8 @@ public record StudySessionResponse(
 
         @Schema(description = "비공부 상태 이벤트 목록 — 시작 시각 오름차순") List<StatusEventResponse> events) {
 
-    public static StudySessionResponse from(StudySession session) {
+    // focusRate 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다
+    public static StudySessionResponse from(StudySession session, double focusRate) {
         return new StudySessionResponse(
                 session.getId(),
                 session.getUserId(),
@@ -39,7 +40,7 @@ public record StudySessionResponse(
                 session.getEndedAt(),
                 session.getSessionSec(),
                 session.getFocusSec(),
-                session.focusRate(),
+                focusRate,
                 session.getEvents().stream().map(StatusEventResponse::from).toList());
     }
 }

@@ -7,7 +7,7 @@ import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 
 public record StatusEventRequest(
-        @Schema(description = "비공부 상태 종류 — 이 구간들은 순공 시간(focusSec)에서 제외된다", example = "PHONE") @NotNull
+        @Schema(description = "비공부 상태 종류 — 상태별 발생 건수 통계(eventCounts)에 집계된다", example = "PHONE") @NotNull
         EventStatus status,
 
         @Schema(description = "이벤트 시작 시각 (UTC, ISO-8601) — 세션 구간 안이어야 한다", example = "2026-07-24T01:10:00Z") @NotNull

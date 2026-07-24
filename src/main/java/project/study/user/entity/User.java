@@ -43,9 +43,6 @@ public class User extends BaseTimeEntity {
     private boolean notifyEnabled;
     private Instant deleteAt;
 
-    private Integer streak;
-    private Integer maxStreak;
-
     public User(Provider provider, String providerUserId) {
         this.provider = provider;
         this.providerUserId = providerUserId;

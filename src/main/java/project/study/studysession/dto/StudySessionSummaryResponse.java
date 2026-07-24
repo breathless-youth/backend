@@ -6,8 +6,7 @@ import java.time.LocalDate;
 import project.study.studysession.entity.StudySession;
 
 public record StudySessionSummaryResponse(
-        @Schema(description = "세션 ID — 상세는 GET /api/study-sessions/{id} 로 조회", example = "10")
-        Long id,
+        @Schema(description = "세션 ID", example = "10") Long id,
 
         @Schema(description = "통계 귀속 날짜 — 한국 시간 기준 시작 날짜", example = "2026-07-24")
         LocalDate statDate,
@@ -26,7 +25,8 @@ public record StudySessionSummaryResponse(
         @Schema(description = "집중률(%) — 순공시간 ÷ 총시간 × 100, 소수 1자리 반올림", example = "91.7")
         Double focusRate) {
 
-    public static StudySessionSummaryResponse from(StudySession session) {
+    // focusRate 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다
+    public static StudySessionSummaryResponse from(StudySession session, double focusRate) {
         return new StudySessionSummaryResponse(
                 session.getId(),
                 session.getStatDate(),
@@ -34,6 +34,6 @@ public record StudySessionSummaryResponse(
                 session.getEndedAt(),
                 session.getSessionSec(),
                 session.getFocusSec(),
-                session.focusRate());
+                focusRate);
     }
 }
