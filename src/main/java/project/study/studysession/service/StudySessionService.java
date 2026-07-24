@@ -40,7 +40,8 @@ public class StudySessionService {
     public List<StudySessionResponse> create(StudySessionCreateRequest request) {
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
-        List<StudySession> sessions = createSessions(request.userId(), request.startedAt(), request.endedAt(), events);
+        List<StudySession> sessions =
+                createSessions(request.userId(), request.startedAt(), request.endedAt(), request.focusSec(), events);
         try {
             List<StudySession> saved = studySessionRepository.saveAll(sessions);
             // FK 위반을 트랜잭션 커밋 전에 감지하기 위해 즉시 flush (한 트랜잭션이라 분할 저장도 원자적)
@@ -90,38 +91,66 @@ public class StudySessionService {
     /**
      * 세션을 KST 자정 경계로 분할해 생성한다. 자정을 넘지 않으면 세션 1개가 담긴 리스트를 반환하고,
      * 자정에 걸친 이벤트는 시각 기준으로 나뉘어 각 세션에 귀속된다.
+     * 순공 시간(focusSec)은 앱이 제출한 값을 그대로 저장하되, 분할 시 조각 길이에 비례해 배분한다.
      */
-    List<StudySession> createSessions(Long userId, Instant startedAt, Instant endedAt, List<StatusEvent> events) {
+    List<StudySession> createSessions(
+            Long userId, Instant startedAt, Instant endedAt, int focusSec, List<StatusEvent> events) {
         // 분할 후 조각은 항상 24시간 이내가 되므로, 24시간 한도 등은 반드시 분할 전 원본 기준으로 먼저 검증한다
         validatePeriod(startedAt, endedAt);
         List<StatusEvent> sorted = events.stream()
                 .sorted(Comparator.comparing(StatusEvent::getStartedAt))
                 .toList();
+        // 이벤트 시간 검증
         validateEvents(startedAt, endedAt, sorted);
 
-        List<StudySession> sessions = new ArrayList<>();
-        Instant segmentStart = startedAt;
-        Instant boundary = nextKstMidnight(startedAt);
-        while (boundary.isBefore(endedAt)) {
-            sessions.add(buildSession(userId, segmentStart, boundary, clip(sorted, segmentStart, boundary)));
-            segmentStart = boundary;
-            boundary = nextKstMidnight(boundary);
+        // 조각 경계를 먼저 확정한다 (KST 자정 기준 — 24시간 한도 덕에 조각은 최대 2개)
+        List<Instant> cuts = new ArrayList<>();
+        cuts.add(startedAt);
+        for (Instant boundary = nextKstMidnight(startedAt);
+                boundary.isBefore(endedAt);
+                boundary = nextKstMidnight(boundary)) {
+            cuts.add(boundary);
         }
-        sessions.add(buildSession(userId, segmentStart, endedAt, clip(sorted, segmentStart, endedAt)));
+        cuts.add(endedAt);
+
+        // 순공 시간의 검증·배분 기준은 원본 총 시간이 아니라 저장되는 조각별 총시간(내림 초)의 합이어야 한다.
+        // sub-second 타임스탬프가 자정에 걸치면 원본 기준으로는 0으로 나누기(총 0초)나
+        // focusSec > sessionSec인 조각(절삭 손실)이 생길 수 있다
+        long[] segmentSecs = new long[cuts.size() - 1];
+        long allocatableSec = 0;
+        for (int i = 0; i < segmentSecs.length; i++) {
+            segmentSecs[i] = Duration.between(cuts.get(i), cuts.get(i + 1)).toSeconds();
+            allocatableSec += segmentSecs[i];
+        }
+        validateFocusSec(focusSec, allocatableSec);
+
+        List<StudySession> sessions = new ArrayList<>();
+        long allocatedFocusSec = 0;
+        for (int i = 0; i < segmentSecs.length; i++) {
+            long segmentFocusSec;
+            if (i == segmentSecs.length - 1) {
+                // 마지막 조각이 배분 나머지를 가져가 조각들의 순공 시간 합이 항상 요청값과 같다
+                segmentFocusSec = focusSec - allocatedFocusSec;
+            } else {
+                segmentFocusSec = focusSec == 0 ? 0 : focusSec * segmentSecs[i] / allocatableSec;
+            }
+            sessions.add(buildSession(
+                    userId,
+                    cuts.get(i),
+                    cuts.get(i + 1),
+                    (int) segmentFocusSec,
+                    clip(sorted, cuts.get(i), cuts.get(i + 1))));
+            allocatedFocusSec += segmentFocusSec;
+        }
         return sessions;
     }
 
-    /** 검증이 끝난 한 구간을 세션 엔티티로 만든다 — 총시간·순공시간과 통계 귀속 날짜(KST 시작 날짜)를 계산한다. */
+    /** 검증이 끝난 한 구간을 세션 엔티티로 만든다 — 총시간과 통계 귀속 날짜(KST 시작 날짜)를 계산하고, 순공시간은 배분받은 값을 그대로 담는다. */
     private static StudySession buildSession(
-            Long userId, Instant startedAt, Instant endedAt, List<StatusEvent> events) {
+            Long userId, Instant startedAt, Instant endedAt, int focusSec, List<StatusEvent> events) {
         long sessionSec = Duration.between(startedAt, endedAt).toSeconds();
-        long nonFocusSec = events.stream()
-                .mapToLong(event -> Duration.between(event.getStartedAt(), event.getEndedAt())
-                        .toSeconds())
-                .sum();
         LocalDate statDate = startedAt.atZone(KST).toLocalDate();
-        return new StudySession(
-                userId, statDate, startedAt, endedAt, (int) sessionSec, (int) (sessionSec - nonFocusSec), events);
+        return new StudySession(userId, statDate, startedAt, endedAt, (int) sessionSec, focusSec, events);
     }
 
     private static Instant nextKstMidnight(Instant instant) {
@@ -159,6 +188,12 @@ public class StudySessionService {
         }
         if (endedAt.isAfter(clock.instant().plus(CLOCK_SKEW_TOLERANCE))) {
             throw new InvalidSessionException("세션 종료 시각이 미래일 수 없습니다");
+        }
+    }
+
+    private static void validateFocusSec(int focusSec, long totalSec) {
+        if (focusSec < 0 || focusSec > totalSec) {
+            throw new InvalidSessionException("순공 시간은 0 이상, 세션 총 시간 이하여야 합니다");
         }
     }
 

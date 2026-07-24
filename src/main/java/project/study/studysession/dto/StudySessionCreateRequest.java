@@ -19,7 +19,10 @@ public record StudySessionCreateRequest(
         @NotNull
         Instant endedAt,
 
-        @Schema(description = "앱이 계산한 순공 시간(초) — 필수지만 서버는 신뢰하지 않고 이벤트 기반으로 재계산한다", example = "130") @NotNull
+        @Schema(
+                description = "앱이 계산한 순공 시간(초) — 서버가 그대로 저장한다. 0 이상, 세션 총 시간 이하. 자정 분할 시 조각 길이에 비례해 배분",
+                example = "6600")
+        @NotNull
         Integer focusSec,
 
         @Schema(description = "세션 중 발생한 비공부 상태 이벤트 목록 — 없으면 빈 배열. 순서는 뒤섞여도 된다(서버가 정렬)") @NotNull @Valid
