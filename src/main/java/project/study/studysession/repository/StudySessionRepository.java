@@ -12,6 +12,9 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
 
     List<StudySession> findByUserIdAndStatDateBetweenOrderByStartedAtDesc(Long userId, LocalDate from, LocalDate to);
 
+    // dev 목데이터 시더가 재시작마다 데모 유저의 세션을 갈아끼울 때 사용
+    void deleteByUserId(Long userId);
+
     @Query("""
             select new project.study.studysession.dto.EventStatusCount(e.status, count(e))
             from StudySession s join s.events e
