@@ -4,7 +4,7 @@
 
 Table users {
   id bigint [primary key, increment]
-  provider varchar [not null]          // GOOGLE (추후 KAKAO, APPLE 확장 가능)
+  provider varchar [not null]          // GOOGLE, DEVICE(익명 기기, ADR-0004) — 추후 KAKAO, APPLE 확장 가능
   provider_user_id varchar [not null]
   nickname varchar [unique]
   category varchar               // 수능/공무원/자격증 등

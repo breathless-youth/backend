@@ -1,22 +1,24 @@
 package project.study.config;
 
-import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.security.SecurityRequirement;
-import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class OpenApiConfig {
 
-    private static final String BEARER_AUTH = "bearerAuth";
+    // AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 아래 주석 해제
+    // 필요 import (Spotless가 import 블록 내 주석을 지워 여기에 보존):
+    //   io.swagger.v3.oas.models.Components
+    //   io.swagger.v3.oas.models.security.SecurityRequirement
+    //   io.swagger.v3.oas.models.security.SecurityScheme
+    // private static final String BEARER_AUTH = "bearerAuth";
 
+    // AUTH-DISABLED: description의 인증 흐름 안내는 현재 스테일 (인증 재도입 시까지 유지)
     @Bean
     public OpenAPI openApi() {
-        return new OpenAPI()
-                .info(new Info().title("Study API").version("v1").description("""
+        return new OpenAPI().info(new Info().title("Study API").version("v1").description("""
                                 공부 기록 앱 백엔드 API 문서.
 
                                 **용어 안내**
@@ -30,14 +32,15 @@ public class OpenApiConfig {
                                 3. access 토큰이 만료되면 `POST /api/auth/refresh`로 새 토큰 쌍을 받는다.
 
                                 인증 관련 실패는 모두 `401` 상태코드로 내려가며,
-                                본문이 있는 경우 `{"error": "사유"}` 형태로 실패 이유가 담긴다."""))
-                .components(new Components()
-                        .addSecuritySchemes(
-                                BEARER_AUTH,
-                                new SecurityScheme()
-                                        .type(SecurityScheme.Type.HTTP)
-                                        .scheme("bearer")
-                                        .bearerFormat("JWT")))
-                .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
+                                본문이 있는 경우 `{"error": "사유"}` 형태로 실패 이유가 담긴다."""));
+        // AUTH-DISABLED
+        // .components(new Components()
+        //         .addSecuritySchemes(
+        //                 BEARER_AUTH,
+        //                 new SecurityScheme()
+        //                         .type(SecurityScheme.Type.HTTP)
+        //                         .scheme("bearer")
+        //                         .bearerFormat("JWT")))
+        // .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
     }
 }
