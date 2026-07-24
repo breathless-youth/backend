@@ -21,7 +21,7 @@ public class StudyApplication {
     public RestClient.Builder restClientBuilder() {
         return RestClient.builder();
     }
-    // 시간 고정
+    // 시스템 UTC
     @Bean
     public Clock systemClock() {
         return Clock.systemUTC();
