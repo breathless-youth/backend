@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -42,8 +43,13 @@ public class StudySessionService {
     public List<StudySessionResponse> create(StudySessionCreateRequest request) {
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
-        List<StudySession> sessions =
-                createSessions(request.userId(), request.startedAt(), request.endedAt(), request.focusSec(), events);
+        List<StudySession> sessions = createSessions(
+                request.userId(),
+                request.startedAt(),
+                request.endedAt(),
+                request.studySec(),
+                request.focusSec(),
+                events);
         try {
             List<StudySession> saved = studySessionRepository.saveAll(sessions);
             // FK 위반을 트랜잭션 커밋 전에 감지하기 위해 즉시 flush (한 트랜잭션이라 분할 저장도 원자적)
@@ -54,13 +60,16 @@ public class StudySessionService {
         }
     }
 
-    /** 통계 날짜(statDate) 기준 하루 조회 — 기간(from~to) 조회는 추후 별도 메서드로 분리한다. */
+    /**
+     * 통계 날짜(statDate) 기준 하루 조회 — 기간(from~to) 조회는 추후 별도 메서드로 분리한다.
+     * 캘린더 표시용으로 date가 속한 달의 공부한 날짜 목록(studiedDatesInMonth)도 함께 내려준다.
+     */
     @Transactional(readOnly = true)
     public StudySessionListResponse list(Long userId, LocalDate date) {
         List<StudySession> sessions =
                 studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(userId, date, date);
-        long totalSessionSec =
-                sessions.stream().mapToLong(StudySession::getSessionSec).sum();
+        long totalStudySec =
+                sessions.stream().mapToLong(StudySession::getStudySec).sum();
         long totalFocusSec =
                 sessions.stream().mapToLong(StudySession::getFocusSec).sum();
 
@@ -73,30 +82,38 @@ public class StudySessionService {
                 .countEventsByStatus(userId, date, date)
                 .forEach(count -> eventCounts.put(count.status(), count.count()));
 
+        YearMonth month = YearMonth.from(date);
+        List<LocalDate> studiedDatesInMonth =
+                studySessionRepository.findDistinctStatDatesBetween(userId, month.atDay(1), month.atEndOfMonth());
+
         return new StudySessionListResponse(
                 sessions.stream().map(this::toSummaryResponse).toList(),
                 sessions.size(),
-                totalSessionSec,
+                totalStudySec,
                 totalFocusSec,
-                focusRate(totalFocusSec, totalSessionSec),
-                eventCounts);
+                focusRate(totalFocusSec, totalStudySec),
+                eventCounts,
+                studiedDatesInMonth);
     }
 
     private StudySessionResponse toResponse(StudySession session) {
-        return StudySessionResponse.from(session, focusRate(session.getFocusSec(), session.getSessionSec()));
+        return StudySessionResponse.from(session, focusRate(session.getFocusSec(), session.getStudySec()));
     }
 
     private StudySessionSummaryResponse toSummaryResponse(StudySession session) {
-        return StudySessionSummaryResponse.from(session, focusRate(session.getFocusSec(), session.getSessionSec()));
+        return StudySessionSummaryResponse.from(session, focusRate(session.getFocusSec(), session.getStudySec()));
     }
 
     /**
      * 세션을 KST 자정 경계로 분할해 생성한다. 자정을 넘지 않으면 세션 1개가 담긴 리스트를 반환하고,
      * 자정에 걸친 이벤트는 시각 기준으로 나뉘어 각 세션에 귀속된다.
-     * 순공 시간(focusSec)은 앱이 제출한 값을 그대로 저장하되, 분할 시 조각 길이에 비례해 배분한다.
+     * 총 공부 시간(studySec)과 순공 시간(focusSec)은 앱이 제출한 값을 그대로 저장하되, 분할 시
+     * 조각 길이에 비례해 배분한다. STOP(일시정지)은 총공부시간 타이머도 멈추므로 studySec 배분
+     * 가중치에서 제외되고, 나머지 이벤트(PHONE/DEVICE/AWAY)는 순공시간 타이머만 멈추므로
+     * focusSec 배분 가중치에서만 제외된다.
      */
     List<StudySession> createSessions(
-            Long userId, Instant startedAt, Instant endedAt, int focusSec, List<StatusEvent> events) {
+            Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
         // 분할 후 조각은 항상 24시간 이내가 되므로, 24시간 한도 등은 반드시 분할 전 원본 기준으로 먼저 검증한다
         validatePeriod(startedAt, endedAt);
         List<StatusEvent> sorted = events.stream()
@@ -105,7 +122,17 @@ public class StudySessionService {
         // 이벤트 시간 검증
         validateEvents(startedAt, endedAt, sorted);
 
-        // 조각 경계를 먼저 확정한다 (KST 자정 기준 — 24시간 한도 덕에 조각은 최대 2개)
+        List<Instant> cuts = computeCuts(startedAt, endedAt);
+        SegmentWeights weights = computeSegmentWeights(cuts, sorted);
+
+        validateStudySec(studySec, weights.totalStudyActiveSec());
+        validateFocusSec(focusSec, studySec);
+
+        return buildSessions(userId, cuts, weights, studySec, focusSec);
+    }
+
+    /** 조각 경계를 확정한다 (KST 자정 기준 — 24시간 한도 덕에 조각은 최대 2개). */
+    private static List<Instant> computeCuts(Instant startedAt, Instant endedAt) {
         List<Instant> cuts = new ArrayList<>();
         cuts.add(startedAt);
         for (Instant boundary = nextKstMidnight(startedAt);
@@ -114,45 +141,101 @@ public class StudySessionService {
             cuts.add(boundary);
         }
         cuts.add(endedAt);
+        return cuts;
+    }
 
-        // 순공 시간의 검증·배분 기준은 원본 총 시간이 아니라 저장되는 조각별 총시간(내림 초)의 합이어야 한다.
-        // sub-second 타임스탬프가 자정에 걸치면 원본 기준으로는 0으로 나누기(총 0초)나
-        // focusSec > sessionSec인 조각(절삭 손실)이 생길 수 있다
-        long[] segmentSecs = new long[cuts.size() - 1];
-        long allocatableSec = 0;
-        for (int i = 0; i < segmentSecs.length; i++) {
-            segmentSecs[i] = Duration.between(cuts.get(i), cuts.get(i + 1)).toSeconds();
-            allocatableSec += segmentSecs[i];
+    /** 조각별 이벤트 클립과, studySec/focusSec 배분 가중치(studyActiveSec/focusActiveSec) 및 그 합계. */
+    private record SegmentWeights(
+            List<List<StatusEvent>> segmentEvents,
+            long[] studyActiveSecs,
+            long[] focusActiveSecs,
+            long totalStudyActiveSec,
+            long totalFocusActiveSec) {}
+
+    /**
+     * 검증·배분 기준은 원본 총 시간이 아니라 저장되는 조각별 총시간(내림 초)의 합이어야 한다.
+     * sub-second 타임스탬프가 자정에 걸치면 원본 기준으로는 0으로 나누기(총 0초)나 절삭 손실이
+     * 생길 수 있다. 조각마다 STOP만 뺀 studyActiveSec과 전체 이벤트를 뺀 focusActiveSec을
+     * 함께 구해 각각의 배분 가중치로 쓴다.
+     */
+    private static SegmentWeights computeSegmentWeights(List<Instant> cuts, List<StatusEvent> sorted) {
+        int segmentCount = cuts.size() - 1;
+        List<List<StatusEvent>> segmentEvents = new ArrayList<>(segmentCount);
+        long[] studyActiveSecs = new long[segmentCount];
+        long[] focusActiveSecs = new long[segmentCount];
+        long totalStudyActiveSec = 0;
+        long totalFocusActiveSec = 0;
+        for (int i = 0; i < segmentCount; i++) {
+            long segmentSec = Duration.between(cuts.get(i), cuts.get(i + 1)).toSeconds();
+            List<StatusEvent> clipped = clip(sorted, cuts.get(i), cuts.get(i + 1));
+            segmentEvents.add(clipped);
+            long stopSec = sumDuration(clipped, EventStatus.STOP);
+            long eventSec = sumDuration(clipped);
+            studyActiveSecs[i] = segmentSec - stopSec;
+            focusActiveSecs[i] = segmentSec - eventSec;
+            totalStudyActiveSec += studyActiveSecs[i];
+            totalFocusActiveSec += focusActiveSecs[i];
         }
-        validateFocusSec(focusSec, allocatableSec);
+        return new SegmentWeights(
+                segmentEvents, studyActiveSecs, focusActiveSecs, totalStudyActiveSec, totalFocusActiveSec);
+    }
 
+    /** 조각별 가중치대로 studySec/focusSec을 비례 배분해 세션들을 만든다 — 마지막 조각이 배분 나머지를 가져가 합이 항상 요청값과 같다. */
+    private static List<StudySession> buildSessions(
+            Long userId, List<Instant> cuts, SegmentWeights weights, int studySec, int focusSec) {
+        int segmentCount = cuts.size() - 1;
         List<StudySession> sessions = new ArrayList<>();
+        long allocatedStudySec = 0;
         long allocatedFocusSec = 0;
-        for (int i = 0; i < segmentSecs.length; i++) {
+        for (int i = 0; i < segmentCount; i++) {
+            long segmentStudySec;
             long segmentFocusSec;
-            if (i == segmentSecs.length - 1) {
-                // 마지막 조각이 배분 나머지를 가져가 조각들의 순공 시간 합이 항상 요청값과 같다
+            if (i == segmentCount - 1) {
+                segmentStudySec = studySec - allocatedStudySec;
                 segmentFocusSec = focusSec - allocatedFocusSec;
             } else {
-                segmentFocusSec = focusSec == 0 ? 0 : focusSec * segmentSecs[i] / allocatableSec;
+                segmentStudySec =
+                        studySec == 0 ? 0 : studySec * weights.studyActiveSecs()[i] / weights.totalStudyActiveSec();
+                // focusActiveSec 합이 0(전 구간이 이벤트로 덮인 경우)이면 studyActiveSec 비율로 대체 배분
+                boolean noFocusActiveTime = weights.totalFocusActiveSec() == 0;
+                long focusWeight = noFocusActiveTime ? weights.studyActiveSecs()[i] : weights.focusActiveSecs()[i];
+                long focusWeightTotal =
+                        noFocusActiveTime ? weights.totalStudyActiveSec() : weights.totalFocusActiveSec();
+                segmentFocusSec = focusSec == 0 ? 0 : focusSec * focusWeight / focusWeightTotal;
             }
             sessions.add(buildSession(
                     userId,
                     cuts.get(i),
                     cuts.get(i + 1),
+                    (int) segmentStudySec,
                     (int) segmentFocusSec,
-                    clip(sorted, cuts.get(i), cuts.get(i + 1))));
+                    weights.segmentEvents().get(i)));
+            allocatedStudySec += segmentStudySec;
             allocatedFocusSec += segmentFocusSec;
         }
         return sessions;
     }
 
-    /** 검증이 끝난 한 구간을 세션 엔티티로 만든다 — 총시간과 통계 귀속 날짜(KST 시작 날짜)를 계산하고, 순공시간은 배분받은 값을 그대로 담는다. */
+    /** 검증이 끝난 한 구간을 세션 엔티티로 만든다 — 통계 귀속 날짜(KST 시작 날짜)만 계산하고, 총공부·순공 시간은 배분받은 값을 그대로 담는다. */
     private static StudySession buildSession(
-            Long userId, Instant startedAt, Instant endedAt, int focusSec, List<StatusEvent> events) {
-        long sessionSec = Duration.between(startedAt, endedAt).toSeconds();
+            Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
         LocalDate statDate = startedAt.atZone(KST).toLocalDate();
-        return new StudySession(userId, statDate, startedAt, endedAt, (int) sessionSec, focusSec, events);
+        return new StudySession(userId, statDate, startedAt, endedAt, studySec, focusSec, events);
+    }
+
+    private static long sumDuration(List<StatusEvent> events) {
+        return events.stream()
+                .mapToLong(
+                        e -> Duration.between(e.getStartedAt(), e.getEndedAt()).toSeconds())
+                .sum();
+    }
+
+    private static long sumDuration(List<StatusEvent> events, EventStatus status) {
+        return events.stream()
+                .filter(e -> e.getStatus() == status)
+                .mapToLong(
+                        e -> Duration.between(e.getStartedAt(), e.getEndedAt()).toSeconds())
+                .sum();
     }
 
     private static Instant nextKstMidnight(Instant instant) {
@@ -173,12 +256,12 @@ public class StudySessionService {
         return clipped;
     }
 
-    /** 집중률(%) — 순공시간 ÷ 총시간 × 100, 소수 1자리 반올림. */
-    static double focusRate(long focusSec, long sessionSec) {
-        if (sessionSec <= 0) {
+    /** 집중률(%) — 순공시간 ÷ 총공부시간 × 100, 소수 1자리 반올림. */
+    static double focusRate(long focusSec, long studySec) {
+        if (studySec <= 0) {
             return 0.0;
         }
-        return Math.round(focusSec * 1000.0 / sessionSec) / 10.0;
+        return Math.round(focusSec * 1000.0 / studySec) / 10.0;
     }
 
     private void validatePeriod(Instant startedAt, Instant endedAt) {
@@ -193,9 +276,17 @@ public class StudySessionService {
         }
     }
 
-    private static void validateFocusSec(int focusSec, long totalSec) {
-        if (focusSec < 0 || focusSec > totalSec) {
-            throw new InvalidSessionException("순공 시간은 0 이상, 세션 총 시간 이하여야 합니다");
+    /** studySec 상한은 방 체류시간이 아니라 STOP(일시정지) 시간을 제외한 시간이다 — STOP 중엔 총공부 타이머도 멈춘다. */
+    private static void validateStudySec(int studySec, long totalStudyActiveSec) {
+        if (studySec < 0 || studySec > totalStudyActiveSec) {
+            throw new InvalidSessionException("총 공부 시간은 0 이상, 일시정지를 제외한 세션 시간 이하여야 합니다");
+        }
+    }
+
+    /** focusSec 상한은 이벤트 총합이 아니라 studySec이다 — 이벤트로 focusSec을 역산·제한하지 않는다(ADR-0006). */
+    private static void validateFocusSec(int focusSec, int studySec) {
+        if (focusSec < 0 || focusSec > studySec) {
+            throw new InvalidSessionException("순공 시간은 0 이상, 총 공부 시간 이하여야 합니다");
         }
     }
 

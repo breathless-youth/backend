@@ -100,13 +100,22 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     private void submit(Long userId, Instant startedAt, Instant endedAt, List<StatusEventRequest> events) {
-        // focusSec는 요청값이 그대로 저장되므로, 앱이 보내듯 총 시간에서 이벤트 구간을 뺀 값을 계산해 보낸다
+        // studySec/focusSec는 요청값이 그대로 저장되므로, 앱이 보내듯 값을 계산해 보낸다.
+        // studySec은 STOP(일시정지) 구간만 빼고, focusSec은 전체 이벤트 구간을 뺀다.
+        long totalSec = Duration.between(startedAt, endedAt).toSeconds();
+        long stopSec = events.stream()
+                .filter(event -> event.status() == EventStatus.STOP)
+                .mapToLong(event ->
+                        Duration.between(event.startedAt(), event.endedAt()).toSeconds())
+                .sum();
         long nonFocusSec = events.stream()
                 .mapToLong(event ->
                         Duration.between(event.startedAt(), event.endedAt()).toSeconds())
                 .sum();
-        int focusSec = (int) (Duration.between(startedAt, endedAt).toSeconds() - nonFocusSec);
-        studySessionService.create(new StudySessionCreateRequest(userId, startedAt, endedAt, focusSec, events));
+        int studySec = (int) (totalSec - stopSec);
+        int focusSec = (int) (totalSec - nonFocusSec);
+        studySessionService.create(
+                new StudySessionCreateRequest(userId, startedAt, endedAt, studySec, focusSec, events));
     }
 
     private static StatusEventRequest event(EventStatus status, Instant startedAt, Instant endedAt) {

@@ -30,4 +30,13 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             where s.userId = :userId
             order by s.statDate desc""")
     List<LocalDate> findDistinctStatDates(@Param("userId") Long userId);
+
+    // 일간 조회 시 달력 표시용 — 특정 기간(보통 한 달) 동안 공부한 날짜 목록 (중복 없음, 오름차순)
+    @Query("""
+            select distinct s.statDate
+            from StudySession s
+            where s.userId = :userId and s.statDate between :from and :to
+            order by s.statDate""")
+    List<LocalDate> findDistinctStatDatesBetween(
+            @Param("userId") Long userId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 }

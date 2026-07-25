@@ -20,8 +20,15 @@ public record StudySessionCreateRequest(
         Instant endedAt,
 
         @Schema(
-                description = "앱이 계산한 순공 시간(초) — 서버가 그대로 저장한다. 0 이상, 세션 총 시간 이하. 자정 분할 시 조각 길이에 비례해 배분",
+                description = "앱이 잰 총 공부 타이머 시간(초) — 서버가 그대로 저장한다. 0 이상, (세션 총 시간 − 일시정지(STOP) 시간) 이하. "
+                        + "자정 분할 시 조각 길이에 비례해 배분",
                 example = "6600")
+        @NotNull
+        Integer studySec,
+
+        @Schema(
+                description = "앱이 계산한 순공 시간(초) — 서버가 그대로 저장한다. 0 이상, 총 공부 시간 이하. 자정 분할 시 조각 길이에 비례해 배분",
+                example = "6000")
         @NotNull
         Integer focusSec,
 

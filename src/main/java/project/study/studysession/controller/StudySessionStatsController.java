@@ -30,12 +30,15 @@ public class StudySessionStatsController {
                     응답은 세션 목록과 그날 전체 통계를 함께 담은 객체다.
                     - `sessions` — 세션 요약 목록, 시작 시각 내림차순. 이벤트 목록은 미포함
                     - `sessionCount` — 조회된 세션 개수 (자정 분할 세션은 각각 1개로 센다)
-                    - `totalSessionSec` / `totalFocusSec` — 그날 총 시간·순공 시간 합계(초)
+                    - `totalStudySec` / `totalFocusSec` — 그날 총 공부 시간·순공 시간 합계(초)
                     - `focusRate` — 그날 전체 집중률(%). 세션별 집중률의 평균이 아니라 합계 기준으로 계산한다
                     - `eventCounts` — 상태별 이벤트 발생 건수. 없는 상태도 0으로 내려간다
+                    - `studiedDatesInMonth` — `date`가 속한 달 동안 공부 기록이 있는 날짜 목록. \
+                    캘린더에 공부일을 표시하는 용도(중복 없음, 오름차순)
 
                     존재하지 않는 userId거나 기록 없는 날짜면 sessions는 빈 배열, sessionCount는 0, \
-                    합계는 0, focusRate는 0.0, eventCounts는 모든 상태 0인 객체가 내려온다.""")
+                    합계는 0, focusRate는 0.0, eventCounts는 모든 상태 0인 객체가 내려온다. \
+                    studiedDatesInMonth는 해당 달의 기록 여부와 무관하게 항상 계산된다.""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 목록 + 세션 개수 + 그날 합계·집중률·상태별 이벤트 건수")
     @GetMapping
     public StudySessionListResponse list(

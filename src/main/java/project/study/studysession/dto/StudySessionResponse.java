@@ -19,10 +19,10 @@ public record StudySessionResponse(
         @Schema(description = "세션 종료 시각 (UTC, ISO-8601)", example = "2026-07-24T03:00:00Z")
         Instant endedAt,
 
-        @Schema(description = "총 세션 시간(초) — 서버가 계산: 종료 - 시작", example = "7200")
-        Integer sessionSec,
+        @Schema(description = "총 공부 시간(초) — 앱이 제출한 값 그대로 (자정 분할 시 조각 길이에 비례해 배분)", example = "6600")
+        Integer studySec,
 
-        @Schema(description = "순공 시간(초) — 앱이 제출한 값 그대로 (자정 분할 시 조각 길이에 비례해 배분)", example = "6600")
+        @Schema(description = "순공 시간(초) — 앱이 제출한 값 그대로 (자정 분할 시 조각 길이에 비례해 배분)", example = "6000")
         Integer focusSec,
 
         @Schema(description = "집중률(%) — 순공시간 ÷ 총시간 × 100, 소수 1자리 반올림", example = "91.7")
@@ -38,7 +38,7 @@ public record StudySessionResponse(
                 session.getStatDate(),
                 session.getStartedAt(),
                 session.getEndedAt(),
-                session.getSessionSec(),
+                session.getStudySec(),
                 session.getFocusSec(),
                 focusRate,
                 session.getEvents().stream().map(StatusEventResponse::from).toList());

@@ -40,8 +40,8 @@ public class StudySession {
     @Column(name = "ended_at")
     private Instant endedAt;
 
-    @Column(name = "session_sec")
-    private Integer sessionSec;
+    @Column(name = "study_sec")
+    private Integer studySec;
 
     @Column(name = "focus_sec")
     private Integer focusSec;
@@ -57,14 +57,14 @@ public class StudySession {
             LocalDate statDate,
             Instant startedAt,
             Instant endedAt,
-            int sessionSec,
+            int studySec,
             int focusSec,
             List<StatusEvent> events) {
         this.userId = userId;
         this.statDate = statDate;
         this.startedAt = startedAt;
         this.endedAt = endedAt;
-        this.sessionSec = sessionSec;
+        this.studySec = studySec;
         this.focusSec = focusSec;
         this.events = new ArrayList<>(events);
     }

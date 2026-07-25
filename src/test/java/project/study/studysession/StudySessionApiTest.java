@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,10 +58,11 @@ class StudySessionApiTest {
                 "tester-" + UUID.randomUUID());
     }
 
-    // focusSec는 앱 제출값이 그대로 저장된다 — 응답에도 보낸 값이 그대로 내려와야 한다
-    private MockMvcTester.MockMvcRequestBuilder submitRequest(String userIdJson, int focusSec, String eventsJson) {
+    // studySec/focusSec는 앱 제출값이 그대로 저장된다 — 응답에도 보낸 값이 그대로 내려와야 한다
+    private MockMvcTester.MockMvcRequestBuilder submitRequest(
+            String userIdJson, int studySec, int focusSec, String eventsJson) {
         String body = """
-                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "focusSec": %d, "events": %s}""".formatted(userIdJson, sessionStart, sessionEnd, focusSec, eventsJson);
+                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": %s}""".formatted(userIdJson, sessionStart, sessionEnd, studySec, focusSec, eventsJson);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -73,18 +75,18 @@ class StudySessionApiTest {
     }
 
     @Test
-    void 세션을_제출하면_요청의_순공_시간이_그대로_저장된다() {
+    void 세션을_제출하면_요청의_총공부시간과_순공시간이_그대로_저장된다() {
         String phoneEvent = eventJson("PHONE", sessionStart.plusSeconds(600), sessionStart.plusSeconds(1200));
 
-        MvcTestResult result =
-                submitRequest(userId.toString(), 6600, "[" + phoneEvent + "]").exchange();
+        MvcTestResult result = submitRequest(userId.toString(), 7200, 6600, "[" + phoneEvent + "]")
+                .exchange();
         assertThat(result)
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying("$.length()", length -> assertThat(length).isEqualTo(1))
                 .hasPathSatisfying("$[0].id", id -> assertThat(id).isNotNull())
                 .hasPathSatisfying("$[0].userId", uid -> assertThat(uid).isEqualTo(userId.intValue()))
-                .hasPathSatisfying("$[0].sessionSec", sec -> assertThat(sec).isEqualTo(7200))
+                .hasPathSatisfying("$[0].studySec", sec -> assertThat(sec).isEqualTo(7200))
                 .hasPathSatisfying("$[0].focusSec", sec -> assertThat(sec).isEqualTo(6600))
                 .hasPathSatisfying("$[0].focusRate", rate -> assertThat(rate).isEqualTo(91.7));
         long sessionId = objectMapper
@@ -100,15 +102,12 @@ class StudySessionApiTest {
     }
 
     private MockMvcTester.MockMvcRequestBuilder listRequest(LocalDate date) {
-        return mvc.get()
-                .uri("/api/study-sessions")
-                .param("userId", userId.toString())
-                .param("date", date.toString());
+        return mvc.get().uri("/api/stats").param("userId", userId.toString()).param("date", date.toString());
     }
 
     @Test
     void 날짜로_그날의_세션_목록과_개수를_조회한다() {
-        assertThat(submitRequest(userId.toString(), 7200, "[]")).hasStatus(HttpStatus.CREATED);
+        assertThat(submitRequest(userId.toString(), 7200, 7200, "[]")).hasStatus(HttpStatus.CREATED);
 
         // 세션은 어제 KST 낮 12~14시 — statDate가 어제이므로 date=어제 조회에 잡혀야 한다
         assertThat(listRequest(today.minusDays(1)))
@@ -117,8 +116,23 @@ class StudySessionApiTest {
                 .hasPathSatisfying(
                         "$.sessions.length()", length -> assertThat(length).isEqualTo(1))
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(1))
-                .extractingPath("$.sessions[0].sessionSec")
+                .extractingPath("$.sessions[0].studySec")
                 .isEqualTo(7200);
+    }
+
+    @Test
+    void 목록_응답에_그_달_공부한_날짜_목록이_담긴다() {
+        assertThat(submitRequest(userId.toString(), 7200, 7200, "[]")).hasStatus(HttpStatus.CREATED);
+
+        // 세션의 statDate(어제)가 속한 달로 조회하면 studiedDatesInMonth에 그 날짜가 포함된다
+        assertThat(listRequest(today.minusDays(1)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.studiedDatesInMonth",
+                        dates -> assertThat(dates)
+                                .asInstanceOf(InstanceOfAssertFactories.LIST)
+                                .contains(today.minusDays(1).toString()));
     }
 
     @Test
@@ -128,13 +142,13 @@ class StudySessionApiTest {
                 + ","
                 + eventJson("AWAY", sessionStart.plusSeconds(1800), sessionStart.plusSeconds(2100))
                 + "]";
-        assertThat(submitRequest(userId.toString(), 6300, events)).hasStatus(HttpStatus.CREATED);
+        assertThat(submitRequest(userId.toString(), 7200, 6300, events)).hasStatus(HttpStatus.CREATED);
 
         assertThat(listRequest(today.minusDays(1)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(1))
-                .hasPathSatisfying("$.totalSessionSec", v -> assertThat(v).isEqualTo(7200))
+                .hasPathSatisfying("$.totalStudySec", v -> assertThat(v).isEqualTo(7200))
                 // 제출한 focusSec 6300이 그대로 합계에 잡힌다 → 집중률 87.5%
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(6300))
                 .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(87.5))
@@ -144,12 +158,13 @@ class StudySessionApiTest {
     }
 
     // 어제 KST 자정을 걸치는 세션 (그저께 23시 ~ 어제 01시), PHONE 이벤트가 자정에 걸침
-    // 제출한 focusSec 6000이 조각 길이(3600:3600)에 비례해 3000씩 배분된다
+    // 제출한 studySec 7200은 조각 길이(3600:3600)에 비례해 3600씩,
+    // focusSec 6000은 조각별 focusActiveSec(3000:3000)에 비례해 3000씩 배분된다
     private void submitCrossMidnightSession() {
         Instant midnight = today.minusDays(1).atStartOfDay(KST).toInstant();
         String phoneEvent = eventJson("PHONE", midnight.minusSeconds(600), midnight.plusSeconds(600));
         String body = """
-                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "focusSec": 6000, "events": [%s]}""".formatted(userId, midnight.minusSeconds(3600), midnight.plusSeconds(3600), phoneEvent);
+                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "studySec": 7200, "focusSec": 6000, "events": [%s]}""".formatted(userId, midnight.minusSeconds(3600), midnight.plusSeconds(3600), phoneEvent);
 
         assertThat(mvc.post()
                         .uri("/api/study-sessions")
@@ -161,13 +176,13 @@ class StudySessionApiTest {
                 .hasPathSatisfying(
                         "$[0].statDate",
                         d -> assertThat(d).isEqualTo(today.minusDays(2).toString()))
-                .hasPathSatisfying("$[0].sessionSec", v -> assertThat(v).isEqualTo(3600))
+                .hasPathSatisfying("$[0].studySec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying("$[0].focusSec", v -> assertThat(v).isEqualTo(3000))
                 .hasPathSatisfying("$[0].focusRate", v -> assertThat(v).isEqualTo(83.3))
                 .hasPathSatisfying(
                         "$[1].statDate",
                         d -> assertThat(d).isEqualTo(today.minusDays(1).toString()))
-                .hasPathSatisfying("$[1].sessionSec", v -> assertThat(v).isEqualTo(3600))
+                .hasPathSatisfying("$[1].studySec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying("$[1].focusSec", v -> assertThat(v).isEqualTo(3000));
     }
 
@@ -194,7 +209,7 @@ class StudySessionApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(1))
-                .hasPathSatisfying("$.totalSessionSec", v -> assertThat(v).isEqualTo(3600))
+                .hasPathSatisfying("$.totalStudySec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(3000))
                 .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(83.3))
                 .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(1));
@@ -204,7 +219,7 @@ class StudySessionApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(1))
-                .hasPathSatisfying("$.totalSessionSec", v -> assertThat(v).isEqualTo(3600))
+                .hasPathSatisfying("$.totalStudySec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(3000))
                 .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(1));
     }
@@ -216,20 +231,22 @@ class StudySessionApiTest {
                 .bodyJson()
                 .hasPathSatisfying("$.sessions.length()", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(0))
-                .hasPathSatisfying("$.totalSessionSec", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.totalStudySec", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(0.0))
-                .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(0));
+                .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying(
+                        "$.studiedDatesInMonth.length()", v -> assertThat(v).isEqualTo(0));
     }
 
     private MockMvcTester.MockMvcRequestBuilder streakRequest() {
-        return mvc.get().uri("/api/study-sessions/streak").param("userId", userId.toString());
+        return mvc.get().uri("/api/stats/streak").param("userId", userId.toString());
     }
 
     @Test
     void 어제_세션을_제출하면_스트릭이_1이다() {
         // 세션은 어제 KST 낮 12~14시 — 오늘 기록이 없어도 어제까지 이어진 스트릭은 유지된다
-        assertThat(submitRequest(userId.toString(), 7200, "[]")).hasStatus(HttpStatus.CREATED);
+        assertThat(submitRequest(userId.toString(), 7200, 7200, "[]")).hasStatus(HttpStatus.CREATED);
 
         assertThat(streakRequest())
                 .hasStatusOk()
@@ -242,7 +259,7 @@ class StudySessionApiTest {
     void 같은_날_여러_세션과_자정_분할은_스트릭에_하루씩만_잡힌다() {
         // 그저께~어제 자정 분할(날짜 2개) + 어제 낮 세션(중복 날짜) → 실제 JPQL의 distinct·정렬 검증
         submitCrossMidnightSession();
-        assertThat(submitRequest(userId.toString(), 7200, "[]")).hasStatus(HttpStatus.CREATED);
+        assertThat(submitRequest(userId.toString(), 7200, 7200, "[]")).hasStatus(HttpStatus.CREATED);
 
         assertThat(streakRequest())
                 .hasStatusOk()
@@ -263,17 +280,19 @@ class StudySessionApiTest {
     @Test
     void date_없이_조회하면_400을_반환한다() {
         // 필수 파라미터 누락은 Spring 기본 처리라 본문 없이 상태 코드만 내려온다
-        assertThat(mvc.get().uri("/api/study-sessions").param("userId", userId.toString()))
+        assertThat(mvc.get().uri("/api/stats").param("userId", userId.toString()))
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
 
     @Test
     void STOP_이벤트도_저장되고_집계에_잡힌다() {
+        // STOP 5분은 총공부시간 타이머도 멈춘다 — 총공부시간 상한은 7200-300=6900초
         String stopEvent = eventJson("STOP", sessionStart.plusSeconds(600), sessionStart.plusSeconds(900));
 
-        assertThat(submitRequest(userId.toString(), 6900, "[" + stopEvent + "]"))
+        assertThat(submitRequest(userId.toString(), 6900, 6900, "[" + stopEvent + "]"))
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
+                .hasPathSatisfying("$[0].studySec", v -> assertThat(v).isEqualTo(6900))
                 .hasPathSatisfying("$[0].focusSec", v -> assertThat(v).isEqualTo(6900));
 
         assertThat(listRequest(today.minusDays(1)))
@@ -283,9 +302,24 @@ class StudySessionApiTest {
     }
 
     @Test
+    void studySec_없이_제출하면_400을_반환한다() {
+        String body = """
+                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "focusSec": 7200, "events": []}""".formatted(userId, sessionStart, sessionEnd);
+
+        assertThat(mvc.post()
+                        .uri("/api/study-sessions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.message", message -> assertThat(message).asString().contains("studySec"));
+    }
+
+    @Test
     void focusSec_없이_제출하면_400을_반환한다() {
         String body = """
-                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "events": []}""".formatted(userId, sessionStart, sessionEnd);
+                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "studySec": 7200, "events": []}""".formatted(userId, sessionStart, sessionEnd);
 
         assertThat(mvc.post()
                         .uri("/api/study-sessions")
@@ -305,15 +339,15 @@ class StudySessionApiTest {
                 + eventJson("PHONE", sessionStart.plusSeconds(300), sessionStart.plusSeconds(900))
                 + "]";
 
-        assertThat(submitRequest(userId.toString(), 6600, events))
+        assertThat(submitRequest(userId.toString(), 7200, 6600, events))
                 .hasStatus(HttpStatus.BAD_REQUEST)
                 .bodyJson()
                 .hasPathSatisfying("$.message", message -> assertThat(message).isNotNull());
     }
 
     @Test
-    void 순공_시간이_총시간을_초과하면_400을_반환한다() {
-        assertThat(submitRequest(userId.toString(), 7201, "[]"))
+    void 순공_시간이_총공부시간을_초과하면_400을_반환한다() {
+        assertThat(submitRequest(userId.toString(), 7200, 7201, "[]"))
                 .hasStatus(HttpStatus.BAD_REQUEST)
                 .bodyJson()
                 .hasPathSatisfying(
@@ -322,7 +356,7 @@ class StudySessionApiTest {
 
     @Test
     void 순공_시간이_음수면_400을_반환한다() {
-        assertThat(submitRequest(userId.toString(), -1, "[]"))
+        assertThat(submitRequest(userId.toString(), 7200, -1, "[]"))
                 .hasStatus(HttpStatus.BAD_REQUEST)
                 .bodyJson()
                 .hasPathSatisfying(
@@ -330,12 +364,24 @@ class StudySessionApiTest {
     }
 
     @Test
+    void 총공부시간이_STOP을_제외한_시간을_초과하면_400을_반환한다() {
+        // STOP 5분 → 총공부시간 상한은 7200-300=6900초, 6901초는 초과
+        String stopEvent = eventJson("STOP", sessionStart.plusSeconds(600), sessionStart.plusSeconds(900));
+
+        assertThat(submitRequest(userId.toString(), 6901, 0, "[" + stopEvent + "]"))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.message", message -> assertThat(message).asString().contains("총 공부 시간"));
+    }
+
+    @Test
     void 필수_값이_없으면_400을_반환한다() {
-        assertThat(submitRequest("null", 7200, "[]")).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(submitRequest("null", 7200, 7200, "[]")).hasStatus(HttpStatus.BAD_REQUEST);
     }
 
     @Test
     void 존재하지_않는_사용자면_404를_반환한다() {
-        assertThat(submitRequest("999999999", 7200, "[]")).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(submitRequest("999999999", 7200, 7200, "[]")).hasStatus(HttpStatus.NOT_FOUND);
     }
 }

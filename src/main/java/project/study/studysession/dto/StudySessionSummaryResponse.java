@@ -17,10 +17,10 @@ public record StudySessionSummaryResponse(
         @Schema(description = "세션 종료 시각 (UTC, ISO-8601)", example = "2026-07-24T03:00:00Z")
         Instant endedAt,
 
-        @Schema(description = "총 세션 시간(초)", example = "7200")
-        Integer sessionSec,
+        @Schema(description = "총 공부 시간(초)", example = "6600")
+        Integer studySec,
 
-        @Schema(description = "순공 시간(초)", example = "6600") Integer focusSec,
+        @Schema(description = "순공 시간(초)", example = "6000") Integer focusSec,
 
         @Schema(description = "집중률(%) — 순공시간 ÷ 총시간 × 100, 소수 1자리 반올림", example = "91.7")
         Double focusRate) {
@@ -32,7 +32,7 @@ public record StudySessionSummaryResponse(
                 session.getStatDate(),
                 session.getStartedAt(),
                 session.getEndedAt(),
-                session.getSessionSec(),
+                session.getStudySec(),
                 session.getFocusSec(),
                 focusRate);
     }
