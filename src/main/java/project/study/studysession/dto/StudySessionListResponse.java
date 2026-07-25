@@ -19,6 +19,12 @@ public record StudySessionListResponse(
         @Schema(description = "조회 범위 전체 순공 시간(초) 합계 — sessions[].focusSec의 합", example = "6000")
         Long totalFocusSec,
 
+        @Schema(
+                description =
+                        "조회 범위 내 최장집중시간(초) — 세션 하나 안에서 이벤트(PHONE/DEVICE/AWAY/PAUSE)로 끊기지 않고 이어진 가장 긴 구간을 세션마다 구해, 그중 최댓값. 세션이 없으면 0",
+                example = "3000")
+        Long longestFocusSec,
+
         @Schema(description = "조회 범위 전체 집중률(%) — totalFocusSec ÷ totalStudySec × 100, 소수 1자리", example = "83.3")
         Double focusRate,
 

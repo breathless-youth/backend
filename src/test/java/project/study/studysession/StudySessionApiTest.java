@@ -151,6 +151,7 @@ class StudySessionApiTest {
                 .hasPathSatisfying("$.totalStudySec", v -> assertThat(v).isEqualTo(7200))
                 // 제출한 focusSec 6300이 그대로 합계에 잡힌다 → 집중률 87.5%
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(6300))
+                .hasPathSatisfying("$.longestFocusSec", v -> assertThat(v).isEqualTo(5100)) // 시작~PHONE~AWAY~종료 중 최댓값
                 .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(87.5))
                 .hasPathSatisfying(
                         "$.totalEventCounts.PHONE", v -> assertThat(v).isEqualTo(1))
@@ -242,6 +243,7 @@ class StudySessionApiTest {
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.totalStudySec", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.longestFocusSec", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(0.0))
                 .hasPathSatisfying(
                         "$.totalEventCounts.PHONE", v -> assertThat(v).isEqualTo(0))

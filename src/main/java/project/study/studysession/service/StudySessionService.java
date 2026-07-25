@@ -73,6 +73,10 @@ public class StudySessionService {
                 sessions.stream().mapToLong(StudySession::getStudySec).sum();
         long totalFocusSec =
                 sessions.stream().mapToLong(StudySession::getFocusSec).sum();
+        long longestFocusSec = sessions.stream()
+                .mapToLong(StudySessionService::longestFocusStreakSec)
+                .max()
+                .orElse(0);
         List<StudySessionSummaryResponse> summaries =
                 sessions.stream().map(this::toSummaryResponse).toList();
         Map<EventStatus, Long> totalEventCounts = countByStatus(
@@ -87,9 +91,24 @@ public class StudySessionService {
                 sessions.size(),
                 totalStudySec,
                 totalFocusSec,
+                longestFocusSec,
                 focusRate(totalFocusSec, totalStudySec),
                 totalEventCounts,
                 studiedDatesInMonth);
+    }
+
+    /** 세션 내부에서 이벤트(PHONE/DEVICE/AWAY/PAUSE)로 끊기지 않고 이어진 가장 긴 구간(초) — 이벤트가 없으면 세션 전체 길이. */
+    private static long longestFocusStreakSec(StudySession session) {
+        List<StatusEvent> sorted = session.getEvents().stream()
+                .sorted(Comparator.comparing(StatusEvent::getStartedAt))
+                .toList();
+        Instant cursor = session.getStartedAt();
+        long max = 0;
+        for (StatusEvent event : sorted) {
+            max = Math.max(max, Duration.between(cursor, event.getStartedAt()).toSeconds());
+            cursor = event.getEndedAt();
+        }
+        return Math.max(max, Duration.between(cursor, session.getEndedAt()).toSeconds());
     }
 
     /** 상태별 이벤트 발생 건수 — 프론트가 키 존재를 가정할 수 있도록 없는 상태도 0으로 채운다. */
