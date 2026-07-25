@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -99,9 +100,9 @@ class StudySessionServiceTest {
     }
 
     @Test
-    void STOP을_제외한_시간까지는_총공부시간으로_허용된다() {
-        // STOP 10분 → 방 체류시간(7200) - STOP(600) = 6600초까지 허용
-        List<StatusEvent> events = List.of(event(EventStatus.STOP, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"));
+    void PAUSE를_제외한_시간까지는_총공부시간으로_허용된다() {
+        // PAUSE 10분 → 방 체류시간(7200) - PAUSE(600) = 6600초까지 허용
+        List<StatusEvent> events = List.of(event(EventStatus.PAUSE, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"));
 
         StudySession session =
                 service.createSessions(1L, START, END, 6600, 6600, events).get(0);
@@ -110,15 +111,15 @@ class StudySessionServiceTest {
     }
 
     @Test
-    void STOP을_제외한_시간을_초과하는_총공부시간은_거부된다() {
-        List<StatusEvent> events = List.of(event(EventStatus.STOP, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"));
+    void PAUSE를_제외한_시간을_초과하는_총공부시간은_거부된다() {
+        List<StatusEvent> events = List.of(event(EventStatus.PAUSE, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"));
 
         assertThatThrownBy(() -> service.createSessions(1L, START, END, 6601, 0, events))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
     @Test
-    void STOP이_아닌_이벤트는_총공부시간_상한에_영향을_주지_않는다() {
+    void PAUSE가_아닌_이벤트는_총공부시간_상한에_영향을_주지_않는다() {
         // PHONE은 순공시간 타이머만 멈춘다 — 총공부시간 상한은 방 체류시간 그대로
         List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"));
 
@@ -242,7 +243,6 @@ class StudySessionServiceTest {
         LocalDate date = LocalDate.of(2026, 7, 24);
         when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
                 .thenReturn(List.of());
-        when(studySessionRepository.countEventsByStatus(1L, date, date)).thenReturn(List.of());
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
                 .thenReturn(List.of());
@@ -259,7 +259,6 @@ class StudySessionServiceTest {
         StudySession second = new StudySession(1L, date, START, END, 3600, 3000, List.of());
         when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
                 .thenReturn(List.of(first, second));
-        when(studySessionRepository.countEventsByStatus(1L, date, date)).thenReturn(List.of());
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
                 .thenReturn(List.of());
@@ -277,7 +276,6 @@ class StudySessionServiceTest {
         List<LocalDate> studiedDates = List.of(LocalDate.of(2026, 7, 3), LocalDate.of(2026, 7, 24));
         when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
                 .thenReturn(List.of());
-        when(studySessionRepository.countEventsByStatus(1L, date, date)).thenReturn(List.of());
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
                 .thenReturn(studiedDates);
@@ -288,11 +286,73 @@ class StudySessionServiceTest {
     }
 
     @Test
+    void 세션_요약에_상태별_이벤트_건수가_담긴다() {
+        LocalDate date = LocalDate.of(2026, 7, 24);
+        StudySession session = new StudySession(
+                1L,
+                date,
+                START,
+                END,
+                7200,
+                6600,
+                List.of(
+                        event(EventStatus.PHONE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
+                        event(EventStatus.PHONE, "2026-07-24T08:10:00Z", "2026-07-24T08:15:00Z"),
+                        event(EventStatus.PAUSE, "2026-07-24T08:20:00Z", "2026-07-24T08:25:00Z")));
+        when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
+                .thenReturn(List.of(session));
+        when(studySessionRepository.findDistinctStatDatesBetween(
+                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+                .thenReturn(List.of());
+
+        StudySessionListResponse response = service.list(1L, date);
+
+        Map<EventStatus, Long> eventCounts = response.sessions().get(0).eventCounts();
+        assertThat(eventCounts.get(EventStatus.PHONE)).isEqualTo(2L);
+        assertThat(eventCounts.get(EventStatus.PAUSE)).isEqualTo(1L);
+        assertThat(eventCounts.get(EventStatus.DEVICE)).isEqualTo(0L);
+        assertThat(eventCounts.get(EventStatus.AWAY)).isEqualTo(0L);
+    }
+
+    @Test
+    void 목록_응답의_totalEventCounts는_세션별_건수의_합이다() {
+        LocalDate date = LocalDate.of(2026, 7, 24);
+        StudySession first = new StudySession(
+                1L,
+                date,
+                START,
+                END,
+                7200,
+                6600,
+                List.of(event(EventStatus.PHONE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z")));
+        StudySession second = new StudySession(
+                1L,
+                date,
+                START,
+                END,
+                3600,
+                3000,
+                List.of(
+                        event(EventStatus.PHONE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
+                        event(EventStatus.AWAY, "2026-07-24T08:10:00Z", "2026-07-24T08:15:00Z")));
+        when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
+                .thenReturn(List.of(first, second));
+        when(studySessionRepository.findDistinctStatDatesBetween(
+                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+                .thenReturn(List.of());
+
+        StudySessionListResponse response = service.list(1L, date);
+
+        assertThat(response.totalEventCounts().get(EventStatus.PHONE)).isEqualTo(2L);
+        assertThat(response.totalEventCounts().get(EventStatus.AWAY)).isEqualTo(1L);
+        assertThat(response.totalEventCounts().get(EventStatus.DEVICE)).isEqualTo(0L);
+    }
+
+    @Test
     void date가_달의_마지막날이어도_그달_전체_범위로_조회한다() {
         LocalDate date = LocalDate.of(2026, 2, 28);
         when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
                 .thenReturn(List.of());
-        when(studySessionRepository.countEventsByStatus(1L, date, date)).thenReturn(List.of());
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28)))
                 .thenReturn(List.of());

@@ -100,9 +100,9 @@ class StudySessionMidnightSplitTest {
     }
 
     @Test
-    void 자정_분할_시_STOP_구간은_총공부시간_배분에서_제외된다() {
-        // STOP 10분이 앞 조각(23~24시)에만 있다 — studyActiveSec: 조각1=3000, 조각2=3600, 합 6600
-        List<StatusEvent> events = List.of(event(EventStatus.STOP, "2026-07-23T14:00:00Z", "2026-07-23T14:10:00Z"));
+    void 자정_분할_시_PAUSE_구간은_총공부시간_배분에서_제외된다() {
+        // PAUSE 10분이 앞 조각(23~24시)에만 있다 — studyActiveSec: 조각1=3000, 조각2=3600, 합 6600
+        List<StatusEvent> events = List.of(event(EventStatus.PAUSE, "2026-07-23T14:00:00Z", "2026-07-23T14:10:00Z"));
 
         List<StudySession> sessions = service.createSessions(1L, CROSS_START, CROSS_END, 6600, 0, events);
 
@@ -111,8 +111,8 @@ class StudySessionMidnightSplitTest {
     }
 
     @Test
-    void 순공시간_분할_가중치는_STOP이_아닌_이벤트도_포함한다() {
-        // PHONE 10분이 앞 조각에만 있다 — STOP이 아니므로 총공부시간 배분엔 영향 없고, 순공시간 배분에만 영향
+    void 순공시간_분할_가중치는_PAUSE가_아닌_이벤트도_포함한다() {
+        // PHONE 10분이 앞 조각에만 있다 — PAUSE가 아니므로 총공부시간 배분엔 영향 없고, 순공시간 배분에만 영향
         List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-23T14:00:00Z", "2026-07-23T14:10:00Z"));
 
         List<StudySession> sessions = service.createSessions(1L, CROSS_START, CROSS_END, 7200, 6600, events);

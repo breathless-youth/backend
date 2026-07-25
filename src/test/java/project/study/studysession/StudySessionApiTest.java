@@ -152,9 +152,16 @@ class StudySessionApiTest {
                 // 제출한 focusSec 6300이 그대로 합계에 잡힌다 → 집중률 87.5%
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(6300))
                 .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(87.5))
-                .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(1))
-                .hasPathSatisfying("$.eventCounts.AWAY", v -> assertThat(v).isEqualTo(1))
-                .hasPathSatisfying("$.eventCounts.DEVICE", v -> assertThat(v).isEqualTo(0));
+                .hasPathSatisfying(
+                        "$.totalEventCounts.PHONE", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying("$.totalEventCounts.AWAY", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying(
+                        "$.totalEventCounts.DEVICE", v -> assertThat(v).isEqualTo(0))
+                // 세션이 하나뿐이라 세션별 건수도 합계와 같다
+                .hasPathSatisfying(
+                        "$.sessions[0].eventCounts.PHONE", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying(
+                        "$.sessions[0].eventCounts.AWAY", v -> assertThat(v).isEqualTo(1));
     }
 
     // 어제 KST 자정을 걸치는 세션 (그저께 23시 ~ 어제 01시), PHONE 이벤트가 자정에 걸침
@@ -212,7 +219,8 @@ class StudySessionApiTest {
                 .hasPathSatisfying("$.totalStudySec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(3000))
                 .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(83.3))
-                .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(1));
+                .hasPathSatisfying(
+                        "$.totalEventCounts.PHONE", v -> assertThat(v).isEqualTo(1));
 
         // 어제 조회: 00~01시 조각 + 이벤트의 뒤 조각 1건
         assertThat(listRequest(today.minusDays(1)))
@@ -221,7 +229,8 @@ class StudySessionApiTest {
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying("$.totalStudySec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(3000))
-                .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(1));
+                .hasPathSatisfying(
+                        "$.totalEventCounts.PHONE", v -> assertThat(v).isEqualTo(1));
     }
 
     @Test
@@ -234,7 +243,8 @@ class StudySessionApiTest {
                 .hasPathSatisfying("$.totalStudySec", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.focusRate", v -> assertThat(v).isEqualTo(0.0))
-                .hasPathSatisfying("$.eventCounts.PHONE", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying(
+                        "$.totalEventCounts.PHONE", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying(
                         "$.studiedDatesInMonth.length()", v -> assertThat(v).isEqualTo(0));
     }
@@ -285,11 +295,11 @@ class StudySessionApiTest {
     }
 
     @Test
-    void STOP_이벤트도_저장되고_집계에_잡힌다() {
-        // STOP 5분은 총공부시간 타이머도 멈춘다 — 총공부시간 상한은 7200-300=6900초
-        String stopEvent = eventJson("STOP", sessionStart.plusSeconds(600), sessionStart.plusSeconds(900));
+    void PAUSE_이벤트도_저장되고_집계에_잡힌다() {
+        // PAUSE 5분은 총공부시간 타이머도 멈춘다 — 총공부시간 상한은 7200-300=6900초
+        String pauseEvent = eventJson("PAUSE", sessionStart.plusSeconds(600), sessionStart.plusSeconds(900));
 
-        assertThat(submitRequest(userId.toString(), 6900, 6900, "[" + stopEvent + "]"))
+        assertThat(submitRequest(userId.toString(), 6900, 6900, "[" + pauseEvent + "]"))
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying("$[0].studySec", v -> assertThat(v).isEqualTo(6900))
@@ -298,7 +308,8 @@ class StudySessionApiTest {
         assertThat(listRequest(today.minusDays(1)))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.eventCounts.STOP", v -> assertThat(v).isEqualTo(1));
+                .hasPathSatisfying(
+                        "$.totalEventCounts.PAUSE", v -> assertThat(v).isEqualTo(1));
     }
 
     @Test
@@ -364,11 +375,11 @@ class StudySessionApiTest {
     }
 
     @Test
-    void 총공부시간이_STOP을_제외한_시간을_초과하면_400을_반환한다() {
-        // STOP 5분 → 총공부시간 상한은 7200-300=6900초, 6901초는 초과
-        String stopEvent = eventJson("STOP", sessionStart.plusSeconds(600), sessionStart.plusSeconds(900));
+    void 총공부시간이_PAUSE를_제외한_시간을_초과하면_400을_반환한다() {
+        // PAUSE 5분 → 총공부시간 상한은 7200-300=6900초, 6901초는 초과
+        String pauseEvent = eventJson("PAUSE", sessionStart.plusSeconds(600), sessionStart.plusSeconds(900));
 
-        assertThat(submitRequest(userId.toString(), 6901, 0, "[" + stopEvent + "]"))
+        assertThat(submitRequest(userId.toString(), 6901, 0, "[" + pauseEvent + "]"))
                 .hasStatus(HttpStatus.BAD_REQUEST)
                 .bodyJson()
                 .hasPathSatisfying(

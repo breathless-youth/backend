@@ -63,7 +63,7 @@ public class DevDataSeeder implements ApplicationRunner {
                         event(EventStatus.PHONE, s1.plus(Duration.ofMinutes(30)), s1.plus(Duration.ofMinutes(40))),
                         event(EventStatus.AWAY, s1.plus(Duration.ofMinutes(70)), s1.plus(Duration.ofMinutes(80)))));
 
-        // 2) 어제 14~17시: DEVICE 20분 + STOP 10분
+        // 2) 어제 14~17시: DEVICE 20분 + PAUSE 10분
         Instant s2 = kst(today.minusDays(1), 14);
         submit(
                 userId,
@@ -71,7 +71,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 kst(today.minusDays(1), 17),
                 List.of(
                         event(EventStatus.DEVICE, s2.plus(Duration.ofMinutes(60)), s2.plus(Duration.ofMinutes(80))),
-                        event(EventStatus.STOP, s2.plus(Duration.ofMinutes(120)), s2.plus(Duration.ofMinutes(130)))));
+                        event(EventStatus.PAUSE, s2.plus(Duration.ofMinutes(120)), s2.plus(Duration.ofMinutes(130)))));
 
         // 3) 2일 전 20:00~21:30: 이벤트 없음 (집중률 100%)
         Instant s3 = kst(today.minusDays(2), 20);
@@ -101,10 +101,10 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void submit(Long userId, Instant startedAt, Instant endedAt, List<StatusEventRequest> events) {
         // studySec/focusSec는 요청값이 그대로 저장되므로, 앱이 보내듯 값을 계산해 보낸다.
-        // studySec은 STOP(일시정지) 구간만 빼고, focusSec은 전체 이벤트 구간을 뺀다.
+        // studySec은 PAUSE(일시정지) 구간만 빼고, focusSec은 전체 이벤트 구간을 뺀다.
         long totalSec = Duration.between(startedAt, endedAt).toSeconds();
-        long stopSec = events.stream()
-                .filter(event -> event.status() == EventStatus.STOP)
+        long pauseSec = events.stream()
+                .filter(event -> event.status() == EventStatus.PAUSE)
                 .mapToLong(event ->
                         Duration.between(event.startedAt(), event.endedAt()).toSeconds())
                 .sum();
@@ -112,7 +112,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 .mapToLong(event ->
                         Duration.between(event.startedAt(), event.endedAt()).toSeconds())
                 .sum();
-        int studySec = (int) (totalSec - stopSec);
+        int studySec = (int) (totalSec - pauseSec);
         int focusSec = (int) (totalSec - nonFocusSec);
         studySessionService.create(
                 new StudySessionCreateRequest(userId, startedAt, endedAt, studySec, focusSec, events));

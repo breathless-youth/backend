@@ -6,7 +6,7 @@ import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 
 public record StatusEventResponse(
-        @Schema(description = "비공부 상태 종류", example = "PHONE")
+        @Schema(description = "비공부 상태 종류. PHONE/DEVICE/AWAY=순공 타이머만 정지, PAUSE=총공부·순공 타이머 모두 정지", example = "PHONE")
         EventStatus status,
 
         @Schema(description = "이벤트 시작 시각 (UTC, ISO-8601)", example = "2026-07-24T01:10:00Z")

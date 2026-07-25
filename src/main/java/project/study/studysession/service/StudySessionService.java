@@ -63,6 +63,7 @@ public class StudySessionService {
     /**
      * 통계 날짜(statDate) 기준 하루 조회 — 기간(from~to) 조회는 추후 별도 메서드로 분리한다.
      * 캘린더 표시용으로 date가 속한 달의 공부한 날짜 목록(studiedDatesInMonth)도 함께 내려준다.
+     * 상태별 이벤트 건수는 세션마다(sessions[].eventCounts) 내려주고, 그 합계도 함께(totalEventCounts) 내려준다.
      */
     @Transactional(readOnly = true)
     public StudySessionListResponse list(Long userId, LocalDate date) {
@@ -72,28 +73,33 @@ public class StudySessionService {
                 sessions.stream().mapToLong(StudySession::getStudySec).sum();
         long totalFocusSec =
                 sessions.stream().mapToLong(StudySession::getFocusSec).sum();
-
-        // 프론트가 키 존재를 가정할 수 있도록 없는 상태도 0으로 채운다
-        Map<EventStatus, Long> eventCounts = new EnumMap<>(EventStatus.class);
-        for (EventStatus status : EventStatus.values()) {
-            eventCounts.put(status, 0L);
-        }
-        studySessionRepository
-                .countEventsByStatus(userId, date, date)
-                .forEach(count -> eventCounts.put(count.status(), count.count()));
+        List<StudySessionSummaryResponse> summaries =
+                sessions.stream().map(this::toSummaryResponse).toList();
+        Map<EventStatus, Long> totalEventCounts = countByStatus(
+                sessions.stream().flatMap(s -> s.getEvents().stream()).toList());
 
         YearMonth month = YearMonth.from(date);
         List<LocalDate> studiedDatesInMonth =
                 studySessionRepository.findDistinctStatDatesBetween(userId, month.atDay(1), month.atEndOfMonth());
 
         return new StudySessionListResponse(
-                sessions.stream().map(this::toSummaryResponse).toList(),
+                summaries,
                 sessions.size(),
                 totalStudySec,
                 totalFocusSec,
                 focusRate(totalFocusSec, totalStudySec),
-                eventCounts,
+                totalEventCounts,
                 studiedDatesInMonth);
+    }
+
+    /** 상태별 이벤트 발생 건수 — 프론트가 키 존재를 가정할 수 있도록 없는 상태도 0으로 채운다. */
+    private static Map<EventStatus, Long> countByStatus(List<StatusEvent> events) {
+        Map<EventStatus, Long> counts = new EnumMap<>(EventStatus.class);
+        for (EventStatus status : EventStatus.values()) {
+            counts.put(status, 0L);
+        }
+        events.forEach(event -> counts.merge(event.getStatus(), 1L, Long::sum));
+        return counts;
     }
 
     private StudySessionResponse toResponse(StudySession session) {
@@ -101,14 +107,15 @@ public class StudySessionService {
     }
 
     private StudySessionSummaryResponse toSummaryResponse(StudySession session) {
-        return StudySessionSummaryResponse.from(session, focusRate(session.getFocusSec(), session.getStudySec()));
+        return StudySessionSummaryResponse.from(
+                session, focusRate(session.getFocusSec(), session.getStudySec()), countByStatus(session.getEvents()));
     }
 
     /**
      * 세션을 KST 자정 경계로 분할해 생성한다. 자정을 넘지 않으면 세션 1개가 담긴 리스트를 반환하고,
      * 자정에 걸친 이벤트는 시각 기준으로 나뉘어 각 세션에 귀속된다.
      * 총 공부 시간(studySec)과 순공 시간(focusSec)은 앱이 제출한 값을 그대로 저장하되, 분할 시
-     * 조각 길이에 비례해 배분한다. STOP(일시정지)은 총공부시간 타이머도 멈추므로 studySec 배분
+     * 조각 길이에 비례해 배분한다. PAUSE(일시정지)는 총공부시간 타이머도 멈추므로 studySec 배분
      * 가중치에서 제외되고, 나머지 이벤트(PHONE/DEVICE/AWAY)는 순공시간 타이머만 멈추므로
      * focusSec 배분 가중치에서만 제외된다.
      */
@@ -155,7 +162,7 @@ public class StudySessionService {
     /**
      * 검증·배분 기준은 원본 총 시간이 아니라 저장되는 조각별 총시간(내림 초)의 합이어야 한다.
      * sub-second 타임스탬프가 자정에 걸치면 원본 기준으로는 0으로 나누기(총 0초)나 절삭 손실이
-     * 생길 수 있다. 조각마다 STOP만 뺀 studyActiveSec과 전체 이벤트를 뺀 focusActiveSec을
+     * 생길 수 있다. 조각마다 PAUSE만 뺀 studyActiveSec과 전체 이벤트를 뺀 focusActiveSec을
      * 함께 구해 각각의 배분 가중치로 쓴다.
      */
     private static SegmentWeights computeSegmentWeights(List<Instant> cuts, List<StatusEvent> sorted) {
@@ -169,7 +176,7 @@ public class StudySessionService {
             long segmentSec = Duration.between(cuts.get(i), cuts.get(i + 1)).toSeconds();
             List<StatusEvent> clipped = clip(sorted, cuts.get(i), cuts.get(i + 1));
             segmentEvents.add(clipped);
-            long stopSec = sumDuration(clipped, EventStatus.STOP);
+            long stopSec = sumDuration(clipped, EventStatus.PAUSE);
             long eventSec = sumDuration(clipped);
             studyActiveSecs[i] = segmentSec - stopSec;
             focusActiveSecs[i] = segmentSec - eventSec;
@@ -276,7 +283,7 @@ public class StudySessionService {
         }
     }
 
-    /** studySec 상한은 방 체류시간이 아니라 STOP(일시정지) 시간을 제외한 시간이다 — STOP 중엔 총공부 타이머도 멈춘다. */
+    /** studySec 상한은 방 체류시간이 아니라 PAUSE(일시정지) 시간을 제외한 시간이다 — PAUSE 중엔 총공부 타이머도 멈춘다. */
     private static void validateStudySec(int studySec, long totalStudyActiveSec) {
         if (studySec < 0 || studySec > totalStudyActiveSec) {
             throw new InvalidSessionException("총 공부 시간은 0 이상, 일시정지를 제외한 세션 시간 이하여야 합니다");
