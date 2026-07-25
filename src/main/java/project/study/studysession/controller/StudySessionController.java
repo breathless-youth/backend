@@ -36,7 +36,7 @@ public class StudySessionController {
                     서버는 세션을 실시간으로 추적하지 않는다 — 앱에서 제출한 \
                     시작/종료 시각, 앱이 잰 총 공부 시간(`studySec`)과 순공 시간(`focusSec`), \
                     온디바이스에서 제공한 **비공부 상태 이벤트**(PHONE·DEVICE·AWAY·PAUSE) 목록이 데이터의 전부다. \
-                    이벤트 1건은 `status`/`startedAt`/`endedAt` 3개 필드만 있으면 되고, 길이(duration)는 \
+                    이벤트 1건은 `status`/`startedAt`/`endedAt` 3개 필드만 있으면 되고, 순공시간은 \
                     서버가 두 시각으로 직접 계산하므로 별도로 보낼 필요가 없다.
 
                     세션(방 입장~퇴장) 안에 총 공부시간 타이머가 있고, 그 안에 다시 순공시간 타이머가 있는 구조다 — \
