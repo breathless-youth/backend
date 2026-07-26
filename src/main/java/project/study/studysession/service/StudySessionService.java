@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,14 +34,22 @@ import project.study.studysession.repository.StudySessionRepository;
 public class StudySessionService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final Duration MAX_DURATION = Duration.ofHours(24);
-    private static final Duration CLOCK_SKEW_TOLERANCE = Duration.ofMinutes(5);
+    private static final String STARTED_AT_UNIQUE_CONSTRAINT = "uq_study_session_user_started_at";
+    // V1이 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
+    private static final String USER_FK_CONSTRAINT = "study_session_user_id_fkey";
 
     private final StudySessionRepository studySessionRepository;
     private final Clock clock;
 
     @Transactional
     public List<StudySessionResponse> create(StudySessionCreateRequest request) {
+        // 같은 (userId, startedAt) 루트 제출이 이미 있으면 재전송(강제종료 후 복구 등)으로 보고 저장 없이
+        // 기존 결과(자정 분할 조각 포함)를 반환한다 — 재제출 본문의 다른 필드(endedAt 등)는 보지 않는다
+        List<StudySession> existing = studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
+                request.userId(), request.startedAt());
+        if (!existing.isEmpty()) {
+            return existing.stream().map(this::toResponse).toList();
+        }
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
         List<StudySession> sessions = createSessions(
@@ -52,12 +61,31 @@ public class StudySessionService {
                 events);
         try {
             List<StudySession> saved = studySessionRepository.saveAll(sessions);
-            // FK 위반을 트랜잭션 커밋 전에 감지하기 위해 즉시 flush (한 트랜잭션이라 분할 저장도 원자적)
+            // FK·유니크 위반을 트랜잭션 커밋 전에 감지하기 위해 즉시 flush (한 트랜잭션이라 분할 저장도 원자적)
             studySessionRepository.flush();
             return saved.stream().map(this::toResponse).toList();
         } catch (DataIntegrityViolationException e) {
-            throw new NotFoundException("존재하지 않는 사용자입니다: " + request.userId());
+            // 제약 이름으로 원인을 특정한다 — 유니크 위반은 동시 재전송 레이스이거나 기존 세션과
+            // 시작 시각이 겹치는 제출(409), 유저 FK 위반은 404, 그 외 무결성 위반은 숨기지 않고 전파(500)
+            String constraint = violatedConstraint(e);
+            if (STARTED_AT_UNIQUE_CONSTRAINT.equalsIgnoreCase(constraint)) {
+                throw new DuplicateSessionException("이미 같은 시각에 시작한 세션이 저장되어 있습니다");
+            }
+            if (USER_FK_CONSTRAINT.equalsIgnoreCase(constraint)) {
+                throw new NotFoundException("존재하지 않는 사용자입니다: " + request.userId());
+            }
+            throw e;
         }
+    }
+
+    /** 원인 체인에서 위반된 제약 이름을 찾는다 — 없으면 null. */
+    private static String violatedConstraint(DataIntegrityViolationException e) {
+        for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConstraintViolationException violation) {
+                return violation.getConstraintName();
+            }
+        }
+        return null;
     }
 
     /**
@@ -141,18 +169,17 @@ public class StudySessionService {
     List<StudySession> createSessions(
             Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
         // 분할 후 조각은 항상 24시간 이내가 되므로, 24시간 한도 등은 반드시 분할 전 원본 기준으로 먼저 검증한다
-        validatePeriod(startedAt, endedAt);
+        StudySessionValidator.validatePeriod(startedAt, endedAt, clock.instant());
         List<StatusEvent> sorted = events.stream()
                 .sorted(Comparator.comparing(StatusEvent::getStartedAt))
                 .toList();
-        // 이벤트 시간 검증
-        validateEvents(startedAt, endedAt, sorted);
+        StudySessionValidator.validateEvents(startedAt, endedAt, sorted);
 
         List<Instant> cuts = computeCuts(startedAt, endedAt);
         SegmentWeights weights = computeSegmentWeights(cuts, sorted);
 
-        validateStudySec(studySec, weights.totalStudyActiveSec());
-        validateFocusSec(focusSec, studySec);
+        StudySessionValidator.validateStudySec(studySec, weights.totalStudyActiveSec());
+        StudySessionValidator.validateFocusSec(focusSec, studySec);
 
         return buildSessions(userId, cuts, weights, studySec, focusSec);
     }
@@ -239,6 +266,8 @@ public class StudySessionService {
             allocatedStudySec += segmentStudySec;
             allocatedFocusSec += segmentFocusSec;
         }
+        // 조각들이 원본 제출의 시작 시각을 루트로 공유해야 재제출 판별·응답 조회가 조각 단위로 어긋나지 않는다
+        sessions.forEach(session -> session.attachToSubmission(cuts.get(0)));
         return sessions;
     }
 
@@ -288,48 +317,6 @@ public class StudySessionService {
             return 0.0;
         }
         return Math.round(focusSec * 1000.0 / studySec) / 10.0;
-    }
-
-    private void validatePeriod(Instant startedAt, Instant endedAt) {
-        if (!endedAt.isAfter(startedAt)) {
-            throw new InvalidSessionException("세션 종료 시각은 시작 시각 이후여야 합니다");
-        }
-        if (Duration.between(startedAt, endedAt).compareTo(MAX_DURATION) > 0) {
-            throw new InvalidSessionException("세션은 24시간을 초과할 수 없습니다");
-        }
-        if (endedAt.isAfter(clock.instant().plus(CLOCK_SKEW_TOLERANCE))) {
-            throw new InvalidSessionException("세션 종료 시각이 미래일 수 없습니다");
-        }
-    }
-
-    /** studySec 상한은 방 체류시간이 아니라 PAUSE(일시정지) 시간을 제외한 시간이다 — PAUSE 중엔 총공부 타이머도 멈춘다. */
-    private static void validateStudySec(int studySec, long totalStudyActiveSec) {
-        if (studySec < 0 || studySec > totalStudyActiveSec) {
-            throw new InvalidSessionException("총 공부 시간은 0 이상, 일시정지를 제외한 세션 시간 이하여야 합니다");
-        }
-    }
-
-    /** focusSec 상한은 이벤트 총합이 아니라 studySec이다 — 이벤트로 focusSec을 역산·제한하지 않는다(ADR-0006). */
-    private static void validateFocusSec(int focusSec, int studySec) {
-        if (focusSec < 0 || focusSec > studySec) {
-            throw new InvalidSessionException("순공 시간은 0 이상, 총 공부 시간 이하여야 합니다");
-        }
-    }
-
-    private static void validateEvents(Instant startedAt, Instant endedAt, List<StatusEvent> sortedEvents) {
-        StatusEvent previous = null;
-        for (StatusEvent event : sortedEvents) {
-            if (!event.getEndedAt().isAfter(event.getStartedAt())) {
-                throw new InvalidSessionException("이벤트 종료 시각은 시작 시각 이후여야 합니다");
-            }
-            if (event.getStartedAt().isBefore(startedAt) || event.getEndedAt().isAfter(endedAt)) {
-                throw new InvalidSessionException("이벤트는 세션 구간 안에 있어야 합니다");
-            }
-            if (previous != null && event.getStartedAt().isBefore(previous.getEndedAt())) {
-                throw new InvalidSessionException("이벤트 구간이 서로 겹칠 수 없습니다");
-            }
-            previous = event;
-        }
     }
 
     /**

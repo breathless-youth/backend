@@ -52,6 +52,8 @@ public class StudySessionController {
 
                     **검증 규칙**
                     - 종료 시각은 시작 시각 이후여야 한다 (세션·이벤트 모두)
+                    - 세션은 10분 이상이어야 한다 — 10분 미만 세션은 저장되지 않고 `400`으로 거절된다 \
+                    (저장되지 않으므로 스트릭·통계에도 잡히지 않는다)
                     - 세션은 24시간을 초과할 수 없다
                     - 세션 종료 시각은 미래일 수 없다 (기기 시계 오차 5분까지 허용)
                     - 총 공부 시간(`studySec`)은 0 이상, (세션 총 시간 − `PAUSE` 이벤트 시간 합) 이하여야 한다
@@ -67,7 +69,12 @@ public class StudySessionController {
                     자정에 걸친 이벤트도 시각 기준으로 나뉘어 각 세션에 귀속된다 (각 날짜 조회 응답의 세션별 `eventCounts`와 \
                     합계 `totalEventCounts`에 각각 1건씩 잡힌다). \
                     자정을 넘지 않으면 요소가 1개인 배열이 내려온다. \
-                    정확히 자정에 시작하거나 끝나는 세션은 분할되지 않는다.""")
+                    정확히 자정에 시작하거나 끝나는 세션은 분할되지 않는다.
+
+                    **멱등 재제출 — 중복 저장 방지.** `userId`+`startedAt`이 멱등 키다. 같은 키로 다시 제출하면 \
+                    (앱 강제종료 후 재접속해 로컬 보관분을 재전송하는 경우 등) 새로 저장하지 않고 이미 저장된 \
+                    세션 배열을 그대로 `201`로 돌려준다 — 재제출 본문의 다른 필드는 무시된다. \
+                    시작 시각이 기존 세션(자정 분할 조각 포함)과 겹치는 별개 제출이 동시에 들어오면 `409`로 거절된다.""")
     @ApiResponse(
             responseCode = "201",
             description = "저장 성공 — studySec/focusSec/focusRate/statDate를 포함한 세션 배열 (자정 분할 시 2개)")
@@ -82,6 +89,7 @@ public class StudySessionController {
                                 @ExampleObject(
                                         name = "종료가 시작보다 빠름",
                                         value = "{\"message\": \"세션 종료 시각은 시작 시각 이후여야 합니다\"}"),
+                                @ExampleObject(name = "10분 미만", value = "{\"message\": \"세션은 10분 이상이어야 합니다\"}"),
                                 @ExampleObject(name = "24시간 초과", value = "{\"message\": \"세션은 24시간을 초과할 수 없습니다\"}"),
                                 @ExampleObject(name = "미래 시각", value = "{\"message\": \"세션 종료 시각이 미래일 수 없습니다\"}"),
                                 @ExampleObject(
@@ -94,6 +102,17 @@ public class StudySessionController {
                                 @ExampleObject(name = "이벤트가 세션 밖", value = "{\"message\": \"이벤트는 세션 구간 안에 있어야 합니다\"}"),
                                 @ExampleObject(name = "필수 값 누락", value = "{\"message\": \"userId: 널이어서는 안됩니다\"}")
                             }))
+    @ApiResponse(
+            responseCode = "409",
+            description = "시작 시각 충돌 — 같은 시각에 시작한 세션이 이미 저장돼 있다 (동시 재전송 레이스 등). 같은 키로 다시 제출하면 저장된 결과를 받는다",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples =
+                                    @ExampleObject(
+                                            name = "시작 시각 충돌",
+                                            value = "{\"message\": \"이미 같은 시각에 시작한 세션이 저장되어 있습니다\"}")))
     @ApiResponse(
             responseCode = "404",
             description = "존재하지 않는 userId — 먼저 POST /api/users 로 유저를 등록해야 한다",

@@ -196,6 +196,21 @@ class StudySessionServiceTest {
     }
 
     @Test
+    void 십분_미만_세션은_거부한다() {
+        // 9분 59초 — 10분 미만 세션은 저장하지 않는다 (저장이 안 되므로 스트릭에도 잡히지 않는다)
+        assertThatThrownBy(() -> service.createSessions(1L, START, START.plusSeconds(599), 0, 0, List.of()))
+                .isInstanceOf(InvalidSessionException.class);
+    }
+
+    @Test
+    void 정확히_십분_세션은_허용된다() {
+        StudySession session = service.createSessions(1L, START, START.plusSeconds(600), 600, 600, List.of())
+                .get(0);
+
+        assertThat(session.getStudySec()).isEqualTo(600);
+    }
+
+    @Test
     void 이십사_시간을_초과하는_세션은_거부한다() {
         Instant start = NOW.minusSeconds(60 * 60 * 25);
         Instant end = start.plusSeconds(60 * 60 * 24 + 1);

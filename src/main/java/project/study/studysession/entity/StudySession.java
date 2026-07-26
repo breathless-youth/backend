@@ -34,8 +34,14 @@ public class StudySession {
     @Column(name = "stat_date", nullable = false)
     private LocalDate statDate;
 
-    @Column(name = "started_at")
+    // (userId, startedAt)이 멱등 키다 — 재전송 중복 저장은 DB 유니크 제약(uq_study_session_user_started_at)이 막는다
+    @Column(name = "started_at", nullable = false)
     private Instant startedAt;
+
+    // 루트 제출의 시작 시각 — 자정 분할 조각들이 같은 값을 공유해 재제출 판별·응답 조회의 기준이 된다.
+    // NULL은 V7 이전 레거시 행(루트 복원 불가) — 재제출 판별에서 제외되고 유니크 제약이 충돌을 막는다
+    @Column(name = "submission_started_at")
+    private Instant submissionStartedAt;
 
     @Column(name = "ended_at")
     private Instant endedAt;
@@ -61,11 +67,17 @@ public class StudySession {
             int focusSec,
             List<StatusEvent> events) {
         this.userId = userId;
+        this.submissionStartedAt = startedAt;
         this.statDate = statDate;
         this.startedAt = startedAt;
         this.endedAt = endedAt;
         this.studySec = studySec;
         this.focusSec = focusSec;
         this.events = new ArrayList<>(events);
+    }
+
+    /** 자정 분할 조각을 루트 제출에 귀속시킨다 — 분할 직후 서비스만 호출한다 (기본값은 자신의 시작 시각 = 단독 세션). */
+    public void attachToSubmission(Instant submissionStartedAt) {
+        this.submissionStartedAt = submissionStartedAt;
     }
 }

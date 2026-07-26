@@ -64,6 +64,9 @@ class StudySessionMidnightSplitTest {
         List<StudySession> sessions = service.createSessions(1L, CROSS_START, CROSS_END, 7200, 6000, List.of());
 
         assertThat(sessions).hasSize(2);
+        // 두 조각 모두 원본 제출의 시작 시각을 루트로 공유한다 — 재제출 판별·응답 조회의 기준
+        assertThat(sessions.get(0).getSubmissionStartedAt()).isEqualTo(CROSS_START);
+        assertThat(sessions.get(1).getSubmissionStartedAt()).isEqualTo(CROSS_START);
         assertThat(sessions.get(0).getStartedAt()).isEqualTo(CROSS_START);
         assertThat(sessions.get(0).getEndedAt()).isEqualTo(MIDNIGHT);
         assertThat(sessions.get(0).getStatDate()).isEqualTo(LocalDate.of(2026, 7, 23));
@@ -139,27 +142,27 @@ class StudySessionMidnightSplitTest {
     }
 
     @Test
-    void 자정을_걸친_1초_미만_세션도_저장된다() {
-        // 절삭으로 총 0초 — 0으로 나누기 없이 두 조각 모두 0초로 저장된다
+    void 자정을_걸친_서브초_조각은_0초로_저장된다() {
+        // 앞 조각 0.4초는 절삭으로 0초 — 0으로 나누기 없이 뒤 조각이 전부 가져간다 (10분 규칙 때문에 세션은 600.4초로 잡는다)
         Instant start = Instant.parse("2026-07-23T14:59:59.600Z");
-        Instant end = Instant.parse("2026-07-23T15:00:00.400Z");
+        Instant end = Instant.parse("2026-07-23T15:10:00.000Z");
 
-        List<StudySession> sessions = service.createSessions(1L, start, end, 0, 0, List.of());
+        List<StudySession> sessions = service.createSessions(1L, start, end, 600, 600, List.of());
 
         assertThat(sessions).hasSize(2);
         assertThat(sessions.get(0).getStudySec()).isEqualTo(0);
         assertThat(sessions.get(0).getFocusSec()).isEqualTo(0);
-        assertThat(sessions.get(1).getStudySec()).isEqualTo(0);
-        assertThat(sessions.get(1).getFocusSec()).isEqualTo(0);
+        assertThat(sessions.get(1).getStudySec()).isEqualTo(600);
+        assertThat(sessions.get(1).getFocusSec()).isEqualTo(600);
     }
 
     @Test
     void 절삭으로_조각_수용량을_넘는_총공부시간은_거부한다() {
-        // 1.2초 세션이 자정에 걸치면 조각별 절삭(0초+0초) 때문에 담을 수 있는 총공부시간이 0초다
+        // 601.2초 세션이 자정에 걸치면 조각별 절삭(0초+600초) 때문에 담을 수 있는 총공부시간이 600초다
         Instant start = Instant.parse("2026-07-23T14:59:59.200Z");
-        Instant end = Instant.parse("2026-07-23T15:00:00.400Z");
+        Instant end = Instant.parse("2026-07-23T15:10:00.400Z");
 
-        assertThatThrownBy(() -> service.createSessions(1L, start, end, 1, 0, List.of()))
+        assertThatThrownBy(() -> service.createSessions(1L, start, end, 601, 0, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 

@@ -1,5 +1,6 @@
 package project.study.studysession.repository;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,6 +11,10 @@ import project.study.studysession.entity.StudySession;
 public interface StudySessionRepository extends JpaRepository<StudySession, Long> {
 
     List<StudySession> findByUserIdAndStatDateBetweenOrderByStartedAtDesc(Long userId, LocalDate from, LocalDate to);
+
+    // 멱등 재제출 판별·응답용 — 루트 제출 시각이 같은 조각 세션들(자정 분할 포함). 분할 조각의
+    // started_at(자정)은 루트가 아니므로 별개 제출의 멱등 키와 혼동되지 않는다
+    List<StudySession> findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(Long userId, Instant submissionStartedAt);
 
     // dev 목데이터 시더가 재시작마다 데모 유저의 세션을 갈아끼울 때 사용
     void deleteByUserId(Long userId);
