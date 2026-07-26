@@ -2,6 +2,9 @@ package project.study.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,10 +46,28 @@ class DevDataSeederTest {
                 Integer.class,
                 userId);
 
-        // 제출 5건 + 자정 분할 1건 = 최소 6행 (오늘 세션이 KST 자정에 걸치는 시각이면 1행 추가될 수 있다)
-        assertThat(sessions).isGreaterThanOrEqualTo(6);
+        // 엣지케이스 5건(+자정 분할 1행) + 최근 30일 랜덤 세션(하루 최소 1개) = 최소 30행
+        assertThat(sessions).isGreaterThanOrEqualTo(30);
         // 이벤트 6개 제출 + 자정에 걸친 PHONE 1건이 2행으로 분할 = 최소 7행
         assertThat(events).isGreaterThanOrEqualTo(7);
+    }
+
+    @Test
+    void 랜덤_시딩_구간은_하루_1개_이상_8개_이하_세션을_가진다() {
+        Long userId = demoUserId();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+
+        // 5~29일 전은 엣지케이스 세션이 없어 랜덤 시딩만으로 채워지는 구간이다
+        List<Integer> dailyCounts = jdbcTemplate.queryForList(
+                "SELECT count(*) FROM study_session WHERE user_id = ? AND stat_date BETWEEN ? AND ?"
+                        + " GROUP BY stat_date",
+                Integer.class,
+                userId,
+                today.minusDays(29),
+                today.minusDays(5));
+
+        assertThat(dailyCounts).hasSize(25); // 25일 모두 세션이 있다
+        assertThat(dailyCounts).allSatisfy(count -> assertThat(count).isBetween(1, 8));
     }
 
     @Test

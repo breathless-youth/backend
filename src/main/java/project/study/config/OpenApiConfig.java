@@ -21,6 +21,7 @@ public class OpenApiConfig {
             - 2일 전 20:00~21:30: 이벤트 없는 세션 (집중률 100%%)
             - 3일 전 23시~2일 전 1시: 자정을 넘겨 두 세션으로 분할 저장 (PHONE 20분이 자정에 10분씩 걸침)
             - 4일 전 09:00~09:45: 45분 세션 (PHONE 5분)
+            - 그 외 최근 30일: 매일 1~8개 랜덤 세션 (07~21시, 세션당 이벤트 0~2개 — 고정 시드라 재시작해도 같은 패턴)
             """.formatted(DevDataSeeder.DEMO_DEVICE_ID);
 
     private final Environment environment;
