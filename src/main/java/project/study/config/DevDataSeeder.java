@@ -25,9 +25,10 @@ import project.study.user.dto.UserRegisterRequest;
 import project.study.user.service.UserService;
 
 /**
- * dev 프로필 전용 목데이터 시더 — 데모 유저와 엣지케이스 세션 5건 + 최근 30일 하루 1~8개 랜덤 세션을 시딩한다.
+ * dev 프로필 전용 목데이터 시더 — 데모 유저와 엣지케이스 세션 5건 + 최근 30일 하루 0~8개 랜덤 세션을 시딩한다.
+ * 세션이 아예 없는 날도 섞여있어 스트릭이 끊기는 케이스, 빈 날짜 조회도 데모 데이터로 확인할 수 있다.
  * 서비스 레이어를 그대로 통과시켜 검증·계산·자정 분할이 실제 제출과 동일하게 적용되고,
- * 재시작할 때마다 오늘 기준 날짜로 갈아끼워 하루 조회 API에서 항상 데이터가 보인다.
+ * 재시작할 때마다 서버 시작 시각 기준 날짜로 갈아끼워 하루 조회 API에서 항상 데이터가 보인다.
  * 시딩 내용은 OpenApiConfig의 dev 전용 안내와 함께 유지한다.
  */
 @Slf4j
@@ -127,7 +128,8 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     /**
-     * 어제부터 {@value SEED_DAYS}일 전까지 하루 1~8개 세션을 생성해 제출하고 제출 건수를 반환한다.
+     * 어제부터 {@value SEED_DAYS}일 전까지 하루 0~8개 세션을 생성해 제출하고 제출 건수를 반환한다.
+     * 0개인 날은 그대로 세션 없는 날로 남는다 — 스트릭이 끊기는 케이스와 빈 날짜 조회를 데모로 보여준다.
      * 오늘은 세션 1이 현재 시각 기준이라 결과가 매번 달라져(멱등 깨짐) 랜덤 시딩에서 제외한다.
      * 07~21시 창을 세션 수만큼 슬롯으로 나눠 슬롯당 하나씩 배치하므로 세션끼리 겹치지 않고 자정도 넘지 않는다.
      * 창을 21시에 끊는 이유: 오늘 세션(현재 시각-3h~-1h)이 자정 직후 기동 시 어제 21시 이후로 걸칠 수 있어서다.
@@ -137,7 +139,7 @@ public class DevDataSeeder implements ApplicationRunner {
         int generated = 0;
         for (int daysAgo = 1; daysAgo < SEED_DAYS; daysAgo++) {
             LocalDate date = today.minusDays(daysAgo);
-            int targetCount = 1 + random.nextInt(MAX_SESSIONS_PER_DAY);
+            int targetCount = random.nextInt(MAX_SESSIONS_PER_DAY + 1);
             int toGenerate = Math.max(0, targetCount - countPortionsOn(curatedRanges, date));
             if (toGenerate == 0) {
                 continue;

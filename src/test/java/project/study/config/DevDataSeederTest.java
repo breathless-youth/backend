@@ -46,14 +46,14 @@ class DevDataSeederTest {
                 Integer.class,
                 userId);
 
-        // 엣지케이스 5건(+자정 분할 1행) + 최근 30일 랜덤 세션(하루 최소 1개) = 최소 30행
-        assertThat(sessions).isGreaterThanOrEqualTo(30);
+        // 엣지케이스 5건(+자정 분할 1행) — 랜덤 시딩은 0개인 날도 있어 하한을 보장하지 않는다
+        assertThat(sessions).isGreaterThanOrEqualTo(5);
         // 이벤트 6개 제출 + 자정에 걸친 PHONE 1건이 2행으로 분할 = 최소 7행
         assertThat(events).isGreaterThanOrEqualTo(7);
     }
 
     @Test
-    void 랜덤_시딩_구간은_하루_1개_이상_8개_이하_세션을_가진다() {
+    void 랜덤_시딩_구간은_하루_0개_이상_8개_이하_세션이고_세션_없는_날도_있다() {
         Long userId = demoUserId();
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
 
@@ -66,7 +66,8 @@ class DevDataSeederTest {
                 today.minusDays(29),
                 today.minusDays(5));
 
-        assertThat(dailyCounts).hasSize(25); // 25일 모두 세션이 있다
+        // 세션이 있는 날짜만 GROUP BY에 잡히므로, 25일보다 적게 나오면 세션 없는 날이 있다는 뜻이다
+        assertThat(dailyCounts).hasSizeLessThan(25);
         assertThat(dailyCounts).allSatisfy(count -> assertThat(count).isBetween(1, 8));
     }
 
