@@ -82,6 +82,14 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
 - `./gradlew check` 통과한 상태에서만 커밋 (커밋을 검증 단위로 취급)
 - 커밋 메시지 본문에 "왜"가 필요하면 본문에 추가 (ADR 갈 정도가 아닌 자잘한 결정)
 
+## Git 계정
+이 저장소(breathless-youth/backend)의 커밋 작성자·push·PR 생성은 항상 GitHub 계정 `sangjaekwon`을
+쓴다 — `sangjaesangjae` 계정은 이 리포의 협업자가 아니라 push/PR 생성이 막힌다.
+- `gh auth switch --user sangjaekwon`으로 활성 계정을 맞춰둔 상태 유지
+- `git config credential.https://github.com.username sangjaekwon`로 이 저장소에서 자격 증명
+  선택 프롬프트 없이 바로 그 계정을 쓰도록 고정해둠 (Git Credential Manager 기준)
+- 그래도 계정 선택 프롬프트가 뜨면 `sangjaekwon`을 선택한다
+
 ## PR 제목 컨벤션
 형식: `[<type>] <티켓ID> <설명>`
 
