@@ -1,6 +1,7 @@
 package project.study.studysession.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -36,10 +37,10 @@ class StudySessionStreakServiceTest {
 
     @Test
     void 스트릭은_오늘부터_거꾸로_이어진_연속_공부일이다() {
-        when(studySessionRepository.findDistinctStatDates(1L))
+        when(studySessionRepository.findDistinctStatDates(1L, 600))
                 .thenReturn(List.of(TODAY, TODAY.minusDays(1), TODAY.minusDays(2), TODAY.minusDays(4)));
 
-        StudySessionStreakResponse response = service.streak(1L);
+        StudySessionStreakResponse response = service.streak(1L, null, null);
 
         assertThat(response.streak()).isEqualTo(3);
         assertThat(response.maxStreak()).isEqualTo(3);
@@ -47,18 +48,18 @@ class StudySessionStreakServiceTest {
 
     @Test
     void 오늘_기록이_없어도_어제까지_이어진_스트릭은_유지된다() {
-        when(studySessionRepository.findDistinctStatDates(1L))
+        when(studySessionRepository.findDistinctStatDates(1L, 600))
                 .thenReturn(List.of(TODAY.minusDays(1), TODAY.minusDays(2)));
 
-        assertThat(service.streak(1L).streak()).isEqualTo(2);
+        assertThat(service.streak(1L, null, null).streak()).isEqualTo(2);
     }
 
     @Test
     void 어제도_오늘도_기록이_없으면_스트릭은_0이다() {
-        when(studySessionRepository.findDistinctStatDates(1L))
+        when(studySessionRepository.findDistinctStatDates(1L, 600))
                 .thenReturn(List.of(TODAY.minusDays(2), TODAY.minusDays(3)));
 
-        StudySessionStreakResponse response = service.streak(1L);
+        StudySessionStreakResponse response = service.streak(1L, null, null);
 
         assertThat(response.streak()).isEqualTo(0);
         assertThat(response.maxStreak()).isEqualTo(2);
@@ -67,7 +68,7 @@ class StudySessionStreakServiceTest {
     @Test
     void 최장_스트릭은_끊긴_구간들_중_가장_긴_연속_구간이다() {
         // 오늘~어제(2일) + 4~7일 전(4일)
-        when(studySessionRepository.findDistinctStatDates(1L))
+        when(studySessionRepository.findDistinctStatDates(1L, 600))
                 .thenReturn(List.of(
                         TODAY,
                         TODAY.minusDays(1),
@@ -76,7 +77,7 @@ class StudySessionStreakServiceTest {
                         TODAY.minusDays(6),
                         TODAY.minusDays(7)));
 
-        StudySessionStreakResponse response = service.streak(1L);
+        StudySessionStreakResponse response = service.streak(1L, null, null);
 
         assertThat(response.streak()).isEqualTo(2);
         assertThat(response.maxStreak()).isEqualTo(4);
@@ -85,10 +86,10 @@ class StudySessionStreakServiceTest {
     @Test
     void 시계_오차로_생긴_내일_날짜는_스트릭에_세지_않는다() {
         // 미래 종료 허용 오차(5분) 탓에 자정 직후 조각이 내일 날짜로 저장될 수 있다
-        when(studySessionRepository.findDistinctStatDates(1L))
+        when(studySessionRepository.findDistinctStatDates(1L, 600))
                 .thenReturn(List.of(TODAY.plusDays(1), TODAY, TODAY.minusDays(1)));
 
-        StudySessionStreakResponse response = service.streak(1L);
+        StudySessionStreakResponse response = service.streak(1L, null, null);
 
         assertThat(response.streak()).isEqualTo(2);
         assertThat(response.maxStreak()).isEqualTo(2);
@@ -96,11 +97,46 @@ class StudySessionStreakServiceTest {
 
     @Test
     void 기록이_없으면_스트릭과_최장_스트릭_모두_0이다() {
-        when(studySessionRepository.findDistinctStatDates(1L)).thenReturn(List.of());
+        when(studySessionRepository.findDistinctStatDates(1L, 600)).thenReturn(List.of());
 
-        StudySessionStreakResponse response = service.streak(1L);
+        StudySessionStreakResponse response = service.streak(1L, null, null);
 
         assertThat(response.streak()).isEqualTo(0);
         assertThat(response.maxStreak()).isEqualTo(0);
+    }
+
+    @Test
+    void from_to를_주지_않으면_studiedDatesInRange는_빈_배열이다() {
+        when(studySessionRepository.findDistinctStatDates(1L, 600)).thenReturn(List.of());
+
+        StudySessionStreakResponse response = service.streak(1L, null, null);
+
+        assertThat(response.studiedDatesInRange()).isEmpty();
+    }
+
+    @Test
+    void from_to를_주면_기간내_스트릭_인정_날짜만_담긴다() {
+        LocalDate from = TODAY.minusDays(10);
+        LocalDate to = TODAY;
+        List<LocalDate> inRange = List.of(TODAY.minusDays(8), TODAY.minusDays(3));
+        when(studySessionRepository.findDistinctStatDates(1L, 600)).thenReturn(List.of());
+        when(studySessionRepository.findDistinctStatDatesBetween(1L, from, to, 600))
+                .thenReturn(inRange);
+
+        StudySessionStreakResponse response = service.streak(1L, from, to);
+
+        assertThat(response.studiedDatesInRange()).isEqualTo(inRange);
+    }
+
+    @Test
+    void from만_주고_to를_주지_않으면_거부한다() {
+        assertThatThrownBy(() -> service.streak(1L, TODAY.minusDays(10), null))
+                .isInstanceOf(InvalidSessionException.class);
+    }
+
+    @Test
+    void from이_to보다_이후이면_거부한다() {
+        assertThatThrownBy(() -> service.streak(1L, TODAY, TODAY.minusDays(1)))
+                .isInstanceOf(InvalidSessionException.class);
     }
 }

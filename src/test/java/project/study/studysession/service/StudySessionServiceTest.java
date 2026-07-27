@@ -196,18 +196,20 @@ class StudySessionServiceTest {
     }
 
     @Test
-    void 십분_미만_세션은_거부한다() {
-        // 9분 59초 — 10분 미만 세션은 저장하지 않는다 (저장이 안 되므로 스트릭에도 잡히지 않는다)
-        assertThatThrownBy(() -> service.createSessions(1L, START, START.plusSeconds(599), 0, 0, List.of()))
-                .isInstanceOf(InvalidSessionException.class);
+    void 십분_미만_세션도_저장된다() {
+        // 9분 59초 — 세션 길이와 무관하게 저장된다(조회·스트릭 인정 여부는 focusSec 기준으로 별도 판단)
+        StudySession session = service.createSessions(1L, START, START.plusSeconds(599), 599, 599, List.of())
+                .get(0);
+
+        assertThat(session.getStudySec()).isEqualTo(599);
     }
 
     @Test
-    void 정확히_십분_세션은_허용된다() {
-        StudySession session = service.createSessions(1L, START, START.plusSeconds(600), 600, 600, List.of())
+    void 몇_초짜리_세션도_저장된다() {
+        StudySession session = service.createSessions(1L, START, START.plusSeconds(5), 5, 5, List.of())
                 .get(0);
 
-        assertThat(session.getStudySec()).isEqualTo(600);
+        assertThat(session.getStudySec()).isEqualTo(5);
     }
 
     @Test
@@ -256,15 +258,17 @@ class StudySessionServiceTest {
     @Test
     void date로_조회하면_그_날짜_하루_기간으로_조회한다() {
         LocalDate date = LocalDate.of(2026, 7, 24);
-        when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
+        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
+                        1L, date, date, 60))
                 .thenReturn(List.of());
         when(studySessionRepository.findDistinctStatDatesBetween(
-                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
                 .thenReturn(List.of());
 
         service.list(1L, date);
 
-        verify(studySessionRepository).findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date);
+        verify(studySessionRepository)
+                .findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(1L, date, date, 60);
     }
 
     @Test
@@ -272,10 +276,11 @@ class StudySessionServiceTest {
         LocalDate date = LocalDate.of(2026, 7, 24);
         StudySession first = new StudySession(1L, date, START, END, 7200, 6600, List.of());
         StudySession second = new StudySession(1L, date, START, END, 3600, 3000, List.of());
-        when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
+        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
+                        1L, date, date, 60))
                 .thenReturn(List.of(first, second));
         when(studySessionRepository.findDistinctStatDatesBetween(
-                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
                 .thenReturn(List.of());
 
         StudySessionListResponse response = service.list(1L, date);
@@ -289,10 +294,11 @@ class StudySessionServiceTest {
     void 목록_응답에_그_달_공부한_날짜_목록이_담긴다() {
         LocalDate date = LocalDate.of(2026, 7, 24);
         List<LocalDate> studiedDates = List.of(LocalDate.of(2026, 7, 3), LocalDate.of(2026, 7, 24));
-        when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
+        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
+                        1L, date, date, 60))
                 .thenReturn(List.of());
         when(studySessionRepository.findDistinctStatDatesBetween(
-                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
                 .thenReturn(studiedDates);
 
         StudySessionListResponse response = service.list(1L, date);
@@ -314,10 +320,11 @@ class StudySessionServiceTest {
                         event(EventStatus.PHONE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
                         event(EventStatus.PHONE, "2026-07-24T08:10:00Z", "2026-07-24T08:15:00Z"),
                         event(EventStatus.PAUSE, "2026-07-24T08:20:00Z", "2026-07-24T08:25:00Z")));
-        when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
+        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
+                        1L, date, date, 60))
                 .thenReturn(List.of(session));
         when(studySessionRepository.findDistinctStatDatesBetween(
-                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
                 .thenReturn(List.of());
 
         StudySessionListResponse response = service.list(1L, date);
@@ -350,10 +357,11 @@ class StudySessionServiceTest {
                 List.of(
                         event(EventStatus.PHONE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
                         event(EventStatus.AWAY, "2026-07-24T08:10:00Z", "2026-07-24T08:15:00Z")));
-        when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
+        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
+                        1L, date, date, 60))
                 .thenReturn(List.of(first, second));
         when(studySessionRepository.findDistinctStatDatesBetween(
-                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+                        1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
                 .thenReturn(List.of());
 
         StudySessionListResponse response = service.list(1L, date);
@@ -366,15 +374,16 @@ class StudySessionServiceTest {
     @Test
     void date가_달의_마지막날이어도_그달_전체_범위로_조회한다() {
         LocalDate date = LocalDate.of(2026, 2, 28);
-        when(studySessionRepository.findByUserIdAndStatDateBetweenOrderByStartedAtDesc(1L, date, date))
+        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
+                        1L, date, date, 60))
                 .thenReturn(List.of());
         when(studySessionRepository.findDistinctStatDatesBetween(
-                        1L, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28)))
+                        1L, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28), 60))
                 .thenReturn(List.of());
 
         service.list(1L, date);
 
         verify(studySessionRepository)
-                .findDistinctStatDatesBetween(1L, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28));
+                .findDistinctStatDatesBetween(1L, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28), 60);
     }
 }

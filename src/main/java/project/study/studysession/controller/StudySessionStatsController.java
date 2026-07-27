@@ -27,6 +27,9 @@ public class StudySessionStatsController {
                     한 유저의 세션 을 통계 날짜(`statDate`) 기준으로 하루 단위로 조회한다 (일별 기록 화면). \
                     기간(from~to) 조회는 추후 별도 API로 제공한다.
 
+                    세션은 길이와 무관하게 저장되지만, 순공시간(`focusSec`)이 1분 미만인 세션은 이 조회에는 \
+                    보이지 않는다 (`studiedDatesInMonth`도 동일 기준 적용).
+
                     응답은 세션 목록과 그날 전체 통계를 함께 담은 객체다.
                     - `sessions` — 세션 요약 목록, 시작 시각 내림차순. 원본 이벤트 목록(시각)은 미포함이고, \
                     각 세션 항목 안에 그 세션의 상태별 이벤트 건수(`sessions[].eventCounts`)만 담긴다
@@ -54,19 +57,31 @@ public class StudySessionStatsController {
     }
 
     @Operation(summary = "연속 공부일(스트릭) 조회", description = """
-                    통계 날짜(`statDate`) 기준으로 세션이 하루라도 있으면 그날은 공부한 날로 친다. \
-                    유저에 저장된 값이 아니라 세션 이력에서 매번 계산한다.
+                    통계 날짜(`statDate`) 기준으로 그 날 세션 중 하나라도 순공시간(`focusSec`)이 10분 이상이면 \
+                    그날은 공부한 날로 친다 (하루 합계가 아니라 세션 단위 기준). 유저에 저장된 값이 아니라 세션 \
+                    이력에서 매번 계산한다.
 
                     - `streak` — 오늘(오늘 기록이 아직 없으면 어제)부터 거꾸로 이어진 연속 공부일. \
                     오늘 기록이 없어도 어제까지 이어졌으면 유지 중으로 본다 — 오늘이 지나기 전엔 끊긴 게 아니다. \
                     어제도 오늘도 기록이 없으면 0
                     - `maxStreak` — 전체 이력에서 가장 길었던 연속 공부일
+                    - `studiedDatesInRange` — `from`~`to` 기간 중 위 스트릭 인정 기준을 만족한 날짜 목록. \
+                    `from`/`to`는 선택 파라미터로 둘 다 주거나 둘 다 생략해야 하며(하나만 주면 400, `from`이 \
+                    `to`보다 이후면 400), 생략하면 빈 배열이 내려온다
 
-                    기록이 없거나 존재하지 않는 userId면 둘 다 0이다 (목록 조회와 같은 계약).""")
-    @ApiResponse(responseCode = "200", description = "조회 성공 — 현재 스트릭과 역대 최장 스트릭")
+                    기록이 없거나 존재하지 않는 userId면 streak/maxStreak 둘 다 0이다 (목록 조회와 같은 계약).""")
+    @ApiResponse(responseCode = "200", description = "조회 성공 — 현재 스트릭, 역대 최장 스트릭, (선택) 기간 내 공부일 목록")
     @GetMapping("/streak")
     public StudySessionStreakResponse streak(
-            @Parameter(description = "조회할 유저 ID (POST /api/users 로 발급받은 값)", example = "1") @RequestParam Long userId) {
-        return studySessionService.streak(userId);
+            @Parameter(description = "조회할 유저 ID (POST /api/users 로 발급받은 값)", example = "1") @RequestParam Long userId,
+            @Parameter(description = "기간 조회 시작일 (ISO-8601) — to와 함께 지정해야 한다", example = "2026-07-01")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate from,
+            @Parameter(description = "기간 조회 종료일 (ISO-8601) — from과 함께 지정해야 한다", example = "2026-07-28")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate to) {
+        return studySessionService.streak(userId, from, to);
     }
 }
