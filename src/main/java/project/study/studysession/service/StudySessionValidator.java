@@ -8,7 +8,6 @@ import project.study.studysession.entity.StatusEvent;
 /** 세션 제출 검증 규칙 모음 — 규칙 위반은 InvalidSessionException(400). 검증은 자정 분할 전의 원본 제출 기준이다. */
 final class StudySessionValidator {
 
-    private static final Duration MIN_DURATION = Duration.ofMinutes(10);
     private static final Duration MAX_DURATION = Duration.ofHours(24);
     private static final Duration CLOCK_SKEW_TOLERANCE = Duration.ofMinutes(5);
 
@@ -17,10 +16,6 @@ final class StudySessionValidator {
     static void validatePeriod(Instant startedAt, Instant endedAt, Instant now) {
         if (!endedAt.isAfter(startedAt)) {
             throw new InvalidSessionException("세션 종료 시각은 시작 시각 이후여야 합니다");
-        }
-        // 10분 미만 세션은 저장하지 않는다 — 저장이 안 되므로 스트릭(statDate 기반 계산)에도 잡히지 않는다
-        if (Duration.between(startedAt, endedAt).compareTo(MIN_DURATION) < 0) {
-            throw new InvalidSessionException("세션은 10분 이상이어야 합니다");
         }
         if (Duration.between(startedAt, endedAt).compareTo(MAX_DURATION) > 0) {
             throw new InvalidSessionException("세션은 24시간을 초과할 수 없습니다");

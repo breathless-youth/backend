@@ -143,7 +143,7 @@ class StudySessionMidnightSplitTest {
 
     @Test
     void 자정을_걸친_서브초_조각은_0초로_저장된다() {
-        // 앞 조각 0.4초는 절삭으로 0초 — 0으로 나누기 없이 뒤 조각이 전부 가져간다 (10분 규칙 때문에 세션은 600.4초로 잡는다)
+        // 앞 조각 0.4초는 절삭으로 0초 — 0으로 나누기 없이 뒤 조각이 전부 가져간다
         Instant start = Instant.parse("2026-07-23T14:59:59.600Z");
         Instant end = Instant.parse("2026-07-23T15:10:00.000Z");
 
