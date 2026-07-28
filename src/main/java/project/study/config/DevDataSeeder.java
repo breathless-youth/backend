@@ -43,9 +43,9 @@ public class DevDataSeeder implements ApplicationRunner {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     /** 랜덤 세션을 채울 기간(오늘 포함 최근 N일)과 하루 최대 세션 수. */
-    private static final int SEED_DAYS = 30;
+    private static final int SEED_DAYS = 20;
 
-    private static final int MAX_SESSIONS_PER_DAY = 8;
+    private static final int MAX_SESSIONS_PER_DAY = 5;
 
     /** 고정 시드 — 날짜 기준(today)이 같으면 재실행해도 같은 데이터가 나와 시딩이 멱등으로 유지된다. */
     private static final long RANDOM_SEED = 20260726L;
@@ -138,7 +138,7 @@ public class DevDataSeeder implements ApplicationRunner {
         Random random = new Random(RANDOM_SEED);
         int generated = 0;
         for (int daysAgo = 1; daysAgo < SEED_DAYS; daysAgo++) {
-            LocalDate date = today.minusDays(daysAgo);
+            LocalDate date = today.minusDays(daysAgo+4);
             int targetCount = random.nextInt(MAX_SESSIONS_PER_DAY + 1);
             int toGenerate = Math.max(0, targetCount - countPortionsOn(curatedRanges, date));
             if (toGenerate == 0) {
