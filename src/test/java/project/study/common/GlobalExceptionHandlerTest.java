@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 전역 예외 핸들러가 내리는 상태코드와 응답 포맷만 검증한다.
@@ -65,6 +66,18 @@ class GlobalExceptionHandlerTest {
         assertThat(mvc.get().uri("/test/post-only").exchange()).hasStatus(HttpStatus.METHOD_NOT_ALLOWED);
     }
 
+    /**
+     * ResponseStatusException도 ErrorResponse를 구현하므로 위 405 분기에 함께 걸린다.
+     * 상태코드만 보고 일괄 제외하면 5xx인데도 Sentry 전송이 누락되므로, 5xx는 갈라서 처리한다.
+     */
+    @Test
+    void 표준_예외라도_5xx면_서버_오류_메시지로_응답한다() {
+        assertThat(mvc.get().uri("/test/service-unavailable").exchange())
+                .hasStatus(HttpStatus.SERVICE_UNAVAILABLE)
+                .bodyJson()
+                .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("서버 오류가 발생했습니다"));
+    }
+
     @RestController
     static class ThrowingController {
 
@@ -86,6 +99,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/conflict")
         void conflict() {
             throw new ConflictException("이미 존재합니다");
+        }
+
+        @GetMapping("/test/service-unavailable")
+        void serviceUnavailable() {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "일시적으로 사용할 수 없습니다");
         }
 
         @PostMapping("/test/post-only")

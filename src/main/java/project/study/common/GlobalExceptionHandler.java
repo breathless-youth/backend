@@ -2,6 +2,7 @@ package project.study.common;
 
 import io.sentry.Sentry;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -57,7 +58,14 @@ public class GlobalExceptionHandler {
         // 이 핸들러는 표준 예외를 담당하는 DefaultHandlerExceptionResolver보다 먼저 실행되므로
         // 여기서 걸러내지 않으면 상태코드가 뭉개진다.
         if (e instanceof org.springframework.web.ErrorResponse standard) {
-            return ResponseEntity.status(standard.getStatusCode()).body(new ErrorResponse("요청을 처리할 수 없습니다"));
+            HttpStatusCode status = standard.getStatusCode();
+            // 같은 ErrorResponse라도 5xx는 서버 잘못이므로 Sentry로 보낸다.
+            // (예: ResponseStatusException(INTERNAL_SERVER_ERROR) — 상태코드만 보고 걸러내면 누락된다)
+            if (status.is5xxServerError()) {
+                Sentry.captureException(e);
+                return ResponseEntity.status(status).body(new ErrorResponse("서버 오류가 발생했습니다"));
+            }
+            return ResponseEntity.status(status).body(new ErrorResponse("요청을 처리할 수 없습니다"));
         }
         Sentry.captureException(e);
         // 내부 예외 메시지는 노출하지 않는다
