@@ -41,7 +41,9 @@ jobs:
         run: |
           IMAGE=$REGISTRY/$ECR_REPOSITORY
           # 커밋 해시 태그로 "지금 뜬 게 어떤 코드인지" 추적 가능하게 한다
+          # GIT_SHA는 Sentry 이슈에 표시할 릴리스 식별자로 이미지에 구워진다
           docker build --provenance=false --sbom=false \
+            --build-arg GIT_SHA=${{ github.sha }} \
             -t $IMAGE:${{ github.sha }} -t $IMAGE:latest .
           docker push $IMAGE:${{ github.sha }}
           docker push $IMAGE:latest

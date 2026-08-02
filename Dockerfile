@@ -20,6 +20,12 @@ RUN ./gradlew --no-daemon bootJar -x test
 FROM eclipse-temurin:25-jre
 WORKDIR /app
 
+# Sentry 이슈에 어느 배포에서 발생했는지 표시하기 위해 커밋 SHA를 굽는다.
+# CI가 --build-arg GIT_SHA로 주입한다 (.github/workflows/deploy.yml).
+# ARG는 사용하는 스테이지마다 선언해야 하므로 빌드 스테이지가 아닌 여기에 둔다.
+ARG GIT_SHA=unknown
+ENV SENTRY_RELEASE=$GIT_SHA
+
 # root 대신 권한 없는 전용 사용자로 실행한다
 RUN useradd -r -u 1001 appuser
 
