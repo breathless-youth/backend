@@ -38,6 +38,8 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
   - JWT는 jjwt 사용 시 `jjwt-jackson` 대신 `jjwt-gson` 사용 (jjwt-jackson이 아직 Jackson 2 의존이라 Jackson 3와 충돌)
   - QueryDSL은 `com.querydsl` 대신 `io.github.openfeign.querydsl` 사용 (원본은 유지보수 중단, Boot 3/4에서 깨짐).
     APT 프로세서는 classifier `jpa` 사용 (`querydsl-apt:${버전}:jpa`)
+  - Sentry는 Boot 4 전용 모듈 `io.sentry:sentry-spring-boot-4` 사용
+    (`sentry-spring-boot-starter-jakarta`는 Boot 3용). Boot 4 BOM이 버전을 관리하지 않아 버전 명시 필요
   - 확실치 않으면 공식 문서/마이그레이션 가이드 확인 후 작성
 - DB 스키마는 Flyway 마이그레이션(`src/main/resources/db/migration/`)으로만 변경. `ddl-auto`는 validate 고정
 - DTO는 Java record 사용. 엔티티에는 Lombok 사용 가능하되 `@Data` 금지 (`@Getter` + 명시적 생성자 권장)
