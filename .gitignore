@@ -29,7 +29,7 @@ out/
 !**/src/test/**/out/
 src/main/resources/application-local.yaml
 src/main/resources/application-dev.yaml
-src/main/resources/application-prod.yaml
+# application-prod.yaml은 시크릿을 환경변수로 주입받으므로 추적 대상이다
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
@@ -39,3 +39,6 @@ src/main/resources/application-prod.yaml
 
 ### VS Code ###
 .vscode/
+
+### macOS ###
+.DS_Store

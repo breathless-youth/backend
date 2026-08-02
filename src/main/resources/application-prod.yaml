@@ -1,0 +1,61 @@
+# prod 환경 설정 — 이 파일은 git 추적 대상이다.
+# 시크릿(DB 비밀번호·JWT 키 등)은 이 파일에 적지 않고 환경변수로 주입한다.
+# ECS 태스크 정의가 SSM Parameter Store 값을 아래 환경변수로 넣어준다.
+#
+#   SPRING_DATASOURCE_URL       jdbc:postgresql://<RDS 엔드포인트>:5432/app
+#   SPRING_DATASOURCE_USERNAME  /focus-makers/prod/db/username
+#   SPRING_DATASOURCE_PASSWORD  /focus-makers/prod/db/password
+spring:
+  application:
+    name: study
+  datasource:
+    # 값이 없으면 기동 시점에 실패하도록 기본값을 두지 않는다 (설정 누락을 늦게 발견하지 않기 위함)
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+# AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
+#oauth:
+#  google:
+#    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
+#    client-id: ${OAUTH_GOOGLE_CLIENT_ID}
+#
+#jwt:
+#  secret: ${JWT_SECRET} # 32자 이상 랜덤 문자열
+#  access-expiration: 1800000 # 30분
+#
+#refresh-token:
+#  expiration: 2592000000 # 한달 (opaque UUID, DB 저장)
+
+# 웹 클라이언트가 브라우저에서 API를 호출할 수 있게 허용하는 origin.
+# 도메인이 바뀌면 ECS 태스크 정의에 APP_CORS_ALLOWEDORIGINS_0을 넣어 덮어쓸 수 있다
+# (relaxed binding은 하이픈을 제거한다 — APP_CORS_ALLOWED_ORIGINS로는 바인딩되지 않는다).
+# 값은 기동 시점에 한 번 바인딩되므로 바꾸면 태스크를 새로 띄워야 한다.
+app:
+  cors:
+    allowed-origins:
+      - https://web.sunqstudio.kr
+
+# 운영에서는 API 문서를 노출하지 않는다
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# 로그를 한 줄 JSON으로 출력한다 (ECS = Elastic Common Schema).
+# local 프로파일에는 넣지 않아 개발 중에는 사람이 읽기 좋은 텍스트로 나온다.
+logging:
+  structured:
+    format:
+      console: ecs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

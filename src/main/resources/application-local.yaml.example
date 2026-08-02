@@ -12,6 +12,14 @@ spring:
     hibernate:
       ddl-auto: validate
 
+# 로컬에서 프론트를 띄워 API를 호출할 때 필요하다.
+# 포트는 번들러마다 달라(Vite 5173, Next 3000 등) 열어둔다 — :[*]가 Spring의 포트 와일드카드 문법이다.
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:[*]
+      - http://127.0.0.1:[*]
+
 # AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
 #oauth:
 #  google:
