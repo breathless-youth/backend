@@ -37,6 +37,11 @@ dependencies {
 	// runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
 	// runtimeOnly 'io.jsonwebtoken:jjwt-gson:0.13.0' // jjwt-jackson 대신 (Jackson 3 충돌 회피)
 
+	// --- 모니터링 ---
+	// Boot 4 전용 모듈이다. sentry-spring-boot-starter-jakarta는 Boot 3용이라 여기선 동작하지 않는다.
+	// Boot 4 BOM이 Sentry 버전을 관리하지 않아 버전 명시가 필요하다.
+	implementation 'io.sentry:sentry-spring-boot-4:8.51.0'
+
 	// --- 데이터 / DB ---
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
