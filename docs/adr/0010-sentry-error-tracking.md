@@ -22,7 +22,11 @@ Sentry의 Spring 통합은 `SentryExceptionResolver`를 최우선순위로 자�
   로그 수집은 현재 `log.error` 사용처가 없어 얻는 것이 없고, 붙이면 같은 예외가 예외 경로와 로그 경로
   양쪽으로 들어와 중복 이슈가 생긴다
 - **prod 프로파일에서만 활성화한다.** dev/local에는 `sentry` 설정 블록을 두지 않는다 —
-  DSN이 없으면 SDK가 no-op으로 동작하므로 별도 on/off 플래그가 필요 없다
+  DSN이 없으면 SDK가 no-op으로 동작하므로 별도 on/off 플래그가 필요 없다.
+  두 파일은 `.gitignore` 대상이라 배포 이미지에 들어가지도 않는다 (실제 배포 대상은 prod뿐이다).
+  다만 이것이 프로파일 단위의 강제는 아니다 — Spring의 relaxed binding이 `SENTRY_DSN` 환경변수를
+  `sentry.dsn`으로 바인딩하므로, 비-prod 환경에 그 환경변수를 넣으면 켜진다.
+  향후 dev를 실제로 배포하게 되면 `sentry.enabled: false`를 명시하는 방어가 필요하다
 - **처리되지 않은 예외(5xx)만 보낸다.** `sentry.exception-resolver-order`를 최하위(`2147483647`)로 미뤄
   자동 resolver를 무력화하고, `GlobalExceptionHandler`의 최종 핸들러에서
   `Sentry.captureException`을 명시적으로 호출한다
