@@ -70,12 +70,3 @@ jobs:
           cluster: ${{ env.ECS_CLUSTER }}
           # 롤아웃이 안정화될 때까지 기다린다 — 실패 시 워크플로도 실패로 표시된다
           wait-for-service-stability: true
-
-      - name: Notify Slack
-        if: always()
-        uses: slackapi/slack-github-action@v2
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload: |
-            text: "${{ job.status == 'success' && ':white_check_mark:' || ':x:' }} 배포 ${{ job.status }} — `${{ github.sha }}`\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|워크플로 보기>"
