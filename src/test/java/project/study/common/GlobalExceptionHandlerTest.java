@@ -15,7 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
  * 전역 예외 핸들러가 내리는 상태코드와 응답 포맷만 검증한다.
  * Sentry 전송 여부는 자동 검증하지 않는다 — Sentry.captureException이 static이라
  * 래퍼 없이는 호출을 관측할 수 없고, 래퍼를 두지 않기로 결정했다
- * (설계: docs/superpowers/specs/2026-08-02-sentry-error-tracking-design.md).
+ * (설계: docs/superpowers/specs/2026-08-06-sentry-4xx-collection-design.md).
  *
  * <p>DB가 필요 없는 검증이라 standalone으로 띄워 Testcontainers 기동 비용을 피한다.
  */
