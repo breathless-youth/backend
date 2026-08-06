@@ -1,0 +1,184 @@
+// ---------------------------------------------------------
+// 회원
+// ---------------------------------------------------------
+
+Table users {
+  id bigint [primary key, increment]
+  provider varchar [not null]          // GOOGLE, DEVICE(익명 기기, ADR-0004) — 추후 KAKAO, APPLE 확장 가능
+  provider_user_id varchar [not null]
+  nickname varchar [unique]
+  category varchar               // 수능/공무원/자격증 등
+  profile_image varchar
+  status varchar [default: 'ACTIVE']   // ACTIVE, DELETE
+  streak integer
+  max_streak integer
+  notify_enabled boolean [default: false]
+  delete_at timestamptz
+  created_at timestamptz
+  updated_at timestamptz
+
+  indexes {
+    (provider, provider_user_id) [unique]
+  }
+}
+
+Table refresh_token {
+  id bigint [primary key, increment]
+  user_id bigint [ref: > users.id, not null]
+  token_hash varchar [not null]   // opaque refresh 토큰(UUID)의 SHA-256 해시 (원문 미저장)
+  expires_at timestamptz [not null]
+  used_at timestamptz             // 회전 시 마킹. 사용된 토큰 재사용 = 탈취 의심 → 유저 토큰 전체 폐기
+  created_at timestamptz [not null]
+
+  indexes {
+    (token_hash) [unique]
+    (user_id)
+  }
+}
+
+// ---------------------------------------------------------
+// 공부 세션 / 상태 이벤트
+// ---------------------------------------------------------
+
+Table study_session {
+  id bigint [primary key, increment]
+  user_id bigint [ref: > users.id, not null]
+  stat_date date              // 적용 날짜 (자정 경계 세션의 귀속일, 타임존 기준 명시 필요)
+  started_at timestamptz         // 세션 시작 - 서버 타임스탬프
+  ended_at timestamptz           // 세션 종료 - 서버 타임스탬프, 진행 중이면 null
+  study_sec integer          // 총 공부 타이머 시간 — (ended_at - started_at) - PAUSE 이벤트 시간 이하인지 서버에서 검증(조작 방지)
+  focus_sec integer         // 순공 시간 — study_sec 이하인지 서버에서 검증
+
+  indexes {
+    (user_id, stat_date)
+  }
+}
+
+Table status_event {
+  id bigint [primary key, increment]
+  session_id bigint [ref: > study_session.id, not null]
+  status varchar [not null] // AWAY, PHONE, DEVICE, PAUSE
+  started_at timestamptz
+  ended_at timestamptz
+
+  indexes {
+    (session_id)
+  }
+}
+
+// ---------------------------------------------------------
+// 통계 (일/주/월 집계 upsert)
+// ---------------------------------------------------------
+
+Table study_stats_daily {
+  user_id bigint [ref: > users.id, not null]
+  stat_date date
+  total_study_sec integer
+  total_focus_sec integer
+  session_count integer
+  updated_at timestamptz
+
+  indexes {
+    (user_id, stat_date) [pk]
+    (stat_date) // 랭킹용
+  }
+}
+
+Table study_stats_weekly {
+  user_id bigint [ref: > users.id, not null]
+  period_start date            // 해당 주 월요일
+  total_study_sec integer
+  total_focus_sec integer
+  session_count integer
+  updated_at timestamptz
+
+  indexes {
+    (user_id, period_start) [pk]
+    (period_start) // 랭킹용
+  }
+}
+
+Table study_stats_monthly {
+  user_id bigint [ref: > users.id, not null]
+  period_start date            // 해당 월 1일
+  total_study_sec integer
+  total_focus_sec integer
+  session_count integer
+  updated_at timestamptz
+
+  indexes {
+    (user_id, period_start) [pk]
+    (period_start) // 랭킹용
+  }
+}
+
+// ---------------------------------------------------------
+// 알림
+// ---------------------------------------------------------
+
+Table notification {
+  id bigint [primary key, increment]
+  title varchar
+  content varchar
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+Table user_notification {
+  id bigint [primary key, increment]
+  user_id bigint [ref: > users.id, not null]
+  notification_id bigint [ref: > notification.id, not null]
+  is_read boolean [default: false]
+  created_at timestamptz
+
+  indexes {
+    (user_id)
+  }
+}
+
+
+Table push_token {
+  id bigint [primary key, increment]
+  user_id bigint [ref: > users.id, not null]
+  token varchar [not null]     // FCM registration token / APNs device token
+  platform varchar              // IOS, ANDROID
+  created_at timestamptz
+  updated_at timestamptz          // 토큰은 주기적으로 갱신되므로 갱신 시각
+
+  indexes {
+    (token) [unique]
+    (user_id)
+  }
+}
+
+// ---------------------------------------------------------
+// 신고
+// ---------------------------------------------------------
+
+Table report {
+  id bigint [primary key, increment]
+  report_user_id bigint [ref: > users.id, not null]
+  target_user_id bigint [ref: > users.id, not null]
+  reason varchar
+  created_at timestamptz
+
+  indexes {
+    (target_user_id)
+    (report_user_id)
+  }
+}
+
+// ---------------------------------------------------------
+// 문의/건의
+// ---------------------------------------------------------
+
+Table inquiry  {
+  id bigint [primary key, increment]
+  user_id bigint [ref: > users.id, not null]
+  content varchar
+  created_at timestamptz
+
+  indexes {
+    (created_at)
+  }
+}

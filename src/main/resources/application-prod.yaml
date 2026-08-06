@@ -1,0 +1,85 @@
+# prod 환경 설정 — 이 파일은 git 추적 대상이다.
+# 시크릿(DB 비밀번호·JWT 키 등)은 이 파일에 적지 않고 환경변수로 주입한다.
+# ECS 태스크 정의가 SSM Parameter Store 값을 아래 환경변수로 넣어준다.
+#
+#   SPRING_DATASOURCE_URL       jdbc:postgresql://<RDS 엔드포인트>:5432/app
+#   SPRING_DATASOURCE_USERNAME  /focus-makers/prod/db/username
+#   SPRING_DATASOURCE_PASSWORD  /focus-makers/prod/db/password
+spring:
+  application:
+    name: study
+  datasource:
+    # 값이 없으면 기동 시점에 실패하도록 기본값을 두지 않는다 (설정 누락을 늦게 발견하지 않기 위함)
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+# AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
+#oauth:
+#  google:
+#    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
+#    client-id: ${OAUTH_GOOGLE_CLIENT_ID}
+#
+#jwt:
+#  secret: ${JWT_SECRET} # 32자 이상 랜덤 문자열
+#  access-expiration: 1800000 # 30분
+#
+#refresh-token:
+#  expiration: 2592000000 # 한달 (opaque UUID, DB 저장)
+
+# 웹 클라이언트가 브라우저에서 API를 호출할 수 있게 허용하는 origin.
+# 도메인이 바뀌면 ECS 태스크 정의에 APP_CORS_ALLOWEDORIGINS_0을 넣어 덮어쓸 수 있다
+# (relaxed binding은 하이픈을 제거한다 — APP_CORS_ALLOWED_ORIGINS로는 바인딩되지 않는다).
+# 값은 기동 시점에 한 번 바인딩되므로 바꾸면 태스크를 새로 띄워야 한다.
+app:
+  cors:
+    allowed-origins:
+      - https://web.sunqstudio.kr
+
+# 운영에서는 API 문서를 노출하지 않는다
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# 로그를 한 줄 JSON으로 출력한다 (ECS = Elastic Common Schema).
+# local 프로파일에는 넣지 않아 개발 중에는 사람이 읽기 좋은 텍스트로 나온다.
+logging:
+  structured:
+    format:
+      console: ecs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+# 처리되지 않은 예외(4xx+5xx)를 전부 Sentry로 보낸다.
+# 설계: docs/superpowers/specs/2026-08-06-sentry-4xx-collection-design.md
+sentry:
+  # DSN이 없으면 SDK가 no-op으로 동작한다. DB 설정과 달리 기본값을 두는 이유는,
+  # 모니터링 설정 하나가 없다고 API 전체가 기동 실패하는 쪽이 더 나쁘기 때문이다.
+  # DSN이 비면 SDK가 기동 로그에 비활성 메시지를 남기므로 누락은 발견할 수 있다.
+  dsn: ${SENTRY_DSN:}
+  environment: prod
+  # 이미지 빌드 시 커밋 SHA가 주입된다 (Dockerfile의 ARG GIT_SHA)
+  release: ${SENTRY_RELEASE:unknown}
+  # 요청 헤더·IP를 수집하지 않는다. 로그인이 MVP 제외(ADR-0004)라 식별할 주체도 없다
+  send-default-pii: false
+  # 성능 트레이싱은 이번 범위가 아니다
+  traces-sample-rate: 0
+  # 자동 등록되는 SentryExceptionResolver를 예외 리졸버 체인의 맨 앞으로 당긴다.
+  # 이 값을 지우면(기본값 1) Sentry는 아무것도 못 받는다 — Spring MVC의 예외 리졸버 컴포짓
+  # (@ExceptionHandler를 실행하는 ExceptionHandlerExceptionResolver 포함)이 order 0으로 등록돼
+  # 더 먼저 실행되는데, GlobalExceptionHandler가 @ExceptionHandler(Exception.class)로 모든 예외를
+  # 소비하면 DispatcherServlet이 체인을 멈춰 뒤쪽 리졸버는 호출되지 않기 때문이다.
+  # 즉 0보다 작은 값이어야 Sentry가 먼저 캡처한다. SentryExceptionResolver는 캡처 후 null을
+  # 반환하므로 응답 생성은 그대로 @ExceptionHandler가 담당한다.
+  # 검증: SentryExceptionResolverOrderTest
+  exception-resolver-order: -2147483647

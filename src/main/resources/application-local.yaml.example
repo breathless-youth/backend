@@ -1,0 +1,36 @@
+# 로컬 개발용 설정 템플릿 — application-local.yaml은 gitignore 대상이므로
+# 이 파일을 복사해서 사용한다:
+#   cp src/main/resources/application-local.yaml.example src/main/resources/application-local.yaml
+spring:
+  datasource:
+    # docker compose up -d 로 뜨는 로컬 PostgreSQL 기준
+    url: jdbc:postgresql://localhost:5432/study
+    username: study
+    password: study
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+# 로컬에서 프론트를 띄워 API를 호출할 때 필요하다.
+# 포트는 번들러마다 달라(Vite 5173, Next 3000 등) 열어둔다 — :[*]가 Spring의 포트 와일드카드 문법이다.
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:[*]
+      - http://127.0.0.1:[*]
+
+# AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
+#oauth:
+#  google:
+#    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
+#    # 값은 구글 클라우드 콘솔 > API 및 서비스 > 사용자 인증 정보에서 확인
+#    client-id: <웹-클라이언트-ID>.apps.googleusercontent.com
+#
+#jwt:
+#  # 로컬 전용 — 32자 이상 아무 문자열이면 됨 (dev/prod는 환경변수 JWT_SECRET 주입)
+#  secret: local-dev-secret-change-me-at-least-32-chars
+#  access-expiration: 1800000 # 30분
+#
+#refresh-token:
+#  expiration: 2592000000 # 한달 (opaque UUID, DB 저장)

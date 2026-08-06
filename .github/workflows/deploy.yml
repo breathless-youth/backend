@@ -1,0 +1,72 @@
+name: Deploy to ECS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # 콘솔에서 수동 배포도 가능하게 열어둔다
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: focus-prod-api
+  ECS_CLUSTER: focus-makers-prod-cluster
+  ECS_SERVICE: focus-makers-prod-api
+  TASK_FAMILY: focus-makers-prod-api
+  CONTAINER_NAME: api
+
+# OIDC로 AWS 자격 증명을 받기 위해 필요하다 (액세스 키를 저장하지 않는다)
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    # 이미지가 arm64라 ARM 러너에서 네이티브 빌드한다 (x86 러너 + QEMU 에뮬레이션은 수 배 느리다)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE=$REGISTRY/$ECR_REPOSITORY
+          # 커밋 해시 태그로 "지금 뜬 게 어떤 코드인지" 추적 가능하게 한다
+          # GIT_SHA는 Sentry 이슈에 표시할 릴리스 식별자로 이미지에 구워진다
+          docker build --provenance=false --sbom=false \
+            --build-arg GIT_SHA=${{ github.sha }} \
+            -t $IMAGE:${{ github.sha }} -t $IMAGE:latest .
+          docker push $IMAGE:${{ github.sha }}
+          docker push $IMAGE:latest
+          echo "IMAGE_URI=$IMAGE:${{ github.sha }}" >> $GITHUB_ENV
+
+      - name: Fetch current task definition
+        run: |
+          aws ecs describe-task-definition --task-definition $TASK_FAMILY \
+            --query taskDefinition > task-definition.json
+
+      - name: Render new task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ env.IMAGE_URI }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          # 롤아웃이 안정화될 때까지 기다린다 — 실패 시 워크플로도 실패로 표시된다
+          wait-for-service-stability: true

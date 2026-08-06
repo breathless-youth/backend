@@ -1,0 +1,23 @@
+# 빌드 산출물 · 로컬 캐시
+build/
+.gradle/
+
+# VCS · IDE · 문서
+.git/
+.github/
+.idea/
+.vscode/
+.DS_Store
+*.md
+docs/
+
+# 테스트 소스 (이미지 빌드 시 -x test 이므로 불필요)
+src/test/
+
+# 로컬/개발 설정 — 실제 접속정보가 들어있어 이미지에 포함되면 안 된다
+# (prod 설정은 시크릿을 환경변수로 주입받으므로 이미지에 포함한다)
+src/main/resources/application-local.yaml
+src/main/resources/application-dev.yaml
+
+# 로컬 개발용 도커 컴포즈
+docker-compose.yml

@@ -19,30 +19,62 @@ repositories {
 	mavenCentral()
 }
 
+ext {
+	querydslVersion = '7.4.0'
+}
+
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	// --- Web / API ---
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+	// --- Security / 인증 ---
+	// AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
+	// implementation 'org.springframework.boot:spring-boot-starter-security'
+	// implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+	// runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
+	// runtimeOnly 'io.jsonwebtoken:jjwt-gson:0.13.0' // jjwt-jackson 대신 (Jackson 3 충돌 회피)
+
+	// --- 모니터링 ---
+	// Boot 4 전용 모듈이다. sentry-spring-boot-starter-jakarta는 Boot 3용이라 여기선 동작하지 않는다.
+	// Boot 4 BOM이 Sentry 버전을 관리하지 않아 버전 명시가 필요하다.
+	implementation 'io.sentry:sentry-spring-boot-4:8.51.0'
+
+	// --- 데이터 / DB ---
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	implementation 'org.flywaydb:flyway-database-postgresql'
-	compileOnly 'org.projectlombok:lombok'
+	implementation "io.github.openfeign.querydsl:querydsl-jpa:${querydslVersion}"
+	annotationProcessor "io.github.openfeign.querydsl:querydsl-apt:${querydslVersion}:jpa"
+	annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
 	runtimeOnly 'org.postgresql:postgresql'
+
+	// --- 코드 생성 / 유틸 ---
+	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
-	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
-	testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client-test'
-	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
-	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+
+	// ===== 테스트 =====
+	// --- 테스트 스타터 (각 스타터의 테스트 대응 모듈) ---
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+	// AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
+	// testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+
+	// --- 통합 테스트 / 실제 DB ---
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation 'org.testcontainers:testcontainers-postgresql'
+
+	// --- API 테스트 / 아키텍처 검증 ---
 	testImplementation 'io.rest-assured:rest-assured:6.0.1'
 	testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.2'
+
+	// --- 코드 생성 / 유틸 (테스트) ---
 	testCompileOnly 'org.projectlombok:lombok'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
