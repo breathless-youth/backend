@@ -122,6 +122,7 @@ ADR-0010에서는 Sentry 알림이 노이즈로 죽는 것을 막기 위해 "처
   `StudySessionIdempotencyApiTest`, `StudySessionMinDurationApiTest` 등. 응답 자체를
   바꾸지 않으므로 전부 그린이어야 정상이다.
 - **새로 추가하는 자동 테스트는 위 리졸버 순서 테스트 하나뿐이다.**
-- **배포 후 수동 검증(1회)** — 로컬에서 `application-local.yaml`에 `sentry.dsn`을 임시로
-  넣고 4xx(예: 404) 하나를 발생시켜 Sentry 콘솔에 이슈로 뜨는지 확인한다. 배포 후 실제
-  4xx 한 건도 확인한다.
+- **배포 후 수동 검증(1회)** — 음수 순서값은 `application-prod.yaml`에만 있어 local
+  프로파일에서는 검증되지 않는다(local은 여전히 order 1이라 로컬 검증 절차 자체를
+  두지 않는다). `main` 배포로 새 설정이 반영된 뒤, 실제 4xx 한 건과 5xx 한 건을
+  각각 Sentry 콘솔에서 확인한다.

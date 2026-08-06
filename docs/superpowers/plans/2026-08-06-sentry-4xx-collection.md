@@ -275,13 +275,11 @@ git commit -m "docs: Sentry 4xx 수집 확장 ADR 추가"
 ## 배포 후 수동 검증 (사용자 작업)
 
 이 계획의 코드 작업으로는 "Sentry에 실제로 4xx가 도달하는지"를 확인할 수 없다.
+음수 순서값은 `application-prod.yaml`에만 있어 local 프로파일에서는 검증되지
+않으므로(local은 여전히 order 1), 로컬 검증 절차는 두지 않는다.
 
-- **로컬 검증(배포 전 권장)** — `application-local.yaml`에 `sentry.dsn`과
-  `sentry.exception-resolver-order`를 지운 `sentry` 블록을 임시로 넣고 앱을 띄운 뒤,
-  존재하지 않는 사용자로 세션 조회 API를 호출해 404를 유발한다. Sentry 콘솔에 이슈로
-  뜨는지 확인한 후 설정을 되돌린다.
-- **배포 후 검증** — `main` 배포로 새 설정이 반영되면, 실제 4xx 하나(예: 잘못된 세션
-  시간 요청)가 Sentry에 뜨는지 확인한다.
+- **배포 후 검증** — `main` 배포로 새 설정이 반영되면, 존재하지 않는 사용자 조회 같은
+  4xx 하나와 5xx 하나를 각각 유발해 둘 다 Sentry에 뜨는지 확인한다.
 
 ## 남은 후속 작업 (이 계획 범위 밖)
 
