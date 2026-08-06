@@ -49,8 +49,8 @@ public class GlobalExceptionHandler {
 
     /**
      * 위의 어떤 핸들러도 처리하지 못한 예외를 마지막으로 받는다.
-     * Sentry 전송은 여기서 하지 않는다 — SentryExceptionResolver가 이 핸들러보다 먼저 실행되어
-     * 이미 캡처했으므로 (설계: docs/superpowers/specs/2026-08-06-sentry-4xx-collection-design.md),
+     * Sentry 전송은 여기서 하지 않는다 — prod의 {@code sentry.exception-resolver-order}를 음수로
+     * 지정해 SentryExceptionResolver가 이 핸들러보다 먼저 실행되도록 해뒀으므로 (ADR-0011),
      * 여기서 또 호출하면 같은 예외가 이슈 2개로 중복된다.
      */
     @ExceptionHandler(Exception.class)
@@ -60,6 +60,7 @@ public class GlobalExceptionHandler {
         // 여기서 걸러내지 않으면 상태코드가 뭉개진다.
         if (e instanceof org.springframework.web.ErrorResponse standard) {
             HttpStatusCode status = standard.getStatusCode();
+            // 표준 예외라도 5xx면 내부 사정을 노출하지 않는 서버 오류 메시지로 통일한다
             if (status.is5xxServerError()) {
                 return ResponseEntity.status(status).body(new ErrorResponse("서버 오류가 발생했습니다"));
             }

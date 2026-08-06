@@ -74,3 +74,12 @@ sentry:
   send-default-pii: false
   # 성능 트레이싱은 이번 범위가 아니다
   traces-sample-rate: 0
+  # 자동 등록되는 SentryExceptionResolver를 예외 리졸버 체인의 맨 앞으로 당긴다.
+  # 이 값을 지우면(기본값 1) Sentry는 아무것도 못 받는다 — Spring MVC의 예외 리졸버 컴포짓
+  # (@ExceptionHandler를 실행하는 ExceptionHandlerExceptionResolver 포함)이 order 0으로 등록돼
+  # 더 먼저 실행되는데, GlobalExceptionHandler가 @ExceptionHandler(Exception.class)로 모든 예외를
+  # 소비하면 DispatcherServlet이 체인을 멈춰 뒤쪽 리졸버는 호출되지 않기 때문이다.
+  # 즉 0보다 작은 값이어야 Sentry가 먼저 캡처한다. SentryExceptionResolver는 캡처 후 null을
+  # 반환하므로 응답 생성은 그대로 @ExceptionHandler가 담당한다.
+  # 검증: SentryExceptionResolverOrderTest
+  exception-resolver-order: -2147483647

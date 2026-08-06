@@ -13,9 +13,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 전역 예외 핸들러가 내리는 상태코드와 응답 포맷만 검증한다.
- * Sentry 전송 여부는 자동 검증하지 않는다 — Sentry.captureException이 static이라
+ * Sentry로 이벤트가 실제로 전송되는지는 자동 검증하지 않는다 — Sentry SDK 진입점이 static이라
  * 래퍼 없이는 호출을 관측할 수 없고, 래퍼를 두지 않기로 결정했다
  * (설계: docs/superpowers/specs/2026-08-06-sentry-4xx-collection-design.md).
+ * 다만 Sentry 리졸버가 이 핸들러보다 먼저 실행되는지(=캡처될 기회가 있는지)는
+ * {@link SentryExceptionResolverOrderTest}에서 검증한다.
  *
  * <p>DB가 필요 없는 검증이라 standalone으로 띄워 Testcontainers 기동 비용을 피한다.
  */
@@ -68,7 +70,8 @@ class GlobalExceptionHandlerTest {
 
     /**
      * ResponseStatusException도 ErrorResponse를 구현하므로 위 405 분기에 함께 걸린다.
-     * 상태코드만 보고 일괄 제외하면 5xx인데도 Sentry 전송이 누락되므로, 5xx는 갈라서 처리한다.
+     * 이 분기는 응답 메시지 선택만 담당한다 — 4xx는 "요청을 처리할 수 없습니다",
+     * 5xx는 내부 사정을 감추는 "서버 오류가 발생했습니다"로 갈라야 하므로 상태코드를 다시 본다.
      */
     @Test
     void 표준_예외라도_5xx면_서버_오류_메시지로_응답한다() {
