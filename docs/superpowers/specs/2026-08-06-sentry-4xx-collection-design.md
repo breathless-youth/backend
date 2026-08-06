@@ -42,30 +42,44 @@ ADR-0010에서는 Sentry 알림이 노이즈로 죽는 것을 막기 위해 "처
 
 ## 결정과 근거
 
-### 1. `exception-resolver-order` 설정 제거
+### 1. `exception-resolver-order` 설정 반전
 
-`application-prod.yaml`에서 다음 블록을 삭제한다.
+`application-prod.yaml`의 값을 삭제하지 않고 음수로 뒤집는다.
 
 ```yaml
-# 삭제 대상
-  # 자동 등록되는 SentryExceptionResolver를 맨 뒤로 미룬다.
-  # 기본값(Integer.MIN_VALUE = 최우선순위)이면 @ExceptionHandler보다 먼저 모든 예외를 캡처해
-  # 404·409 같은 정상적인 클라이언트 오류까지 이슈로 쌓이고,
-  # GlobalExceptionHandler의 명시적 캡처와도 중복된다.
+# 변경 전
   exception-resolver-order: 2147483647
+# 변경 후
+  exception-resolver-order: -2147483647
 ```
 
-이 설정이 정확히 ADR-0010이 4xx를 걸러내던 메커니즘이다. Sentry의 `SentryExceptionResolver`는
-기본값(`Integer.MIN_VALUE` = 최우선순위)으로 등록되면 `@ExceptionHandler`보다 **먼저** 모든
-예외(4xx 포함)를 캡처한다. 지금은 그 동작을 원하므로, 설정을 걷어내고 Sentry Spring Boot
-통합의 기본 동작으로 되돌리는 것이 가장 단순한 방법이다.
+> **정정 (최종 리뷰 결과 반영):** 이 설계의 초안은 ADR-0010을 따라 `SentryExceptionResolver`의
+> 기본 order가 `Integer.MIN_VALUE`(최우선순위)라고 적었으나, **틀린 값**이다. 실제 기본값은
+> **1**이고(`io.sentry.spring.boot4.SentryProperties` 생성자), Spring MVC가 등록하는 예외 리졸버
+> 컴포짓(`@ExceptionHandler`를 실행하는 `ExceptionHandlerExceptionResolver`를 품은
+> `HandlerExceptionResolverComposite`)은 order **0**이다
+> (`WebMvcConfigurationSupport.handlerExceptionResolver`). 낮은 값이 먼저 실행되므로
+> 기본값 그대로면 Spring 컴포짓이 앞선다.
+
+`GlobalExceptionHandler`가 `@ExceptionHandler(Exception.class)`로 모든 예외를 소비하기 때문에,
+`DispatcherServlet.processHandlerException`은 컴포짓에서 non-null을 받는 즉시 체인을 멈춘다.
+따라서 **설정을 지우기만 하면 Sentry 리졸버는 호출조차 되지 않고 4xx는 물론 5xx도 전송이 끊긴다.**
+0보다 작은 값을 줘야 Sentry가 먼저 캡처한다. `SentryExceptionResolver.resolveException`은 캡처 후
+`null`을 반환하므로, 응답 생성은 그대로 뒤따르는 `@ExceptionHandler`가 담당한다.
+
+같은 이유로 기존 값 `2147483647`도 실제로는 아무 효과가 없었다. ADR-0010에서 4xx가 걸러졌던
+진짜 메커니즘은 리졸버 순서가 아니라 `GlobalExceptionHandler`가 5xx에서만 수동으로
+`Sentry.captureException`을 호출한 것이었다.
 
 ### 2. `GlobalExceptionHandler`의 수동 캡처 제거
 
 `GlobalExceptionHandler.java`의 `Sentry.captureException(e)` 호출 2곳(현재 65행, 70행)을 삭제한다.
 
-- 자동 resolver가 `@ExceptionHandler`보다 먼저 실행되어 모든 예외를 이미 캡처하므로,
-  기존 5xx 수동 캡처를 남겨두면 5xx 하나당 Sentry 이슈가 2개(자동 1개 + 수동 1개) 생긴다.
+- 위 1번(순서 반전)이 적용된 뒤에는 자동 resolver가 `@ExceptionHandler`보다 먼저 실행되어 모든
+  예외를 이미 캡처하므로, 기존 5xx 수동 캡처를 남겨두면 5xx 하나당 Sentry 이슈가 2개
+  (자동 1개 + 수동 1개) 생긴다.
+- **1번과 2번은 한 세트다.** 순서 반전 없이 수동 캡처만 지우면 prod에서 Sentry로 아무것도
+  전송되지 않는다.
 - 405/415 같은 Spring MVC 표준 예외의 HTTP 상태코드를 지키는
   `instanceof org.springframework.web.ErrorResponse` 분기(60~69행)는 Sentry 캡처와 무관한
   로직이므로 그대로 둔다.
@@ -97,13 +111,17 @@ ADR-0010에서는 Sentry 알림이 노이즈로 죽는 것을 막기 위해 "처
 - `Sentry.captureException`이 static 메서드라 "실제로 Sentry에 도달하는지"는 ADR-0010 때와
   마찬가지로 자동 테스트로 검증하지 않는다. wrapper 인터페이스를 새로 만드는 비용 대비
   얻는 것이 적다고 판단한 기존 결정을 그대로 따른다.
+- **다만 리졸버 *순서*는 자동 검증한다** (`SentryExceptionResolverOrderTest`, 최종 리뷰 결과 추가).
+  "전송 여부는 검증 불가"라는 판단을 순서에까지 확대한 것이 이번 오류를 놓친 원인이었다.
+  prod yaml의 실제 값을 읽어 Spring 컨텍스트에 적용하고, `DispatcherServlet`과 동일한 방식으로
+  정렬한 리졸버 체인의 맨 앞이 `SentryExceptionResolver`인지 확인한다 (DSN 불필요).
 - **회귀 테스트가 그대로 통과해야 한다** — `GlobalExceptionHandlerTest.java`의 405 유지
   테스트, 5xx 서버 오류 메시지 테스트는 Sentry 캡처와 무관하게 상태코드/응답 바디만
   검증하므로 이번 변경으로 깨지면 안 된다.
 - **기존 4xx 통합테스트 전부 그대로 통과해야 한다** — `StudySessionApiTest`,
   `StudySessionIdempotencyApiTest`, `StudySessionMinDurationApiTest` 등. 응답 자체를
   바꾸지 않으므로 전부 그린이어야 정상이다.
-- **새로 추가하는 자동 테스트는 없다.**
+- **새로 추가하는 자동 테스트는 위 리졸버 순서 테스트 하나뿐이다.**
 - **배포 후 수동 검증(1회)** — 로컬에서 `application-local.yaml`에 `sentry.dsn`을 임시로
   넣고 4xx(예: 404) 하나를 발생시켜 Sentry 콘솔에 이슈로 뜨는지 확인한다. 배포 후 실제
   4xx 한 건도 확인한다.
