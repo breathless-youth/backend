@@ -42,3 +42,6 @@ src/main/resources/application-dev.yaml
 
 ### macOS ###
 .DS_Store
+
+### Claude superpowers scratch state ###
+.superpowers/
