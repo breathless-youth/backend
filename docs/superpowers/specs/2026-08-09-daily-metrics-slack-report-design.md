@@ -24,6 +24,17 @@
   (인정일 3일)은 호출자가 매번 올바르게 넘겨야 하는 값이 아니라 `StudySessionMetricsService`
   내부 상수(`WINDOW_DAYS`, `MIN_ACTIVE_DAYS`)로 캡슐화했다 — 헤비유저 정의가 통째로
   서비스 밖으로 새지 않게 하기 위함이다.
+- **하루 1회 발송 보장(날짜 선점)을 걷어냈다**: 아래 "3. 하루 1회 발송 보장" 절은 계획
+  당시 그대로다(경위를 남기려고 지우지 않았다). `daily_report_log` 테이블과
+  `DailyReportLogRepository`로 오늘 날짜를 선점해 배포 중 중복 발송을 막는 방식으로
+  구현·배포까지 했었다. 그런데 독립 리뷰에서 이 가드가 막으려던 것(몇 달에 한 번, 무해한
+  중복 Slack 메시지)보다 가드 자체가 만드는 피해(선점 후 발송 실패 시 그날 리포트가
+  영구 유실되고, `sent_at`이 "보냈다"는 거짓 상태를 남기는 것)가 더 크다는 P1 지적이
+  나왔다. 원본 데이터(`users`, `study_session`)가 그대로 남아 언제든 재조회 가능하므로
+  유실의 실질 피해보다 거짓 상태가 조사를 오도하는 비용이 크다고 판단해 선점 자체를
+  제거했다 — `V8__daily_report_log.sql`은 운영 DB에 한 번도 적용되지 않았기에(기능
+  미배포) DROP 마이그레이션 대신 파일을 삭제했다. 지금은 중복 발송을 막지 않는다;
+  근거와 향후 대응은 3번 절 끝의 정정 내용 참고.
 
 ## 배경
 
@@ -46,9 +57,8 @@
 
 ## 범위
 
-- `project.study.metrics` 패키지 신설 — 스케줄러, 리포트 서비스, Slack 발송기, 발송 이력 저장소
+- `project.study.metrics` 패키지 신설 — 스케줄러, 리포트 서비스, Slack 발송기
 - `@EnableScheduling` 활성화 (현재 이 프로젝트에 스케줄러가 전혀 없다)
-- Flyway 마이그레이션 1건 — 발송 이력 테이블
 - `UserService`·`StudySessionMetricsService`(신설, `studysession` 도메인)에 지표 조회 메서드 추가
 - Slack Incoming Webhook 연동 (URL은 SSM Parameter Store → 환경변수)
 
@@ -61,7 +71,6 @@
   안전하게 보호할 인증 수단이 현재 없다. Slack push 방식은 엔드포인트를 노출하지 않으므로
   이 문제를 회피한다.
 - **중복 유저 보정**: 하지 않는다. 아래 "알려진 한계" 참고.
-- **과거 데이터 백필**: 발송 이력은 이 기능이 켜진 날부터 쌓인다.
 
 ## 결정과 근거
 
@@ -135,7 +144,16 @@ ORDER BY active_days DESC, user_id;
 테이블을 직접 조회하지 않는다 — CLAUDE.md의 "도메인 간 직접 참조 최소화"를 따르고,
 ArchUnit 규칙(`controllerShouldNotAccessRepository`)과도 결이 맞는다.
 
-### 3. 하루 1회 발송 보장 — 날짜 선점
+### 3. 하루 1회 발송 보장 — 날짜 선점 (계획대로 구현했으나 이후 제거됨)
+
+> **정정(위 "구현 중 변경된 사항" 참고)**: 아래 내용은 계획·최초 구현 그대로 남겨둔
+> 것이고, 실제로는 이 절의 결정이 뒤집혀 선점 자체가 제거됐다. `daily_report_log` 테이블,
+> `DailyReportLogRepository.claim`, 그 아래 코드는 더 이상 존재하지 않는다. 지금은
+> "하루 1회"를 DB로 보장하지 않는다 — 자세한 이유는 `DailyReportService`의 클래스
+> javadoc과 ADR-0012 참고. 요지: 이 절이 막으려던 것(배포 중 태스크 중복으로 인한 무해한
+> 중복 Slack 메시지)보다, 이 절의 방식 자체가 만드는 피해(선점 후 발송 실패 시 그날
+> 리포트가 영구 유실되고 `sent_at`이 "보냈다"는 거짓 상태를 남기는 것)가 더 크다는 게
+> 독립 리뷰에서 P1으로 지적됐다. 아래는 그 결정이 나오기 전까지의 원래 설계다.
 
 ECS `desired_count = 1`이지만 **배포 중에는 태스크가 일시적으로 2개**가 된다(무중단 배포).
 그 시간대에 10시가 걸리면 알림이 두 번 간다. 태스크 재시작이 10시 정각에 겹치는 경우도
@@ -145,7 +163,7 @@ ECS `desired_count = 1`이지만 **배포 중에는 태스크가 일시적으로
 보냈다는 뜻이므로 즉시 종료한다.
 
 ```sql
--- V8__daily_report_log.sql
+-- V8__daily_report_log.sql (삭제됨 — 운영 DB에 한 번도 적용되지 않아 DROP 없이 파일 자체를 지웠다)
 CREATE TABLE "daily_report_log" (
     "report_date" date PRIMARY KEY,
     "sent_at"     timestamptz NOT NULL
@@ -157,12 +175,18 @@ INSERT INTO daily_report_log (report_date, sent_at) VALUES (:today, now())
 ON CONFLICT (report_date) DO NOTHING
 ```
 
-`UserRepository.insertIfAbsent`와 같은 관용구다 — 이 레포는 동시성을 애플리케이션 락이 아니라
-DB 제약으로 처리해왔고, 그 패턴을 유지한다.
+`UserRepository.insertIfAbsent`와 같은 관용구였다 — 이 레포는 동시성을 애플리케이션 락이
+아니라 DB 제약으로 처리해온 사례가 있고, 그 패턴을 따랐다.
 
-**선점을 먼저 하는 쪽의 트레이드오프**: 발송이 실패하면 그날 알림이 누락된다(자동 재시도
-없음). 반대로 발송 후에 기록하면 중복 발송이 가능해진다. 매일 오는 알림이므로 하루 누락이
-중복보다 낫다고 판단했다. 실패는 Sentry로 올라오므로 필요하면 수동으로 확인한다.
+**선점을 먼저 하는 쪽의 트레이드오프(당시 판단)**: 발송이 실패하면 그날 알림이
+누락된다(자동 재시도 없음). 반대로 발송 후에 기록하면 중복 발송이 가능해진다. 매일 오는
+알림이므로 하루 누락이 중복보다 낫다고 판단했었다. **이후 재검토 결과**: "실패는 Sentry로
+올라오므로 필요하면 수동으로 확인한다"는 전제가 안이했다 — Sentry 알림을 놓치거나 늦게
+확인하면 그 사이 `sent_at`은 계속 "보냈다"고 말하고 있어, 리포트가 안 왔다는 사실 자체를
+알아채기 더 어려워진다. 반면 막으려던 중복은 몇 달~1년에 한 번, 눈에 바로 띄는 무해한
+증상이다. 그래서 이 절의 결정을 뒤집고 선점을 제거했다 — 현재는 중복 발송을 막지 않으며,
+`desired_count`를 올릴 계획이 생기면 그때 분산 락이나 외부 스케줄러(EventBridge)로
+옮긴다(`DailyReportScheduler` javadoc 참고).
 
 ### 4. Slack 발송 — Incoming Webhook
 
@@ -201,11 +225,10 @@ UTC로 뜨므로 zone 없이는 오후 7시에 발송된다.
 | 클래스 | 책임 | 의존 |
 |---|---|---|
 | `DailyReportScheduler` | 시각 트리거만. 로직 없음 | `DailyReportService` |
-| `DailyReportService` | 날짜 선점 → 지표 수집 → 발송 조율 | `UserService`, `StudySessionMetricsService`, `SlackNotifier`, `DailyReportLogRepository` |
+| `DailyReportService` | 지표 수집 → 발송 조율 | `UserService`, `StudySessionMetricsService`, `SlackNotifier` |
 | `SlackNotifier` (인터페이스) | 메시지 발송 | — |
 | `SlackWebhookNotifier` | `RestClient`로 Webhook POST. URL이 비면 no-op | `RestClient.Builder` |
 | `StudySessionMetricsService` | 헤비유저·10분 이상 세션 수 조회(지표 전용, `studysession` 도메인 소속) | `StudySessionRepository`, `StudySessionThresholds` |
-| `DailyReportLogRepository` | 발송 이력 선점 | — |
 | `DailyReport` (record) | 지표 4개를 담는 DTO | — |
 
 `SlackNotifier`를 인터페이스로 두는 이유는 단위 테스트에서 가짜 구현으로 대체하기 위함이다.
@@ -217,25 +240,20 @@ UTC로 뜨므로 zone 없이는 오후 7시에 발송된다.
 10:00 KST → DailyReportScheduler.run()
               ↓
             DailyReportService.sendDailyReport()
-              ↓ ① INSERT ... ON CONFLICT DO NOTHING  → 0행이면 즉시 종료(이미 발송됨)
-              ↓ ② UserService.countTotal() / countRegisteredOn(어제)
+              ↓ ① UserService.countTotal() / countRegisteredOn(어제)
               ↓    StudySessionMetricsService.findHeavyUsers(어제)  // 구간·임계값은 서비스 내부 상수로 캡슐화
               ↓    StudySessionMetricsService.countQualifyingSessionsOn(어제)
-              ↓ ③ SlackNotifier.send(DailyReport)
+              ↓ ② SlackNotifier.send(DailyReport)
 ```
 
 ## 에러 처리
 
 | 상황 | 동작 |
 |---|---|
-| 날짜 선점 실패(0행) | 정상 종료. INFO 로그만 남긴다 — 배포 중 겹침은 예상된 상황이다 |
+| 배포 중 태스크 일시 중복(무중단 배포) | 두 태스크 모두 발송한다 — 같은 메시지가 두 번 온다. 막지 않는다(아래 3번 정정 내용 참고) |
 | 지표 쿼리 실패 | 전체 중단 + Sentry. 부분 지표만 보내면 숫자를 오해하게 된다 |
-| Slack 발송 실패 | Sentry + ERROR 로그. 자동 재시도 없음(위 3번 트레이드오프) |
-| Webhook URL 미설정 | **날짜를 선점하지 않고** 즉시 종료. 기동 시 WARN 로그 1회로 누락을 발견할 수 있게 한다 |
-
-Webhook URL이 없을 때 날짜를 선점하지 않는 이유는, 선점해 두면 나중에 URL을 설정하고 태스크를
-다시 띄워도 그날 리포트가 영영 발송되지 않기 때문이다. 발송할 수단이 없으면 아무 기록도
-남기지 않는 편이 복구 가능하다.
+| Slack 발송 실패 | Sentry + ERROR 로그. 자동 재시도 없음 |
+| Webhook URL 미설정 | 즉시 종료. WARN 로그 1회로 누락을 발견할 수 있게 한다 |
 
 스케줄러 메서드 자체에서 예외가 밖으로 나가면 Spring이 로그만 남기고 삼킨다. Sentry로
 올리려면 서비스 안에서 명시적으로 캡처해야 한다.
@@ -243,8 +261,8 @@ Webhook URL이 없을 때 날짜를 선점하지 않는 이유는, 선점해 두
 ## 테스트 계획
 
 **단위 테스트 — `DailyReportServiceTest`**
-- 날짜 선점에 실패하면(0행) 지표 조회도 발송도 하지 않는다 (`verify(never())`)
-- 선점에 성공하면 지표 4개를 모아 발송기에 넘긴다
+- 발송기가 비활성이면 지표 조회도 발송도 하지 않는다 (`verify(never())`)
+- 지표 4개를 모아 발송기에 넘긴다
 - 발송이 예외를 던져도 스케줄러 밖으로 전파되지 않는다
 - 메시지 포맷 — 헤비유저 0명일 때 목록 자리에 무엇이 오는지 포함
 
@@ -262,9 +280,6 @@ Webhook URL이 없을 때 날짜를 선점하지 않는 이유는, 선점해 두
 - 자정 분할 조각(각각 10분 미만) → 인정되지 않음. **기존 스트릭과 동일한 동작임을
   고정하는 테스트**다 — 향후 누군가 병합 로직을 넣으면 이 테스트가 실패해 ADR-0009와의
   불일치를 알린다
-
-**통합 테스트 — 하루 1회 보장**
-- 같은 날짜로 두 번 호출하면 두 번째는 발송기를 호출하지 않는다
 
 ## 예상 결과
 
