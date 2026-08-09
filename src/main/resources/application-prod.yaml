@@ -60,6 +60,14 @@ management:
       exposure:
         include: health,info,metrics
 
+# 일일 지표 리포트를 보낼 Slack Incoming Webhook.
+# URL이 없으면 발송기가 비활성으로 동작한다 — Sentry DSN과 같은 이유로 기본값을 둔다:
+# 모니터링 설정 하나가 없다고 API 전체가 기동 실패하는 쪽이 더 나쁘다.
+# ECS 태스크 정의가 SSM Parameter Store 값을 SLACK_WEBHOOK_URL로 주입한다.
+metrics:
+  slack:
+    webhook-url: ${SLACK_WEBHOOK_URL:}
+
 # 처리되지 않은 예외(4xx+5xx)를 전부 Sentry로 보낸다.
 # 설계: docs/superpowers/specs/2026-08-06-sentry-4xx-collection-design.md
 sentry:
