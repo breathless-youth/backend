@@ -2,7 +2,28 @@
 
 - 작성일: 2026-08-09
 - 상태: 작성됨
-- 관련 ADR: ADR-0009(스트릭 인정 기준 재사용), ADR-0004(로그인 MVP 제외 — 관리자 API를 열지 않는 근거)
+- 관련 ADR: ADR-0009(스트릭 인정 기준 재사용), ADR-0004(로그인 MVP 제외 — 관리자 API를 열지 않는 근거),
+  ADR-0012(헤비유저 정의·지표를 백엔드에 두는 결정)
+
+## 구현 중 변경된 사항
+
+이 문서는 계획 단계에서 작성됐고, 구현 과정에서 아래와 같이 달라졌다. "기준이 한 곳에만
+존재한다"는 원래 목표는 그대로 지켜졌고, 그 기준이 속한 클래스만 바뀌었다.
+
+- **임계값 상수의 위치**: `StudySessionService.MIN_STREAK_FOCUS_SEC`(private)로 두려던
+  계획을 바꿔, `StudySessionThresholds`의 public 상수(`MIN_STREAK_FOCUS_SEC` 등)로
+  추출했다. 이유는 checkstyle `FileLength max=400`이다 — `StudySessionService`가 이미
+  390줄 안팎이라 새 로직을 추가할 여유가 거의 없었다. 조회 메서드도 `StudySessionService`가
+  아니라 신설한 `StudySessionMetricsService`가 소유한다(§1 참고). 지표 정의가 "도메인
+  규칙으로서 한 곳에만 존재해야 한다"는 목표(ADR-0012)는 변하지 않았다 — 상수가 놓인
+  클래스와 조회 메서드를 제공하는 서비스만 바뀌었다.
+- **`DailyReportRepository` → `DailyReportLogRepository`**: 엔티티·테이블명
+  (`daily_report_log`)과 맞춰 리포지토리 이름도 `DailyReportLogRepository`로 지었다.
+- **헤비유저 조회 시그니처**: `findHeavyUsers(from, to, 3)`처럼 구간·임계값을 인자로
+  받는 대신, `findHeavyUsers(anchorDate)` 하나로 단순화했다. 구간(최근 7일)과 임계값
+  (인정일 3일)은 호출자가 매번 올바르게 넘겨야 하는 값이 아니라 `StudySessionMetricsService`
+  내부 상수(`WINDOW_DAYS`, `MIN_ACTIVE_DAYS`)로 캡슐화했다 — 헤비유저 정의가 통째로
+  서비스 밖으로 새지 않게 하기 위함이다.
 
 ## 배경
 
@@ -28,7 +49,7 @@
 - `project.study.metrics` 패키지 신설 — 스케줄러, 리포트 서비스, Slack 발송기, 발송 이력 저장소
 - `@EnableScheduling` 활성화 (현재 이 프로젝트에 스케줄러가 전혀 없다)
 - Flyway 마이그레이션 1건 — 발송 이력 테이블
-- `UserService`·`StudySessionService`에 지표 조회 메서드 추가
+- `UserService`·`StudySessionMetricsService`(신설, `studysession` 도메인)에 지표 조회 메서드 추가
 - Slack Incoming Webhook 연동 (URL은 SSM Parameter Store → 환경변수)
 
 ### 비범위 (Non-goals)
@@ -77,6 +98,14 @@ ORDER BY active_days DESC, user_id;
 임계값 `600`은 `StudySessionService.MIN_STREAK_FOCUS_SEC`에 이미 private 상수로 존재한다.
 새로 정의하지 않고 **`StudySessionService`가 조회 메서드를 노출**해 상수를 private으로
 유지한다 — 기준이 계속 한 곳에만 존재하게 하기 위함이다.
+
+> **구현 결과(위 "구현 중 변경된 사항" 참고)**: 실제로는 `StudySessionService`가 이미
+> checkstyle `FileLength max=400`에 여유가 없어(390줄 안팎), 상수를 `StudySessionThresholds`의
+> public 상수로 추출하고 조회 메서드는 신설한 `StudySessionMetricsService`가 소유하는
+> 쪽으로 바뀌었다. 수단은 바뀌었지만 "기준이 한 곳에만 존재한다"는 목표는 그대로다 —
+> 상수는 여전히 `StudySessionThresholds` 한 곳에만 있고, 앱 화면의 스트릭 판정
+> (`StudySessionService`)과 지표 집계(`StudySessionMetricsService`)가 그 상수를 함께
+> 참조한다. 자세한 이유는 ADR-0012 참고.
 
 ### 2. 지표 4개
 
@@ -172,10 +201,11 @@ UTC로 뜨므로 zone 없이는 오후 7시에 발송된다.
 | 클래스 | 책임 | 의존 |
 |---|---|---|
 | `DailyReportScheduler` | 시각 트리거만. 로직 없음 | `DailyReportService` |
-| `DailyReportService` | 날짜 선점 → 지표 수집 → 발송 조율 | `UserService`, `StudySessionService`, `SlackNotifier`, `DailyReportRepository` |
+| `DailyReportService` | 날짜 선점 → 지표 수집 → 발송 조율 | `UserService`, `StudySessionMetricsService`, `SlackNotifier`, `DailyReportLogRepository` |
 | `SlackNotifier` (인터페이스) | 메시지 발송 | — |
 | `SlackWebhookNotifier` | `RestClient`로 Webhook POST. URL이 비면 no-op | `RestClient.Builder` |
-| `DailyReportRepository` | 발송 이력 선점 | — |
+| `StudySessionMetricsService` | 헤비유저·10분 이상 세션 수 조회(지표 전용, `studysession` 도메인 소속) | `StudySessionRepository`, `StudySessionThresholds` |
+| `DailyReportLogRepository` | 발송 이력 선점 | — |
 | `DailyReport` (record) | 지표 4개를 담는 DTO | — |
 
 `SlackNotifier`를 인터페이스로 두는 이유는 단위 테스트에서 가짜 구현으로 대체하기 위함이다.
@@ -189,8 +219,8 @@ UTC로 뜨므로 zone 없이는 오후 7시에 발송된다.
             DailyReportService.sendDailyReport()
               ↓ ① INSERT ... ON CONFLICT DO NOTHING  → 0행이면 즉시 종료(이미 발송됨)
               ↓ ② UserService.countTotal() / countRegisteredOn(어제)
-              ↓    StudySessionService.findHeavyUsers(from, to, 3)
-              ↓    StudySessionService.countQualifyingSessionsOn(어제)
+              ↓    StudySessionMetricsService.findHeavyUsers(어제)  // 구간·임계값은 서비스 내부 상수로 캡슐화
+              ↓    StudySessionMetricsService.countQualifyingSessionsOn(어제)
               ↓ ③ SlackNotifier.send(DailyReport)
 ```
 
