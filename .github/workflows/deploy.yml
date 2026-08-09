@@ -18,22 +18,31 @@ permissions:
   id-token: write
   contents: read
 
+# main에 연속으로 push되어 워크플로 두 개가 겹치면, 늦게 시작한 배포가 먼저 끝나
+# 최신 배포가 이전 이미지로 덮어써질 수 있다. 새 실행은 큐에 세워 순서대로만 배포한다
+# (진행 중인 배포를 취소하면 롤아웃이 중간에 끊길 수 있어 cancel-in-progress는 쓰지 않는다)
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
 jobs:
   deploy:
     # 이미지가 arm64라 ARM 러너에서 네이티브 빌드한다 (x86 러너 + QEMU 에뮬레이션은 수 배 느리다)
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      # 액션들은 id-token: write로 AWS 자격을 얻는 워크플로라 가변 태그(@v4 등) 대신
+      # 커밋 SHA로 고정한다 — 태그가 재태깅되어도 실행 내용이 바뀌지 않는다
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
         id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
 
       - name: Build and push image
         env:
@@ -56,14 +65,14 @@ jobs:
 
       - name: Render new task definition
         id: render
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        uses: aws-actions/amazon-ecs-render-task-definition@138c24f321fdbdf7edee4a685519d253cae2cdea # v1
         with:
           task-definition: task-definition.json
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ env.IMAGE_URI }}
 
       - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        uses: aws-actions/amazon-ecs-deploy-task-definition@c465972ecbd160473f22e683363b422a5412a3de # v2
         with:
           task-definition: ${{ steps.render.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
