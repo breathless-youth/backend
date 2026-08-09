@@ -12,6 +12,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Slack Incoming Webhook 발송기.
@@ -43,9 +44,27 @@ public class SlackWebhookNotifier implements SlackNotifier {
         requestFactory.setReadTimeout(READ_TIMEOUT);
         this.restClient =
                 restClientBuilder.clone().requestFactory(requestFactory).build();
-        this.webhookUrl = webhookUrl;
+        this.webhookUrl = resolveWebhookUrl(webhookUrl);
         if (!isEnabled()) {
-            log.warn("metrics.slack.webhook-url이 비어 있어 일일 지표 리포트를 발송하지 않는다");
+            log.warn("metrics.slack.webhook-url이 비어 있거나 형식이 올바르지 않아 일일 지표 리포트를 발송하지 않는다");
+        }
+    }
+
+    // 발송 시점(RestClient의 .uri() 호출)에 처음 파싱하면, 형식이 깨진 URL(SSM 값 붙여넣기 중
+    // 섞인 공백, 깨진 percent-escape 등)이 던지는 IllegalArgumentException이 기동 후 첫 발송(오전
+    // 10시)에야 드러난다. RestClient가 내부적으로 쓰는 것과 동일한 파서(UriComponentsBuilder의
+    // 기본 RFC 파서, DefaultUriBuilderFactory#uriString 참고)로 기동 시점에 미리 검증해서, 형식이
+    // 깨진 URL도 빈 문자열과 동일하게 "비활성" 취급한다. 검증 실패로 애플리케이션 기동 자체를 막지
+    // 않으며, URL 자체가 자격증명이므로 예외 메시지·WARN 로그 어디에도 URL을 찍지 않는다.
+    private static String resolveWebhookUrl(String webhookUrl) {
+        if (!StringUtils.hasText(webhookUrl)) {
+            return webhookUrl;
+        }
+        try {
+            UriComponentsBuilder.fromUriString(webhookUrl);
+            return webhookUrl;
+        } catch (IllegalArgumentException e) {
+            return "";
         }
     }
 
@@ -73,6 +92,12 @@ public class SlackWebhookNotifier implements SlackNotifier {
         } catch (RestClientException e) {
             throw new SlackNotificationException(
                     "Slack webhook 호출 실패 (%s)".formatted(e.getClass().getSimpleName()));
+        } catch (IllegalArgumentException e) {
+            // 기동 시 검증(resolveWebhookUrl)을 통과했더라도 최후의 방어선을 둔다 — RestClient의
+            // URI 파서가 던지는 IllegalArgumentException(예: InvalidUrlException)은
+            // RestClientException의 하위 타입이 아니라 위 catch들을 통과하며, 예외 메시지에 URL이
+            // 담길 수 있으므로 원본을 그대로 던지거나 cause로 붙이지 않는다.
+            throw new SlackNotificationException("Slack webhook URL 형식이 올바르지 않다");
         }
     }
 }

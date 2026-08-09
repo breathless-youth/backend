@@ -5,9 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.client.RestClient;
 
 class SlackWebhookNotifierTest {
@@ -35,6 +39,45 @@ class SlackWebhookNotifierTest {
     @Test
     void webhook_URL이_공백뿐이어도_비활성이다() {
         assertThat(notifier("   ").isEnabled()).isFalse();
+    }
+
+    @Test
+    void webhook_URL_형식이_깨져있으면_비활성이다() {
+        // SSM 파라미터에 URL을 붙여넣다 escape가 깨지는 경우(예: percent-escape 오타)를 재현한다.
+        // 이런 URL은 RestClient의 .uri() 호출이 던지는 IllegalArgumentException을 기동 시점에
+        // 미리 걸러내야 한다 — 그러지 않으면 첫 발송(오전 10시)에야 실패가 드러난다.
+        assertThat(notifier("http://hooks.slack.test/services/%zz/" + SECRET_TOKEN)
+                        .isEnabled())
+                .isFalse();
+    }
+
+    @Test
+    void webhook_URL_형식이_깨져있어도_기동_WARN_로그에_시크릿_토큰이_남지_않는다() {
+        String malformedUrl = "http://hooks.slack.test/services/%zz/" + SECRET_TOKEN;
+
+        Logger logger = (Logger) LoggerFactory.getLogger(SlackWebhookNotifier.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            notifier(malformedUrl);
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(appender.list)
+                .extracting(ILoggingEvent::getFormattedMessage)
+                .noneMatch(msg -> msg.contains(SECRET_TOKEN))
+                .noneMatch(msg -> msg.contains(malformedUrl));
+    }
+
+    @Test
+    void webhook_URL_형식이_깨져있으면_비활성이라_발송해도_예외를_던지지_않는다() {
+        // resolveWebhookUrl이 malformed URL을 빈 문자열로 대체하므로, isEnabled()가 false가
+        // 되어 send()는 .uri()를 호출조차 하지 않고 조용히 넘어간다.
+        assertThatCode(() -> notifier("http://hooks.slack.test/services/%zz/" + SECRET_TOKEN)
+                        .send("무시되는 메시지"))
+                .doesNotThrowAnyException();
     }
 
     @Test
