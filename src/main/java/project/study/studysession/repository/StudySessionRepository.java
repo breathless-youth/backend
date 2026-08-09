@@ -57,4 +57,7 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             @Param("to") LocalDate to,
             @Param("minFocusSec") int minFocusSec,
             @Param("minActiveDays") long minActiveDays);
+
+    // 특정 날짜의 인정 기준(focusSec >= minFocusSec) 충족 세션 수 — 유저 무관 전체 집계
+    long countByStatDateAndFocusSecGreaterThanEqual(LocalDate statDate, int minFocusSec);
 }

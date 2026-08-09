@@ -44,4 +44,14 @@ public class StudySessionMetricsService {
         return studySessionRepository.findHeavyUsers(
                 from, anchorDate, StudySessionThresholds.MIN_STREAK_FOCUS_SEC, MIN_ACTIVE_DAYS);
     }
+
+    /**
+     * 해당 날짜에 스트릭 인정 기준을 충족한 세션 수(전체 유저 합계).
+     * 헤비유저·스트릭과 같은 {@code MIN_STREAK_FOCUS_SEC}(ADR-0009) 잣대를 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public long countQualifyingSessionsOn(LocalDate date) {
+        return studySessionRepository.countByStatDateAndFocusSecGreaterThanEqual(
+                date, StudySessionThresholds.MIN_STREAK_FOCUS_SEC);
+    }
 }
