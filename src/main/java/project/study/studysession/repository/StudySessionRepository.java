@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import project.study.studysession.dto.HeavyUser;
 import project.study.studysession.entity.StudySession;
 
 public interface StudySessionRepository extends JpaRepository<StudySession, Long> {
@@ -41,4 +42,19 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             @Param("from") LocalDate from,
             @Param("to") LocalDate to,
             @Param("minFocusSec") int minFocusSec);
+
+    // 헤비유저 조회 — 구간 안에서 스트릭 인정 기준(focusSec >= minFocusSec)을 만족한 날이
+    // minActiveDays 이상인 유저. 스트릭과 같은 세션 단위 판정이라 자정 분할 조각을 병합하지 않는다
+    @Query("""
+            select new project.study.studysession.dto.HeavyUser(s.userId, count(distinct s.statDate))
+            from StudySession s
+            where s.statDate between :from and :to and s.focusSec >= :minFocusSec
+            group by s.userId
+            having count(distinct s.statDate) >= :minActiveDays
+            order by count(distinct s.statDate) desc, s.userId""")
+    List<HeavyUser> findHeavyUsers(
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("minFocusSec") int minFocusSec,
+            @Param("minActiveDays") long minActiveDays);
 }
