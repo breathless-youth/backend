@@ -17,7 +17,7 @@
 - **생성자 주입만.** `@Autowired` 필드 주입 금지, Lombok `@RequiredArgsConstructor` 사용. ArchUnit `noFieldInjection` 규칙이 강제한다.
 - **로거는 Lombok `@Slf4j`** (`DevDataSeeder.java:34` 참고).
 - **테스트 메서드명은 한글 스네이크 케이스** (`새_기기_등록은_유저를_생성하고_isNew가_true다`). 단언은 AssertJ.
-- **임계값 `600`을 새로 정의하지 않는다.** `StudySessionService.MIN_STREAK_FOCUS_SEC`이 이미 private 상수로 존재한다(ADR-0009). 이 값이 계속 한 곳에만 존재하도록 `StudySessionService`가 조회 메서드를 노출한다.
+- **임계값 `600`을 새로 정의하지 않는다.** Task 2가 `StudySessionThresholds.MIN_STREAK_FOCUS_SEC`(ADR-0009)로 추출했다. 지표 코드는 이 상수만 참조한다.
 - **집계 기준일은 "KST 어제"** (`anchorDate`). 헤비유저 구간은 `[anchorDate - 6일, anchorDate]`로 어제를 포함한 7일이다.
 - 각 태스크 커밋 전 `./gradlew check` 통과. 포맷은 `./gradlew spotlessApply`로 자동 수정.
 - 커밋 메시지는 Conventional Commits (`<type>: <설명>`).
@@ -44,7 +44,7 @@
 | 파일 | 변경 |
 |---|---|
 | `src/main/java/project/study/studysession/repository/StudySessionRepository.java` | 헤비유저 조회 + 세션 수 카운트 쿼리 추가 |
-| `src/main/java/project/study/studysession/service/StudySessionService.java` | `findHeavyUsers`, `countQualifyingSessionsOn` 추가 |
+| `src/main/java/project/study/studysession/service/StudySessionMetricsService.java` | `findHeavyUsers`, `countQualifyingSessionsOn` (Task 2에서 신설) |
 | `src/main/java/project/study/user/repository/UserRepository.java` | 기간별 가입 수 카운트 추가 |
 | `src/main/java/project/study/user/service/UserService.java` | `countTotal`, `countRegisteredOn` 추가 |
 | `src/main/resources/application-prod.yaml` | `metrics.slack.webhook-url` |
@@ -233,6 +233,12 @@ git commit -m "feat: 일일 리포트 발송 이력 테이블과 날짜 선점 �
 
 이 설계의 핵심 도메인 로직이다. ADR-0009의 스트릭 인정 기준(`focusSec >= 600`, 세션 단위)을 재사용해 "최근 7일 중 인정일 3일 이상"을 판정한다.
 
+> **⚠️ 이 섹션의 Step 5는 실행 중 폐기됐다(2026-08-09).** `StudySessionService`에 메서드를 추가하려
+> 했으나 checkstyle `FileLength max=400`에 걸렸다(그 파일은 390줄, 여유 10줄). 실제 구현은:
+> `StudySessionThresholds`(임계값 홀더)와 `StudySessionMetricsService`(지표 전용 서비스)를 신설하고
+> `StudySessionService`는 그 상수를 정적 임포트로 참조하도록 바꿨다. 아래 Step 5 코드가 아니라
+> 커밋 `64f9f1b` 이후의 실제 코드가 정본이다. Step 1~4·6~7은 그대로 유효하다.
+
 **Files:**
 - Create: `src/main/java/project/study/studysession/dto/HeavyUser.java`
 - Modify: `src/main/java/project/study/studysession/repository/StudySessionRepository.java` (파일 끝에 쿼리 추가)
@@ -288,7 +294,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.TestcontainersConfiguration;
 import project.study.studysession.dto.HeavyUser;
-import project.study.studysession.service.StudySessionService;
+import project.study.studysession.service.StudySessionMetricsService;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -302,7 +308,7 @@ class HeavyUserQueryIntegrationTest {
     private static final int BELOW = 599;
 
     @Autowired
-    private StudySessionService studySessionService;
+    private StudySessionMetricsService studySessionMetricsService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -332,7 +338,7 @@ class HeavyUserQueryIntegrationTest {
     }
 
     private List<Long> heavyUserIds() {
-        return studySessionService.findHeavyUsers(ANCHOR).stream()
+        return studySessionMetricsService.findHeavyUsers(ANCHOR).stream()
                 .map(HeavyUser::userId)
                 .toList();
     }
@@ -446,7 +452,7 @@ class HeavyUserQueryIntegrationTest {
             insertSession(moreActive, ANCHOR.minusDays(i), QUALIFYING);
         }
 
-        List<HeavyUser> heavyUsers = studySessionService.findHeavyUsers(ANCHOR).stream()
+        List<HeavyUser> heavyUsers = studySessionMetricsService.findHeavyUsers(ANCHOR).stream()
                 .filter(u -> u.userId() == moreActive || u.userId() == lessActive)
                 .toList();
 
@@ -536,7 +542,7 @@ git commit -m "feat: 헤비유저 조회 추가 (ADR-0009 스트릭 기준 재�
 - Modify: `src/main/java/project/study/user/repository/UserRepository.java`
 - Modify: `src/main/java/project/study/user/service/UserService.java`
 - Modify: `src/main/java/project/study/studysession/repository/StudySessionRepository.java`
-- Modify: `src/main/java/project/study/studysession/service/StudySessionService.java`
+- Modify: `src/main/java/project/study/studysession/service/StudySessionMetricsService.java` (Task 2 신설)
 - Test: `src/test/java/project/study/metrics/MetricsQueryIntegrationTest.java`
 
 **Interfaces:**
@@ -544,7 +550,7 @@ git commit -m "feat: 헤비유저 조회 추가 (ADR-0009 스트릭 기준 재�
 - Produces:
   - `UserService.countTotal()` → `long`
   - `UserService.countRegisteredOn(LocalDate date)` → `long` (해당 KST 날짜에 가입한 수)
-  - `StudySessionService.countQualifyingSessionsOn(LocalDate date)` → `long` (해당 날짜의 `focusSec >= 600` 세션 수)
+  - `StudySessionMetricsService.countQualifyingSessionsOn(LocalDate date)` → `long` (해당 날짜의 `focusSec >= 600` 세션 수)
 
 - [ ] **Step 1: 실패하는 통합 테스트 작성**
 
@@ -567,7 +573,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.TestcontainersConfiguration;
-import project.study.studysession.service.StudySessionService;
+import project.study.studysession.service.StudySessionMetricsService;
 import project.study.user.service.UserService;
 
 @SpringBootTest
@@ -582,7 +588,7 @@ class MetricsQueryIntegrationTest {
     private UserService userService;
 
     @Autowired
-    private StudySessionService studySessionService;
+    private StudySessionMetricsService studySessionMetricsService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -641,7 +647,7 @@ class MetricsQueryIntegrationTest {
 
     @Test
     void 해당_날짜의_10분_이상_세션만_센다() {
-        long before = studySessionService.countQualifyingSessionsOn(TARGET);
+        long before = studySessionMetricsService.countQualifyingSessionsOn(TARGET);
         long userId = insertUserCreatedAt(Instant.parse("2020-01-10T05:00:00Z"));
 
         insertSession(userId, TARGET, 600);
@@ -649,7 +655,7 @@ class MetricsQueryIntegrationTest {
         insertSession(userId, TARGET, 599); // 미만이라 제외
         insertSession(userId, TARGET.minusDays(1), 600); // 다른 날이라 제외
 
-        assertThat(studySessionService.countQualifyingSessionsOn(TARGET)).isEqualTo(before + 2);
+        assertThat(studySessionMetricsService.countQualifyingSessionsOn(TARGET)).isEqualTo(before + 2);
     }
 }
 ```
@@ -705,16 +711,21 @@ Expected: 컴파일 실패 — `countTotal`, `countRegisteredOn`, `countQualifyi
     long countByStatDateAndFocusSecGreaterThanEqual(LocalDate statDate, int minFocusSec);
 ```
 
-`StudySessionService.java`의 `findHeavyUsers` 뒤에 추가:
+`StudySessionMetricsService.java`의 `findHeavyUsers` 뒤에 추가:
+
+> **계획 수정(2026-08-09)**: 원래 이 메서드를 `StudySessionService`에 넣기로 했으나, 그 파일이
+> checkstyle `FileLength max=400`에 걸린다(Task 2에서 발견). 지표 조회는 Task 2가 신설한
+> `StudySessionMetricsService`가 소유한다. 임계값은 `StudySessionThresholds`에서 가져온다.
 
 ```java
     /**
      * 해당 날짜에 스트릭 인정 기준을 충족한 세션 수(전체 유저 합계).
-     * 헤비유저·스트릭과 같은 {@code MIN_STREAK_FOCUS_SEC} 잣대를 쓴다.
+     * 헤비유저·스트릭과 같은 {@code MIN_STREAK_FOCUS_SEC}(ADR-0009) 잣대를 쓴다.
      */
     @Transactional(readOnly = true)
     public long countQualifyingSessionsOn(LocalDate date) {
-        return studySessionRepository.countByStatDateAndFocusSecGreaterThanEqual(date, MIN_STREAK_FOCUS_SEC);
+        return studySessionRepository.countByStatDateAndFocusSecGreaterThanEqual(
+                date, StudySessionThresholds.MIN_STREAK_FOCUS_SEC);
     }
 ```
 
@@ -916,7 +927,7 @@ git commit -m "feat: Slack Incoming Webhook 발송기 추가"
 - Test: `src/test/java/project/study/metrics/dto/DailyReportTest.java`
 
 **Interfaces:**
-- Consumes: `DailyReportLogRepository.claim`, `UserService.countTotal/countRegisteredOn`, `StudySessionService.findHeavyUsers/countQualifyingSessionsOn`, `SlackNotifier.isEnabled/send`, `HeavyUser`
+- Consumes: `DailyReportLogRepository.claim`, `UserService.countTotal/countRegisteredOn`, `StudySessionMetricsService.findHeavyUsers/countQualifyingSessionsOn`, `SlackNotifier.isEnabled/send`, `HeavyUser`
 - Produces: `DailyReportService.sendDailyReport()` → `void`
 
 - [ ] **Step 1: 메시지 포맷 테스트 작성**
@@ -1043,7 +1054,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.metrics.repository.DailyReportLogRepository;
 import project.study.metrics.slack.SlackNotifier;
 import project.study.studysession.dto.HeavyUser;
-import project.study.studysession.service.StudySessionService;
+import project.study.studysession.service.StudySessionMetricsService;
 import project.study.user.service.UserService;
 
 @ExtendWith(MockitoExtension.class)
@@ -1061,7 +1072,7 @@ class DailyReportServiceTest {
     private UserService userService;
 
     @Mock
-    private StudySessionService studySessionService;
+    private StudySessionMetricsService studySessionMetricsService;
 
     @Mock
     private SlackNotifier slackNotifier;
@@ -1071,7 +1082,7 @@ class DailyReportServiceTest {
     @BeforeEach
     void setUp() {
         service = new DailyReportService(
-                dailyReportLogRepository, userService, studySessionService, slackNotifier, CLOCK);
+                dailyReportLogRepository, userService, studySessionMetricsService, slackNotifier, CLOCK);
     }
 
     private void givenEnabledAndClaimed() {
@@ -1084,8 +1095,8 @@ class DailyReportServiceTest {
         givenEnabledAndClaimed();
         when(userService.countTotal()).thenReturn(53L);
         when(userService.countRegisteredOn(ANCHOR)).thenReturn(4L);
-        when(studySessionService.findHeavyUsers(ANCHOR)).thenReturn(List.of(new HeavyUser(14L, 7L)));
-        when(studySessionService.countQualifyingSessionsOn(ANCHOR)).thenReturn(6L);
+        when(studySessionMetricsService.findHeavyUsers(ANCHOR)).thenReturn(List.of(new HeavyUser(14L, 7L)));
+        when(studySessionMetricsService.countQualifyingSessionsOn(ANCHOR)).thenReturn(6L);
 
         service.sendDailyReport();
 
@@ -1105,7 +1116,7 @@ class DailyReportServiceTest {
 
         service.sendDailyReport();
 
-        verifyNoInteractions(userService, studySessionService);
+        verifyNoInteractions(userService, studySessionMetricsService);
         verify(slackNotifier, never()).send(any());
     }
 
@@ -1116,7 +1127,7 @@ class DailyReportServiceTest {
 
         service.sendDailyReport();
 
-        verifyNoInteractions(dailyReportLogRepository, userService, studySessionService);
+        verifyNoInteractions(dailyReportLogRepository, userService, studySessionMetricsService);
         verify(slackNotifier, never()).send(any());
     }
 }
@@ -1143,14 +1154,14 @@ import org.springframework.stereotype.Service;
 import project.study.metrics.dto.DailyReport;
 import project.study.metrics.repository.DailyReportLogRepository;
 import project.study.metrics.slack.SlackNotifier;
-import project.study.studysession.service.StudySessionService;
+import project.study.studysession.service.StudySessionMetricsService;
 import project.study.user.service.UserService;
 
 /**
  * 일일 지표 리포트를 조립해 Slack으로 발송한다.
  *
  * <p>지표는 각자 소유 도메인의 서비스에서 가져온다 — 이 클래스가 users·study_session 테이블을
- * 직접 조회하지 않는다. 특히 헤비유저 판정 기준(ADR-0009)은 StudySessionService 안에만 두어
+ * 직접 조회하지 않는다. 특히 헤비유저 판정 기준(ADR-0009)은 StudySessionMetricsService 안에만 두어
  * 앱 스트릭과 같은 잣대를 유지한다.
  */
 @Slf4j
@@ -1162,7 +1173,7 @@ public class DailyReportService {
 
     private final DailyReportLogRepository dailyReportLogRepository;
     private final UserService userService;
-    private final StudySessionService studySessionService;
+    private final StudySessionMetricsService studySessionMetricsService;
     private final SlackNotifier slackNotifier;
     private final Clock clock;
 
@@ -1184,8 +1195,8 @@ public class DailyReportService {
                 anchorDate,
                 userService.countTotal(),
                 userService.countRegisteredOn(anchorDate),
-                studySessionService.findHeavyUsers(anchorDate),
-                studySessionService.countQualifyingSessionsOn(anchorDate));
+                studySessionMetricsService.findHeavyUsers(anchorDate),
+                studySessionMetricsService.countQualifyingSessionsOn(anchorDate));
 
         slackNotifier.send(report.toSlackMessage());
         log.info("일일 지표 리포트를 발송했다 (reportDate={})", anchorDate);
