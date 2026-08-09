@@ -22,6 +22,11 @@ public class DailyReportScheduler {
      * <p>예외를 직접 잡아 Sentry로 올린다 — @Scheduled 메서드에서 예외가 밖으로 나가면 Spring이
      * 로그만 남기고 삼켜서, 자동 리졸버(SentryExceptionResolver)가 잡는 HTTP 요청 경로와 달리
      * Sentry에 아무것도 남지 않는다.
+     *
+     * <p><b>주의</b>: ECS {@code desired_count}를 2 이상으로 올리면 태스크마다 이 스케줄러가
+     * 떠서 리포트가 태스크 수만큼 중복 발송된다. 지금은 1이라 문제없고, 나중에 늘려서 중복이
+     * 생기더라도 매일 아침 Slack에 바로 드러나므로 조용히 잘못될 위험은 없다. desired_count를
+     * 늘릴 계획이 생기면 그때 분산 락이나 외부 스케줄러(EventBridge)로 옮겨야 한다.
      */
     @Scheduled(cron = "0 0 10 * * *", zone = "Asia/Seoul")
     public void sendDailyReport() {
