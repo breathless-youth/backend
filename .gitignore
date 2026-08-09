@@ -45,3 +45,4 @@ src/main/resources/application-dev.yaml
 
 ### Claude superpowers scratch state ###
 .superpowers/
+.gstack/
