@@ -103,13 +103,29 @@ class StudySessionIdempotencyServiceTest {
 
     @Test
     void 저장_시_유니크_제약_위반이면_DuplicateSessionException을_던진다() {
-        // 멱등 사전 조회 이후 끼어든 동시 재전송 레이스 — flush에서 (user_id, started_at) 유니크 위반이 감지된다
+        // 동시 재전송 레이스이거나 시작 시각만 겹치는 별개 제출 — 어느 쪽이든 create() 자신은 409를 던진다.
+        // 레이스에서 진 것뿐인지 재조회로 가리는 건 create()를 호출하는 쪽(컨트롤러)의 책임이다 —
+        // findExistingSubmission()이 그 재조회이고, 아래 별도 테스트로 검증한다.
         givenNoStoredSubmission(START);
         doThrow(integrityViolation("uq_study_session_user_started_at"))
                 .when(studySessionRepository)
                 .flush();
 
         assertThatThrownBy(() -> service.create(request(START, END))).isInstanceOf(DuplicateSessionException.class);
+    }
+
+    @Test
+    void 루트_제출_시각으로_재조회하면_저장된_세션을_그대로_반환한다() {
+        // create()가 유니크 위반으로 DuplicateSessionException을 던진 뒤, 호출자가 레이스에서 진 것인지
+        // 가리려고 쓰는 재조회 — 상대가 이미 커밋한 결과를 새로 저장하지 않고 그대로 돌려준다
+        when(studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(1L, START))
+                .thenReturn(List.of(session(START, END)));
+
+        List<StudySessionResponse> responses = service.findExistingSubmission(1L, START);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).studySec()).isEqualTo(7200);
+        verify(studySessionRepository, never()).saveAll(any());
     }
 
     @Test

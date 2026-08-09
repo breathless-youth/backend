@@ -6,6 +6,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -102,6 +107,33 @@ class StudySessionIdempotencyApiTest {
         assertThat(firstSessionId(second)).isEqualTo(firstSessionId(first));
 
         assertThat(sessionRows(userId)).isEqualTo(1);
+    }
+
+    @Test
+    void 동시_재전송_레이스에서_지는_쪽도_예외_없이_같은_세션을_반환한다() throws Exception {
+        // 사전 조회를 둘 다 통과한 뒤 한쪽만 유니크 제약에 걸리는 진짜 레이스를 실제 DB·HTTP 계층으로 재현한다.
+        // 이긴 쪽은 정상 저장 경로, 진 쪽은 컨트롤러가 DuplicateSessionException을 잡아 재조회하는 경로를 탄다.
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            Callable<MvcTestResult> task = () -> {
+                start.await();
+                return submit(userId, sessionStart, sessionEnd, 7200, 6600);
+            };
+            Future<MvcTestResult> first = executor.submit(task);
+            Future<MvcTestResult> second = executor.submit(task);
+            start.countDown();
+
+            MvcTestResult r1 = first.get();
+            MvcTestResult r2 = second.get();
+
+            assertThat(r1).hasStatus(HttpStatus.CREATED);
+            assertThat(r2).hasStatus(HttpStatus.CREATED);
+            assertThat(firstSessionId(r1)).isEqualTo(firstSessionId(r2));
+            assertThat(sessionRows(userId)).isEqualTo(1);
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test

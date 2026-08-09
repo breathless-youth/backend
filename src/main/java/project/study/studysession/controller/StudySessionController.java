@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import project.study.common.ErrorResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
+import project.study.studysession.service.DuplicateSessionException;
 import project.study.studysession.service.StudySessionService;
 
 @Tag(
@@ -36,8 +37,7 @@ public class StudySessionController {
                     서버는 세션을 실시간으로 추적하지 않는다 — 앱에서 제출한 \
                     시작/종료 시각, 앱이 잰 총 공부 시간(`studySec`)과 순공 시간(`focusSec`), \
                     온디바이스에서 제공한 **비공부 상태 이벤트**(PHONE·DEVICE·AWAY·PAUSE) 목록이 데이터의 전부다. \
-                    이벤트 1건은 `status`/`startedAt`/`endedAt` 3개 필드만 있으면 되고, 순공시간은 \
-                    서버가 두 시각으로 직접 계산하므로 별도로 보낼 필요가 없다.
+                    이벤트 1건은 `status`/`startedAt`/`endedAt` 3개 필드만 있으면 된다.
 
                     세션(방 입장~퇴장) 안에 총 공부시간 타이머가 있고, 그 안에 다시 순공시간 타이머가 있는 구조다 — \
                     `PAUSE`(일시정지, 앱에서 직접 멈추는 상태)는 총공부·순공 타이머를 모두 멈추고, \
@@ -125,6 +125,18 @@ public class StudySessionController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public List<StudySessionResponse> create(@Valid @RequestBody StudySessionCreateRequest request) {
-        return studySessionService.create(request);
+        try {
+            return studySessionService.create(request);
+        } catch (DuplicateSessionException e) {
+            // 동시에 들어온 같은 제출이 유니크 제약 레이스에서 졌을 수 있다 — create()의 트랜잭션은 이미
+            // 롤백되어 끝났으니, 완전히 새 트랜잭션에서 재조회해 상대가 커밋한 결과를 그대로 돌려준다(멱등).
+            // 다른 제출이 시각만 겹친 것뿐이면 재조회도 비어있으므로 원래 409를 그대로 던진다.
+            List<StudySessionResponse> concurrent =
+                    studySessionService.findExistingSubmission(request.userId(), request.startedAt());
+            if (!concurrent.isEmpty()) {
+                return concurrent;
+            }
+            throw e;
+        }
     }
 }
