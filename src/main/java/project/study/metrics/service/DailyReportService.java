@@ -40,7 +40,7 @@ public class DailyReportService {
 
         LocalDate today = LocalDate.ofInstant(clock.instant(), KST);
         if (dailyReportLogRepository.claim(today) == 0) {
-            log.info("일일 리포트가 이미 발송됐다 (reportDate={}) — 배포 중 태스크 중복으로 보고 건너뛴다", today);
+            log.info("일일 리포트가 이미 발송됐다 (발송일={}) — 배포 중 태스크 중복으로 보고 건너뛴다", today);
             return;
         }
 
@@ -54,6 +54,6 @@ public class DailyReportService {
                 studySessionMetricsService.countQualifyingSessionsOn(anchorDate));
 
         slackNotifier.send(report.toSlackMessage());
-        log.info("일일 지표 리포트를 발송했다 (reportDate={})", anchorDate);
+        log.info("일일 지표 리포트를 발송했다 (기준일={})", anchorDate);
     }
 }

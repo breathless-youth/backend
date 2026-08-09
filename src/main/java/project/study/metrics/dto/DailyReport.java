@@ -17,20 +17,31 @@ import project.study.studysession.dto.HeavyUser;
 public record DailyReport(
         LocalDate reportDate, long totalUsers, long newUsers, List<HeavyUser> heavyUsers, long qualifyingSessions) {
 
+    // Slack text 상한(40,000자)에 걸리지 않도록 헤비유저 목록에 상한을 둔다. 유저가 늘어 헤비유저가
+    // 수천 명이 되면 발송이 실패하는데, 그때는 이미 날짜가 선점된 뒤라 그날 리포트가 통째로
+    // 날아간다 — 그런 실패를 만들지 않기 위해 상위 N명만 나열하고 나머지는 개수로 요약한다.
+    private static final int MAX_HEAVY_USERS_LISTED = 20;
+
     public String toSlackMessage() {
         return """
-                📊 %s 지표
-                • 총 가입: %d명 (어제 신규: %d명)
-                • 헤비유저: %d명 — %s
-                • 10분 이상 세션: %d건""".formatted(reportDate, totalUsers, newUsers, heavyUsers.size(), heavyUserList(), qualifyingSessions);
+                📊 %1$s 지표
+                • 총 가입: %2$d명 (%1$s 신규: %3$d명)
+                • 헤비유저: %4$d명 — %5$s
+                • 10분 이상 세션: %6$d건""".formatted(reportDate, totalUsers, newUsers, heavyUsers.size(), heavyUserList(), qualifyingSessions);
     }
 
     private String heavyUserList() {
         if (heavyUsers.isEmpty()) {
             return "없음";
         }
-        return heavyUsers.stream()
+        List<HeavyUser> shown =
+                heavyUsers.size() > MAX_HEAVY_USERS_LISTED ? heavyUsers.subList(0, MAX_HEAVY_USERS_LISTED) : heavyUsers;
+        String listed = shown.stream()
                 .map(user -> "#%d(%d일)".formatted(user.userId(), user.activeDays()))
                 .collect(Collectors.joining(", "));
+        if (heavyUsers.size() > MAX_HEAVY_USERS_LISTED) {
+            return listed + ", 외 %d명".formatted(heavyUsers.size() - MAX_HEAVY_USERS_LISTED);
+        }
+        return listed;
     }
 }

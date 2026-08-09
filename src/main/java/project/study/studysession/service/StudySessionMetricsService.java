@@ -25,10 +25,10 @@ public class StudySessionMetricsService {
     private final StudySessionRepository studySessionRepository;
 
     /**
-     * 헤비유저 조회 — {@code anchorDate}를 포함한 최근 {@value WINDOW_DAYS}일 구간에서, 스트릭 인정
+     * 헤비유저 조회 — {@code anchorDate}를 포함한 최근 {@value #WINDOW_DAYS}일 구간에서, 스트릭 인정
      * 기준(ADR-0009: 그 날짜의 세션 중 하나라도 focusSec이
      * {@value StudySessionThresholds#MIN_STREAK_FOCUS_SEC}초(10분) 이상)을 만족한 날이
-     * {@value MIN_ACTIVE_DAYS}일 이상인 유저를 인정일수 내림차순(동수면 userId 오름차순)으로 반환한다.
+     * {@value #MIN_ACTIVE_DAYS}일 이상인 유저를 인정일수 내림차순(동수면 userId 오름차순)으로 반환한다.
      * 앱 화면의 스트릭 판정과 같은 규칙을 써서, 사용자가 앱에서 보는 스트릭과 리포트 상의 헤비유저 판정이
      * 어긋나지 않도록 한다.
      *
