@@ -300,7 +300,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.TestcontainersConfiguration;
-import project.study.studysession.dto.HeavyUser;
+import project.study.metrics.dto.HeavyUser;
 import project.study.studysession.service.StudySessionMetricsService;
 
 @SpringBootTest
@@ -477,13 +477,13 @@ Expected: 컴파일 실패 — `StudySessionService.findHeavyUsers` 메서드 �
 
 - [ ] **Step 4: 리포지토리 쿼리 추가**
 
-`StudySessionRepository.java`의 마지막 메서드(`findDistinctStatDatesBetween`) 뒤, 인터페이스 닫는 중괄호 앞에 추가한다. import에 `project.study.studysession.dto.HeavyUser`를 더한다.
+`StudySessionRepository.java`의 마지막 메서드(`findDistinctStatDatesBetween`) 뒤, 인터페이스 닫는 중괄호 앞에 추가한다. import에 `project.study.metrics.dto.HeavyUser`를 더한다.
 
 ```java
     // 헤비유저 조회 — 구간 안에서 스트릭 인정 기준(focusSec >= minFocusSec)을 만족한 날이
     // minActiveDays 이상인 유저. 스트릭과 같은 세션 단위 판정이라 자정 분할 조각을 병합하지 않는다
     @Query("""
-            select new project.study.studysession.dto.HeavyUser(s.userId, count(distinct s.statDate))
+            select new project.study.metrics.dto.HeavyUser(s.userId, count(distinct s.statDate))
             from StudySession s
             where s.statDate between :from and :to and s.focusSec >= :minFocusSec
             group by s.userId
@@ -505,7 +505,7 @@ Expected: 컴파일 실패 — `StudySessionService.findHeavyUsers` 메서드 �
     private static final long HEAVY_USER_MIN_ACTIVE_DAYS = 3; // 헤비유저 최소 인정일수
 ```
 
-`streak` 관련 메서드 근처에 추가. import에 `project.study.studysession.dto.HeavyUser`를 더한다:
+`streak` 관련 메서드 근처에 추가. import에 `project.study.metrics.dto.HeavyUser`를 더한다:
 
 ```java
     /**
@@ -949,7 +949,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import project.study.studysession.dto.HeavyUser;
+import project.study.metrics.dto.HeavyUser;
 
 class DailyReportTest {
 
@@ -994,7 +994,7 @@ package project.study.metrics.dto;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
-import project.study.studysession.dto.HeavyUser;
+import project.study.metrics.dto.HeavyUser;
 
 /**
  * 일일 지표 리포트.
@@ -1060,7 +1060,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.metrics.repository.DailyReportLogRepository;
 import project.study.metrics.slack.SlackNotifier;
-import project.study.studysession.dto.HeavyUser;
+import project.study.metrics.dto.HeavyUser;
 import project.study.studysession.service.StudySessionMetricsService;
 import project.study.user.service.UserService;
 

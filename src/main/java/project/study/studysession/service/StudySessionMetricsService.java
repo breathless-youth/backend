@@ -5,8 +5,8 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import project.study.metrics.dto.HeavyUser;
 import project.study.studysession.StudySessionThresholds;
-import project.study.studysession.dto.HeavyUser;
 import project.study.studysession.repository.StudySessionRepository;
 
 /**

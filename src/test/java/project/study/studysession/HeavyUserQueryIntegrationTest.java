@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.TestcontainersConfiguration;
-import project.study.studysession.dto.HeavyUser;
+import project.study.metrics.dto.HeavyUser;
 import project.study.studysession.service.StudySessionMetricsService;
 
 @SpringBootTest

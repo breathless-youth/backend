@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.LongStream;
 import org.junit.jupiter.api.Test;
-import project.study.studysession.dto.HeavyUser;
 
 class DailyReportTest {
 
