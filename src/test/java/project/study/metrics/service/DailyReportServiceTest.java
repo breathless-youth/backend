@@ -18,8 +18,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import project.study.metrics.dto.HeavyUser;
 import project.study.metrics.slack.SlackNotifier;
-import project.study.studysession.dto.HeavyUser;
 import project.study.studysession.service.StudySessionMetricsService;
 import project.study.user.service.UserService;
 

@@ -3,6 +3,7 @@ package project.study.metrics.scheduler;
 import io.sentry.Sentry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import project.study.metrics.service.DailyReportService;
@@ -28,7 +29,8 @@ public class DailyReportScheduler {
      * 생기더라도 매일 아침 Slack에 바로 드러나므로 조용히 잘못될 위험은 없다. desired_count를
      * 늘릴 계획이 생기면 그때 분산 락이나 외부 스케줄러(EventBridge)로 옮겨야 한다.
      */
-    @Scheduled(cron = "0 0 10 * * *", zone = "Asia/Seoul")
+    @Profile("prod")
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     public void sendDailyReport() {
         try {
             dailyReportService.sendDailyReport();

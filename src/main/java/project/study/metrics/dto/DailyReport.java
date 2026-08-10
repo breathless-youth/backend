@@ -3,7 +3,6 @@ package project.study.metrics.dto;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
-import project.study.studysession.dto.HeavyUser;
 
 /**
  * 일일 지표 리포트.
@@ -34,14 +33,12 @@ public record DailyReport(
         if (heavyUsers.isEmpty()) {
             return "없음";
         }
-        List<HeavyUser> shown =
-                heavyUsers.size() > MAX_HEAVY_USERS_LISTED ? heavyUsers.subList(0, MAX_HEAVY_USERS_LISTED) : heavyUsers;
+        boolean truncated = heavyUsers.size() > MAX_HEAVY_USERS_LISTED;
+        List<HeavyUser> shown = truncated ? heavyUsers.subList(0, MAX_HEAVY_USERS_LISTED) : heavyUsers;
         String listed = shown.stream()
                 .map(user -> "#%d(%d일)".formatted(user.userId(), user.activeDays()))
                 .collect(Collectors.joining(", "));
-        if (heavyUsers.size() > MAX_HEAVY_USERS_LISTED) {
-            return listed + ", 외 %d명".formatted(heavyUsers.size() - MAX_HEAVY_USERS_LISTED);
-        }
-        return listed;
+
+        return truncated ? listed + ", 외 %d명".formatted(heavyUsers.size() - MAX_HEAVY_USERS_LISTED) : listed;
     }
 }
