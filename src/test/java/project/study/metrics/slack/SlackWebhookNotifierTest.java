@@ -8,10 +8,17 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.resilience.annotation.EnableResilientMethods;
 import org.springframework.web.client.RestClient;
 
 class SlackWebhookNotifierTest {
@@ -113,5 +120,77 @@ class SlackWebhookNotifierTest {
                 .noneMatch(text -> text.contains("127.0.0.1"));
         // 원인을 아예 붙이지 않는 것이 URL 미유출을 보장하는 가장 확실한 방법이다
         assertThat(thrown.getCause()).isNull();
+    }
+
+    // @Retryable은 Spring 컨테이너가 만든 프록시를 통해 호출될 때만 동작한다(SlackNotifier
+    // 인터페이스의 send() 주석 참고) — 그래서 아래 두 테스트만 new로 직접 생성하는 대신 최소 스프링
+    // 컨텍스트를 띄워 실제 재시도 프록시를 거치게 한다.
+    @Test
+    void 처음_두_번_실패해도_세_번째_시도에서_성공하면_예외를_던지지_않는다() throws IOException {
+        AtomicInteger requestCount = new AtomicInteger();
+        HttpServer server = stubServer(requestCount, (exchange, count) -> {
+            int status = count <= 2 ? 500 : 200;
+            exchange.sendResponseHeaders(status, -1);
+        });
+        try {
+            server.start();
+            String webhookUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/services/x";
+
+            try (AnnotationConfigApplicationContext context = retryingContext(webhookUrl)) {
+                SlackNotifier notifier = context.getBean(SlackNotifier.class);
+                assertThatCode(() -> notifier.send("메시지")).doesNotThrowAnyException();
+            }
+            assertThat(requestCount.get()).isEqualTo(3);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void 세_번_모두_실패하면_더_이상_재시도하지_않고_예외를_던진다() throws IOException {
+        AtomicInteger requestCount = new AtomicInteger();
+        HttpServer server = stubServer(requestCount, (exchange, count) -> exchange.sendResponseHeaders(500, -1));
+        try {
+            server.start();
+            String webhookUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/services/x";
+
+            try (AnnotationConfigApplicationContext context = retryingContext(webhookUrl)) {
+                SlackNotifier notifier = context.getBean(SlackNotifier.class);
+                assertThatThrownBy(() -> notifier.send("메시지")).isInstanceOf(SlackNotificationException.class);
+            }
+            assertThat(requestCount.get()).isEqualTo(3);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private AnnotationConfigApplicationContext retryingContext(String webhookUrl) {
+        AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
+        context.register(RetryEnabledConfig.class);
+        context.registerBean(
+                SlackWebhookNotifier.class, () -> new SlackWebhookNotifier(RestClient.builder(), webhookUrl));
+        context.refresh();
+        return context;
+    }
+
+    @EnableResilientMethods
+    @Configuration(proxyBeanMethods = false)
+    private static class RetryEnabledConfig {}
+
+    private HttpServer stubServer(AtomicInteger requestCount, ResponseHandler handler) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            try {
+                handler.handle(exchange, requestCount.incrementAndGet());
+            } finally {
+                exchange.close();
+            }
+        });
+        return server;
+    }
+
+    @FunctionalInterface
+    private interface ResponseHandler {
+        void handle(com.sun.net.httpserver.HttpExchange exchange, int requestCount) throws IOException;
     }
 }

@@ -16,9 +16,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Slack Incoming Webhook 발송기.
- *
- * <p>기존 {@code infra/monitoring.tf}의 AWS Chatbot 연동은 SNS 토픽을 구독하는 CloudWatch
- * 알람 전용이라, 정해진 시각에 임의 메시지를 보내는 용도로는 재사용할 수 없다.
  */
 @Slf4j
 @Component
