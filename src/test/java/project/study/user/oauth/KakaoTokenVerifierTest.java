@@ -26,7 +26,8 @@ class KakaoTokenVerifierTest {
     void 유효한_ID_토큰이면_유저정보를_반환한다() {
         server.expect(requestTo(TOKEN_INFO_URL))
                 .andRespond(withSuccess(
-                        "{\"aud\":\"my-kakao-app-key\",\"sub\":\"kakao-12345\"}", MediaType.APPLICATION_JSON));
+                        "{\"aud\":\"my-kakao-app-key\",\"sub\":\"kakao-12345\",\"email\":\"test@kakao.com\"}",
+                        MediaType.APPLICATION_JSON));
 
         OAuthUserInfo userInfo = verifier.verify("id-token");
 

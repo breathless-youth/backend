@@ -127,7 +127,8 @@ class AuthApiIntegrationTest {
     }
 
     private void stubVerifier(String sub) {
-        when(googleTokenVerifier.verify("id-token-" + sub)).thenReturn(new OAuthUserInfo(Provider.GOOGLE, sub));
+        when(googleTokenVerifier.verify("id-token-" + sub))
+                .thenReturn(new OAuthUserInfo(Provider.GOOGLE, sub, sub + "@gmail.com"));
     }
 
     private MockMvcTester.MockMvcRequestBuilder loginRequest(String sub) {

@@ -35,8 +35,8 @@ public class KakaoTokenVerifier implements OAuthTokenVerifier {
         if (tokenInfo == null || !appKey.equals(tokenInfo.aud())) {
             throw new InvalidOAuthTokenException("카카오 ID 토큰의 대상(aud)이 일치하지 않습니다");
         }
-        return new OAuthUserInfo(Provider.KAKAO, tokenInfo.sub());
+        return new OAuthUserInfo(Provider.KAKAO, tokenInfo.sub(), tokenInfo.email());
     }
 
-    record KakaoTokenInfo(String aud, String sub) {}
+    record KakaoTokenInfo(String aud, String sub, String email) {}
 }

@@ -54,7 +54,7 @@ public class AppleTokenVerifier implements OAuthTokenVerifier {
                     .parseSignedClaims(idToken)
                     .getPayload();
 
-            return new OAuthUserInfo(Provider.APPLE, claims.getSubject());
+            return new OAuthUserInfo(Provider.APPLE, claims.getSubject(), (String) claims.get("email"));
         } catch (InvalidOAuthTokenException e) {
             throw e;
         } catch (Exception e) {

@@ -73,8 +73,8 @@ public class AuthService {
         Optional<User> existing =
                 userRepository.findByProviderAndProviderUserId(userInfo.provider(), userInfo.providerUserId());
         boolean isNewUser = existing.isEmpty();
-        User user =
-                existing.orElseGet(() -> userRepository.save(new User(userInfo.provider(), userInfo.providerUserId())));
+        User user = existing.orElseGet(
+                () -> userRepository.save(new User(userInfo.provider(), userInfo.providerUserId(), userInfo.email())));
         rejectIfDeleted(user);
 
         TokenPair tokens = issueTokens(user.getId());
@@ -115,7 +115,7 @@ public class AuthService {
                 User user = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("존재하지 않는 사용자입니다"));
                 rejectIfDeleted(user);
 
-                user.linkSocialAccount(socialInfo.provider(), socialInfo.providerUserId());
+                user.linkSocialAccount(socialInfo.provider(), socialInfo.providerUserId(), socialInfo.email());
                 userRepository.flush();
 
                 TokenPair tokens = issueTokens(user.getId());

@@ -42,7 +42,7 @@ class AuthServiceTest {
 
     private static final String ID_TOKEN = "google-id-token";
     private static final long REFRESH_EXPIRATION_MS = 1_209_600_000L;
-    private static final OAuthUserInfo USER_INFO = new OAuthUserInfo(Provider.GOOGLE, "sub-123");
+    private static final OAuthUserInfo USER_INFO = new OAuthUserInfo(Provider.GOOGLE, "sub-123", "test@gmail.com");
 
     @Mock
     private OAuthTokenVerifier tokenVerifier;
