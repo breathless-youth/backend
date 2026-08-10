@@ -1,10 +1,12 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.UUID;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,7 +18,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import project.study.TestcontainersConfiguration;
 
 /**
@@ -26,7 +31,6 @@ import project.study.TestcontainersConfiguration;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-// 인증은 MVP 제외 (ADR-0004) — 재도입 시 @WithMockUser 등으로 인증 컨텍스트 추가 필요
 class StudySessionMinDurationApiTest {
 
     @Autowired
@@ -53,13 +57,19 @@ class StudySessionMinDurationApiTest {
                 "tester-" + UUID.randomUUID());
     }
 
+    private static RequestPostProcessor authenticatedUser(Long userId) {
+        return authentication(new UsernamePasswordAuthenticationToken(
+                userId, null, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+    }
+
     private MockMvcTester.MockMvcRequestBuilder submitRequest(Instant startedAt, int durationSec) {
         String body = """
-                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(userId, startedAt, startedAt.plusSeconds(durationSec), durationSec, durationSec);
+                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(startedAt, startedAt.plusSeconds(durationSec), durationSec, durationSec);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body);
+                .content(body)
+                .with(authenticatedUser(userId));
     }
 
     private int sessionRowCount() {
@@ -81,8 +91,8 @@ class StudySessionMinDurationApiTest {
 
         assertThat(mvc.get()
                         .uri("/api/stats")
-                        .param("userId", userId.toString())
-                        .param("date", yesterday.toString()))
+                        .param("date", yesterday.toString())
+                        .with(authenticatedUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(0));
@@ -94,13 +104,13 @@ class StudySessionMinDurationApiTest {
 
         assertThat(mvc.get()
                         .uri("/api/stats")
-                        .param("userId", userId.toString())
-                        .param("date", yesterday.toString()))
+                        .param("date", yesterday.toString())
+                        .with(authenticatedUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(1));
 
-        assertThat(mvc.get().uri("/api/stats/streak").param("userId", userId.toString()))
+        assertThat(mvc.get().uri("/api/stats/streak").with(authenticatedUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.streak", v -> assertThat(v).isEqualTo(0));
@@ -112,7 +122,7 @@ class StudySessionMinDurationApiTest {
         assertThat(submitRequest(sessionStart, 599)).hasStatus(HttpStatus.CREATED);
         assertThat(submitRequest(sessionStart.plusSeconds(3600), 600)).hasStatus(HttpStatus.CREATED);
 
-        assertThat(mvc.get().uri("/api/stats/streak").param("userId", userId.toString()))
+        assertThat(mvc.get().uri("/api/stats/streak").with(authenticatedUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.streak", v -> assertThat(v).isEqualTo(1));
@@ -124,9 +134,9 @@ class StudySessionMinDurationApiTest {
 
         assertThat(mvc.get()
                         .uri("/api/stats/streak")
-                        .param("userId", userId.toString())
                         .param("from", yesterday.minusDays(5).toString())
-                        .param("to", yesterday.toString()))
+                        .param("to", yesterday.toString())
+                        .with(authenticatedUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying(
@@ -138,7 +148,7 @@ class StudySessionMinDurationApiTest {
 
     @Test
     void from_to를_주지_않으면_studiedDatesInRange는_빈_배열이다() {
-        assertThat(mvc.get().uri("/api/stats/streak").param("userId", userId.toString()))
+        assertThat(mvc.get().uri("/api/stats/streak").with(authenticatedUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying(
@@ -152,8 +162,8 @@ class StudySessionMinDurationApiTest {
     void from만_주고_to를_주지_않으면_400이다() {
         assertThat(mvc.get()
                         .uri("/api/stats/streak")
-                        .param("userId", userId.toString())
-                        .param("from", yesterday.toString()))
+                        .param("from", yesterday.toString())
+                        .with(authenticatedUser(userId)))
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
 
@@ -161,9 +171,9 @@ class StudySessionMinDurationApiTest {
     void from이_to보다_이후이면_400이다() {
         assertThat(mvc.get()
                         .uri("/api/stats/streak")
-                        .param("userId", userId.toString())
                         .param("from", yesterday.toString())
-                        .param("to", yesterday.minusDays(1).toString()))
+                        .param("to", yesterday.minusDays(1).toString())
+                        .with(authenticatedUser(userId)))
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
 }

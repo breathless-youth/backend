@@ -2,6 +2,7 @@ package project.study.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +28,9 @@ class UserServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private AuthService authService;
+
     @InjectMocks
     private UserService userService;
 
@@ -35,19 +39,22 @@ class UserServiceTest {
         when(userRepository.insertIfAbsent(Provider.DEVICE.name(), DEVICE_ID)).thenReturn(1);
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.of(userWithId(1L, DEVICE_ID)));
+        when(authService.issueTokens(1L)).thenReturn(new AuthService.TokenPair("access-token", "refresh-token"));
 
         UserRegisterResponse response = userService.register(new UserRegisterRequest(DEVICE_ID));
 
         assertThat(response.userId()).isEqualTo(1L);
         assertThat(response.isNew()).isTrue();
+        assertThat(response.accessToken()).isEqualTo("access-token");
+        assertThat(response.refreshToken()).isEqualTo("refresh-token");
     }
 
     @Test
     void 이미_등록된_기기는_기존_유저를_반환하고_isNew가_false다() {
-        // on conflict do nothing → 0행 삽입 = 이미 등록된 기기
         when(userRepository.insertIfAbsent(Provider.DEVICE.name(), DEVICE_ID)).thenReturn(0);
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.of(userWithId(7L, DEVICE_ID)));
+        when(authService.issueTokens(7L)).thenReturn(new AuthService.TokenPair("access-token", "refresh-token"));
 
         UserRegisterResponse response = userService.register(new UserRegisterRequest(DEVICE_ID));
 
@@ -61,6 +68,7 @@ class UserServiceTest {
         when(userRepository.insertIfAbsent(Provider.DEVICE.name(), DEVICE_ID)).thenReturn(1);
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.of(userWithId(1L, DEVICE_ID)));
+        when(authService.issueTokens(anyLong())).thenReturn(new AuthService.TokenPair("a", "r"));
 
         userService.register(new UserRegisterRequest(upperCase));
 

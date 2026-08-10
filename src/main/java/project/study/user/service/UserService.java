@@ -20,6 +20,7 @@ public class UserService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final UserRepository userRepository;
+    private final AuthService authService;
 
     // @Modifying 네이티브 쿼리는 트랜잭션 안에서만 실행할 수 있다
     @Transactional
@@ -33,7 +34,8 @@ public class UserService {
                 .findByProviderAndProviderUserId(Provider.DEVICE, deviceId)
                 .orElseThrow(() -> new IllegalStateException("등록 이후 조회 실패"));
 
-        return new UserRegisterResponse(user.getId(), isNew);
+        AuthService.TokenPair tokens = authService.issueTokens(user.getId());
+        return new UserRegisterResponse(user.getId(), isNew, tokens.accessToken(), tokens.refreshToken());
     }
 
     @Transactional(readOnly = true)

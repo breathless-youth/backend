@@ -11,6 +11,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -124,15 +125,13 @@ public class StudySessionController {
                                     @ExampleObject(name = "유저 없음", value = "{\"message\": \"존재하지 않는 사용자입니다: 999\"}")))
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public List<StudySessionResponse> create(@Valid @RequestBody StudySessionCreateRequest request) {
+    public List<StudySessionResponse> create(
+            @AuthenticationPrincipal Long userId, @Valid @RequestBody StudySessionCreateRequest request) {
         try {
-            return studySessionService.create(request);
+            return studySessionService.create(userId, request);
         } catch (DuplicateSessionException e) {
-            // 동시에 들어온 같은 제출이 유니크 제약 레이스에서 졌을 수 있다 — create()의 트랜잭션은 이미
-            // 롤백되어 끝났으니, 완전히 새 트랜잭션에서 재조회해 상대가 커밋한 결과를 그대로 돌려준다(멱등).
-            // 다른 제출이 시각만 겹친 것뿐이면 재조회도 비어있으므로 원래 409를 그대로 던진다.
             List<StudySessionResponse> concurrent =
-                    studySessionService.findExistingSubmission(request.userId(), request.startedAt());
+                    studySessionService.findExistingSubmission(userId, request.startedAt());
             if (!concurrent.isEmpty()) {
                 return concurrent;
             }

@@ -8,6 +8,10 @@
 spring:
   application:
     name: study
+  http:
+    client:
+      connect-timeout: 5s
+      read-timeout: 5s
   datasource:
     # 값이 없으면 기동 시점에 실패하도록 기본값을 두지 않는다 (설정 누락을 늦게 발견하지 않기 위함)
     url: ${SPRING_DATASOURCE_URL}
@@ -18,18 +22,21 @@ spring:
     hibernate:
       ddl-auto: validate
 
-# AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
-#oauth:
-#  google:
-#    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
-#    client-id: ${OAUTH_GOOGLE_CLIENT_ID}
-#
-#jwt:
-#  secret: ${JWT_SECRET} # 32자 이상 랜덤 문자열
-#  access-expiration: 1800000 # 30분
-#
-#refresh-token:
-#  expiration: 2592000000 # 한달 (opaque UUID, DB 저장)
+oauth:
+  google:
+    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
+    client-id: ${OAUTH_GOOGLE_CLIENT_ID}
+  kakao:
+    app-key: ${OAUTH_KAKAO_APP_KEY}
+  apple:
+    client-id: ${OAUTH_APPLE_CLIENT_ID}
+
+jwt:
+  secret: ${JWT_SECRET} # 32자 이상 랜덤 문자열
+  access-expiration: 1800000 # 30분
+
+refresh-token:
+  expiration: 2592000000 # 한달 (opaque UUID, DB 저장)
 
 # 웹 클라이언트가 브라우저에서 API를 호출할 수 있게 허용하는 origin.
 # 도메인이 바뀌면 ECS 태스크 정의에 APP_CORS_ALLOWEDORIGINS_0을 넣어 덮어쓸 수 있다

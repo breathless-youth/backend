@@ -31,11 +31,10 @@ dependencies {
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 
 	// --- Security / 인증 ---
-	// AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
-	// implementation 'org.springframework.boot:spring-boot-starter-security'
-	// implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
-	// runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
-	// runtimeOnly 'io.jsonwebtoken:jjwt-gson:0.13.0' // jjwt-jackson 대신 (Jackson 3 충돌 회피)
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
+	runtimeOnly 'io.jsonwebtoken:jjwt-gson:0.13.0' // jjwt-jackson 대신 (Jackson 3 충돌 회피)
 
 	// --- 모니터링 ---
 	// Boot 4 전용 모듈이다. sentry-spring-boot-starter-jakarta는 Boot 3용이라 여기선 동작하지 않는다.
@@ -59,8 +58,7 @@ dependencies {
 	// --- 테스트 스타터 (각 스타터의 테스트 대응 모듈) ---
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
-	// AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
-	// testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 
 	// --- 통합 테스트 / 실제 DB ---

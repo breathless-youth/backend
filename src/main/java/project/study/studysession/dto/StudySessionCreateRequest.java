@@ -7,9 +7,6 @@ import java.time.Instant;
 import java.util.List;
 
 public record StudySessionCreateRequest(
-        @Schema(description = "세션 주인의 유저 ID (POST /api/users 로 발급받은 값)", example = "1") @NotNull
-        Long userId,
-
         @Schema(
                 description = "세션 시작 시각 — 방 입장 시각 (UTC, ISO-8601). userId와 함께 멱등 키로 쓰인다 — "
                         + "같은 유저가 같은 startedAt으로 다시 제출하면(강제종료 후 재전송 등) 중복 저장 없이 "

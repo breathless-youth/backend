@@ -4,7 +4,7 @@
 
 ## 프로젝트 개요
 <!-- TODO: 서비스 한 줄 설명으로 교체 -->
-Spring Boot 4.1 + Java 25(LTS) + PostgreSQL. 로그인은 MVP에서 제외 — 인증 코드는 `AUTH-DISABLED` 태그와 함께 주석처리로 보존됨 (ADR-0004).
+Spring Boot 4.1 + Java 25(LTS) + PostgreSQL. 소셜 로그인(구글/카카오/애플) + JWT 인증 (ADR-0002, ADR-0013).
 Vision AI 기술을 활용해 사용자의 실제 공부 상태를 감지하고, 공부 유지 시간을 측정하여 몰입도 높은 공부 환경을 제공하는 모바일 서비스를 개발한다. 사용자는 AI 기반 공부 유지 시간 측정을 통해 자신의 공부 패턴을 객관적으로 확인할 수 있으며, 필요에 따라 동일한 공부 목표를 가진 사용자들과 소셜 스터디에 참여하여 함께 공부할 수 있다.
 
 ## 자주 쓰는 명령어
@@ -63,7 +63,7 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
 ## 테스트
 - 통합테스트는 Testcontainers로 실제 PostgreSQL 사용 (`TestcontainersConfiguration` import)
 - API 통합테스트는 MockMvc 원본 API 대신 `MockMvcTester`(AssertJ 통합) 사용 — `@AutoConfigureMockMvc`가 빈으로 자동 구성해준다
-- 로그인 MVP 제외(ADR-0004)로 현재 API 테스트에 인증 불필요. 인증 재도입 시 `spring-security-test`의 `@WithMockUser` / `SecurityMockMvcRequestPostProcessors.oauth2Login()` 사용
+- API 테스트에서 인증이 필요한 엔드포인트는 `SecurityMockMvcRequestPostProcessors.authentication()`으로 `UsernamePasswordAuthenticationToken(userId, null, authorities)`를 설정한다. JwtFilter가 principal을 `Long userId`로 넣으므로 `@AuthenticationPrincipal Long userId`로 받는다
 
 ## 커밋 컨벤션
 [Conventional Commits](https://www.conventionalcommits.org/) 형식 사용: `<type>: <설명>`

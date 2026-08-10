@@ -50,11 +50,15 @@ class UserApiIntegrationTest {
     }
 
     @Test
-    void 새_기기는_유저를_생성하고_201과_isNew_true를_반환한다() {
+    void 새_기기는_유저를_생성하고_201과_isNew_true와_토큰을_반환한다() {
         assertThat(registerRequest(UUID.randomUUID().toString()))
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying("$.userId", id -> assertThat(id).isNotNull())
+                .hasPathSatisfying(
+                        "$.accessToken", token -> assertThat(token).asString().isNotEmpty())
+                .hasPathSatisfying(
+                        "$.refreshToken", token -> assertThat(token).asString().isNotEmpty())
                 .extractingPath("$.isNew")
                 .isEqualTo(true);
     }

@@ -48,4 +48,12 @@ public class User extends BaseTimeEntity {
         this.providerUserId = providerUserId;
         this.status = UserStatus.ACTIVE;
     }
+
+    public void linkSocialAccount(Provider provider, String providerUserId) {
+        if (this.provider != Provider.DEVICE) {
+            throw new project.study.common.ConflictException("이미 소셜 계정이 연동된 사용자입니다");
+        }
+        this.provider = provider;
+        this.providerUserId = providerUserId;
+    }
 }

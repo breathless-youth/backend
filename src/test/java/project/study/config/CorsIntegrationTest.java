@@ -1,13 +1,17 @@
 package project.study.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
@@ -62,10 +66,11 @@ class CorsIntegrationTest {
 
     @Test
     void 실제_요청_응답에도_CORS_헤더가_붙는다() {
+        var auth = new UsernamePasswordAuthenticationToken(1L, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
         MvcTestResult result = mvc.get()
                 .uri("/api/stats/streak")
-                .param("userId", "1")
                 .header("Origin", ALLOWED_ORIGIN)
+                .with(authentication(auth))
                 .exchange();
 
         assertThat(result).hasStatusOk();

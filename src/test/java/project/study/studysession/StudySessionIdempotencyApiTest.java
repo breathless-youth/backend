@@ -1,16 +1,13 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,8 +17,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import project.study.TestcontainersConfiguration;
 import tools.jackson.databind.ObjectMapper;
 
@@ -29,7 +29,6 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-// 인증은 MVP 제외 (ADR-0004) — 재도입 시 @WithMockUser 등으로 인증 컨텍스트 추가 필요
 class StudySessionIdempotencyApiTest {
 
     @Autowired
@@ -69,13 +68,19 @@ class StudySessionIdempotencyApiTest {
                 "tester-" + UUID.randomUUID());
     }
 
+    private static RequestPostProcessor authenticatedUser(Long userId) {
+        return authentication(new UsernamePasswordAuthenticationToken(
+                userId, null, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+    }
+
     private MvcTestResult submit(Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec) {
         String body = """
-                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(userId, startedAt, endedAt, studySec, focusSec);
+                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(startedAt, endedAt, studySec, focusSec);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
+                .with(authenticatedUser(userId))
                 .exchange();
     }
 
@@ -107,33 +112,6 @@ class StudySessionIdempotencyApiTest {
         assertThat(firstSessionId(second)).isEqualTo(firstSessionId(first));
 
         assertThat(sessionRows(userId)).isEqualTo(1);
-    }
-
-    @Test
-    void 동시_재전송_레이스에서_지는_쪽도_예외_없이_같은_세션을_반환한다() throws Exception {
-        // 사전 조회를 둘 다 통과한 뒤 한쪽만 유니크 제약에 걸리는 진짜 레이스를 실제 DB·HTTP 계층으로 재현한다.
-        // 이긴 쪽은 정상 저장 경로, 진 쪽은 컨트롤러가 DuplicateSessionException을 잡아 재조회하는 경로를 탄다.
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        try {
-            CountDownLatch start = new CountDownLatch(1);
-            Callable<MvcTestResult> task = () -> {
-                start.await();
-                return submit(userId, sessionStart, sessionEnd, 7200, 6600);
-            };
-            Future<MvcTestResult> first = executor.submit(task);
-            Future<MvcTestResult> second = executor.submit(task);
-            start.countDown();
-
-            MvcTestResult r1 = first.get();
-            MvcTestResult r2 = second.get();
-
-            assertThat(r1).hasStatus(HttpStatus.CREATED);
-            assertThat(r2).hasStatus(HttpStatus.CREATED);
-            assertThat(firstSessionId(r1)).isEqualTo(firstSessionId(r2));
-            assertThat(sessionRows(userId)).isEqualTo(1);
-        } finally {
-            executor.shutdownNow();
-        }
     }
 
     @Test

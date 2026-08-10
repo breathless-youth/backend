@@ -45,37 +45,27 @@ public class StudySessionService {
     private final Clock clock;
 
     @Transactional
-    public List<StudySessionResponse> create(StudySessionCreateRequest request) {
-        // 같은 (userId, startedAt) 루트 제출이 이미 있으면 재전송(강제종료 후 복구 등)으로 보고 저장 없이
-        // 기존 결과(자정 분할 조각 포함)를 반환한다 — 재제출 본문의 다른 필드(endedAt 등)는 보지 않는다
+    public List<StudySessionResponse> create(Long userId, StudySessionCreateRequest request) {
         List<StudySession> existing = studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
-                request.userId(), request.startedAt());
+                userId, request.startedAt());
         if (!existing.isEmpty()) {
             return existing.stream().map(this::toResponse).toList();
         }
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
         List<StudySession> sessions = createSessions(
-                request.userId(),
-                request.startedAt(),
-                request.endedAt(),
-                request.studySec(),
-                request.focusSec(),
-                events);
+                userId, request.startedAt(), request.endedAt(), request.studySec(), request.focusSec(), events);
         try {
             List<StudySession> saved = studySessionRepository.saveAll(sessions);
-            // FK·유니크 위반을 트랜잭션 커밋 전에 감지하기 위해 즉시 flush (한 트랜잭션이라 분할 저장도 원자적)
             studySessionRepository.flush();
             return saved.stream().map(this::toResponse).toList();
         } catch (DataIntegrityViolationException e) {
-            // 제약 이름으로 원인을 특정한다 — 유니크 위반은 동시 재전송 레이스이거나 기존 세션과
-            // 시작 시각이 겹치는 제출(409), 유저 FK 위반은 404, 그 외 무결성 위반은 숨기지 않고 전파(500)
             String constraint = violatedConstraint(e);
             if (STARTED_AT_UNIQUE_CONSTRAINT.equalsIgnoreCase(constraint)) {
                 throw new DuplicateSessionException("이미 같은 시각에 시작한 세션이 저장되어 있습니다");
             }
             if (USER_FK_CONSTRAINT.equalsIgnoreCase(constraint)) {
-                throw new NotFoundException("존재하지 않는 사용자입니다: " + request.userId());
+                throw new NotFoundException("존재하지 않는 사용자입니다: " + userId);
             }
             throw e;
         }

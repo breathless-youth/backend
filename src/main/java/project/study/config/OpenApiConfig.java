@@ -1,7 +1,10 @@
 package project.study.config;
 
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,33 +30,31 @@ public class OpenApiConfig {
               (07~21시, 세션당 이벤트 0~2개 — 고정 시드라 재시작해도 같은 패턴)
             """.formatted(DevDataSeeder.DEMO_DEVICE_ID);
 
+    private static final String BEARER_AUTH = "bearerAuth";
+
     private final Environment environment;
 
-    // AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 아래 주석 해제
-    // 필요 import (Spotless가 import 블록 내 주석을 지워 여기에 보존):
-    //   io.swagger.v3.oas.models.Components
-    //   io.swagger.v3.oas.models.security.SecurityRequirement
-    //   io.swagger.v3.oas.models.security.SecurityScheme
-    // private static final String BEARER_AUTH = "bearerAuth";
-
-    // AUTH-DISABLED: description의 인증 흐름 안내는 현재 스테일 (인증 재도입 시까지 유지)
     @Bean
     public OpenAPI openApi() {
         String description = """
                 공부 기록 앱 백엔드 API 문서.
+
+                **인증 방법** — 소셜 로그인(`POST /api/auth/login`)으로 access 토큰을 발급받은 뒤, \
+                모든 API 요청에 `Authorization: Bearer <access_token>` 헤더를 붙인다. \
+                아래 자물쇠 버튼으로 토큰을 입력하면 Swagger UI에서도 인증된 요청을 보낼 수 있다.
                 """;
         if (environment.matchesProfiles("dev")) {
             description += DEV_MOCK_DATA_GUIDE;
         }
-        return new OpenAPI().info(new Info().title("Study API").version("v1").description(description));
-        // AUTH-DISABLED
-        // .components(new Components()
-        //         .addSecuritySchemes(
-        //                 BEARER_AUTH,
-        //                 new SecurityScheme()
-        //                         .type(SecurityScheme.Type.HTTP)
-        //                         .scheme("bearer")
-        //                         .bearerFormat("JWT")))
-        // .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
+        return new OpenAPI()
+                .info(new Info().title("Study API").version("v1").description(description))
+                .components(new Components()
+                        .addSecuritySchemes(
+                                BEARER_AUTH,
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")))
+                .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
     }
 }
