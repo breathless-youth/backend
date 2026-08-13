@@ -1,5 +1,8 @@
 package project.study.studysession.service;
 
+import static project.study.studysession.StudySessionThresholds.MIN_LIST_FOCUS_SEC;
+import static project.study.studysession.StudySessionThresholds.MIN_STREAK_FOCUS_SEC;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,8 +40,6 @@ public class StudySessionService {
     private static final String STARTED_AT_UNIQUE_CONSTRAINT = "uq_study_session_user_started_at";
     // V1이 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
     private static final String USER_FK_CONSTRAINT = "study_session_user_id_fkey";
-    private static final int MIN_LIST_FOCUS_SEC = 60; // 1분 — 조회에 보이는 최소 순공시간
-    private static final int MIN_STREAK_FOCUS_SEC = 600; // 10분 — 스트릭 인정 최소 순공시간(세션 단위)
 
     private final StudySessionRepository studySessionRepository;
     private final Clock clock;
@@ -80,6 +81,20 @@ public class StudySessionService {
         }
     }
 
+    /**
+     * 유니크 위반으로 create()가 던진 DuplicateSessionException을 받은 호출자가 재조회할 때 쓴다.
+     * create()의 트랜잭션은 flush 실패 시점에 이미 롤백되어 끝났으므로, 같은 (userId, submissionStartedAt)의
+     * 레이스에서 진 것뿐이라면 이 완전히 새 트랜잭션에서 상대가 커밋한 결과를 찾아 그대로 반환한다(멱등).
+     */
+    @Transactional(readOnly = true)
+    public List<StudySessionResponse> findExistingSubmission(Long userId, Instant submissionStartedAt) {
+        return studySessionRepository
+                .findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(userId, submissionStartedAt)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     /** 원인 체인에서 위반된 제약 이름을 찾는다 — 없으면 null. */
     private static String violatedConstraint(DataIntegrityViolationException e) {
         for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
@@ -92,7 +107,8 @@ public class StudySessionService {
 
     /**
      * 통계 날짜(statDate) 기준 하루 조회 — 기간(from~to) 조회는 추후 별도 메서드로 분리한다.
-     * 순공시간(focusSec)이 {@value MIN_LIST_FOCUS_SEC}초(1분) 미만인 세션은 저장은 되어도 조회엔 보이지 않는다.
+     * 순공시간(focusSec)이 {@value project.study.studysession.StudySessionThresholds#MIN_LIST_FOCUS_SEC}초(1분)
+     * 미만인 세션은 저장은 되어도 조회엔 보이지 않는다.
      * 캘린더 표시용으로 date가 속한 달의 공부한 날짜 목록(studiedDatesInMonth)도 함께 내려준다.
      * 상태별 이벤트 건수는 세션마다(sessions[].eventCounts) 내려주고, 그 합계도 함께(totalEventCounts) 내려준다.
      */
@@ -163,12 +179,9 @@ public class StudySessionService {
     }
 
     /**
-     * 세션을 KST 자정 경계로 분할해 생성한다. 자정을 넘지 않으면 세션 1개가 담긴 리스트를 반환하고,
-     * 자정에 걸친 이벤트는 시각 기준으로 나뉘어 각 세션에 귀속된다.
-     * 총 공부 시간(studySec)과 순공 시간(focusSec)은 앱이 제출한 값을 그대로 저장하되, 분할 시
-     * 조각 길이에 비례해 배분한다. PAUSE(일시정지)는 총공부시간 타이머도 멈추므로 studySec 배분
-     * 가중치에서 제외되고, 나머지 이벤트(PHONE/DEVICE/AWAY)는 순공시간 타이머만 멈추므로
-     * focusSec 배분 가중치에서만 제외된다.
+     * 세션을 KST 자정 경계로 분할해 생성한다 — 안 넘으면 1개, 걸친 이벤트는 시각 기준으로 각 세션에 귀속.
+     * studySec/focusSec은 제출값을 조각 길이 비례로 배분한다. PAUSE는 총공부·순공 타이머를 모두 멈추므로
+     * 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY)는 순공 타이머만 멈추므로 focusSec 배분에서만 빠진다.
      */
     List<StudySession> createSessions(
             Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
@@ -210,10 +223,8 @@ public class StudySessionService {
             long totalFocusActiveSec) {}
 
     /**
-     * 검증·배분 기준은 원본 총 시간이 아니라 저장되는 조각별 총시간(내림 초)의 합이어야 한다.
-     * sub-second 타임스탬프가 자정에 걸치면 원본 기준으로는 0으로 나누기(총 0초)나 절삭 손실이
-     * 생길 수 있다. 조각마다 PAUSE만 뺀 studyActiveSec과 전체 이벤트를 뺀 focusActiveSec을
-     * 함께 구해 각각의 배분 가중치로 쓴다.
+     * 검증·배분 기준은 원본 총 시간이 아니라 저장되는 조각별 총시간(내림 초)의 합이다 — sub-second
+     * 타임스탬프가 자정에 걸치면 원본 기준으로는 0으로 나누기나 절삭 손실이 생길 수 있어서다.
      */
     private static SegmentWeights computeSegmentWeights(List<Instant> cuts, List<StatusEvent> sorted) {
         int segmentCount = cuts.size() - 1;
@@ -325,10 +336,9 @@ public class StudySessionService {
 
     /**
      * 연속 공부일(스트릭) 조회 — 유저에 상태로 저장하지 않고 세션 이력(statDate)에서 매번 계산한다.
-     * 저장 방식은 갱신 시점(제출·조회 순서)에 따라 어긋날 수 있지만, 이력 계산은 항상 정합하다.
-     * 그 날 세션 중 하나라도 순공시간이 {@value MIN_STREAK_FOCUS_SEC}초(10분) 이상이면 그 날은 스트릭에 잡힌다
-     * (하루 합계가 아니라 세션 단위 기준).
-     * 기록이 없거나 존재하지 않는 userId면 0/0 — 목록 조회와 같은 계약이다.
+     * 그 날 세션 중 하나라도 순공시간이
+     * {@value project.study.studysession.StudySessionThresholds#MIN_STREAK_FOCUS_SEC}초(10분) 이상이면 그 날은 스트릭에 잡힌다
+     * (하루 합계가 아니라 세션 단위 기준). 기록이 없거나 존재하지 않는 userId면 0/0 — 목록 조회와 같은 계약이다.
      * from/to를 함께 주면 그 기간 중 스트릭 인정 기준을 만족한 날짜 목록(studiedDatesInRange)도 계산한다 — 선택 파라미터.
      */
     @Transactional(readOnly = true)
