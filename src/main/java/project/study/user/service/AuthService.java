@@ -68,11 +68,18 @@ public class AuthService {
                 .findByTokenHash(sha256(request.refreshToken()))
                 .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
 
+        // 재사용 검사가 만료 검사보다 먼저다: 만료를 먼저 보면 탈취자가 회전시킨 토큰이 만료된 뒤
+        // 피해자가 재시도할 때 행만 삭제되고 끝나 전량 폐기가 안 일어난다(재사용 감지 우회)
+        if (saved.getUsedAt() != null) {
+            refreshTokenRepository.deleteByUserId(saved.getUserId());
+            throw new InvalidRefreshTokenException("이미 사용된 refresh 토큰입니다");
+        }
         if (saved.isExpired(Instant.now())) {
             refreshTokenRepository.delete(saved);
             throw new InvalidRefreshTokenException("만료된 refresh 토큰입니다");
         }
         // 조건부 UPDATE의 행 잠금이 동시 요청을 직렬화한다 — 정확히 한쪽만 사용 처리에 성공
+        // (위 usedAt 검사는 조회 시점 스냅샷이라 동시 요청 레이스는 여기서만 걸러진다)
         if (refreshTokenRepository.markUsedIfUnused(saved.getId(), Instant.now()) == 0) {
             // 이미 사용된 토큰의 재등장 = 재사용(탈취 의심) → 해당 유저 토큰 전체 폐기
             refreshTokenRepository.deleteByUserId(saved.getUserId());
@@ -111,6 +118,10 @@ public class AuthService {
             // 전환: 식별자 쌍 교체 — userId 유지로 기록이 그대로 이어지고, 옛 deviceId 연결은 자동 해제된다
             user.linkSocialAccount(socialInfo.provider(), socialInfo.providerUserId(), socialInfo.email());
             userRepository.flush();
+            // 전환은 userId를 유지하므로 익명 시절 토큰이 그대로 유효해진다 — 전환 시점의 익명 유저는
+            // 정의상 단일 기기이므로 새 쌍 발급 전에 기존 토큰을 전량 폐기한다
+            // (병합 경로는 mergeInto가 source의 토큰을 이미 지운다)
+            refreshTokenRepository.deleteByUserId(user.getId());
             TokenPair tokens = issueTokens(user.getId());
             // 전환 = 이 소셜 계정의 최초 가입 → isNewUser true (프론트가 프로필 설정 화면으로 보낸다)
             return new LoginResponse(tokens.accessToken(), tokens.refreshToken(), true);
@@ -143,8 +154,18 @@ public class AuthService {
 
     @Transactional
     public void logout(String refreshToken) {
-        // DB에는 해시만 저장되므로 원문을 해시로 변환해서 삭제해야 한다
-        refreshTokenRepository.deleteByTokenHash(sha256(refreshToken));
+        // DB에는 해시만 저장되므로 원문을 해시로 변환해서 조회·삭제해야 한다
+        String tokenHash = sha256(refreshToken);
+        refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(saved -> {
+            if (saved.getUsedAt() != null) {
+                // 이미 회전된 토큰으로 logout = 탈취자가 재사용 증거(tombstone)를 지우려는 시도로 볼 수 있다.
+                // 그냥 지우면 피해자가 같은 토큰을 재시도해도 "알 수 없는 토큰"이라 전량 폐기가 안 걸린다
+                // → 재사용 감지와 동일하게 해당 유저의 refresh를 전량 폐기한다
+                refreshTokenRepository.deleteByUserId(saved.getUserId());
+                return;
+            }
+            refreshTokenRepository.deleteByTokenHash(tokenHash);
+        });
     }
 
     OAuthTokenVerifier verifierFor(Provider provider) {

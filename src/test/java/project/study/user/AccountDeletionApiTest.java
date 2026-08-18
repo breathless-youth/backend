@@ -57,13 +57,13 @@ class AccountDeletionApiTest {
     @Test
     void 탈퇴하면_유저와_세션이_삭제되고_refresh가_전량_폐기된다() {
         // 유저 한 명에게 refresh 토큰이 여러 개(다기기) 있어도 탈퇴 시 전부 폐기됨을 검증한다.
-        // 기기 A: 익명 등록 후 소셜 전환 — 전환은 userId를 유지하고 옛 device 토큰을 지우지 않으므로
-        // deviceA.refreshToken()이 전환 후에도 그대로 유효하게 남는다.
+        // 기기 A: 익명 등록 후 소셜 전환 — 전환이 발급한 토큰(social.refreshToken())을 쓴다
+        // (전환 전 익명 토큰은 전환 시점에 전량 폐기되므로 다기기 검증에 못 쓴다).
         // 기기 B: 같은 소셜 계정으로 link(병합) — 병합이 새로 발급한 토큰을 받는다.
         // 결과적으로 같은 최종 유저(deviceA.userId())에 서로 다른 두 refresh 토큰이 걸린다.
         stubVerifier("sub-multi-device");
         UserRegisterResponse deviceA = registerDevice();
-        link(deviceA.accessToken(), "sub-multi-device");
+        LoginResponse social = link(deviceA.accessToken(), "sub-multi-device");
         UserRegisterResponse deviceB = registerDevice();
         LoginResponse merged = link(deviceB.accessToken(), "sub-multi-device");
 
@@ -79,8 +79,8 @@ class AccountDeletionApiTest {
         assertThat(studySessionRepository.findAll())
                 .noneMatch(s -> s.getUserId().equals(deviceA.userId()));
         // 다기기 refresh 토큰 둘 다 폐기됐는지 확인 — deleteByUserId가 deleteByTokenHash로
-        // 회귀하면(탈퇴 호출에 쓴 토큰 하나만 지움) deviceA.refreshToken() 쪽이 여전히 살아있어 실패한다
-        assertThat(refreshRequest(deviceA.refreshToken())).hasStatus(HttpStatus.UNAUTHORIZED);
+        // 회귀하면(탈퇴 호출에 쓴 토큰 하나만 지움) social.refreshToken() 쪽이 여전히 살아있어 실패한다
+        assertThat(refreshRequest(social.refreshToken())).hasStatus(HttpStatus.UNAUTHORIZED);
         assertThat(refreshRequest(merged.refreshToken())).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 

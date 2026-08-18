@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -147,13 +149,57 @@ class AuthServiceTest {
     }
 
     @Test
+    void 이미_사용된_토큰은_만료됐어도_전량_폐기하고_거부한다() {
+        // 만료 검사가 재사용 검사보다 앞서면 행만 삭제되고 끝나 재사용 증거(tombstone)가 사라진다
+        RefreshToken saved = new RefreshToken(1L, "hash", Instant.now().minusSeconds(1));
+        ReflectionTestUtils.setField(saved, "id", 10L);
+        ReflectionTestUtils.setField(saved, "usedAt", Instant.now().minusSeconds(10));
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(saved));
+
+        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("refresh-uuid")))
+                .isInstanceOf(InvalidRefreshTokenException.class)
+                .hasMessage("이미 사용된 refresh 토큰입니다");
+        verify(refreshTokenRepository).deleteByUserId(1L);
+        verify(refreshTokenRepository, never()).markUsedIfUnused(anyLong(), any());
+        verify(refreshTokenRepository, never()).delete(any());
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
     void 로그아웃은_전달된_refresh_토큰의_해시로_삭제한다() {
+        RefreshToken unused = new RefreshToken(7L, "hash", Instant.now().plusSeconds(3600));
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(unused));
+
         authService.logout("refresh-uuid");
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(refreshTokenRepository).deleteByTokenHash(captor.capture());
         assertThat(captor.getValue()).isNotEqualTo("refresh-uuid");
         assertThat(captor.getValue()).hasSize(64); // SHA-256 hex
+        verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
+    }
+
+    @Test
+    void 이미_사용된_토큰으로_로그아웃하면_해당_유저의_토큰을_전부_폐기한다() {
+        // 탈취자가 회전시킨 뒤 그 토큰으로 logout하면 재사용 증거가 지워져 피해자의 재시도를 감지 못 한다
+        RefreshToken used = new RefreshToken(7L, "hash", Instant.now().plusSeconds(3600));
+        ReflectionTestUtils.setField(used, "usedAt", Instant.now().minusSeconds(10));
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(used));
+
+        authService.logout("refresh-uuid");
+
+        verify(refreshTokenRepository).deleteByUserId(7L);
+        verify(refreshTokenRepository, never()).deleteByTokenHash(anyString());
+    }
+
+    @Test
+    void 알_수_없는_토큰으로_로그아웃하면_아무것도_지우지_않는다() {
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
+
+        authService.logout("unknown-token");
+
+        verify(refreshTokenRepository, never()).deleteByTokenHash(anyString());
+        verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
     }
 
     @Test
@@ -170,5 +216,23 @@ class AuthServiceTest {
 
         assertThat(response.isNewUser()).isTrue();
         assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("5");
+    }
+
+    @Test
+    void 전환은_새_토큰쌍_발급_전에_기존_refresh_토큰을_전량_폐기한다() {
+        // 전환 전 익명 토큰은 userId가 그대로라 폐기하지 않으면 계속 유효하다
+        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
+        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
+        User device = new User(Provider.DEVICE, "device-uuid");
+        ReflectionTestUtils.setField(device, "id", 5L);
+        when(userRepository.findById(5L)).thenReturn(Optional.of(device));
+        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
+                .thenReturn(Optional.empty());
+
+        authService.linkSocialAccount(5L, new LinkSocialRequest(Provider.GOOGLE, ID_TOKEN));
+
+        InOrder inOrder = inOrder(refreshTokenRepository);
+        inOrder.verify(refreshTokenRepository).deleteByUserId(5L);
+        inOrder.verify(refreshTokenRepository).save(any(RefreshToken.class));
     }
 }

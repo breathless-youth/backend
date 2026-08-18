@@ -126,6 +126,19 @@ class LinkMergeIntegrationTest {
     }
 
     @Test
+    void 전환하면_전환_전에_발급된_익명_refresh_토큰은_무효가_된다() {
+        // 전환은 userId를 유지하므로 익명 시절 토큰이 그대로 유효해질 수 있다 —
+        // 전환 시점의 익명 유저는 단일 기기이므로 전환 경로에서 전량 폐기해야 한다
+        stubVerifier("sub-rotate");
+        UserRegisterResponse device = registerDevice();
+        LoginResponse social = link(device.accessToken(), "sub-rotate");
+
+        assertThat(refreshRequest(device.refreshToken())).hasStatus(HttpStatus.UNAUTHORIZED);
+        // 전환이 새로 발급한 토큰은 정상 동작한다
+        assertThat(refreshRequest(social.refreshToken())).hasStatusOk();
+    }
+
+    @Test
     void 기록이_없는_새_기기의_link는_빈_병합으로_기존_계정_토큰을_받는다() {
         stubVerifier("sub-second-device");
         UserRegisterResponse deviceA = registerDevice();
