@@ -153,22 +153,25 @@ public class AuthService {
     }
 
     @Transactional
-    public void logout(String refreshToken) {
+    public void logout(Long userId, String refreshToken) {
         // DB에는 해시만 저장되므로 원문을 해시로 변환해서 조회·삭제해야 한다.
         // 조회 후 삭제로 나누면 그 사이 동시 refresh가 같은 토큰을 회전시킬 수 있고(TOCTOU),
         // 그러면 logout이 used tombstone만 지워 새로 발급된 토큰이 살아남는다
-        // → "미사용일 때만 삭제"를 한 문장으로 원자화한다
+        // → "호출자 소유의 미사용 토큰만 삭제"를 한 문장으로 원자화한다
         String tokenHash = sha256(refreshToken);
-        if (refreshTokenRepository.deleteByTokenHashIfUnused(tokenHash) == 1) {
+        if (refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(tokenHash, userId) == 1) {
             return; // 미사용 토큰을 지웠다 = 정상 로그아웃(해당 기기만 폐기)
         }
-        // 0 = 애초에 없었거나, 이미 사용됐거나, 방금 회전됐다. 행이 남아 있다면 후자들이다:
-        // 이미 회전된 토큰으로 logout = 탈취자가 재사용 증거(tombstone)를 지우려는 시도로 볼 수 있다.
+        // 0 = 애초에 없었거나, 남의 토큰이거나, 이미(방금) 회전된 것.
+        // 남의 토큰이면 아무것도 하지 않는다 — 소유권 검증 없이 폐기하면 인증만 통과한 공격자가
+        // 남의 refresh 토큰으로 그 유저를 전량 로그아웃시킬 수 있다.
+        // 내 토큰인데 이미 회전된 것 = 탈취자가 재사용 증거(tombstone)를 지우려는 시도로 볼 수 있다.
         // 그냥 지우면 피해자가 같은 토큰을 재시도해도 "알 수 없는 토큰"이라 전량 폐기가 안 걸린다
         // → 재사용 감지와 동일하게 해당 유저의 refresh를 전량 폐기한다
         refreshTokenRepository
                 .findByTokenHash(tokenHash)
-                .ifPresent(saved -> refreshTokenRepository.deleteByUserId(saved.getUserId()));
+                .filter(saved -> saved.getUserId().equals(userId))
+                .ifPresent(saved -> refreshTokenRepository.deleteByUserId(userId));
     }
 
     OAuthTokenVerifier verifierFor(Provider provider) {

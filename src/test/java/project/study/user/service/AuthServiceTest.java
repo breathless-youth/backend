@@ -167,13 +167,14 @@ class AuthServiceTest {
 
     @Test
     void 로그아웃은_전달된_refresh_토큰의_해시로_삭제한다() {
-        // 조건부 삭제가 1 = 미사용 토큰을 원자적으로 지웠다 → 해당 기기만 로그아웃
-        when(refreshTokenRepository.deleteByTokenHashIfUnused(anyString())).thenReturn(1);
+        // 조건부 삭제가 1 = 호출자 소유의 미사용 토큰을 원자적으로 지웠다 → 해당 기기만 로그아웃
+        when(refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(anyString(), eq(1L)))
+                .thenReturn(1);
 
-        authService.logout("refresh-uuid");
+        authService.logout(1L, "refresh-uuid");
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(refreshTokenRepository).deleteByTokenHashIfUnused(captor.capture());
+        verify(refreshTokenRepository).deleteByTokenHashAndUserIdIfUnused(captor.capture(), eq(1L));
         assertThat(captor.getValue()).isNotEqualTo("refresh-uuid");
         assertThat(captor.getValue()).hasSize(64); // SHA-256 hex
         verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
@@ -186,10 +187,11 @@ class AuthServiceTest {
         // 탈취자가 회전시킨 뒤 그 토큰으로 logout하면 재사용 증거가 지워져 피해자의 재시도를 감지 못 한다
         RefreshToken used = new RefreshToken(7L, "hash", Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(used, "usedAt", Instant.now().minusSeconds(10));
-        when(refreshTokenRepository.deleteByTokenHashIfUnused(anyString())).thenReturn(0);
+        when(refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(anyString(), eq(7L)))
+                .thenReturn(0);
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(used));
 
-        authService.logout("refresh-uuid");
+        authService.logout(7L, "refresh-uuid");
 
         verify(refreshTokenRepository).deleteByUserId(7L);
     }
@@ -200,20 +202,37 @@ class AuthServiceTest {
         // 이때 그냥 지우면 used tombstone만 사라지고 새로 발급된 토큰이 살아남는다
         RefreshToken rotated = new RefreshToken(9L, "hash", Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(rotated, "usedAt", Instant.now());
-        when(refreshTokenRepository.deleteByTokenHashIfUnused(anyString())).thenReturn(0);
+        when(refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(anyString(), eq(9L)))
+                .thenReturn(0);
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(rotated));
 
-        authService.logout("refresh-uuid");
+        authService.logout(9L, "refresh-uuid");
 
         verify(refreshTokenRepository).deleteByUserId(9L);
     }
 
     @Test
     void 알_수_없는_토큰으로_로그아웃하면_아무것도_지우지_않는다() {
-        when(refreshTokenRepository.deleteByTokenHashIfUnused(anyString())).thenReturn(0);
+        when(refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(anyString(), eq(1L)))
+                .thenReturn(0);
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
 
-        authService.logout("unknown-token");
+        authService.logout(1L, "unknown-token");
+
+        verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
+    }
+
+    @Test
+    void 다른_유저의_토큰으로_로그아웃하면_아무것도_폐기하지_않는다() {
+        // 소유권 검증: 인증만 통과한 공격자가 남의 refresh 토큰을 넣어도
+        // 남의 세션을 지우거나(기기별) 전량 로그아웃시킬(전량 폐기) 수 없어야 한다
+        RefreshToken someoneElses = new RefreshToken(42L, "hash", Instant.now().plusSeconds(3600));
+        ReflectionTestUtils.setField(someoneElses, "usedAt", Instant.now());
+        when(refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(anyString(), eq(1L)))
+                .thenReturn(0);
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(someoneElses));
+
+        authService.logout(1L, "stolen-refresh-uuid");
 
         verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
     }

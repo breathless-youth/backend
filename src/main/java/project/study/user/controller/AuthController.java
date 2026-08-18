@@ -63,7 +63,8 @@ public class AuthController {
 
     @Operation(summary = "로그아웃 (기기별)", description = """
                     지금 이 기기가 보관 중인 refresh 토큰(교환권)을 폐기해 로그인 상태를 끝낸다. \
-                    교환권만 무효화하므로 **다른 기기의 로그인은 그대로 유지된다.**
+                    교환권만 무효화하므로 **다른 기기의 로그인은 그대로 유지된다.** \
+                    호출자 본인 소유의 토큰만 폐기된다 — 다른 유저의 토큰을 보내면 무시된다(204는 동일).
 
                     access 토큰(입장권)은 서버가 따로 저장하지 않아 만료 시각(발급 후 30분)까지는 형식상 유효하다. \
                     따라서 앱은 이 API 호출과 함께 기기에 저장된 토큰 쌍을 반드시 삭제해야 한다.""")
@@ -74,8 +75,8 @@ public class AuthController {
             content = @Content(schema = @Schema(hidden = true)))
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(@Valid @RequestBody RefreshRequest request) {
-        authService.logout(request.refreshToken());
+    public void logout(@AuthenticationPrincipal Long userId, @Valid @RequestBody RefreshRequest request) {
+        authService.logout(userId, request.refreshToken());
     }
 
     @Operation(summary = "기기 유저 소셜 계정 연동", description = """

@@ -100,7 +100,8 @@ class AuthApiIntegrationTest {
     void access_토큰으로는_refresh할_수_없다() {
         LoginResponse tokens = login("sub-wrong-category");
 
-        assertThat(refreshRequest(tokens.accessToken())).hasStatus(HttpStatus.UNAUTHORIZED);
+        // JWT는 refresh 상한(64자)을 넘어 DTO 검증에서 400으로 걸러진다 — 어느 쪽이든 재발급은 불가
+        assertThat(refreshRequest(tokens.accessToken())).hasStatus(HttpStatus.BAD_REQUEST);
     }
 
     @Test
@@ -123,6 +124,37 @@ class AuthApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"provider\":\"GOOGLE\",\"idToken\":\"any\"}"))
                 .hasStatus(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void 상한을_넘는_refresh_토큰은_400이다() {
+        // 임의 길이 입력이 해시·조회 로직까지 흘러들지 않게 DTO에서 자른다
+        assertThat(refreshRequest("x".repeat(65))).hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void 상한을_넘는_ID_토큰은_400이다() {
+        // 프로바이더 검증(외부 HTTP 호출)에 도달하기 전에 DTO에서 자른다
+        UserRegisterResponse device = registerDevice();
+
+        assertThat(mvc.post()
+                        .uri("/api/auth/link")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + device.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"provider\":\"GOOGLE\",\"idToken\":\"" + "e".repeat(8193) + "\"}"))
+                .hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void 다른_유저의_refresh_토큰으로_로그아웃해도_그_토큰은_살아있다() {
+        // 소유권 검증 — 인증만 통과한 호출자가 남의 토큰을 폐기할 수 없다
+        UserRegisterResponse victim = registerDevice();
+        UserRegisterResponse attacker = registerDevice();
+
+        assertThat(logoutRequest(attacker.accessToken(), victim.refreshToken())).hasStatus(HttpStatus.NO_CONTENT);
+
+        // 피해자의 토큰은 여전히 유효하다 (회전 성공)
+        assertThat(refreshRequest(victim.refreshToken())).hasStatusOk();
     }
 
     private void stubVerifier(String sub) {

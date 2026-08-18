@@ -14,10 +14,11 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     void deleteByUserId(Long userId);
 
-    // logout의 TOCTOU 방지 — 미사용일 때만 원자적으로 삭제, 0이면 그 사이 회전(사용)됐거나 없는 것
+    // logout의 TOCTOU 방지 + 소유권 강제 — 호출자 소유의 미사용 토큰만 원자적으로 삭제.
+    // 0이면 없거나, 남의 토큰이거나, 그 사이 회전(사용)된 것
     @Modifying
-    @Query("delete from RefreshToken t where t.tokenHash = :tokenHash and t.usedAt is null")
-    int deleteByTokenHashIfUnused(@Param("tokenHash") String tokenHash);
+    @Query("delete from RefreshToken t" + " where t.tokenHash = :tokenHash and t.userId = :userId and t.usedAt is null")
+    int deleteByTokenHashAndUserIdIfUnused(@Param("tokenHash") String tokenHash, @Param("userId") Long userId);
 
     // 원자적 사용 처리: 같은 토큰의 동시 재발급 요청 중 정확히 한쪽만 성공하게 한다
     @Modifying
