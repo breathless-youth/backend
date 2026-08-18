@@ -7,10 +7,12 @@ import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import project.study.studysession.repository.StudySessionRepository;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
 import project.study.user.entity.Provider;
 import project.study.user.entity.User;
+import project.study.user.repository.RefreshTokenRepository;
 import project.study.user.repository.UserRepository;
 
 @Service
@@ -21,6 +23,8 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final StudySessionRepository studySessionRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     // @Modifying 네이티브 쿼리는 트랜잭션 안에서만 실행할 수 있다
     @Transactional
@@ -55,5 +59,20 @@ public class UserService {
         Instant from = date.atStartOfDay(KST).toInstant();
         Instant to = date.plusDays(1).atStartOfDay(KST).toInstant();
         return userRepository.countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to);
+    }
+
+    /**
+     * 탈퇴 — "즉시 전부 삭제" 정책(BY-383). refresh 전량 폐기로 모든 기기가 로그아웃되고,
+     * 세션 기록은 status_event까지 함께 삭제된다(엔티티 단위 삭제의 cascade).
+     * 이미 삭제된 유저면 아무것도 안 한다(멱등) — 삭제 직후 중복 호출이 실패하지 않게 한다.
+     */
+    @Transactional
+    public void deleteAccount(Long userId) {
+        // 여기서 다루는 유저 귀속 테이블은 study_session(+status_event cascade)·refresh_token뿐 —
+        // users를 참조하는 새 테이블(push_token, report 등)에 쓰기 경로가 생기면 반드시 여기에
+        // 삭제를 추가한다 (안 하면 탈퇴가 FK 위반 500)
+        studySessionRepository.deleteByUserId(userId);
+        refreshTokenRepository.deleteByUserId(userId);
+        userRepository.deleteById(userId);
     }
 }

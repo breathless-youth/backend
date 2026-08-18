@@ -3,6 +3,7 @@ package project.study.studysession.service;
 import static project.study.studysession.StudySessionThresholds.MIN_LIST_FOCUS_SEC;
 import static project.study.studysession.StudySessionThresholds.MIN_STREAK_FOCUS_SEC;
 
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -38,6 +39,9 @@ public class StudySessionService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final String STARTED_AT_UNIQUE_CONSTRAINT = "uq_study_session_user_started_at";
+    private static final String PERIOD_OVERLAP_CONSTRAINT = "ex_study_session_user_period";
+    // exclusion 제약 위반 SQLState(PostgreSQL 표준 에러 코드)
+    private static final String EXCLUSION_VIOLATION_SQLSTATE = "23P01";
     // V1이 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
     private static final String USER_FK_CONSTRAINT = "study_session_user_id_fkey";
 
@@ -64,6 +68,9 @@ public class StudySessionService {
             if (STARTED_AT_UNIQUE_CONSTRAINT.equalsIgnoreCase(constraint)) {
                 throw new DuplicateSessionException("이미 같은 시각에 시작한 세션이 저장되어 있습니다");
             }
+            if (PERIOD_OVERLAP_CONSTRAINT.equalsIgnoreCase(constraint)) {
+                throw new DuplicateSessionException("이미 같은 시간대에 저장된 세션이 있습니다");
+            }
             if (USER_FK_CONSTRAINT.equalsIgnoreCase(constraint)) {
                 throw new NotFoundException("존재하지 않는 사용자입니다: " + userId);
             }
@@ -85,11 +92,21 @@ public class StudySessionService {
                 .toList();
     }
 
-    /** 원인 체인에서 위반된 제약 이름을 찾는다 — 없으면 null. */
+    /**
+     * 원인 체인에서 위반된 제약 이름을 찾는다 — 없으면 null. exclusion 위반(23P01)은 Hibernate가
+     * 제약 이름을 못 채우므로, 드라이버 클래스 의존 없이 표준 {@link SQLException}의 SQLState와
+     * 메시지 포함 여부로 겹침 제약 위반을 폴백 판별한다.
+     */
     private static String violatedConstraint(DataIntegrityViolationException e) {
         for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
-            if (cause instanceof ConstraintViolationException violation) {
+            if (cause instanceof ConstraintViolationException violation && violation.getConstraintName() != null) {
                 return violation.getConstraintName();
+            }
+            if (cause instanceof SQLException sqlException
+                    && EXCLUSION_VIOLATION_SQLSTATE.equals(sqlException.getSQLState())
+                    && sqlException.getMessage() != null
+                    && sqlException.getMessage().contains(PERIOD_OVERLAP_CONSTRAINT)) {
+                return PERIOD_OVERLAP_CONSTRAINT;
             }
         }
         return null;

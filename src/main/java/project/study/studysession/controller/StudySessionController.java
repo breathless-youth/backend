@@ -105,15 +105,18 @@ public class StudySessionController {
                             }))
     @ApiResponse(
             responseCode = "409",
-            description = "시작 시각 충돌 — 같은 시각에 시작한 세션이 이미 저장돼 있다 (동시 재전송 레이스 등). 같은 키로 다시 제출하면 저장된 결과를 받는다",
+            description =
+                    "시작 시각 또는 기간 충돌 — 같은 시각에 시작했거나 기간이 겹치는 세션이 이미 저장돼 있다 (두 기기 동시 사용 등). 같은 키(재제출)면 저장된 결과를 받지만, 기간만 겹치는 별개 제출은 저장되지 않는다",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class),
-                            examples =
-                                    @ExampleObject(
-                                            name = "시작 시각 충돌",
-                                            value = "{\"message\": \"이미 같은 시각에 시작한 세션이 저장되어 있습니다\"}")))
+                            examples = {
+                                @ExampleObject(
+                                        name = "시작 시각 충돌",
+                                        value = "{\"message\": \"이미 같은 시각에 시작한 세션이 저장되어 있습니다\"}"),
+                                @ExampleObject(name = "기간 겹침", value = "{\"message\": \"이미 같은 시간대에 저장된 세션이 있습니다\"}")
+                            }))
     @ApiResponse(
             responseCode = "404",
             description = "존재하지 않는 userId — 먼저 POST /api/users 로 유저를 등록해야 한다",

@@ -47,8 +47,12 @@ class MetricsQueryIntegrationTest {
                 Timestamp.from(createdAt));
     }
 
+    /**
+     * started_at은 (user_id, started_at) 유니크 제약과, 기간이 겹치면 안 되는 무겹침 제약(V9)이 있어
+     * 호출마다 세션 길이(1시간)만큼 밀어 앞 세션과 맞닿기만 하게 한다(반개구간이라 겹침이 아니다).
+     */
     private void insertSession(long userId, LocalDate statDate, int focusSec) {
-        Instant startedAt = statDate.atStartOfDay(KST).toInstant().plusSeconds(sequence++);
+        Instant startedAt = statDate.atStartOfDay(KST).toInstant().plusSeconds(3600L * sequence++);
         jdbcTemplate.update(
                 "insert into study_session (user_id, stat_date, started_at, ended_at, study_sec, focus_sec) "
                         + "values (?, ?, ?, ?, ?, ?)",

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import project.study.metrics.dto.HeavyUser;
@@ -60,4 +61,22 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
 
     // 특정 날짜의 인정 기준(focusSec >= minFocusSec) 충족 세션 수 — 유저 무관 전체 집계
     long countByStatDateAndFocusSecGreaterThanEqual(LocalDate statDate, int minFocusSec);
+
+    // 병합 전 겹침 판정 — 대상 유저의 세션과 기간(반개구간)이 겹치는 원본 유저 세션 id.
+    // 겹치는 세션은 이관하지 않고 폐기한다 (기존 계정 기록 우선 — BY-383)
+    @Query(value = """
+            select s.id from study_session s
+            where s.user_id = :sourceUserId
+              and exists (
+                select 1 from study_session t
+                where t.user_id = :targetUserId
+                  and tstzrange(t.started_at, t.ended_at, '[)') && tstzrange(s.started_at, s.ended_at, '[)')
+              )
+            """, nativeQuery = true)
+    List<Long> findIdsOverlapping(@Param("sourceUserId") Long sourceUserId, @Param("targetUserId") Long targetUserId);
+
+    // 병합 이관 — 겹침 삭제 후에만 호출해야 무겹침 제약(ex_study_session_user_period)을 통과한다
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update StudySession s set s.userId = :targetUserId where s.userId = :sourceUserId")
+    int reassignUserId(@Param("sourceUserId") Long sourceUserId, @Param("targetUserId") Long targetUserId);
 }

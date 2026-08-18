@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -18,13 +19,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
-import project.study.user.dto.LoginRequest;
+import project.study.studysession.repository.StudySessionRepository;
+import project.study.user.dto.LinkSocialRequest;
 import project.study.user.dto.LoginResponse;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
@@ -54,6 +56,9 @@ class AuthServiceTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
+    private StudySessionRepository studySessionRepository;
+
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     private final JwtUtil jwtUtil = new JwtUtil("test-secret-key-that-is-at-least-32-chars-long", 3_600_000L);
@@ -62,64 +67,28 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        // login의 TransactionTemplate 실행용 — refresh/logout 테스트는 안 쓰므로 lenient
+        // link의 TransactionTemplate 실행용 — refresh/logout 테스트는 안 쓰므로 lenient
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         authService = new AuthService(
                 List.of(tokenVerifier),
                 userRepository,
                 refreshTokenRepository,
+                studySessionRepository,
                 jwtUtil,
                 transactionManager,
                 REFRESH_EXPIRATION_MS);
     }
 
     @Test
-    void 신규_유저_로그인은_유저를_생성하고_isNewUser가_true다() {
-        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
-        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
-        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
-                .thenReturn(Optional.empty());
-        when(userRepository.save(any())).thenAnswer(invocation -> {
-            User user = invocation.getArgument(0);
-            ReflectionTestUtils.setField(user, "id", 1L);
-            return user;
-        });
-
-        LoginResponse response = authService.login(new LoginRequest(Provider.GOOGLE, ID_TOKEN));
-
-        assertThat(response.isNewUser()).isTrue();
-        assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("1");
-        verify(refreshTokenRepository).save(any(RefreshToken.class));
-    }
-
-    @Test
-    void 기존_유저_로그인은_유저를_생성하지_않고_isNewUser가_false다() {
-        User existing = new User(Provider.GOOGLE, "sub-123");
-        ReflectionTestUtils.setField(existing, "id", 7L);
-        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
-        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
-        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
-                .thenReturn(Optional.of(existing));
-
-        LoginResponse response = authService.login(new LoginRequest(Provider.GOOGLE, ID_TOKEN));
-
-        assertThat(response.isNewUser()).isFalse();
-        assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("7");
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
     void refresh_토큰은_원문이_아닌_SHA256_해시로_저장된다() {
         when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
         when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
+        User device = new User(Provider.DEVICE, "device-uuid");
+        ReflectionTestUtils.setField(device, "id", 5L);
+        when(userRepository.findById(5L)).thenReturn(Optional.of(device));
         when(userRepository.findByProviderAndProviderUserId(any(), anyString())).thenReturn(Optional.empty());
-        when(userRepository.save(any())).thenAnswer(invocation -> {
-            User user = invocation.getArgument(0);
-            ReflectionTestUtils.setField(user, "id", 1L);
-            return user;
-        });
 
-        LoginResponse response = authService.login(new LoginRequest(Provider.GOOGLE, ID_TOKEN));
+        LoginResponse response = authService.linkSocialAccount(5L, new LinkSocialRequest(Provider.GOOGLE, ID_TOKEN));
 
         ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
         verify(refreshTokenRepository).save(captor.capture());
@@ -180,30 +149,125 @@ class AuthServiceTest {
     }
 
     @Test
-    void 동시_첫_로그인_경쟁에서_지면_상대가_만든_유저로_재시도한다() {
-        User winner = new User(Provider.GOOGLE, "sub-123");
-        ReflectionTestUtils.setField(winner, "id", 3L);
-        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
-        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
-        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
-                .thenReturn(Optional.empty(), Optional.of(winner));
-        when(userRepository.save(any())).thenThrow(new DataIntegrityViolationException("중복 유저"));
+    void 이미_사용된_토큰은_만료됐어도_전량_폐기하고_거부한다() {
+        // 만료 검사가 재사용 검사보다 앞서면 행만 삭제되고 끝나 재사용 증거(tombstone)가 사라진다
+        RefreshToken saved = new RefreshToken(1L, "hash", Instant.now().minusSeconds(1));
+        ReflectionTestUtils.setField(saved, "id", 10L);
+        ReflectionTestUtils.setField(saved, "usedAt", Instant.now().minusSeconds(10));
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(saved));
 
-        LoginResponse response = authService.login(new LoginRequest(Provider.GOOGLE, ID_TOKEN));
-
-        assertThat(response.isNewUser()).isFalse();
-        assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("3");
-        // 재시도는 DB 트랜잭션만 다시 실행 — 구글 검증을 반복하지 않는다
-        verify(tokenVerifier).verify(ID_TOKEN);
+        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("refresh-uuid")))
+                .isInstanceOf(InvalidRefreshTokenException.class)
+                .hasMessage("이미 사용된 refresh 토큰입니다");
+        verify(refreshTokenRepository).deleteByUserId(1L);
+        verify(refreshTokenRepository, never()).markUsedIfUnused(anyLong(), any());
+        verify(refreshTokenRepository, never()).delete(any());
+        verify(refreshTokenRepository, never()).save(any());
     }
 
     @Test
     void 로그아웃은_전달된_refresh_토큰의_해시로_삭제한다() {
-        authService.logout("refresh-uuid");
+        // 조건부 삭제가 1 = 호출자 소유의 미사용 토큰을 원자적으로 지웠다 → 해당 기기만 로그아웃
+        when(refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(anyString(), eq(1L)))
+                .thenReturn(1);
+
+        authService.logout(1L, "refresh-uuid");
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(refreshTokenRepository).deleteByTokenHash(captor.capture());
+        verify(refreshTokenRepository).deleteByTokenHashAndUserIdIfUnused(captor.capture(), eq(1L));
         assertThat(captor.getValue()).isNotEqualTo("refresh-uuid");
         assertThat(captor.getValue()).hasSize(64); // SHA-256 hex
+        verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
+        // 원자적 삭제에 성공했으면 재조회할 이유가 없다
+        verify(refreshTokenRepository, never()).findByTokenHash(anyString());
+    }
+
+    @Test
+    void 이미_사용된_토큰으로_로그아웃하면_해당_유저의_토큰을_전부_폐기한다() {
+        // 탈취자가 회전시킨 뒤 그 토큰으로 logout하면 재사용 증거가 지워져 피해자의 재시도를 감지 못 한다
+        RefreshToken used = new RefreshToken(7L, "hash", Instant.now().plusSeconds(3600));
+        ReflectionTestUtils.setField(used, "usedAt", Instant.now().minusSeconds(10));
+        when(refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(anyString(), eq(7L)))
+                .thenReturn(0);
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(used));
+
+        authService.logout(7L, "refresh-uuid");
+
+        verify(refreshTokenRepository).deleteByUserId(7L);
+    }
+
+    @Test
+    void 로그아웃_직전에_회전된_토큰도_전량_폐기된다() {
+        // TOCTOU: 미사용 확인과 삭제 사이에 동시 refresh가 회전시키면, 조건부 삭제가 0을 반환한다.
+        // 이때 그냥 지우면 used tombstone만 사라지고 새로 발급된 토큰이 살아남는다
+        RefreshToken rotated = new RefreshToken(9L, "hash", Instant.now().plusSeconds(3600));
+        ReflectionTestUtils.setField(rotated, "usedAt", Instant.now());
+        when(refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(anyString(), eq(9L)))
+                .thenReturn(0);
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(rotated));
+
+        authService.logout(9L, "refresh-uuid");
+
+        verify(refreshTokenRepository).deleteByUserId(9L);
+    }
+
+    @Test
+    void 알_수_없는_토큰으로_로그아웃하면_아무것도_지우지_않는다() {
+        when(refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(anyString(), eq(1L)))
+                .thenReturn(0);
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
+
+        authService.logout(1L, "unknown-token");
+
+        verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
+    }
+
+    @Test
+    void 다른_유저의_토큰으로_로그아웃하면_아무것도_폐기하지_않는다() {
+        // 소유권 검증: 인증만 통과한 공격자가 남의 refresh 토큰을 넣어도
+        // 남의 세션을 지우거나(기기별) 전량 로그아웃시킬(전량 폐기) 수 없어야 한다
+        RefreshToken someoneElses = new RefreshToken(42L, "hash", Instant.now().plusSeconds(3600));
+        ReflectionTestUtils.setField(someoneElses, "usedAt", Instant.now());
+        when(refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(anyString(), eq(1L)))
+                .thenReturn(0);
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(someoneElses));
+
+        authService.logout(1L, "stolen-refresh-uuid");
+
+        verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
+    }
+
+    @Test
+    void 익명_유저의_link_전환은_isNewUser가_true다() {
+        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
+        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
+        User device = new User(Provider.DEVICE, "device-uuid");
+        ReflectionTestUtils.setField(device, "id", 5L);
+        when(userRepository.findById(5L)).thenReturn(Optional.of(device));
+        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
+                .thenReturn(Optional.empty());
+
+        LoginResponse response = authService.linkSocialAccount(5L, new LinkSocialRequest(Provider.GOOGLE, ID_TOKEN));
+
+        assertThat(response.isNewUser()).isTrue();
+        assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("5");
+    }
+
+    @Test
+    void 전환은_새_토큰쌍_발급_전에_기존_refresh_토큰을_전량_폐기한다() {
+        // 전환 전 익명 토큰은 userId가 그대로라 폐기하지 않으면 계속 유효하다
+        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
+        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
+        User device = new User(Provider.DEVICE, "device-uuid");
+        ReflectionTestUtils.setField(device, "id", 5L);
+        when(userRepository.findById(5L)).thenReturn(Optional.of(device));
+        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
+                .thenReturn(Optional.empty());
+
+        authService.linkSocialAccount(5L, new LinkSocialRequest(Provider.GOOGLE, ID_TOKEN));
+
+        InOrder inOrder = inOrder(refreshTokenRepository);
+        inOrder.verify(refreshTokenRepository).deleteByUserId(5L);
+        inOrder.verify(refreshTokenRepository).save(any(RefreshToken.class));
     }
 }

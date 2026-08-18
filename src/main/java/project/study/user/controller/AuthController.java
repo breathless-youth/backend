@@ -19,49 +19,18 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.ErrorResponse;
 import project.study.user.dto.LinkSocialRequest;
-import project.study.user.dto.LoginRequest;
 import project.study.user.dto.LoginResponse;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
 import project.study.user.service.AuthService;
 
-@Tag(name = "Auth", description = "소셜 계정으로 로그인하고, 로그인 상태를 유지·해제하는 API 모음")
+@Tag(name = "Auth", description = "소셜 로그인(link)·토큰 재발급·로그아웃 API 모음 — 로그인 진입은 link 하나다 (BY-383)")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
-
-    @Operation(summary = "소셜 로그인", description = """
-                    앱에서 소셜 로그인(구글/카카오/애플)을 마치면 소셜 SDK가 앱에 **ID 토큰**을 발급해준다. \
-                    앱이 그 ID 토큰을 이 API로 보내면, 서버는 해당 소셜 서비스에 위조·만료 여부를 확인한 뒤 \
-                    우리 서비스 전용 토큰 두 개를 발급한다.
-
-                    - **access 토큰** — 이후 모든 API 호출 때 신분 증명으로 쓰는 입장권. 30분 뒤 만료된다.
-                    - **refresh 토큰** — 입장권이 만료됐을 때 새 입장권으로 바꾸기 위한 교환권. 30일 유효, 1회용.
-
-                    처음 로그인한 사용자는 이 시점에 자동으로 회원가입되며, 응답의 `isNewUser`가 `true`로 내려온다. \
-                    앱은 이 값을 보고 온보딩(닉네임 설정) 화면으로 보낼지 결정한다.""")
-    @ApiResponse(responseCode = "200", description = "로그인 성공 — access/refresh 토큰 쌍이 발급된다")
-    @ApiResponse(
-            responseCode = "401",
-            description = "ID 토큰 검증 실패 — 위조됐거나, 만료됐거나, 다른 앱용으로 발급된 토큰인 경우",
-            content =
-                    @Content(
-                            mediaType = MediaType.APPLICATION_JSON_VALUE,
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples = {
-                                @ExampleObject(name = "검증 실패", value = "{\"message\": \"구글 ID 토큰 검증에 실패했습니다\"}"),
-                                @ExampleObject(
-                                        name = "다른 앱용 토큰",
-                                        value = "{\"message\": \"구글 ID 토큰의 대상(aud)이 일치하지 않습니다\"}")
-                            }))
-    @SecurityRequirements // 인증 불필요 (전역 bearer 자물쇠 오버라이드)
-    @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        return authService.login(request);
-    }
 
     @Operation(summary = "토큰 재발급", description = """
                     만료된(또는 만료가 임박한) access 토큰을 새것으로 바꾼다. \
@@ -94,7 +63,8 @@ public class AuthController {
 
     @Operation(summary = "로그아웃 (기기별)", description = """
                     지금 이 기기가 보관 중인 refresh 토큰(교환권)을 폐기해 로그인 상태를 끝낸다. \
-                    교환권만 무효화하므로 **다른 기기의 로그인은 그대로 유지된다.**
+                    교환권만 무효화하므로 **다른 기기의 로그인은 그대로 유지된다.** \
+                    호출자 본인 소유의 토큰만 폐기된다 — 다른 유저의 토큰을 보내면 무시된다(204는 동일).
 
                     access 토큰(입장권)은 서버가 따로 저장하지 않아 만료 시각(발급 후 30분)까지는 형식상 유효하다. \
                     따라서 앱은 이 API 호출과 함께 기기에 저장된 토큰 쌍을 반드시 삭제해야 한다.""")
@@ -105,17 +75,47 @@ public class AuthController {
             content = @Content(schema = @Schema(hidden = true)))
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(@Valid @RequestBody RefreshRequest request) {
-        authService.logout(request.refreshToken());
+    public void logout(@AuthenticationPrincipal Long userId, @Valid @RequestBody RefreshRequest request) {
+        authService.logout(userId, request.refreshToken());
     }
 
     @Operation(summary = "기기 유저 소셜 계정 연동", description = """
-                    기존 DEVICE 유저가 소셜 계정을 연동한다. 기존 데이터(공부 세션 등)가 그대로 유지되면서 \
-                    로그인 방식만 소셜로 전환된다. 전환 후에는 기기 UUID가 아닌 소셜 계정으로만 로그인한다.""")
-    @ApiResponse(responseCode = "200", description = "연동 성공 — 소셜 계정 기반 access/refresh 토큰 쌍이 발급된다")
+                    기존 DEVICE(익명) 유저가 소셜 계정으로 로그인한다. 어느 경우든 이 기기의 기록이 소셜 계정으로 이어진다.
+
+                    - 해당 소셜 계정이 처음이면(전환): 익명 유저의 식별자만 소셜로 교체된다 — 기존 데이터 전부 유지, isNewUser true.
+                    - 해당 소셜 계정이 이미 있으면(병합): 이 기기 익명 유저의 기록이 기존 계정으로 이관되고 익명 유저는 소멸한다.
+                      기존 계정의 세션과 시간이 겹치는 익명 세션은 폐기된다(기존 계정 기록 우선). isNewUser false.
+
+                    병합은 되돌릴 수 없다 — 앱은 진행 전 고지 문구를 노출한다.""")
+    @ApiResponse(
+            responseCode = "200",
+            description = "연동 성공 — 소셜 계정 기반 access/refresh 토큰 쌍이 발급된다. "
+                    + "응답 수신 즉시 기존(익명) 토큰 쌍을 폐기하고 새 토큰으로 교체한다 — "
+                    + "구 access 토큰은 만료 전까지 형식상 유효하므로 계속 쓰면 안 된다.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "ID 토큰 검증 실패(위조·만료·다른 앱용 aud 불일치) 또는 access 토큰 무효 — " + "앱은 소셜 SDK 로그인부터 재시도",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = {
+                                @ExampleObject(name = "검증 실패", value = "{\"message\": \"구글 ID 토큰 검증에 실패했습니다\"}"),
+                                @ExampleObject(
+                                        name = "다른 앱용 토큰",
+                                        value = "{\"message\": \"구글 ID 토큰의 대상(aud)이 일치하지 않습니다\"}")
+                            }))
+    @ApiResponse(
+            responseCode = "404",
+            description = "존재하지 않는 사용자 — 앱은 저장 토큰 삭제 후 POST /api/users로 재등록",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(value = "{\"message\": \"존재하지 않는 사용자입니다\"}")))
     @ApiResponse(
             responseCode = "409",
-            description = "해당 소셜 계정이 이미 다른 유저와 연동되어 있음",
+            description = "이미 소셜 계정이 연동된 사용자가 link를 호출함 (비정상 흐름) — 현재 토큰을 유지하고 로그인 화면을 닫는다",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,

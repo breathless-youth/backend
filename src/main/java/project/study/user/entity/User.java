@@ -1,7 +1,6 @@
 package project.study.user.entity;
 
 import jakarta.persistence.*;
-import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,16 +37,11 @@ public class User extends BaseTimeEntity {
     private String category;
     private String profileImage;
 
-    @Enumerated(value = EnumType.STRING)
-    private UserStatus status;
-
     private boolean notifyEnabled;
-    private Instant deleteAt;
 
     public User(Provider provider, String providerUserId) {
         this.provider = provider;
         this.providerUserId = providerUserId;
-        this.status = UserStatus.ACTIVE;
     }
 
     public User(Provider provider, String providerUserId, String email) {
