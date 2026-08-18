@@ -119,7 +119,8 @@ public class AuthService {
                 userRepository.flush();
 
                 TokenPair tokens = issueTokens(user.getId());
-                return new LoginResponse(tokens.accessToken(), tokens.refreshToken(), false);
+                // 전환 = 이 소셜 계정의 최초 가입 → isNewUser true (프론트가 프로필 설정 화면으로 보낸다)
+                return new LoginResponse(tokens.accessToken(), tokens.refreshToken(), true);
             });
         } catch (DataIntegrityViolationException e) {
             throw new ConflictException("이 소셜 계정은 이미 다른 사용자와 연동되어 있습니다");

@@ -24,6 +24,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
+import project.study.user.dto.LinkSocialRequest;
 import project.study.user.dto.LoginRequest;
 import project.study.user.dto.LoginResponse;
 import project.study.user.dto.RefreshRequest;
@@ -205,5 +206,19 @@ class AuthServiceTest {
         verify(refreshTokenRepository).deleteByTokenHash(captor.capture());
         assertThat(captor.getValue()).isNotEqualTo("refresh-uuid");
         assertThat(captor.getValue()).hasSize(64); // SHA-256 hex
+    }
+
+    @Test
+    void 익명_유저의_link_전환은_isNewUser가_true다() {
+        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
+        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
+        User device = new User(Provider.DEVICE, "device-uuid");
+        ReflectionTestUtils.setField(device, "id", 5L);
+        when(userRepository.findById(5L)).thenReturn(Optional.of(device));
+
+        LoginResponse response = authService.linkSocialAccount(5L, new LinkSocialRequest(Provider.GOOGLE, ID_TOKEN));
+
+        assertThat(response.isNewUser()).isTrue();
+        assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("5");
     }
 }
