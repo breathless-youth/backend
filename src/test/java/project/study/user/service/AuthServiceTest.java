@@ -167,16 +167,18 @@ class AuthServiceTest {
 
     @Test
     void 로그아웃은_전달된_refresh_토큰의_해시로_삭제한다() {
-        RefreshToken unused = new RefreshToken(7L, "hash", Instant.now().plusSeconds(3600));
-        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(unused));
+        // 조건부 삭제가 1 = 미사용 토큰을 원자적으로 지웠다 → 해당 기기만 로그아웃
+        when(refreshTokenRepository.deleteByTokenHashIfUnused(anyString())).thenReturn(1);
 
         authService.logout("refresh-uuid");
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(refreshTokenRepository).deleteByTokenHash(captor.capture());
+        verify(refreshTokenRepository).deleteByTokenHashIfUnused(captor.capture());
         assertThat(captor.getValue()).isNotEqualTo("refresh-uuid");
         assertThat(captor.getValue()).hasSize(64); // SHA-256 hex
         verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
+        // 원자적 삭제에 성공했으면 재조회할 이유가 없다
+        verify(refreshTokenRepository, never()).findByTokenHash(anyString());
     }
 
     @Test
@@ -184,21 +186,35 @@ class AuthServiceTest {
         // 탈취자가 회전시킨 뒤 그 토큰으로 logout하면 재사용 증거가 지워져 피해자의 재시도를 감지 못 한다
         RefreshToken used = new RefreshToken(7L, "hash", Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(used, "usedAt", Instant.now().minusSeconds(10));
+        when(refreshTokenRepository.deleteByTokenHashIfUnused(anyString())).thenReturn(0);
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(used));
 
         authService.logout("refresh-uuid");
 
         verify(refreshTokenRepository).deleteByUserId(7L);
-        verify(refreshTokenRepository, never()).deleteByTokenHash(anyString());
+    }
+
+    @Test
+    void 로그아웃_직전에_회전된_토큰도_전량_폐기된다() {
+        // TOCTOU: 미사용 확인과 삭제 사이에 동시 refresh가 회전시키면, 조건부 삭제가 0을 반환한다.
+        // 이때 그냥 지우면 used tombstone만 사라지고 새로 발급된 토큰이 살아남는다
+        RefreshToken rotated = new RefreshToken(9L, "hash", Instant.now().plusSeconds(3600));
+        ReflectionTestUtils.setField(rotated, "usedAt", Instant.now());
+        when(refreshTokenRepository.deleteByTokenHashIfUnused(anyString())).thenReturn(0);
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(rotated));
+
+        authService.logout("refresh-uuid");
+
+        verify(refreshTokenRepository).deleteByUserId(9L);
     }
 
     @Test
     void 알_수_없는_토큰으로_로그아웃하면_아무것도_지우지_않는다() {
+        when(refreshTokenRepository.deleteByTokenHashIfUnused(anyString())).thenReturn(0);
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
 
         authService.logout("unknown-token");
 
-        verify(refreshTokenRepository, never()).deleteByTokenHash(anyString());
         verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
     }
 

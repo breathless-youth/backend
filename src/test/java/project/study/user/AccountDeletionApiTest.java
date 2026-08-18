@@ -78,7 +78,7 @@ class AccountDeletionApiTest {
         assertThat(userRepository.findById(deviceA.userId())).isEmpty();
         assertThat(studySessionRepository.findAll())
                 .noneMatch(s -> s.getUserId().equals(deviceA.userId()));
-        // 다기기 refresh 토큰 둘 다 폐기됐는지 확인 — deleteByUserId가 deleteByTokenHash로
+        // 다기기 refresh 토큰 둘 다 폐기됐는지 확인 — deleteByUserId가 단일 토큰 삭제로
         // 회귀하면(탈퇴 호출에 쓴 토큰 하나만 지움) social.refreshToken() 쪽이 여전히 살아있어 실패한다
         assertThat(refreshRequest(social.refreshToken())).hasStatus(HttpStatus.UNAUTHORIZED);
         assertThat(refreshRequest(merged.refreshToken())).hasStatus(HttpStatus.UNAUTHORIZED);
