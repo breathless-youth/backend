@@ -25,7 +25,6 @@ import project.study.user.dto.TokenResponse;
 import project.study.user.entity.Provider;
 import project.study.user.entity.RefreshToken;
 import project.study.user.entity.User;
-import project.study.user.entity.UserStatus;
 import project.study.user.jwt.JwtUtil;
 import project.study.user.oauth.InvalidOAuthTokenException;
 import project.study.user.oauth.OAuthTokenVerifier;
@@ -83,7 +82,6 @@ public class AuthService {
         User user = userRepository
                 .findById(saved.getUserId())
                 .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
-        rejectIfDeleted(user);
 
         TokenPair tokens = issueTokens(saved.getUserId());
         return new TokenResponse(tokens.accessToken(), tokens.refreshToken());
@@ -159,12 +157,6 @@ public class AuthService {
         refreshTokenRepository.save(
                 new RefreshToken(userId, sha256(refreshToken), Instant.now().plusMillis(refreshExpirationMs)));
         return new TokenPair(accessToken, refreshToken);
-    }
-
-    private static void rejectIfDeleted(User user) {
-        if (user.getStatus() == UserStatus.DELETE) {
-            throw new InvalidOAuthTokenException("삭제된 사용자입니다");
-        }
     }
 
     private static String sha256(String token) {
