@@ -24,6 +24,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
+import project.study.studysession.repository.StudySessionRepository;
 import project.study.user.dto.LinkSocialRequest;
 import project.study.user.dto.LoginRequest;
 import project.study.user.dto.LoginResponse;
@@ -55,6 +56,9 @@ class AuthServiceTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
+    private StudySessionRepository studySessionRepository;
+
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     private final JwtUtil jwtUtil = new JwtUtil("test-secret-key-that-is-at-least-32-chars-long", 3_600_000L);
@@ -69,6 +73,7 @@ class AuthServiceTest {
                 List.of(tokenVerifier),
                 userRepository,
                 refreshTokenRepository,
+                studySessionRepository,
                 jwtUtil,
                 transactionManager,
                 REFRESH_EXPIRATION_MS);
@@ -215,6 +220,8 @@ class AuthServiceTest {
         User device = new User(Provider.DEVICE, "device-uuid");
         ReflectionTestUtils.setField(device, "id", 5L);
         when(userRepository.findById(5L)).thenReturn(Optional.of(device));
+        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
+                .thenReturn(Optional.empty());
 
         LoginResponse response = authService.linkSocialAccount(5L, new LinkSocialRequest(Provider.GOOGLE, ID_TOKEN));
 

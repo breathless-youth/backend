@@ -110,12 +110,17 @@ public class AuthController {
     }
 
     @Operation(summary = "기기 유저 소셜 계정 연동", description = """
-                    기존 DEVICE 유저가 소셜 계정을 연동한다. 기존 데이터(공부 세션 등)가 그대로 유지되면서 \
-                    로그인 방식만 소셜로 전환된다. 전환 후에는 기기 UUID가 아닌 소셜 계정으로만 로그인한다.""")
+                    기존 DEVICE(익명) 유저가 소셜 계정으로 로그인한다. 어느 경우든 이 기기의 기록이 소셜 계정으로 이어진다.
+
+                    - 해당 소셜 계정이 처음이면(전환): 익명 유저의 식별자만 소셜로 교체된다 — 기존 데이터 전부 유지, isNewUser true.
+                    - 해당 소셜 계정이 이미 있으면(병합): 이 기기 익명 유저의 기록이 기존 계정으로 이관되고 익명 유저는 소멸한다.
+                      기존 계정의 세션과 시간이 겹치는 익명 세션은 폐기된다(기존 계정 기록 우선). isNewUser false.
+
+                    병합은 되돌릴 수 없다 — 앱은 진행 전 고지 문구를 노출한다.""")
     @ApiResponse(responseCode = "200", description = "연동 성공 — 소셜 계정 기반 access/refresh 토큰 쌍이 발급된다")
     @ApiResponse(
             responseCode = "409",
-            description = "해당 소셜 계정이 이미 다른 유저와 연동되어 있음",
+            description = "이미 소셜 계정이 연동된 사용자가 link를 호출함 (비정상 흐름) — 현재 토큰을 유지하고 로그인 화면을 닫는다",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
