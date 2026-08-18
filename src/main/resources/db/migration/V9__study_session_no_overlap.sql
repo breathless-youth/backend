@@ -14,6 +14,8 @@
 ALTER TABLE "study_session" ALTER COLUMN "ended_at" SET NOT NULL;
 
 -- gist 인덱스에서 = 연산(user_id)을 쓰기 위한 확장
+-- 운영(managed PostgreSQL) 적용 전 Flyway 실행 계정의 CREATE EXTENSION 권한을 확인할 것 —
+-- 권한이 없으면 이 마이그레이션이 배포를 멈춘다 (사전 수동 생성으로 대체 가능).
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 ALTER TABLE "study_session"

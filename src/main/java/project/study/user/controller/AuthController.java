@@ -86,7 +86,32 @@ public class AuthController {
                       기존 계정의 세션과 시간이 겹치는 익명 세션은 폐기된다(기존 계정 기록 우선). isNewUser false.
 
                     병합은 되돌릴 수 없다 — 앱은 진행 전 고지 문구를 노출한다.""")
-    @ApiResponse(responseCode = "200", description = "연동 성공 — 소셜 계정 기반 access/refresh 토큰 쌍이 발급된다")
+    @ApiResponse(
+            responseCode = "200",
+            description = "연동 성공 — 소셜 계정 기반 access/refresh 토큰 쌍이 발급된다. "
+                    + "응답 수신 즉시 기존(익명) 토큰 쌍을 폐기하고 새 토큰으로 교체한다 — "
+                    + "구 access 토큰은 만료 전까지 형식상 유효하므로 계속 쓰면 안 된다.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "ID 토큰 검증 실패(위조·만료·다른 앱용 aud 불일치) 또는 access 토큰 무효 — " + "앱은 소셜 SDK 로그인부터 재시도",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = {
+                                @ExampleObject(name = "검증 실패", value = "{\"message\": \"구글 ID 토큰 검증에 실패했습니다\"}"),
+                                @ExampleObject(
+                                        name = "다른 앱용 토큰",
+                                        value = "{\"message\": \"구글 ID 토큰의 대상(aud)이 일치하지 않습니다\"}")
+                            }))
+    @ApiResponse(
+            responseCode = "404",
+            description = "존재하지 않는 사용자 — 앱은 저장 토큰 삭제 후 POST /api/users로 재등록",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(value = "{\"message\": \"존재하지 않는 사용자입니다\"}")))
     @ApiResponse(
             responseCode = "409",
             description = "이미 소셜 계정이 연동된 사용자가 link를 호출함 (비정상 흐름) — 현재 토큰을 유지하고 로그인 화면을 닫는다",
