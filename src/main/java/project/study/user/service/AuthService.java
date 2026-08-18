@@ -79,7 +79,8 @@ public class AuthService {
             throw new InvalidRefreshTokenException("이미 사용된 refresh 토큰입니다");
         }
 
-        User user = userRepository
+        // 유저가 존재하는지만 확인 — refresh 토큰이 살아있어도 유저가 삭제됐을 수 있다(탈퇴 후 잔여 토큰)
+        userRepository
                 .findById(saved.getUserId())
                 .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
 
@@ -133,6 +134,8 @@ public class AuthService {
         }
         int moved = studySessionRepository.reassignUserId(source.getId(), target.getId());
         refreshTokenRepository.deleteByUserId(source.getId());
+        // 여기서 정리하는 유저 귀속 테이블은 study_session·refresh_token뿐 — users를 참조하는
+        // 새 테이블에 쓰기 경로가 생기면 반드시 여기에도 삭제를 추가한다 (안 하면 병합이 FK 위반 500).
         userRepository.delete(source);
         log.info("계정 병합: 익명 {} → 소셜 {} (이관 {}건, 겹침 폐기 {}건)", source.getId(), target.getId(), moved, overlapping.size());
         return target.getId();
