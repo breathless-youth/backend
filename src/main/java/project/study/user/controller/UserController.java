@@ -11,9 +11,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.ErrorResponse;
 import project.study.user.dto.UserRegisterRequest;
@@ -60,5 +63,20 @@ public class UserController {
         // 신규 등록은 201, 같은 기기의 재등록(멱등)은 200
         HttpStatus status = response.isNew() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(response);
+    }
+
+    @Operation(summary = "계정 삭제 (탈퇴)", description = """
+                    계정과 모든 데이터를 즉시 삭제한다 — 세션 기록, refresh 토큰 전량(모든 기기 로그아웃).
+                    삭제는 되돌릴 수 없으며, 같은 소셜 계정으로 다시 로그인하면 신규 가입으로 처리된다.
+                    익명(DEVICE) 유저도 "모든 데이터 삭제" 용도로 사용할 수 있다.""")
+    @ApiResponse(responseCode = "204", description = "삭제 완료 — 응답 본문 없음")
+    @ApiResponse(
+            responseCode = "401",
+            description = "access 토큰 누락 또는 무효 — 응답 본문 없음",
+            content = @Content(schema = @Schema(hidden = true)))
+    @DeleteMapping("/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMe(@AuthenticationPrincipal Long userId) {
+        userService.deleteAccount(userId);
     }
 }
