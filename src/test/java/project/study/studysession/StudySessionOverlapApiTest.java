@@ -70,7 +70,8 @@ class StudySessionOverlapApiTest {
 
     @Test
     void 기간이_겹치는_별개_제출은_409로_거절된다() {
-        Instant base = Instant.now().minus(6, ChronoUnit.HOURS);
+        // 초 단위 절단: PostgreSQL timestamptz(마이크로초)와 Instant(나노초 가능)의 왕복 정밀도 차이 방지
+        Instant base = Instant.now().minus(6, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
         // 첫 제출: base ~ base+60분
         assertThat(submit(base, base.plus(60, ChronoUnit.MINUTES))).hasStatus(HttpStatus.CREATED);
         // 겹치는 제출: base+5분 ~ base+50분 (시작 시각이 달라 유니크는 통과, 기간은 겹침)
@@ -80,7 +81,8 @@ class StudySessionOverlapApiTest {
 
     @Test
     void 끝과_시작이_맞닿는_세션은_겹침이_아니다() {
-        Instant base = Instant.now().minus(6, ChronoUnit.HOURS);
+        // 초 단위 절단: PostgreSQL timestamptz(마이크로초)와 Instant(나노초 가능)의 왕복 정밀도 차이 방지
+        Instant base = Instant.now().minus(6, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
         assertThat(submit(base, base.plus(30, ChronoUnit.MINUTES))).hasStatus(HttpStatus.CREATED);
         // 앞 세션의 끝 == 뒷 세션의 시작 → 반개구간이라 허용
         assertThat(submit(base.plus(30, ChronoUnit.MINUTES), base.plus(60, ChronoUnit.MINUTES)))

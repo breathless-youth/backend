@@ -67,7 +67,8 @@ class AccountDeletionApiTest {
         UserRegisterResponse deviceB = registerDevice();
         LoginResponse merged = link(deviceB.accessToken(), "sub-multi-device");
 
-        Instant base = Instant.now().minus(6, ChronoUnit.HOURS);
+        // 초 단위 절단: PostgreSQL timestamptz(마이크로초)와 Instant(나노초 가능)의 왕복 정밀도 차이 방지
+        Instant base = Instant.now().minus(6, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
         submitSession(merged.accessToken(), base, base.plus(30, ChronoUnit.MINUTES));
 
         assertThat(mvc.delete()

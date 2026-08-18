@@ -70,7 +70,7 @@ class LinkMergeIntegrationTest {
         UserRegisterResponse deviceA = registerDevice();
         LoginResponse social = link(deviceA.accessToken(), "sub-merge");
         Long socialUserId = Long.valueOf(jwtUserId(social.accessToken()));
-        Instant base = Instant.now().minus(6, ChronoUnit.HOURS);
+        Instant base = Instant.now().minus(6, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
         submitSession(social.accessToken(), base, base.plus(60, ChronoUnit.MINUTES));
 
         // 기기 B 익명: 겹치는 세션(base+30분~base+90분, 내부에 PAUSE 이벤트 포함) + 안 겹치는 세션(base+2시간~base+2시간30분)
