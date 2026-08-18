@@ -19,49 +19,18 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.ErrorResponse;
 import project.study.user.dto.LinkSocialRequest;
-import project.study.user.dto.LoginRequest;
 import project.study.user.dto.LoginResponse;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
 import project.study.user.service.AuthService;
 
-@Tag(name = "Auth", description = "소셜 계정으로 로그인하고, 로그인 상태를 유지·해제하는 API 모음")
+@Tag(name = "Auth", description = "소셜 로그인(link)·토큰 재발급·로그아웃 API 모음 — 로그인 진입은 link 하나다 (BY-383)")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
-
-    @Operation(summary = "소셜 로그인", description = """
-                    앱에서 소셜 로그인(구글/카카오/애플)을 마치면 소셜 SDK가 앱에 **ID 토큰**을 발급해준다. \
-                    앱이 그 ID 토큰을 이 API로 보내면, 서버는 해당 소셜 서비스에 위조·만료 여부를 확인한 뒤 \
-                    우리 서비스 전용 토큰 두 개를 발급한다.
-
-                    - **access 토큰** — 이후 모든 API 호출 때 신분 증명으로 쓰는 입장권. 30분 뒤 만료된다.
-                    - **refresh 토큰** — 입장권이 만료됐을 때 새 입장권으로 바꾸기 위한 교환권. 30일 유효, 1회용.
-
-                    처음 로그인한 사용자는 이 시점에 자동으로 회원가입되며, 응답의 `isNewUser`가 `true`로 내려온다. \
-                    앱은 이 값을 보고 온보딩(닉네임 설정) 화면으로 보낼지 결정한다.""")
-    @ApiResponse(responseCode = "200", description = "로그인 성공 — access/refresh 토큰 쌍이 발급된다")
-    @ApiResponse(
-            responseCode = "401",
-            description = "ID 토큰 검증 실패 — 위조됐거나, 만료됐거나, 다른 앱용으로 발급된 토큰인 경우",
-            content =
-                    @Content(
-                            mediaType = MediaType.APPLICATION_JSON_VALUE,
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples = {
-                                @ExampleObject(name = "검증 실패", value = "{\"message\": \"구글 ID 토큰 검증에 실패했습니다\"}"),
-                                @ExampleObject(
-                                        name = "다른 앱용 토큰",
-                                        value = "{\"message\": \"구글 ID 토큰의 대상(aud)이 일치하지 않습니다\"}")
-                            }))
-    @SecurityRequirements // 인증 불필요 (전역 bearer 자물쇠 오버라이드)
-    @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        return authService.login(request);
-    }
 
     @Operation(summary = "토큰 재발급", description = """
                     만료된(또는 만료가 임박한) access 토큰을 새것으로 바꾼다. \

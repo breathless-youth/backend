@@ -19,7 +19,6 @@ import project.study.common.ConflictException;
 import project.study.common.NotFoundException;
 import project.study.studysession.repository.StudySessionRepository;
 import project.study.user.dto.LinkSocialRequest;
-import project.study.user.dto.LoginRequest;
 import project.study.user.dto.LoginResponse;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
@@ -61,30 +60,6 @@ public class AuthService {
         this.jwtUtil = jwtUtil;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.refreshExpirationMs = refreshExpirationMs;
-    }
-
-    public LoginResponse login(LoginRequest request) {
-        // 외부 HTTP 호출(구글 검증)은 DB 트랜잭션 밖에서 수행한다
-        OAuthUserInfo userInfo = verifierFor(request.provider()).verify(request.idToken());
-        try {
-            return transactionTemplate.execute(status -> loginTransaction(userInfo));
-        } catch (DataIntegrityViolationException e) {
-            // 동일 유저의 동시 첫 로그인 경쟁에서 패배 → 상대가 만든 유저를 새 트랜잭션에서 조회해 재시도
-            // (트랜잭션 안에서 catch하면 rollback-only 때문에 실패하므로 반드시 실행 단위를 분리)
-            return transactionTemplate.execute(status -> loginTransaction(userInfo));
-        }
-    }
-
-    private LoginResponse loginTransaction(OAuthUserInfo userInfo) {
-        Optional<User> existing =
-                userRepository.findByProviderAndProviderUserId(userInfo.provider(), userInfo.providerUserId());
-        boolean isNewUser = existing.isEmpty();
-        User user = existing.orElseGet(
-                () -> userRepository.save(new User(userInfo.provider(), userInfo.providerUserId(), userInfo.email())));
-        rejectIfDeleted(user);
-
-        TokenPair tokens = issueTokens(user.getId());
-        return new LoginResponse(tokens.accessToken(), tokens.refreshToken(), isNewUser);
     }
 
     // noRollbackFor: 재사용 감지 시 예외를 던져도 "전체 폐기"는 커밋되어야 한다

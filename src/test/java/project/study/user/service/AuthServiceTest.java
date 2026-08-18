@@ -20,13 +20,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import project.study.studysession.repository.StudySessionRepository;
 import project.study.user.dto.LinkSocialRequest;
-import project.study.user.dto.LoginRequest;
 import project.study.user.dto.LoginResponse;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
@@ -67,7 +65,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        // login의 TransactionTemplate 실행용 — refresh/logout 테스트는 안 쓰므로 lenient
+        // link의 TransactionTemplate 실행용 — refresh/logout 테스트는 안 쓰므로 lenient
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         authService = new AuthService(
                 List.of(tokenVerifier),
@@ -80,52 +78,15 @@ class AuthServiceTest {
     }
 
     @Test
-    void 신규_유저_로그인은_유저를_생성하고_isNewUser가_true다() {
-        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
-        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
-        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
-                .thenReturn(Optional.empty());
-        when(userRepository.save(any())).thenAnswer(invocation -> {
-            User user = invocation.getArgument(0);
-            ReflectionTestUtils.setField(user, "id", 1L);
-            return user;
-        });
-
-        LoginResponse response = authService.login(new LoginRequest(Provider.GOOGLE, ID_TOKEN));
-
-        assertThat(response.isNewUser()).isTrue();
-        assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("1");
-        verify(refreshTokenRepository).save(any(RefreshToken.class));
-    }
-
-    @Test
-    void 기존_유저_로그인은_유저를_생성하지_않고_isNewUser가_false다() {
-        User existing = new User(Provider.GOOGLE, "sub-123");
-        ReflectionTestUtils.setField(existing, "id", 7L);
-        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
-        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
-        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
-                .thenReturn(Optional.of(existing));
-
-        LoginResponse response = authService.login(new LoginRequest(Provider.GOOGLE, ID_TOKEN));
-
-        assertThat(response.isNewUser()).isFalse();
-        assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("7");
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
     void refresh_토큰은_원문이_아닌_SHA256_해시로_저장된다() {
         when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
         when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
+        User device = new User(Provider.DEVICE, "device-uuid");
+        ReflectionTestUtils.setField(device, "id", 5L);
+        when(userRepository.findById(5L)).thenReturn(Optional.of(device));
         when(userRepository.findByProviderAndProviderUserId(any(), anyString())).thenReturn(Optional.empty());
-        when(userRepository.save(any())).thenAnswer(invocation -> {
-            User user = invocation.getArgument(0);
-            ReflectionTestUtils.setField(user, "id", 1L);
-            return user;
-        });
 
-        LoginResponse response = authService.login(new LoginRequest(Provider.GOOGLE, ID_TOKEN));
+        LoginResponse response = authService.linkSocialAccount(5L, new LinkSocialRequest(Provider.GOOGLE, ID_TOKEN));
 
         ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
         verify(refreshTokenRepository).save(captor.capture());
@@ -183,24 +144,6 @@ class AuthServiceTest {
         verify(refreshTokenRepository).delete(saved);
         verify(refreshTokenRepository, never()).markUsedIfUnused(anyLong(), any());
         verify(refreshTokenRepository, never()).save(any());
-    }
-
-    @Test
-    void 동시_첫_로그인_경쟁에서_지면_상대가_만든_유저로_재시도한다() {
-        User winner = new User(Provider.GOOGLE, "sub-123");
-        ReflectionTestUtils.setField(winner, "id", 3L);
-        when(tokenVerifier.provider()).thenReturn(Provider.GOOGLE);
-        when(tokenVerifier.verify(ID_TOKEN)).thenReturn(USER_INFO);
-        when(userRepository.findByProviderAndProviderUserId(Provider.GOOGLE, "sub-123"))
-                .thenReturn(Optional.empty(), Optional.of(winner));
-        when(userRepository.save(any())).thenThrow(new DataIntegrityViolationException("중복 유저"));
-
-        LoginResponse response = authService.login(new LoginRequest(Provider.GOOGLE, ID_TOKEN));
-
-        assertThat(response.isNewUser()).isFalse();
-        assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("3");
-        // 재시도는 DB 트랜잭션만 다시 실행 — 구글 검증을 반복하지 않는다
-        verify(tokenVerifier).verify(ID_TOKEN);
     }
 
     @Test

@@ -39,8 +39,9 @@ public class OpenApiConfig {
         String description = """
                 공부 기록 앱 백엔드 API 문서.
 
-                **인증 방법** — 소셜 로그인(`POST /api/auth/login`)으로 access 토큰을 발급받은 뒤, \
-                모든 API 요청에 `Authorization: Bearer <access_token>` 헤더를 붙인다. \
+                **인증 방법** — 먼저 `POST /api/users`로 기기를 등록해 익명 access 토큰을 받고, \
+                `POST /api/auth/link`(소셜 로그인)로 이 access 토큰을 계정에 연동해 최종 access 토큰을 발급받는다. \
+                이후 모든 API 요청에 `Authorization: Bearer <access_token>` 헤더를 붙인다. \
                 아래 자물쇠 버튼으로 토큰을 입력하면 Swagger UI에서도 인증된 요청을 보낼 수 있다.
                 """;
         if (environment.matchesProfiles("dev")) {
