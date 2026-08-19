@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -46,6 +47,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/users")
                         .permitAll()
                         .requestMatchers("/actuator/health")
+                        .permitAll()
+                        // 공지는 로그인 전 사용자에게도 보여야 하는 공개 브로드캐스트다(BY-376).
+                        // 민감정보 없는 읽기 전용이라 GET만 연다.
+                        .requestMatchers(HttpMethod.GET, "/api/notices/active")
                         .permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**")
                         .permitAll()
