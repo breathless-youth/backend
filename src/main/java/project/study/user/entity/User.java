@@ -37,6 +37,9 @@ public class User extends BaseTimeEntity {
     private String email;
     private String category;
     private String profileImage;
+    private String goal;
+    private String initial;
+    private Integer colorIndex;
 
     @Enumerated(value = EnumType.STRING)
     private UserStatus status;
@@ -62,5 +65,19 @@ public class User extends BaseTimeEntity {
         this.provider = provider;
         this.providerUserId = providerUserId;
         this.email = email;
+    }
+
+    // null이 아닌 필드만 반영한다. initial은 닉네임 첫 글자로 갱신, colorIndex는 최초 배정 후 불변
+    public void updateProfile(String nickname, String goal, String category) {
+        if (nickname != null) {
+            this.nickname = nickname;
+            this.initial = nickname.substring(0, 1);
+        }
+        if (goal != null) {
+            this.goal = goal;
+        }
+        if (category != null) {
+            this.category = category;
+        }
     }
 }
