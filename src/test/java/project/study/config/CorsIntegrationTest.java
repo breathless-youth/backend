@@ -1,17 +1,13 @@
 package project.study.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
@@ -57,7 +53,6 @@ class CorsIntegrationTest {
 
     @Test
     void localhost는_포트와_무관하게_허용된다() {
-        // 프론트 번들러마다 포트가 달라 패턴으로 열어둔 것이 실제로 동작하는지 확인한다
         MvcTestResult result = preflight("http://localhost:5173");
 
         assertThat(result).hasStatusOk();
@@ -66,11 +61,10 @@ class CorsIntegrationTest {
 
     @Test
     void 실제_요청_응답에도_CORS_헤더가_붙는다() {
-        var auth = new UsernamePasswordAuthenticationToken(1L, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
         MvcTestResult result = mvc.get()
                 .uri("/api/stats/streak")
+                .param("userId", "1")
                 .header("Origin", ALLOWED_ORIGIN)
-                .with(authentication(auth))
                 .exchange();
 
         assertThat(result).hasStatusOk();
@@ -91,8 +85,6 @@ class CorsIntegrationTest {
                 .contains("Authorization");
     }
 
-    // 보장 범위는 "응답에 credentials 허용 헤더가 없다"까지다. 서버가 쿠키 헤더를 거부한다는 뜻이 아니라,
-    // 브라우저가 쿠키를 실은 교차 출처 요청의 응답을 읽지 못하게 된다는 의미다.
     @Test
     void credentials_허용_헤더는_응답에_실리지_않는다() {
         assertThat(preflight(ALLOWED_ORIGIN).getResponse().getHeader("Access-Control-Allow-Credentials"))

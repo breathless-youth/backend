@@ -11,7 +11,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -125,13 +124,12 @@ public class StudySessionController {
                                     @ExampleObject(name = "유저 없음", value = "{\"message\": \"존재하지 않는 사용자입니다: 999\"}")))
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public List<StudySessionResponse> create(
-            @AuthenticationPrincipal Long userId, @Valid @RequestBody StudySessionCreateRequest request) {
+    public List<StudySessionResponse> create(@Valid @RequestBody StudySessionCreateRequest request) {
         try {
-            return studySessionService.create(userId, request);
+            return studySessionService.create(request.userId(), request);
         } catch (DuplicateSessionException e) {
             List<StudySessionResponse> concurrent =
-                    studySessionService.findExistingSubmission(userId, request.startedAt());
+                    studySessionService.findExistingSubmission(request.userId(), request.startedAt());
             if (!concurrent.isEmpty()) {
                 return concurrent;
             }

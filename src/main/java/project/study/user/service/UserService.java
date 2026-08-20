@@ -20,22 +20,17 @@ public class UserService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final UserRepository userRepository;
-    private final AuthService authService;
 
-    // @Modifying 네이티브 쿼리는 트랜잭션 안에서만 실행할 수 있다
     @Transactional
     public UserRegisterResponse register(UserRegisterRequest request) {
-        // 플랫폼마다 UUID 대소문자 표기가 달라 같은 기기가 유저를 중복 생성하지 않도록 정규화
         String deviceId = request.deviceId().toLowerCase(Locale.ROOT);
 
-        // on conflict do nothing이라 이미 있으면 0행 — 동시 첫 등록 경쟁도 DB가 정리한다
         boolean isNew = userRepository.insertIfAbsent(Provider.DEVICE.name(), deviceId) > 0;
         User user = userRepository
                 .findByProviderAndProviderUserId(Provider.DEVICE, deviceId)
                 .orElseThrow(() -> new IllegalStateException("등록 이후 조회 실패"));
 
-        AuthService.TokenPair tokens = authService.issueTokens(user.getId());
-        return new UserRegisterResponse(user.getId(), isNew, tokens.accessToken(), tokens.refreshToken());
+        return new UserRegisterResponse(user.getId(), isNew);
     }
 
     @Transactional(readOnly = true)

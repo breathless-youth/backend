@@ -1,24 +1,20 @@
 package project.study.config;
 
-import jakarta.servlet.DispatcherType;
+// AUTH-DISABLED: 소셜 로그인은 후순위로 미뤄짐 (ADR-0004) — 재도입 시 feature/BY-383-auth-contract 브랜치 참고
+
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import project.study.user.jwt.JwtFilter;
-import project.study.user.jwt.JwtUtil;
 
 @EnableWebSecurity
 @Configuration
@@ -28,7 +24,6 @@ public class SecurityConfig {
 
     private static final long PREFLIGHT_CACHE_SECONDS = 3600;
 
-    private final JwtUtil jwtUtil;
     private final CorsProperties corsProperties;
 
     @Bean
@@ -39,20 +34,7 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(request -> request.dispatcherTypeMatchers(DispatcherType.ERROR)
-                        .permitAll()
-                        .requestMatchers("/api/auth/login", "/api/auth/refresh")
-                        .permitAll()
-                        .requestMatchers("/api/users")
-                        .permitAll()
-                        .requestMatchers("/actuator/health")
-                        .permitAll()
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**")
-                        .permitAll()
-                        .anyRequest()
-                        .authenticated())
-                .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedEntryPoint()))
-                .addFilterBefore(new JwtFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class)
+                .authorizeHttpRequests(request -> request.anyRequest().permitAll())
                 .build();
     }
 
@@ -72,12 +54,8 @@ public class SecurityConfig {
         return source;
     }
 
-    private AuthenticationEntryPoint unauthorizedEntryPoint() {
-        return (request, response, authException) -> {
-            response.setStatus(401);
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.setCharacterEncoding("UTF-8");
-            response.getWriter().write("{\"message\": \"인증이 필요합니다\"}");
-        };
-    }
+    // AUTH-DISABLED: 인증 재도입 시 아래 항목 복원
+    // - JwtFilter를 UsernamePasswordAuthenticationFilter 앞에 추가
+    // - /api/auth/login, /api/auth/refresh를 permitAll, 나머지를 authenticated()
+    // - unauthorizedEntryPoint (401 JSON 응답)
 }
