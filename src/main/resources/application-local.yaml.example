@@ -19,6 +19,17 @@ app:
     allowed-origins:
       - http://localhost:[*]
       - http://127.0.0.1:[*]
+  room:
+    turn:
+      # coturn static-auth-secret 방식 임시 자격 발급용. 운영에서는 coturn 서버의 시크릿과 일치시킬 것.
+      # urls가 비어 있으면 join 응답의 iceServers가 빈 배열로 내려간다 (로컬은 STUN/TURN 없이 개발 가능,
+      # 원격 P2P 연결에는 반드시 설정 필요)
+      secret: local-turn-secret
+      ttl-seconds: 7200
+      urls: []
+      # urls 예시:
+      #   - stun:turn.example.com:3478
+      #   - turn:turn.example.com:3478?transport=udp
 
 oauth:
   google:

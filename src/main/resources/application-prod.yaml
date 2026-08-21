@@ -46,6 +46,16 @@ app:
   cors:
     allowed-origins:
       - https://web.sunqstudio.kr
+  room:
+    turn:
+      # coturn(EC2)과 공유하는 static-auth-secret — ECS 태스크 정의가 SSM
+      # room/turn-secret 값을 주입한다 (infra/coturn.tf). datasource처럼 기본값을
+      # 두지 않는다 — 누락 시 코드의 draft 시크릿으로 조용히 뜨면 TURN 인증이
+      # 전부 실패하는데 앱은 멀쩡해 보여서 발견이 늦어진다
+      secret: ${APP_ROOM_TURN_SECRET}
+      # ICE 서버 URL 목록 (쉼표 구분). coturn EIP에서 파생되므로 Terraform이
+      # 태스크 정의 환경변수로 관리한다. 빈 값이면 iceServers 빈 배열로 동작
+      urls: ${APP_ROOM_TURN_URLS:}
 
 # 운영에서는 API 문서를 노출하지 않는다
 springdoc:
