@@ -35,10 +35,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")
-                .addInterceptors(new UserIdHandshakeInterceptor())
-                .withSockJS();
+        // SockJS 미사용 — FE가 @stomp/stompjs로 순수 WebSocket에 직접 접속한다
+        registry.addEndpoint("/ws").setAllowedOriginPatterns("*").addInterceptors(new UserIdHandshakeInterceptor());
     }
 
     @Override
