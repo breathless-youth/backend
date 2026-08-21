@@ -70,7 +70,7 @@ public class UserController {
     @Operation(summary = "프로필 조회", description = """
                     유저의 프로필(닉네임·한줄 목표·카테고리·아바타 정보)을 조회한다. \
                     최초 프로필은 유저 등록(POST /api/users) 시점에 자동 발급된다 — \
-                    닉네임 `포메{랜덤4자리}`, goal·category는 null.""")
+                    닉네임 `포메{랜덤5자리}`, goal·category는 null.""")
     @ApiResponse(responseCode = "200", description = "조회 성공")
     @ApiResponse(
             responseCode = "404",

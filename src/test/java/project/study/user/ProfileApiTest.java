@@ -46,7 +46,7 @@ class ProfileApiTest {
         assertThat(mvc.get().uri("/api/users/" + userId + "/profile"))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{4}"))
+                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"))
                 .hasPathSatisfying("$.initial", v -> assertThat(v).isEqualTo("포"))
                 .hasPathSatisfying(
                         "$.colorIndex",
@@ -68,7 +68,7 @@ class ProfileApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.goal", v -> assertThat(v).isEqualTo("올해 안에 이직 성공"))
-                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{4}"));
+                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"));
     }
 
     @Test

@@ -3,7 +3,7 @@ package project.study.user.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public record ProfileResponse(
-        @Schema(description = "닉네임 — 전역 유니크, 최초값은 등록 시 자동 발급(포메{랜덤4자리})", example = "포메3721")
+        @Schema(description = "닉네임 — 전역 유니크, 최초값은 등록 시 자동 발급(포메{랜덤5자리})", example = "포메37210")
         String nickname,
 
         @Schema(description = "한줄 목표 — 미설정 시 null (룸 타일에서 표시 생략)", example = "올해 안에 이직 성공")

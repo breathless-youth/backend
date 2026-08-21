@@ -52,7 +52,7 @@ class UserServiceTest {
     }
 
     @Test
-    void 등록_시_자동_닉네임은_포메_뒤에_4자리_숫자다() {
+    void 등록_시_자동_닉네임은_포메_뒤에_5자리_숫자다() {
         when(userRepository.insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), eq("포"), anyInt()))
                 .thenReturn(1);
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
@@ -63,7 +63,7 @@ class UserServiceTest {
         ArgumentCaptor<String> nicknameCaptor = ArgumentCaptor.forClass(String.class);
         verify(userRepository)
                 .insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), nicknameCaptor.capture(), eq("포"), anyInt());
-        assertThat(nicknameCaptor.getValue()).matches("포메\\d{4}");
+        assertThat(nicknameCaptor.getValue()).matches("포메\\d{5}");
     }
 
     @Test

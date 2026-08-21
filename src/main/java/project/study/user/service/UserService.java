@@ -51,12 +51,12 @@ public class UserService {
         return new UserRegisterResponse(user.getId(), isNew);
     }
 
-    // 자동 닉네임(포메{랜덤4자리})이 기존 닉네임과 충돌하면 재생성해서 재시도한다.
+    // 자동 닉네임(포메{랜덤5자리})이 기존 닉네임과 충돌하면 재생성해서 재시도한다.
     // insertIfAbsent는 타겟 없는 on conflict do nothing이라 어떤 유니크 충돌이든 0행으로 떨어진다 —
     // 0행일 때 기기(deviceId)가 이미 있으면 멱등 재등록, 없으면 닉네임 충돌이므로 재시도
     private boolean insertWithAutoNickname(String deviceId) {
         for (int attempt = 0; attempt < AUTO_NICKNAME_MAX_ATTEMPTS; attempt++) {
-            String nickname = "포메" + String.format("%04d", RANDOM.nextInt(10000));
+            String nickname = "포메" + String.format("%05d", RANDOM.nextInt(100000));
             int inserted = userRepository.insertIfAbsent(
                     Provider.DEVICE.name(), deviceId, nickname, "포", RANDOM.nextInt(COLOR_COUNT));
             if (inserted > 0) {
@@ -131,10 +131,6 @@ public class UserService {
 
     /**
      * 해당 날짜(KST)에 가입한 유저 수.
-     *
-     * <p>가입 수는 현재 실제보다 크다 — 구버전 앱 빌드가 첫 실행에서 서로 다른 UUID로 등록을
-     * 두 번 호출해 유저가 2건씩 생긴다. 어느 쪽이 중복인지 서버가 판별할 수 없어 보정하지 않는다
-     * (설계 문서의 "알려진 한계" 참고). 수정된 빌드가 퍼지면 자연히 정확해진다.
      */
     @Transactional(readOnly = true)
     public long countRegisteredOn(LocalDate date) {
