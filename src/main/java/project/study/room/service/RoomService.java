@@ -8,9 +8,11 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import project.study.common.BadRequestException;
 import project.study.common.ConflictException;
@@ -18,6 +20,12 @@ import project.study.common.NotFoundException;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinResponse;
 import project.study.room.dto.RoomMember;
+import project.study.room.event.CloseReason;
+import project.study.room.event.LeaveReason;
+import project.study.room.event.ParticipantJoinedEvent;
+import project.study.room.event.ParticipantLeftEvent;
+import project.study.room.event.RoomClosedEvent;
+import project.study.room.event.RoomCreatedEvent;
 
 /**
  * 인메모리 룸 상태 관리 (단일 인스턴스 전제).
@@ -45,14 +53,17 @@ public class RoomService {
     private final String turnSecret;
     private final int turnTtlSeconds;
     private final List<String> turnUrls;
+    private final ApplicationEventPublisher eventPublisher;
 
     public RoomService(
             @Value("${app.room.turn.secret:draft-turn-secret}") String turnSecret,
             @Value("${app.room.turn.ttl-seconds:86400}") int turnTtlSeconds,
-            @Value("${app.room.turn.urls:}") List<String> turnUrls) {
+            @Value("${app.room.turn.urls:}") List<String> turnUrls,
+            ApplicationEventPublisher eventPublisher) {
         this.turnSecret = turnSecret;
         this.turnTtlSeconds = turnTtlSeconds;
         this.turnUrls = turnUrls;
+        this.eventPublisher = eventPublisher;
     }
 
     public record JoinResult(RoomJoinResponse response, AutoLeave autoLeave) {}
@@ -69,6 +80,9 @@ public class RoomService {
             Room room = new Room(++roomIdSequence, code, Instant.now());
             roomByCode.put(code, room);
             roomById.put(room.id, room);
+            // @Async 리스너 전제의 발행이라 큐 제출(마이크로초)로 끝난다 — 락 안에서 안전.
+            // 동기 리스너를 추가하면 락 안에서 실행되므로 금지 (RoomHistoryRecorder 참고)
+            eventPublisher.publishEvent(new RoomCreatedEvent(room.uid, userId, room.createdAt));
             return new RoomCreateResponse(room.id, code, EMPTY_ROOM_TTL_SECONDS);
         }
         throw new ConflictException("사용 가능한 초대코드가 없습니다");
@@ -122,7 +136,7 @@ public class RoomService {
     }
 
     public synchronized boolean leave(Long roomId, Long userId) {
-        return removeParticipant(roomId, userId);
+        return removeParticipant(roomId, userId, LeaveReason.EXPLICIT);
     }
 
     public synchronized List<RoomMember> confirmStomp(Long roomId, Long userId, String stompSessionId) {
@@ -138,6 +152,11 @@ public class RoomService {
         // 살아 있는 참가자를 유예 만료로 제거한다
         participant.disconnectedAt = null;
         sessionToUser.put(stompSessionId, userId);
+
+        if (participant.firstConfirmedAt == null) {
+            participant.firstConfirmedAt = Instant.now();
+            eventPublisher.publishEvent(new ParticipantJoinedEvent(room.uid, userId, participant.firstConfirmedAt));
+        }
 
         return confirmedMembers(room);
     }
@@ -213,7 +232,8 @@ public class RoomService {
 
         for (Room room : List.copyOf(roomById.values())) {
             for (Participant participant : List.copyOf(room.participants.values())) {
-                if (isExpired(participant, now) && removeParticipant(room.id, participant.userId)) {
+                if (isExpired(participant, now)
+                        && removeParticipant(room.id, participant.userId, LeaveReason.DISCONNECT_TIMEOUT)) {
                     removed.add(new AutoLeave(room.id, participant.userId));
                 }
             }
@@ -223,7 +243,7 @@ public class RoomService {
             if (room.participants.isEmpty()
                     && roomById.containsKey(room.id)
                     && room.createdAt.plusSeconds(EMPTY_ROOM_TTL_SECONDS).isBefore(now)) {
-                destroyRoom(room);
+                destroyRoom(room, CloseReason.EMPTY_EXPIRED);
             }
         }
 
@@ -243,14 +263,16 @@ public class RoomService {
     // 동시 1룸 제한 — 다른 방에 있으면 자동 퇴장시키고 그 사실을 반환한다 (호출자가 MEMBER_LEFT 브로드캐스트)
     private AutoLeave leaveCurrentRoomIfDifferent(Long userId, Long targetRoomId) {
         Long currentRoomId = userToRoomId.get(userId);
-        if (currentRoomId != null && !currentRoomId.equals(targetRoomId) && removeParticipant(currentRoomId, userId)) {
+        if (currentRoomId != null
+                && !currentRoomId.equals(targetRoomId)
+                && removeParticipant(currentRoomId, userId, LeaveReason.SWITCHED_ROOM)) {
             return new AutoLeave(currentRoomId, userId);
         }
         return null;
     }
 
     // 참가자 제거 — 마지막 1명이 빠지면(명시적 퇴장·예약 만료·유예 만료 공통) 방과 코드가 소멸한다
-    private boolean removeParticipant(Long roomId, Long userId) {
+    private boolean removeParticipant(Long roomId, Long userId, LeaveReason reason) {
         Room room = roomById.get(roomId);
         if (room == null) return false;
 
@@ -261,15 +283,20 @@ public class RoomService {
         if (removed.stompSessionId != null) {
             sessionToUser.remove(removed.stompSessionId);
         }
+        // 확정된 적 없는 예약자는 참여 이력이 없으므로 퇴장 이벤트도 없다
+        if (removed.firstConfirmedAt != null) {
+            eventPublisher.publishEvent(new ParticipantLeftEvent(room.uid, userId, Instant.now(), reason));
+        }
         if (room.participants.isEmpty()) {
-            destroyRoom(room);
+            destroyRoom(room, CloseReason.LAST_LEFT);
         }
         return true;
     }
 
-    private void destroyRoom(Room room) {
+    private void destroyRoom(Room room, CloseReason reason) {
         roomById.remove(room.id);
         roomByCode.remove(room.inviteCode);
+        eventPublisher.publishEvent(new RoomClosedEvent(room.uid, Instant.now(), reason));
     }
 
     private Participant findParticipantOfUser(Long userId) {
@@ -316,6 +343,8 @@ public class RoomService {
 
     static class Room {
         final Long id;
+        // 인메모리 id는 재시작마다 0부터 재사용되므로 DB 이력의 키로는 uid를 쓴다
+        final UUID uid = UUID.randomUUID();
         final String inviteCode;
         final Instant createdAt;
         final Map<Long, Participant> participants = new HashMap<>();
@@ -341,6 +370,9 @@ public class RoomService {
         boolean stompConfirmed;
         Instant disconnectedAt;
         String stompSessionId;
+        // 최초 STOMP 확정 시각 — null이면 아직 한 번도 확정된 적 없음.
+        // 참여 이력(ParticipantJoined/Left)은 확정된 참가자에 대해서만 기록한다
+        Instant firstConfirmedAt;
 
         Participant(Long userId, String nickname, String goal, String category) {
             this.userId = userId;
