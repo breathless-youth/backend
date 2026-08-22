@@ -19,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.metrics.dto.HeavyUser;
+import project.study.metrics.dto.NewUser;
 import project.study.metrics.slack.SlackNotifier;
 import project.study.studysession.service.StudySessionMetricsService;
 import project.study.user.service.UserService;
@@ -50,7 +51,8 @@ class DailyReportServiceTest {
     void 기준일은_어제이고_지표_네_개를_모아_발송한다() {
         when(slackNotifier.isEnabled()).thenReturn(true);
         when(userService.countTotal()).thenReturn(53L);
-        when(userService.countRegisteredOn(ANCHOR)).thenReturn(4L);
+        when(userService.findRegisteredOn(ANCHOR))
+                .thenReturn(List.of(new NewUser(51L, Instant.parse("2026-08-08T00:31:00Z"))));
         when(studySessionMetricsService.findHeavyUsers(ANCHOR)).thenReturn(List.of(new HeavyUser(14L, 7L)));
         when(studySessionMetricsService.countQualifyingSessionsOn(ANCHOR)).thenReturn(6L);
 
@@ -61,6 +63,8 @@ class DailyReportServiceTest {
         assertThat(message.getValue())
                 .contains("2026-08-08")
                 .contains("총 가입: 53명")
+                .contains("신규 가입: 1명")
+                .contains("#51(09:31)")
                 .contains("#14(7일)")
                 .contains("10분 이상 세션: 6건");
     }
