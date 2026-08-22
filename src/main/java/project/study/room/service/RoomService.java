@@ -84,8 +84,7 @@ public class RoomService {
             Room room = new Room(++roomIdSequence, code, Instant.now());
             roomByCode.put(code, room);
             roomById.put(room.id, room);
-            // @Async 리스너 전제의 발행이라 큐 제출(마이크로초)로 끝난다 — 락 안에서 안전.
-            // 동기 리스너를 추가하면 락 안에서 실행되므로 금지 (RoomHistoryRecorder 참고)
+            // @Async 리스너 전제라 안전. 동기 리스너 추가 금지 (RoomHistoryRecorder 참고)
             publish(new RoomCreatedEvent(room.uid, userId, room.createdAt));
             return new RoomCreateResponse(room.id, code, EMPTY_ROOM_TTL_SECONDS);
         }
@@ -191,8 +190,7 @@ public class RoomService {
         return true;
     }
 
-    // 마지막 순공시간을 보관해 SNAPSHOT에 싣는다 — 새 입장자가 다음 STUDY_TIME 틱까지
-    // 빈 값을 보지 않게 한다 (cameraOn과 같은 "마지막 값 보관" 방식)
+    // 마지막 순공시간을 보관해 SNAPSHOT에 싣는다 (새 입장자가 다음 틱까지 빈 값 안 봄)
     public synchronized boolean updateStudyTime(Long roomId, Long userId, int studySeconds) {
         Participant p = getParticipant(roomId, userId);
         if (p == null || !p.stompConfirmed) return false;
@@ -323,8 +321,7 @@ public class RoomService {
         return room.participants.get(userId);
     }
 
-    // 이력 발행은 best-effort — 종료 중 executor 거부(TaskRejectedException) 등 발행 실패가
-    // 룸 동작으로 전파되면 안 된다 (스펙 불변식)
+    // 발행 실패가 룸 동작으로 전파되면 안 된다 (best-effort, 스펙 불변식)
     private void publish(Object event) {
         try {
             eventPublisher.publishEvent(event);
