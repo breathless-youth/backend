@@ -84,7 +84,10 @@ public class RoomStompHandler {
     }
 
     private void broadcastStudyTime(Long roomId, Long userId, Integer studySeconds) {
-        if (studySeconds == null || studySeconds < 0) return;
+        // camera/focus와 동일하게 저장이 성공했을 때만 브로드캐스트 — 마지막 값은 SNAPSHOT에 실린다
+        if (studySeconds == null || studySeconds < 0 || !roomService.updateStudyTime(roomId, userId, studySeconds)) {
+            return;
+        }
         messagingTemplate.convertAndSend("/topic/room/" + roomId, (Object)
                 Map.of("type", "STUDY_TIME", "userId", userId, "studySeconds", studySeconds));
     }

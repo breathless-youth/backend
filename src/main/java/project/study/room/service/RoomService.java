@@ -74,7 +74,8 @@ public class RoomService {
         throw new ConflictException("사용 가능한 초대코드가 없습니다");
     }
 
-    public synchronized JoinResult join(Long userId, String inviteCode) {
+    // nickname/goal은 호출자(컨트롤러)가 락 밖에서 DB 조회해 넘긴다 — 글로벌 락 안에서 I/O 금지
+    public synchronized JoinResult join(Long userId, String inviteCode, String nickname, String goal, String category) {
         if (inviteCode == null || !inviteCode.matches("\\d{4}")) {
             throw new BadRequestException("초대코드는 숫자 4자리여야 합니다");
         }
@@ -90,6 +91,9 @@ public class RoomService {
             existing.disconnectedAt = null;
             existing.stompConfirmed = false;
             existing.reservedAt = Instant.now();
+            existing.nickname = nickname;
+            existing.goal = goal;
+            existing.category = category;
             userToRoomId.put(userId, room.id);
             return new JoinResult(
                     new RoomJoinResponse(room.id, true, existing.cameraOn, generateIceServers(userId), turnTtlSeconds),
@@ -106,8 +110,11 @@ public class RoomService {
         if (existing != null) {
             // 미확정 예약의 재시도 — 예약 시각을 갱신해 직후 정리 틱에 쓸려나가지 않게 한다
             existing.reservedAt = Instant.now();
+            existing.nickname = nickname;
+            existing.goal = goal;
+            existing.category = category;
         } else {
-            room.participants.put(userId, new Participant(userId));
+            room.participants.put(userId, new Participant(userId, nickname, goal, category));
         }
         userToRoomId.put(userId, room.id);
         return new JoinResult(
@@ -158,6 +165,15 @@ public class RoomService {
         Participant p = getParticipant(roomId, userId);
         if (p == null || !p.stompConfirmed) return false;
         p.focusState = focusState;
+        return true;
+    }
+
+    // 마지막 순공시간을 보관해 SNAPSHOT에 싣는다 — 새 입장자가 다음 STUDY_TIME 틱까지
+    // 빈 값을 보지 않게 한다 (cameraOn과 같은 "마지막 값 보관" 방식)
+    public synchronized boolean updateStudyTime(Long roomId, Long userId, int studySeconds) {
+        Participant p = getParticipant(roomId, userId);
+        if (p == null || !p.stompConfirmed) return false;
+        p.studySeconds = studySeconds;
         return true;
     }
 
@@ -265,7 +281,8 @@ public class RoomService {
     private static List<RoomMember> confirmedMembers(Room room) {
         return room.participants.values().stream()
                 .filter(p -> p.stompConfirmed)
-                .map(p -> new RoomMember(p.userId, p.cameraOn, p.focusState))
+                .map(p -> new RoomMember(
+                        p.userId, p.nickname, p.goal, p.category, p.cameraOn, p.focusState, p.studySeconds))
                 .toList();
     }
 
@@ -312,17 +329,27 @@ public class RoomService {
 
     static class Participant {
         final Long userId;
+        // 프로필은 join 시점 값을 보관한다 — 방에 있는 중 프로필을 수정하면 스냅샷에는
+        // 낡은 값이 실릴 수 있다 (마지막 값 보관 방식의 알려진 한계)
+        String nickname;
+        String goal;
+        String category;
         boolean cameraOn;
         String focusState;
+        int studySeconds;
         Instant reservedAt;
         boolean stompConfirmed;
         Instant disconnectedAt;
         String stompSessionId;
 
-        Participant(Long userId) {
+        Participant(Long userId, String nickname, String goal, String category) {
             this.userId = userId;
+            this.nickname = nickname;
+            this.goal = goal;
+            this.category = category;
             this.cameraOn = false;
             this.focusState = "FOCUS";
+            this.studySeconds = 0;
             this.reservedAt = Instant.now();
             this.stompConfirmed = false;
         }

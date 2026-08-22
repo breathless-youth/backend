@@ -49,7 +49,7 @@ public class StompEventListener {
         RoomMember self = members.stream()
                 .filter(m -> m.userId().equals(userId))
                 .findFirst()
-                .orElse(new RoomMember(userId, false, "FOCUS"));
+                .orElse(new RoomMember(userId, null, null, null, false, "FOCUS", 0));
 
         messagingTemplate.convertAndSend(
                 "/topic/room/" + roomId, (Object) Map.of("type", "MEMBER_JOINED", "member", self));
