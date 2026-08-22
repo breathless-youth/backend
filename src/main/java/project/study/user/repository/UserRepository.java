@@ -1,6 +1,7 @@
 package project.study.user.repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -22,7 +23,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
         """, nativeQuery = true)
     int insertIfAbsent(@Param("provider") String provider, @Param("providerUserId") String providerUserId);
 
-    // 기간별 가입 수 — Between은 양끝 포함이라 하루 경계에서 다음날 00:00:00.000을 삼킨다.
-    // 반개구간 [from, to)로 세어 날짜 간 중복 집계를 막는다
-    long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(Instant from, Instant to);
+    // 기간별 가입자 — Between은 양끝 포함이라 하루 경계에서 다음날 00:00:00.000을 삼킨다.
+    // 반개구간 [from, to)로 조회해 날짜 간 중복 집계를 막는다
+    List<User> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(Instant from, Instant to);
 }

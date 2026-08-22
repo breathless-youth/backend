@@ -3,10 +3,12 @@ package project.study.user.service;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import project.study.metrics.dto.NewUser;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
 import project.study.user.entity.Provider;
@@ -42,16 +44,18 @@ public class UserService {
     }
 
     /**
-     * 해당 날짜(KST)에 가입한 유저 수.
+     * 해당 날짜(KST)에 가입한 유저 목록 — 가입 시각 오름차순.
      *
      * <p>가입 수는 현재 실제보다 크다 — 구버전 앱 빌드가 첫 실행에서 서로 다른 UUID로 등록을
      * 두 번 호출해 유저가 2건씩 생긴다. 어느 쪽이 중복인지 서버가 판별할 수 없어 보정하지 않는다
      * (설계 문서의 "알려진 한계" 참고). 수정된 빌드가 퍼지면 자연히 정확해진다.
      */
     @Transactional(readOnly = true)
-    public long countRegisteredOn(LocalDate date) {
+    public List<NewUser> findRegisteredOn(LocalDate date) {
         Instant from = date.atStartOfDay(KST).toInstant();
         Instant to = date.plusDays(1).atStartOfDay(KST).toInstant();
-        return userRepository.countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to);
+        return userRepository.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(from, to).stream()
+                .map(user -> new NewUser(user.getId(), user.getCreatedAt()))
+                .toList();
     }
 }

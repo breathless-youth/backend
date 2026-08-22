@@ -49,7 +49,7 @@ public class DailyReportService {
         DailyReport report = new DailyReport(
                 anchorDate,
                 userService.countTotal(),
-                userService.countRegisteredOn(anchorDate),
+                userService.findRegisteredOn(anchorDate),
                 studySessionMetricsService.findHeavyUsers(anchorDate),
                 studySessionMetricsService.countQualifyingSessionsOn(anchorDate));
 
