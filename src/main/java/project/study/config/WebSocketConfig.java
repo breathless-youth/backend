@@ -17,6 +17,8 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
@@ -30,6 +32,7 @@ import project.study.room.service.RoomService;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private static final String USER_ID_ATTR = "userId";
+    private static final long HEARTBEAT_INTERVAL_MS = 10_000L;
 
     private final RoomService roomService;
 
@@ -41,9 +44,22 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic", "/queue");
+        // 하트비트가 없으면 클라이언트가 종료 신호 없이 사라졌을 때(전파 이탈, 배터리
+        // 방전 등) 서버가 끊김을 인지하지 못해 유예(grace period)가 시작되지 않고
+        // 유령 멤버가 방에 영원히 남는다. heartbeat 값 설정에는 TaskScheduler가 필수다.
+        registry.enableSimpleBroker("/topic", "/queue")
+                .setHeartbeatValue(new long[] {HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS})
+                .setTaskScheduler(heartbeatTaskScheduler());
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
+    }
+
+    private TaskScheduler heartbeatTaskScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("stomp-heartbeat-");
+        scheduler.initialize();
+        return scheduler;
     }
 
     @Override
