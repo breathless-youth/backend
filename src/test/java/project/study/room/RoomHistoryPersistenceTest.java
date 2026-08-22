@@ -3,6 +3,7 @@ package project.study.room;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +57,7 @@ class RoomHistoryPersistenceTest {
     void 방_이력과_참여_이력을_저장하고_조회한다() {
         long userId = registerUser();
         UUID roomUid = UUID.randomUUID();
-        Instant now = Instant.now();
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         roomHistoryRepository.save(new RoomHistory(roomUid, userId, now));
         roomParticipationRepository.save(new RoomParticipation(roomUid, userId, now));
@@ -75,7 +76,7 @@ class RoomHistoryPersistenceTest {
     void 닫힌_참여는_open_조회에서_제외된다() {
         long userId = registerUser();
         UUID roomUid = UUID.randomUUID();
-        Instant now = Instant.now();
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         RoomHistory room = new RoomHistory(roomUid, userId, now);
         room.close(now, CloseReason.LAST_LEFT);

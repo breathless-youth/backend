@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,8 @@ import project.study.room.event.RoomCreatedEvent;
  */
 @Service
 public class RoomService {
+
+    private static final Logger log = LoggerFactory.getLogger(RoomService.class);
 
     static final int MAX_PARTICIPANTS = 6;
     static final int EMPTY_ROOM_TTL_SECONDS = 600;
@@ -82,7 +86,7 @@ public class RoomService {
             roomById.put(room.id, room);
             // @Async 리스너 전제의 발행이라 큐 제출(마이크로초)로 끝난다 — 락 안에서 안전.
             // 동기 리스너를 추가하면 락 안에서 실행되므로 금지 (RoomHistoryRecorder 참고)
-            eventPublisher.publishEvent(new RoomCreatedEvent(room.uid, userId, room.createdAt));
+            publish(new RoomCreatedEvent(room.uid, userId, room.createdAt));
             return new RoomCreateResponse(room.id, code, EMPTY_ROOM_TTL_SECONDS);
         }
         throw new ConflictException("사용 가능한 초대코드가 없습니다");
@@ -155,7 +159,7 @@ public class RoomService {
 
         if (participant.firstConfirmedAt == null) {
             participant.firstConfirmedAt = Instant.now();
-            eventPublisher.publishEvent(new ParticipantJoinedEvent(room.uid, userId, participant.firstConfirmedAt));
+            publish(new ParticipantJoinedEvent(room.uid, userId, participant.firstConfirmedAt));
         }
 
         return confirmedMembers(room);
@@ -285,7 +289,7 @@ public class RoomService {
         }
         // 확정된 적 없는 예약자는 참여 이력이 없으므로 퇴장 이벤트도 없다
         if (removed.firstConfirmedAt != null) {
-            eventPublisher.publishEvent(new ParticipantLeftEvent(room.uid, userId, Instant.now(), reason));
+            publish(new ParticipantLeftEvent(room.uid, userId, Instant.now(), reason));
         }
         if (room.participants.isEmpty()) {
             destroyRoom(room, CloseReason.LAST_LEFT);
@@ -296,7 +300,7 @@ public class RoomService {
     private void destroyRoom(Room room, CloseReason reason) {
         roomById.remove(room.id);
         roomByCode.remove(room.inviteCode);
-        eventPublisher.publishEvent(new RoomClosedEvent(room.uid, Instant.now(), reason));
+        publish(new RoomClosedEvent(room.uid, Instant.now(), reason));
     }
 
     private Participant findParticipantOfUser(Long userId) {
@@ -317,6 +321,16 @@ public class RoomService {
         Room room = roomById.get(roomId);
         if (room == null) return null;
         return room.participants.get(userId);
+    }
+
+    // 이력 발행은 best-effort — 종료 중 executor 거부(TaskRejectedException) 등 발행 실패가
+    // 룸 동작으로 전파되면 안 된다 (스펙 불변식)
+    private void publish(Object event) {
+        try {
+            eventPublisher.publishEvent(event);
+        } catch (RuntimeException e) {
+            log.warn("룸 이력 이벤트 발행 실패: {}", event, e);
+        }
     }
 
     private List<RoomJoinResponse.IceServer> generateIceServers(Long userId) {
