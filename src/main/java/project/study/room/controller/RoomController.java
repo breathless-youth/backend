@@ -25,6 +25,8 @@ import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinRequest;
 import project.study.room.dto.RoomJoinResponse;
 import project.study.room.service.RoomService;
+import project.study.user.dto.ProfileResponse;
+import project.study.user.service.UserService;
 
 @Tag(name = "Room", description = "실시간 공부방 API — 초대코드 기반 일회성 방. WebRTC 시그널링은 STOMP WebSocket(/ws)으로 처리한다")
 @RestController
@@ -33,6 +35,7 @@ import project.study.room.service.RoomService;
 public class RoomController {
 
     private final RoomService roomService;
+    private final UserService userService;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Operation(summary = "방 생성", description = """
@@ -62,7 +65,7 @@ public class RoomController {
                             examples = @ExampleObject(value = "{\"message\": \"초대코드는 숫자 4자리여야 합니다\"}")))
     @ApiResponse(
             responseCode = "404",
-            description = "없는 코드 또는 소멸된 방 (구분하지 않음)",
+            description = "없는 코드 또는 소멸된 방 (구분하지 않음), 혹은 존재하지 않는 사용자",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -78,7 +81,11 @@ public class RoomController {
                             examples = @ExampleObject(value = "{\"message\": \"방이 가득 찼어요\"}")))
     @PostMapping("/join")
     public RoomJoinResponse join(@Valid @RequestBody RoomJoinRequest request) {
-        RoomService.JoinResult result = roomService.join(request.userId(), request.inviteCode());
+        // 프로필(닉네임·목표)은 방 상태에 보관돼 SNAPSHOT/MEMBER_JOINED에 실린다.
+        // RoomService는 글로벌 락이라 조회는 락 밖(여기)에서 한다. 없는 유저면 404
+        ProfileResponse profile = userService.getProfile(request.userId());
+        RoomService.JoinResult result = roomService.join(
+                request.userId(), request.inviteCode(), profile.nickname(), profile.goal(), profile.category());
 
         if (result.autoLeave() != null) {
             RoomService.AutoLeave al = result.autoLeave();

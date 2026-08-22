@@ -2,6 +2,7 @@ package project.study.room;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,20 @@ class RoomApiTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    // join이 프로필(닉네임·목표)을 조회해 방 상태에 보관하므로 실제 유저가 필요하다
+    private long registerUser() {
+        MvcTestResult result = mvc.post()
+                .uri("/api/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deviceId\": \"" + UUID.randomUUID() + "\"}")
+                .exchange();
+        assertThat(result).hasStatus(HttpStatus.CREATED);
+        return objectMapper
+                .readTree(result.getResponse().getContentAsByteArray())
+                .get("userId")
+                .asLong();
+    }
 
     private String createRoomAndGetCode(long userId) {
         MvcTestResult result = mvc.post()
@@ -61,8 +76,9 @@ class RoomApiTest {
     @Test
     void 초대코드로_입장하면_200과_응답이_내려온다() {
         String code = createRoomAndGetCode(1L);
+        long userId = registerUser();
 
-        assertThat(joinRequest(100L, code))
+        assertThat(joinRequest(userId, code))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.roomId", v -> assertThat(v).isNotNull())
@@ -72,54 +88,66 @@ class RoomApiTest {
 
     @Test
     void 형식이_틀린_초대코드는_400이다() {
-        assertThat(joinRequest(100L, "12a4")).hasStatus(HttpStatus.BAD_REQUEST);
+        long userId = registerUser();
+
+        assertThat(joinRequest(userId, "12a4")).hasStatus(HttpStatus.BAD_REQUEST);
     }
 
     @Test
     void 없는_초대코드는_404다() {
         String code = createRoomAndGetCode(1L);
+        long userId = registerUser();
         // 활성 코드와 겹치지 않는 코드를 찾는다
         String missing = code.equals("0000") ? "0001" : "0000";
 
-        assertThat(joinRequest(100L, missing)).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(joinRequest(userId, missing)).hasStatus(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void 등록되지_않은_유저가_입장하면_404다() {
+        String code = createRoomAndGetCode(1L);
+
+        assertThat(joinRequest(999_999_999L, code)).hasStatus(HttpStatus.NOT_FOUND);
     }
 
     @Test
     void 정원_6명_초과_시_409를_반환한다() {
         String code = createRoomAndGetCode(1L);
-        for (long i = 1; i <= 6; i++) {
-            assertThat(joinRequest(200 + i, code)).hasStatusOk();
+        for (int i = 1; i <= 6; i++) {
+            assertThat(joinRequest(registerUser(), code)).hasStatusOk();
         }
 
-        assertThat(joinRequest(300L, code)).hasStatus(HttpStatus.CONFLICT);
+        assertThat(joinRequest(registerUser(), code)).hasStatus(HttpStatus.CONFLICT);
     }
 
     @Test
     void 퇴장하면_204를_반환한다() {
         String code = createRoomAndGetCode(1L);
-        MvcTestResult joined = joinRequest(400L, code).exchange();
+        long userId = registerUser();
+        MvcTestResult joined = joinRequest(userId, code).exchange();
         assertThat(joined).hasStatusOk();
         long roomId = objectMapper
                 .readTree(joined.getResponse().getContentAsByteArray())
                 .get("roomId")
                 .asLong();
 
-        assertThat(mvc.post().uri("/api/rooms/" + roomId + "/leave").param("userId", "400"))
+        assertThat(mvc.post().uri("/api/rooms/" + roomId + "/leave").param("userId", String.valueOf(userId)))
                 .hasStatus(HttpStatus.NO_CONTENT);
     }
 
     @Test
     void 마지막_퇴장_후_같은_코드로_입장하면_404다() {
         String code = createRoomAndGetCode(1L);
-        MvcTestResult joined = joinRequest(500L, code).exchange();
+        long userId = registerUser();
+        MvcTestResult joined = joinRequest(userId, code).exchange();
         long roomId = objectMapper
                 .readTree(joined.getResponse().getContentAsByteArray())
                 .get("roomId")
                 .asLong();
-        assertThat(mvc.post().uri("/api/rooms/" + roomId + "/leave").param("userId", "500"))
+        assertThat(mvc.post().uri("/api/rooms/" + roomId + "/leave").param("userId", String.valueOf(userId)))
                 .hasStatus(HttpStatus.NO_CONTENT);
 
-        assertThat(joinRequest(600L, code)).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(joinRequest(registerUser(), code)).hasStatus(HttpStatus.NOT_FOUND);
     }
 
     @Test
