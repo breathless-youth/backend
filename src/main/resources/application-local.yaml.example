@@ -12,6 +12,12 @@ spring:
     hibernate:
       ddl-auto: validate
 
+# 웹소켓 연결/구독/해제, 룸 상태 변경 흐름을 추적하기 위한 DEBUG 로그.
+# prod에는 넣지 않는다 — 로그 볼륨·성능에 영향 없이 그쪽은 기본(INFO) 유지 (BY-426)
+logging:
+  level:
+    project.study: DEBUG
+
 # 로컬에서 프론트를 띄워 API를 호출할 때 필요하다.
 # 포트는 번들러마다 달라(Vite 5173, Next 3000 등) 열어둔다 — :[*]가 Spring의 포트 와일드카드 문법이다.
 app:
