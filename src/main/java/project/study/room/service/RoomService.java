@@ -8,7 +8,6 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -349,52 +348,6 @@ public class RoomService {
             return Base64.getEncoder().encodeToString(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new IllegalStateException("HMAC-SHA1 계산 실패", e);
-        }
-    }
-
-    static class Room {
-        final Long id;
-        // 인메모리 id는 재시작마다 0부터 재사용되므로 DB 이력의 키로는 uid를 쓴다
-        final UUID uid = UUID.randomUUID();
-        final String inviteCode;
-        final Instant createdAt;
-        final Map<Long, Participant> participants = new HashMap<>();
-
-        Room(Long id, String inviteCode, Instant createdAt) {
-            this.id = id;
-            this.inviteCode = inviteCode;
-            this.createdAt = createdAt;
-        }
-    }
-
-    static class Participant {
-        final Long userId;
-        // 프로필은 join 시점 값을 보관한다 — 방에 있는 중 프로필을 수정하면 스냅샷에는
-        // 낡은 값이 실릴 수 있다 (마지막 값 보관 방식의 알려진 한계)
-        String nickname;
-        String goal;
-        String category;
-        boolean cameraOn;
-        String focusState;
-        int studySeconds;
-        Instant reservedAt;
-        boolean stompConfirmed;
-        Instant disconnectedAt;
-        String stompSessionId;
-        // 최초 STOMP 확정 시각 — null이면 아직 한 번도 확정된 적 없음.
-        // 참여 이력(ParticipantJoined/Left)은 확정된 참가자에 대해서만 기록한다
-        Instant firstConfirmedAt;
-
-        Participant(Long userId, String nickname, String goal, String category) {
-            this.userId = userId;
-            this.nickname = nickname;
-            this.goal = goal;
-            this.category = category;
-            this.cameraOn = false;
-            this.focusState = "FOCUS";
-            this.studySeconds = 0;
-            this.reservedAt = Instant.now();
-            this.stompConfirmed = false;
         }
     }
 }
