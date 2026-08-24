@@ -8,7 +8,6 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -112,6 +111,7 @@ public class RoomService {
             existing.goal = goal;
             existing.category = category;
             userToRoomId.put(userId, room.id);
+            log.debug("재입장(유예 중 복원): roomId={}, userId={}", room.id, userId);
             return new JoinResult(
                     new RoomJoinResponse(room.id, true, existing.cameraOn, generateIceServers(userId), turnTtlSeconds),
                     null);
@@ -134,20 +134,29 @@ public class RoomService {
             room.participants.put(userId, new Participant(userId, nickname, goal, category));
         }
         userToRoomId.put(userId, room.id);
+        log.debug("신규 입장 예약: roomId={}, userId={}, autoLeave={}", room.id, userId, autoLeave);
         return new JoinResult(
                 new RoomJoinResponse(room.id, false, null, generateIceServers(userId), turnTtlSeconds), autoLeave);
     }
 
     public synchronized boolean leave(Long roomId, Long userId) {
-        return removeParticipant(roomId, userId, LeaveReason.EXPLICIT);
+        boolean left = removeParticipant(roomId, userId, LeaveReason.EXPLICIT);
+        log.debug("퇴장 요청: roomId={}, userId={}, 처리됨={}", roomId, userId, left);
+        return left;
     }
 
     public synchronized List<RoomMember> confirmStomp(Long roomId, Long userId, String stompSessionId) {
         Room room = roomById.get(roomId);
-        if (room == null) return List.of();
+        if (room == null) {
+            log.debug("STOMP 확정 실패(방 없음): roomId={}, userId={}", roomId, userId);
+            return List.of();
+        }
 
         Participant participant = room.participants.get(userId);
-        if (participant == null) return List.of();
+        if (participant == null) {
+            log.debug("STOMP 확정 실패(참가자 없음): roomId={}, userId={}", roomId, userId);
+            return List.of();
+        }
 
         participant.stompConfirmed = true;
         participant.stompSessionId = stompSessionId;
@@ -161,40 +170,59 @@ public class RoomService {
             publish(new ParticipantJoinedEvent(room.uid, userId, participant.firstConfirmedAt));
         }
 
+        log.debug("STOMP 확정: roomId={}, userId={}, stompSessionId={}", roomId, userId, stompSessionId);
         return confirmedMembers(room);
     }
 
     public synchronized void handleDisconnect(String stompSessionId) {
         Long userId = sessionToUser.remove(stompSessionId);
-        if (userId == null) return;
+        if (userId == null) {
+            log.debug("연결 해제(알 수 없는 세션): stompSessionId={}", stompSessionId);
+            return;
+        }
 
         Participant participant = findParticipantOfUser(userId);
         // 재접속이 옛 세션의 끊김 이벤트보다 먼저 도착할 수 있다 — 지금 세션의 끊김일 때만 유예를 시작한다
         if (participant != null && stompSessionId.equals(participant.stompSessionId)) {
             participant.disconnectedAt = Instant.now();
             participant.stompSessionId = null;
+            log.debug("연결 해제(유예 시작): userId={}, stompSessionId={}", userId, stompSessionId);
+        } else {
+            log.debug("연결 해제(이미 교체된 옛 세션이라 무시): userId={}, stompSessionId={}", userId, stompSessionId);
         }
     }
 
     public synchronized boolean updateCamera(Long roomId, Long userId, boolean cameraOn) {
         Participant p = getParticipant(roomId, userId);
-        if (p == null || !p.stompConfirmed) return false;
+        if (p == null || !p.stompConfirmed) {
+            log.debug("카메라 상태 변경 거부(미확정 참가자): roomId={}, userId={}", roomId, userId);
+            return false;
+        }
         p.cameraOn = cameraOn;
+        log.debug("카메라 상태 변경: roomId={}, userId={}, cameraOn={}", roomId, userId, cameraOn);
         return true;
     }
 
     public synchronized boolean updateFocusState(Long roomId, Long userId, String focusState) {
         Participant p = getParticipant(roomId, userId);
-        if (p == null || !p.stompConfirmed) return false;
+        if (p == null || !p.stompConfirmed) {
+            log.debug("집중 상태 변경 거부(미확정 참가자): roomId={}, userId={}", roomId, userId);
+            return false;
+        }
         p.focusState = focusState;
+        log.debug("집중 상태 변경: roomId={}, userId={}, focusState={}", roomId, userId, focusState);
         return true;
     }
 
     // 마지막 순공시간을 보관해 SNAPSHOT에 싣는다 (새 입장자가 다음 틱까지 빈 값 안 봄)
     public synchronized boolean updateStudyTime(Long roomId, Long userId, int studySeconds) {
         Participant p = getParticipant(roomId, userId);
-        if (p == null || !p.stompConfirmed) return false;
+        if (p == null || !p.stompConfirmed) {
+            log.debug("순공시간 변경 거부(미확정 참가자): roomId={}, userId={}", roomId, userId);
+            return false;
+        }
         p.studySeconds = studySeconds;
+        log.debug("순공시간 변경: roomId={}, userId={}, studySeconds={}", roomId, userId, studySeconds);
         return true;
     }
 
@@ -249,6 +277,9 @@ public class RoomService {
             }
         }
 
+        if (!removed.isEmpty()) {
+            log.debug("만료 정리: 자동 퇴장 {}건 — {}", removed.size(), removed);
+        }
         return removed;
     }
 
@@ -349,52 +380,6 @@ public class RoomService {
             return Base64.getEncoder().encodeToString(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new IllegalStateException("HMAC-SHA1 계산 실패", e);
-        }
-    }
-
-    static class Room {
-        final Long id;
-        // 인메모리 id는 재시작마다 0부터 재사용되므로 DB 이력의 키로는 uid를 쓴다
-        final UUID uid = UUID.randomUUID();
-        final String inviteCode;
-        final Instant createdAt;
-        final Map<Long, Participant> participants = new HashMap<>();
-
-        Room(Long id, String inviteCode, Instant createdAt) {
-            this.id = id;
-            this.inviteCode = inviteCode;
-            this.createdAt = createdAt;
-        }
-    }
-
-    static class Participant {
-        final Long userId;
-        // 프로필은 join 시점 값을 보관한다 — 방에 있는 중 프로필을 수정하면 스냅샷에는
-        // 낡은 값이 실릴 수 있다 (마지막 값 보관 방식의 알려진 한계)
-        String nickname;
-        String goal;
-        String category;
-        boolean cameraOn;
-        String focusState;
-        int studySeconds;
-        Instant reservedAt;
-        boolean stompConfirmed;
-        Instant disconnectedAt;
-        String stompSessionId;
-        // 최초 STOMP 확정 시각 — null이면 아직 한 번도 확정된 적 없음.
-        // 참여 이력(ParticipantJoined/Left)은 확정된 참가자에 대해서만 기록한다
-        Instant firstConfirmedAt;
-
-        Participant(Long userId, String nickname, String goal, String category) {
-            this.userId = userId;
-            this.nickname = nickname;
-            this.goal = goal;
-            this.category = category;
-            this.cameraOn = false;
-            this.focusState = "FOCUS";
-            this.studySeconds = 0;
-            this.reservedAt = Instant.now();
-            this.stompConfirmed = false;
         }
     }
 }

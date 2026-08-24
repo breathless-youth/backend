@@ -4,6 +4,8 @@ import java.security.Principal;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -17,6 +19,7 @@ import project.study.room.service.RoomService;
 @RequiredArgsConstructor
 public class RoomStompHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(RoomStompHandler.class);
     private static final Set<String> SIGNAL_KINDS = Set.of("OFFER", "ANSWER", "CANDIDATE");
     private static final Set<String> FOCUS_STATES = Set.of("FOCUS", "DISTRACTED");
 
@@ -35,13 +38,25 @@ public class RoomStompHandler {
                 || payload.payload() == null
                 || payload.kind() == null
                 || !SIGNAL_KINDS.contains(payload.kind())) {
+            log.debug("signal 요청 형식 검증 실패: roomId={}, principal={}", roomId, principal);
             return;
         }
 
         Long fromUserId = Long.valueOf(principal.getName());
+        log.debug(
+                "signal 요청: roomId={}, fromUserId={}, toUserId={}, kind={}",
+                roomId,
+                fromUserId,
+                payload.toUserId(),
+                payload.kind());
         // 발신자의 "현재" 세션에서 온 메시지인지 + 수신자가 방 멤버인지 검사 — 옛 세션·비멤버의 시그널 주입 차단
         if (!roomService.isActiveSession(roomId, fromUserId, accessor.getSessionId())
                 || !roomService.isConfirmedMember(roomId, payload.toUserId())) {
+            log.debug(
+                    "signal 인가 실패(비활성 세션 또는 비멤버): roomId={}, fromUserId={}, toUserId={}",
+                    roomId,
+                    fromUserId,
+                    payload.toUserId());
             return;
         }
 
@@ -58,7 +73,15 @@ public class RoomStompHandler {
         if (principal == null || payload == null) return;
 
         Long userId = Long.valueOf(principal.getName());
+        log.debug(
+                "state 요청: roomId={}, userId={}, cameraOn={}, focusState={}, studySeconds={}",
+                roomId,
+                userId,
+                payload.cameraOn(),
+                payload.focusState(),
+                payload.studySeconds());
         if (!roomService.isActiveSession(roomId, userId, accessor.getSessionId())) {
+            log.debug("state 인가 실패(비활성 세션): roomId={}, userId={}", roomId, userId);
             return;
         }
 
