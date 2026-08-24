@@ -318,7 +318,7 @@ public class RoomService {
         }
         // 확정된 적 없는 예약자는 참여 이력이 없으므로 퇴장 이벤트도 없다
         if (removed.firstConfirmedAt != null) {
-            publish(new ParticipantLeftEvent(room.uid, userId, Instant.now(), reason));
+            publish(new ParticipantLeftEvent(room.uid, userId, Instant.now(), reason, removed.studySeconds));
         }
         if (room.participants.isEmpty()) {
             destroyRoom(room, CloseReason.LAST_LEFT);

@@ -83,11 +83,16 @@ class RoomHistoryPersistenceTest {
         roomHistoryRepository.save(room);
 
         RoomParticipation participation = new RoomParticipation(roomUid, userId, now);
-        participation.close(now, LeaveReason.EXPLICIT);
+        participation.close(now, LeaveReason.EXPLICIT, 30);
         roomParticipationRepository.save(participation);
 
         assertThat(roomParticipationRepository.findByRoomUidAndUserIdAndLeftAtIsNull(roomUid, userId))
                 .isEmpty();
+        assertThat(roomParticipationRepository
+                        .findById(participation.getId())
+                        .orElseThrow()
+                        .getFocusSec())
+                .isEqualTo(30);
         assertThat(roomHistoryRepository.findByRoomUid(roomUid).orElseThrow().getCloseReason())
                 .isEqualTo(CloseReason.LAST_LEFT);
     }

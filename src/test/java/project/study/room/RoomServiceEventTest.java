@@ -127,6 +127,34 @@ class RoomServiceEventTest {
     }
 
     @Test
+    void 유예_만료_퇴장_이벤트에_마지막_순공시간이_실린다() {
+        String code = createRoom();
+        long roomId = join(1L, code).response().roomId();
+        roomService.confirmStomp(roomId, 1L, "session-1");
+        roomService.updateStudyTime(roomId, 1L, 77);
+        roomService.handleDisconnect("session-1");
+
+        roomService.cleanupExpired(Instant.now().plusSeconds(31));
+
+        List<ParticipantLeftEvent> left = eventsOf(ParticipantLeftEvent.class);
+        assertThat(left).hasSize(1);
+        assertThat(left.getFirst().focusSec()).isEqualTo(77);
+    }
+
+    @Test
+    void 상태_보고가_없었으면_퇴장_이벤트의_순공시간은_0이다() {
+        String code = createRoom();
+        long roomId = join(1L, code).response().roomId();
+        roomService.confirmStomp(roomId, 1L, "session-1");
+
+        roomService.leave(roomId, 1L);
+
+        List<ParticipantLeftEvent> left = eventsOf(ParticipantLeftEvent.class);
+        assertThat(left).hasSize(1);
+        assertThat(left.getFirst().focusSec()).isZero();
+    }
+
+    @Test
     void 확정_없던_예약_만료는_ParticipantLeft를_발행하지_않는다() {
         String code = createRoom();
         join(1L, code);

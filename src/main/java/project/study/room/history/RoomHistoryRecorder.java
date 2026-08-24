@@ -54,7 +54,7 @@ public class RoomHistoryRecorder {
         roomParticipationRepository
                 .findByRoomUidAndUserIdAndLeftAtIsNull(event.roomUid(), event.userId())
                 .ifPresentOrElse(
-                        participation -> participation.close(event.leftAt(), event.reason()),
+                        participation -> participation.close(event.leftAt(), event.reason(), event.focusSec()),
                         () -> log.warn("닫을 참여 기록이 없다: roomUid={}, userId={}", event.roomUid(), event.userId()));
     }
 
