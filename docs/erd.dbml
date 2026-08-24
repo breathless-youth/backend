@@ -184,3 +184,30 @@ Table inquiry  {
     (created_at)
   }
 }
+
+// ---------------------------------------------------------
+// 방(룸) / 방 참여자
+// ---------------------------------------------------------
+
+Table rooms {
+  id bigint [primary key, increment]
+  room_uid uuid [not null, unique, note: '인메모리 방과의 연결고리 — 재시작 간 유일']
+  created_by bigint [ref: > users.id, not null]
+  created_at timestamptz [not null]
+  closed_at timestamptz [note: 'NULL = 운영 중이거나 서버 재시작으로 유실']
+  close_reason varchar(20) [note: 'LAST_LEFT | EMPTY_EXPIRED']
+}
+
+Table room_participations {
+  id bigint [primary key, increment]
+  room_uid uuid [ref: > rooms.room_uid, not null]
+  user_id bigint [ref: > users.id, not null]
+  joined_at timestamptz [not null, note: 'STOMP 확정 시각 (자리 예약 아님)']
+  left_at timestamptz
+  leave_reason varchar(20) [note: 'EXPLICIT | DISCONNECT_TIMEOUT | SWITCHED_ROOM']
+
+  indexes {
+    (user_id, joined_at)
+    (room_uid)
+  }
+}

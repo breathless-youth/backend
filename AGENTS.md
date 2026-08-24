@@ -46,6 +46,9 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
 - 생성자 주입만 사용 (`@Autowired` 필드 주입 금지, Lombok `@RequiredArgsConstructor` 권장)
 
 ## 작업 규칙
+0. **지라 티켓 게이트**: 새로운 작업을 시작하기 전에 해당하는 지라 티켓이 있는지 사용자에게
+   확인한다. 없으면 티켓을 먼저 만들고(Atlassian MCP 사용, 티켓 ID 형식 `BY-XXX`) 작업을
+   시작한다 — 브랜치명·PR 제목이 티켓 ID를 참조하므로 티켓 없이 작업하지 않는다
 1. 기능 구현 시 테스트를 함께 작성 (서비스 로직은 단위테스트, API는 통합테스트)
 2. 작업 완료 선언 전 반드시 `./gradlew check` 실행하고 통과 확인
 3. 실패한 테스트를 지우거나 @Disabled 처리로 회피 금지
