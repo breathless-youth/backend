@@ -40,14 +40,18 @@ public class RoomParticipation {
     @Column(length = 20)
     private LeaveReason leaveReason;
 
+    // 퇴장 시점에 서버가 마지막으로 본 순공 타이머 값(초) — 운영/백업 값. NULL = 도입 전 기록
+    private Integer focusSec;
+
     public RoomParticipation(UUID roomUid, Long userId, Instant joinedAt) {
         this.roomUid = roomUid;
         this.userId = userId;
         this.joinedAt = joinedAt;
     }
 
-    public void close(Instant leftAt, LeaveReason reason) {
+    public void close(Instant leftAt, LeaveReason reason, Integer focusSec) {
         this.leftAt = leftAt;
         this.leaveReason = reason;
+        this.focusSec = focusSec;
     }
 }

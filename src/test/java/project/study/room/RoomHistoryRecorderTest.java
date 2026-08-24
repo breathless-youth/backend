@@ -93,6 +93,7 @@ class RoomHistoryRecorderTest {
                 .orElseThrow();
         assertThat(participation.getJoinedAt()).isNotNull();
 
+        roomService.updateStudyTime(roomId, creator, 42);
         roomService.leave(roomId, creator);
 
         RoomParticipation closed = roomParticipationRepository.findAll().stream()
@@ -102,6 +103,7 @@ class RoomHistoryRecorderTest {
                 .orElseThrow();
         assertThat(closed.getLeftAt()).isNotNull();
         assertThat(closed.getLeaveReason()).isEqualTo(LeaveReason.EXPLICIT);
+        assertThat(closed.getFocusSec()).isEqualTo(42);
 
         RoomHistory closedRoom =
                 roomHistoryRepository.findByRoomUid(room.getRoomUid()).orElseThrow();

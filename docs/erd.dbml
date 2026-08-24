@@ -205,6 +205,7 @@ Table room_participations {
   joined_at timestamptz [not null, note: 'STOMP 확정 시각 (자리 예약 아님)']
   left_at timestamptz
   leave_reason varchar(20) [note: 'EXPLICIT | DISCONNECT_TIMEOUT | SWITCHED_ROOM']
+  focus_sec integer [note: '퇴장 시점에 서버가 마지막으로 본 순공 타이머(초) — 클라이언트 주기 보고 값이라 뒤처질 수 있는 운영/백업 값. study_session과 무관. NULL = 도입 전 기록']
 
   indexes {
     (user_id, joined_at)
