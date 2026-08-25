@@ -17,6 +17,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import project.study.common.BadRequestException;
 import project.study.common.ConflictException;
+import project.study.common.ErrorCode;
 import project.study.common.NotFoundException;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinResponse;
@@ -51,6 +52,7 @@ public class RoomService {
     private final Map<String, Room> roomByCode = new HashMap<>();
     private final Map<Long, Long> userToRoomId = new HashMap<>();
     private final Map<String, Long> sessionToUser = new HashMap<>();
+    private final ClosedInviteCodes closedCodes = new ClosedInviteCodes();
     private long roomIdSequence = 0;
 
     private final String turnSecret;
@@ -75,12 +77,13 @@ public class RoomService {
 
     // 생성만으로는 입장 상태가 아니다 — 생성자도 join으로만 입장한다
     public synchronized RoomCreateResponse create(Long userId) {
+        Instant now = Instant.now();
         for (int attempt = 0; attempt < INVITE_CODE_MAX_ATTEMPTS; attempt++) {
             String code = String.format("%04d", RANDOM.nextInt(10000));
-            if (roomByCode.containsKey(code)) {
+            if (roomByCode.containsKey(code) || closedCodes.contains(code, now)) {
                 continue;
             }
-            Room room = new Room(++roomIdSequence, code, Instant.now());
+            Room room = new Room(++roomIdSequence, code, now);
             roomByCode.put(code, room);
             roomById.put(room.id, room);
             // @Async 리스너 전제라 안전. 동기 리스너 추가 금지 (RoomHistoryRecorder 참고)
@@ -98,7 +101,11 @@ public class RoomService {
 
         Room room = roomByCode.get(inviteCode);
         if (room == null) {
-            throw new NotFoundException("코드를 다시 확인해 주세요");
+            // 동시 퇴장 등으로 방이 막 사라진 경우까지 "코드 오타"로 안내하면 안 된다 (BY-436)
+            if (closedCodes.contains(inviteCode, Instant.now())) {
+                throw new NotFoundException(ErrorCode.ROOM_CLOSED, "방이 종료되었어요");
+            }
+            throw new NotFoundException(ErrorCode.INVITE_CODE_NOT_FOUND, "코드를 다시 확인해 주세요");
         }
 
         Participant existing = room.participants.get(userId);
@@ -260,6 +267,9 @@ public class RoomService {
     public synchronized List<AutoLeave> cleanupExpired(Instant now) {
         List<AutoLeave> removed = new ArrayList<>();
 
+        // 방 정리보다 먼저 한다 — 이번 틱에 소멸시킨 방의 묘비를 같은 틱에 지워버리지 않기 위해
+        closedCodes.purgeExpired(now);
+
         for (Room room : List.copyOf(roomById.values())) {
             for (Participant participant : List.copyOf(room.participants.values())) {
                 if (isExpired(participant, now)
@@ -329,6 +339,7 @@ public class RoomService {
     private void destroyRoom(Room room, CloseReason reason) {
         roomById.remove(room.id);
         roomByCode.remove(room.inviteCode);
+        closedCodes.record(room.inviteCode, Instant.now());
         publish(new RoomClosedEvent(room.uid, Instant.now(), reason));
     }
 

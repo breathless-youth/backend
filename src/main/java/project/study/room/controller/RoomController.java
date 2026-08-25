@@ -62,15 +62,33 @@ public class RoomController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(value = "{\"message\": \"초대코드는 숫자 4자리여야 합니다\"}")))
+                            examples =
+                                    @ExampleObject(
+                                            value =
+                                                    "{\"code\": \"BAD_REQUEST\", \"message\": \"초대코드는 숫자 4자리여야 합니다\"}")))
     @ApiResponse(
             responseCode = "404",
-            description = "없는 코드 또는 소멸된 방 (구분하지 않음), 혹은 존재하지 않는 사용자",
+            description = """
+                    입장 대상을 찾을 수 없음 — 셋 다 404이므로 **본문의 `code`로 구분한다**. \
+                    `INVITE_CODE_NOT_FOUND`는 발급된 적 없는 코드(오타 안내), \
+                    `ROOM_CLOSED`는 참가자가 모두 나갔거나 만료돼 사라진 방(방 종료 안내)이다. \
+                    소멸한 코드는 10분간 `ROOM_CLOSED`로 답하고, 그 뒤에는 `INVITE_CODE_NOT_FOUND`가 된다.""",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(value = "{\"message\": \"코드를 다시 확인해 주세요\"}")))
+                            examples = {
+                                @ExampleObject(
+                                        name = "없는 코드",
+                                        value =
+                                                "{\"code\": \"INVITE_CODE_NOT_FOUND\", \"message\": \"코드를 다시 확인해 주세요\"}"),
+                                @ExampleObject(
+                                        name = "소멸된 방",
+                                        value = "{\"code\": \"ROOM_CLOSED\", \"message\": \"방이 종료되었어요\"}"),
+                                @ExampleObject(
+                                        name = "없는 사용자",
+                                        value = "{\"code\": \"USER_NOT_FOUND\", \"message\": \"존재하지 않는 사용자입니다\"}")
+                            }))
     @ApiResponse(
             responseCode = "409",
             description = "정원 초과 — 방에 이미 6명이 있다 (대기열 없음)",
@@ -78,7 +96,7 @@ public class RoomController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(value = "{\"message\": \"방이 가득 찼어요\"}")))
+                            examples = @ExampleObject(value = "{\"code\": \"CONFLICT\", \"message\": \"방이 가득 찼어요\"}")))
     @PostMapping("/join")
     public RoomJoinResponse join(@Valid @RequestBody RoomJoinRequest request) {
         // 프로필(닉네임·목표)은 방 상태에 보관돼 SNAPSHOT/MEMBER_JOINED에 실린다.

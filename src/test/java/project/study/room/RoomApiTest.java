@@ -107,7 +107,10 @@ class RoomApiTest {
     void 등록되지_않은_유저가_입장하면_404다() {
         String code = createRoomAndGetCode(1L);
 
-        assertThat(joinRequest(999_999_999L, code)).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(joinRequest(999_999_999L, code))
+                .hasStatus(HttpStatus.NOT_FOUND)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("USER_NOT_FOUND"));
     }
 
     @Test
@@ -147,7 +150,10 @@ class RoomApiTest {
         assertThat(mvc.post().uri("/api/rooms/" + roomId + "/leave").param("userId", String.valueOf(userId)))
                 .hasStatus(HttpStatus.NO_CONTENT);
 
-        assertThat(joinRequest(registerUser(), code)).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(joinRequest(registerUser(), code))
+                .hasStatus(HttpStatus.NOT_FOUND)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("ROOM_CLOSED"));
     }
 
     @Test

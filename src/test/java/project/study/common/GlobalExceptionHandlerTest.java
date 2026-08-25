@@ -32,7 +32,8 @@ class GlobalExceptionHandlerTest {
         assertThat(mvc.get().uri("/test/unexpected").exchange())
                 .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR)
                 .bodyJson()
-                .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("서버 오류가 발생했습니다"));
+                .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("서버 오류가 발생했습니다"))
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("INTERNAL_ERROR"));
     }
 
     @Test
@@ -46,6 +47,23 @@ class GlobalExceptionHandlerTest {
     @Test
     void NotFoundException은_404로_응답한다() {
         assertThat(mvc.get().uri("/test/not-found").exchange()).hasStatus(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void 코드를_지정하지_않은_예외는_상태별_기본_코드로_응답한다() {
+        assertThat(mvc.get().uri("/test/not-found").exchange())
+                .bodyJson()
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("NOT_FOUND"));
+    }
+
+    /** 상태코드만으로 갈라지지 않는 404를 클라이언트가 구분할 수 있어야 한다 (BY-436) */
+    @Test
+    void 예외가_지정한_에러_코드를_그대로_내려준다() {
+        assertThat(mvc.get().uri("/test/room-closed").exchange())
+                .hasStatus(HttpStatus.NOT_FOUND)
+                .bodyJson()
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("ROOM_CLOSED"))
+                .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("방이 종료되었어요"));
     }
 
     @Test
@@ -92,6 +110,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/not-found")
         void notFound() {
             throw new NotFoundException("없는 사용자입니다");
+        }
+
+        @GetMapping("/test/room-closed")
+        void roomClosed() {
+            throw new NotFoundException(ErrorCode.ROOM_CLOSED, "방이 종료되었어요");
         }
 
         @GetMapping("/test/bad-request")

@@ -5,16 +5,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.List;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import project.study.common.BadRequestException;
 import project.study.common.ConflictException;
+import project.study.common.ErrorCode;
 import project.study.common.NotFoundException;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomMember;
 import project.study.room.service.RoomService;
 
 class RoomServiceTest {
+
+    private static final long CLOSED_CODE_TTL_SECONDS = 600;
 
     private RoomService roomService;
 
@@ -25,6 +29,12 @@ class RoomServiceTest {
 
     private String createRoom() {
         return roomService.create(1L).inviteCode();
+    }
+
+    private static void assertNotFoundWithCode(ThrowingCallable call, ErrorCode expected) {
+        assertThatThrownBy(call)
+                .isInstanceOfSatisfying(
+                        NotFoundException.class, e -> assertThat(e.getCode()).isEqualTo(expected));
     }
 
     // 프로필 값이 중요하지 않은 테스트용 기본 join — 닉네임·목표는 join 시점에 호출자가 전달한다
@@ -70,6 +80,42 @@ class RoomServiceTest {
     @Test
     void 없는_초대코드는_404다() {
         assertThatThrownBy(() -> join(100L, "9999")).isInstanceOf(NotFoundException.class);
+    }
+
+    // 아래 네 개는 BY-436 — 같은 404라도 클라이언트가 안내 문구를 고를 수 있어야 한다
+
+    @Test
+    void 발급된_적_없는_코드는_INVITE_CODE_NOT_FOUND다() {
+        assertNotFoundWithCode(() -> join(100L, "9999"), ErrorCode.INVITE_CODE_NOT_FOUND);
+    }
+
+    @Test
+    void 마지막_1명이_퇴장해_소멸한_방의_코드는_ROOM_CLOSED다() {
+        String code = createRoom();
+        Long roomId = join(100L, code).response().roomId();
+        roomService.leave(roomId, 100L);
+
+        assertNotFoundWithCode(() -> join(200L, code), ErrorCode.ROOM_CLOSED);
+    }
+
+    @Test
+    void 입장_없이_만료돼_소멸한_빈_방의_코드도_ROOM_CLOSED다() {
+        String code = createRoom();
+
+        roomService.cleanupExpired(Instant.now().plusSeconds(601));
+
+        assertNotFoundWithCode(() -> join(100L, code), ErrorCode.ROOM_CLOSED);
+    }
+
+    @Test
+    void 소멸_10분이_지난_코드는_다시_INVITE_CODE_NOT_FOUND가_된다() {
+        String code = createRoom();
+        Long roomId = join(100L, code).response().roomId();
+        roomService.leave(roomId, 100L);
+
+        roomService.cleanupExpired(Instant.now().plusSeconds(CLOSED_CODE_TTL_SECONDS + 1));
+
+        assertNotFoundWithCode(() -> join(200L, code), ErrorCode.INVITE_CODE_NOT_FOUND);
     }
 
     @Test
@@ -304,13 +350,21 @@ class RoomServiceTest {
         assertThat(roomService.hasParticipant(roomId, 999L)).isFalse();
     }
 
+    /**
+     * 코드를 1만 개 공간에서 무작위로 뽑으므로 "재발급되지 않았다"를 직접 관측할 수는 없다 —
+     * 대신 클라이언트가 실제로 보는 계약을 검증한다. 묘비 기간 안에 방이 여럿 새로 생겨도
+     * 소멸한 코드로 들어오면 새 방 입장이 아니라 ROOM_CLOSED여야 한다 (BY-436).
+     */
     @Test
-    void 소멸한_방의_코드는_새_방이_재사용할_수_있다() {
+    void 소멸한_코드는_묘비_기간_동안_다른_방에_재발급되지_않는다() {
         String code = createRoom();
         Long roomId = join(100L, code).response().roomId();
         roomService.leave(roomId, 100L);
+        for (int i = 0; i < 50; i++) {
+            roomService.create(1L);
+        }
 
-        // 같은 코드가 나올 때까지 생성 반복 — 코드 공간이 비어 있으므로 언젠가 재사용된다는 것만 검증
         assertThat(roomService.roomExists(roomId)).isFalse();
+        assertNotFoundWithCode(() -> join(200L, code), ErrorCode.ROOM_CLOSED);
     }
 }
