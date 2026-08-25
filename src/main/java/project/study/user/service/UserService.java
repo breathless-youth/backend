@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.BadRequestException;
 import project.study.common.ConflictException;
+import project.study.common.ErrorCode;
 import project.study.common.NotFoundException;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
@@ -116,7 +117,9 @@ public class UserService {
     }
 
     private User findUser(Long userId) {
-        return userRepository.findById(userId).orElseThrow(() -> new NotFoundException("존재하지 않는 사용자입니다"));
+        return userRepository
+                .findById(userId)
+                .orElseThrow(() -> new NotFoundException(ErrorCode.USER_NOT_FOUND, "존재하지 않는 사용자입니다"));
     }
 
     private static ProfileResponse toProfileResponse(User user) {
