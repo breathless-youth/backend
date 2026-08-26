@@ -13,3 +13,7 @@ jwt:
 
 refresh-token:
   expiration: 1209600000
+
+# BY-447 확정 스케줄러 — 테스트에서는 끈다 (백그라운드 확정이 테스트 데이터를 건드리는 경합 방지)
+session-finalize:
+  enabled: false
