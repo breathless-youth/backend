@@ -17,6 +17,7 @@ import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,11 +32,14 @@ class StudySessionLongestFocusServiceTest {
     @Mock
     private StudySessionRepository studySessionRepository;
 
+    @Mock
+    private ActiveStudySessionRepository activeStudySessionRepository;
+
     private StudySessionService service;
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, CLOCK);
+        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
                 .thenReturn(List.of());

@@ -30,6 +30,7 @@ import project.study.studysession.dto.StudySessionSummaryResponse;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
 @Service
@@ -42,22 +43,39 @@ public class StudySessionService {
     private static final String USER_FK_CONSTRAINT = "study_session_user_id_fkey";
 
     private final StudySessionRepository studySessionRepository;
+    private final ActiveStudySessionRepository activeStudySessionRepository;
     private final Clock clock;
 
     @Transactional
     public List<StudySessionResponse> create(Long userId, StudySessionCreateRequest request) {
+        return create(userId, request, false);
+    }
+
+    /** autoFinalized=true는 확정 스케줄러 전용 — 저장되는 세션에 자동 확정 표시를 남긴다. */
+    @Transactional
+    public List<StudySessionResponse> create(Long userId, StudySessionCreateRequest request, boolean autoFinalized) {
         List<StudySession> existing = studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
                 userId, request.startedAt());
         if (!existing.isEmpty()) {
-            return existing.stream().map(this::toResponse).toList();
+            // 클라 제출본이 하나라도 있으면 불가침 — 기존 멱등 동작(저장된 결과 반환)
+            if (!existing.stream().allMatch(StudySession::isAutoFinalized)) {
+                return existing.stream().map(this::toResponse).toList();
+            }
+            // 전부 자동 확정본이면 잠정 기록 — 새 도착분(최종 제출·재확정)으로 대체한다. 길이 비교는 하지 않는다: 스냅샷이 누적값이라 나중 도착분이 항상 상위집합이다 (ADR-0014)
+            studySessionRepository.deleteAll(existing);
+            studySessionRepository.flush();
         }
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
         List<StudySession> sessions = createSessions(
                 userId, request.startedAt(), request.endedAt(), request.studySec(), request.focusSec(), events);
+        if (autoFinalized) {
+            sessions.forEach(StudySession::markAutoFinalized);
+        }
         try {
             List<StudySession> saved = studySessionRepository.saveAll(sessions);
             studySessionRepository.flush();
+            activeStudySessionRepository.deleteByUserIdAndStartedAt(userId, request.startedAt());
             return saved.stream().map(this::toResponse).toList();
         } catch (DataIntegrityViolationException e) {
             String constraint = violatedConstraint(e);
@@ -72,9 +90,7 @@ public class StudySessionService {
     }
 
     /**
-     * 유니크 위반으로 create()가 던진 DuplicateSessionException을 받은 호출자가 재조회할 때 쓴다.
-     * create()의 트랜잭션은 flush 실패 시점에 이미 롤백되어 끝났으므로, 같은 (userId, submissionStartedAt)의
-     * 레이스에서 진 것뿐이라면 이 완전히 새 트랜잭션에서 상대가 커밋한 결과를 찾아 그대로 반환한다(멱등).
+     * 유니크 위반으로 create()가 던진 DuplicateSessionException을 받은 호출자가 재조회할 때 쓴다. create()의 트랜잭션은 flush 실패 시점에 이미 롤백되어 끝났으므로, 같은 (userId, submissionStartedAt)의 레이스에서 진 것뿐이라면 이 완전히 새 트랜잭션에서 상대가 커밋한 결과를 찾아 그대로 반환한다(멱등).
      */
     @Transactional(readOnly = true)
     public List<StudySessionResponse> findExistingSubmission(Long userId, Instant submissionStartedAt) {
