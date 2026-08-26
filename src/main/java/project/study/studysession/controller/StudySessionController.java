@@ -52,8 +52,6 @@ public class StudySessionController {
 
                     **검증 규칙**
                     - 종료 시각은 시작 시각 이후여야 한다 (세션·이벤트 모두)
-                    - 세션은 10분 이상이어야 한다 — 10분 미만 세션은 저장되지 않고 `400`으로 거절된다 \
-                    (저장되지 않으므로 스트릭·통계에도 잡히지 않는다)
                     - 세션은 24시간을 초과할 수 없다
                     - 세션 종료 시각은 미래일 수 없다 (기기 시계 오차 5분까지 허용)
                     - 총 공부 시간(`studySec`)은 0 이상, (세션 총 시간 − `PAUSE` 이벤트 시간 합) 이하여야 한다
@@ -74,7 +72,9 @@ public class StudySessionController {
                     **멱등 재제출 — 중복 저장 방지.** `userId`+`startedAt`이 멱등 키다. 같은 키로 다시 제출하면 \
                     (앱 강제종료 후 재접속해 로컬 보관분을 재전송하는 경우 등) 새로 저장하지 않고 이미 저장된 \
                     세션 배열을 그대로 `201`로 돌려준다 — 재제출 본문의 다른 필드는 무시된다. \
-                    시작 시각이 기존 세션(자정 분할 조각 포함)과 겹치는 별개 제출이 동시에 들어오면 `409`로 거절된다.""")
+                    시작 시각이 기존 세션(자정 분할 조각 포함)과 겹치는 별개 제출이 동시에 들어오면 `409`로 거절된다. \
+                    자동 확정본(잠정 기록)이 이미 저장돼 있으면 재제출이 아니라 대체가 일어난다 — 진행중 세션 스냅샷 API 참고 (ADR-0014).
+""")
     @ApiResponse(
             responseCode = "201",
             description = "저장 성공 — studySec/focusSec/focusRate/statDate를 포함한 세션 배열 (자정 분할 시 2개)")
@@ -89,7 +89,6 @@ public class StudySessionController {
                                 @ExampleObject(
                                         name = "종료가 시작보다 빠름",
                                         value = "{\"message\": \"세션 종료 시각은 시작 시각 이후여야 합니다\"}"),
-                                @ExampleObject(name = "10분 미만", value = "{\"message\": \"세션은 10분 이상이어야 합니다\"}"),
                                 @ExampleObject(name = "24시간 초과", value = "{\"message\": \"세션은 24시간을 초과할 수 없습니다\"}"),
                                 @ExampleObject(name = "미래 시각", value = "{\"message\": \"세션 종료 시각이 미래일 수 없습니다\"}"),
                                 @ExampleObject(
