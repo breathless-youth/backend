@@ -34,6 +34,7 @@ class RoomInviteCodeErrorTest {
                         NotFoundException.class, e -> assertThat(e.getCode()).isEqualTo(expected));
     }
 
+    // 프로필 값이 중요하지 않은 테스트용 기본 join — 닉네임·목표는 join 시점에 호출자가 전달한다
     private RoomService.JoinResult join(Long userId, String code) {
         return roomService.join(userId, code, "포메" + userId, null, null);
     }

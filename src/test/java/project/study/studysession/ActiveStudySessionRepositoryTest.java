@@ -18,6 +18,7 @@ import project.study.studysession.repository.ActiveStudySessionRepository;
 /** BY-447 draft 테이블 라운드트립 — jsonb 매핑과 파생 쿼리가 실제 PostgreSQL에서 동작하는지 검증한다. */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
+// findByLastSeenAtBefore가 전 유저 대상 풀스캔이라 다른 테스트가 커밋한 draft가 섞인다 — 롤백 격리 필수
 @Transactional
 class ActiveStudySessionRepositoryTest {
 
