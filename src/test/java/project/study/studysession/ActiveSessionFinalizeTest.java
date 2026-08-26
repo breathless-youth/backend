@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import project.study.TestcontainersConfiguration;
+import project.study.studysession.scheduler.ActiveSessionFinalizeScheduler;
 import project.study.studysession.service.ActiveStudySessionService;
 
 /** BY-447 무응답 draft 자동 확정 — 스케줄러가 호출하는 서비스 메서드를 직접 검증한다. */
@@ -181,5 +182,25 @@ class ActiveSessionFinalizeTest {
 
         assertThat(sessionRows()).isEqualTo(0);
         assertThat(draftRows()).isEqualTo(0);
+    }
+
+    // 최종 리뷰 Important 2 — 영구 실패(검증 불능)만 폐기하고, 하나가 실패해도 나머지 draft는 계속 처리된다는 것을
+    // 스케줄러 빈의 finalizeStaleDrafts()를 직접 호출해 검증한다(스케줄러 빈은 session-finalize.enabled=false로
+    // 컨텍스트에 없으므로 여기서 직접 생성한다).
+    @Test
+    void 검증_불능_draft는_폐기되고_정상_draft는_확정되며_루프는_중단되지_않는다() {
+        Instant invalidStartedAt = startedAt.plusSeconds(10_000);
+        insertDraft(startedAt, startedAt.plusSeconds(1800), staleLastSeen(), 1800, 1700, "[]");
+        // reportedAt(=확정 시 endedAt)이 startedAt보다 이전 — 하트비트 검증이 막았어야 할 영구 실패
+        insertDraft(invalidStartedAt, invalidStartedAt.minusSeconds(10), staleLastSeen(), 100, 100, "[]");
+
+        ActiveSessionFinalizeScheduler scheduler = new ActiveSessionFinalizeScheduler(activeStudySessionService);
+        scheduler.finalizeStaleDrafts();
+
+        assertThat(sessionRows()).isEqualTo(1); // 정상 draft만 세션으로 확정
+        Integer studySec = jdbcTemplate.queryForObject(
+                "SELECT study_sec FROM study_session WHERE user_id = ?", Integer.class, userId);
+        assertThat(studySec).isEqualTo(1800);
+        assertThat(draftRows()).isEqualTo(0); // 정상 draft는 확정으로, 검증 불능 draft는 폐기로 둘 다 사라짐
     }
 }

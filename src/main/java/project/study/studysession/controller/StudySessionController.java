@@ -11,6 +11,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -125,13 +126,20 @@ public class StudySessionController {
     public List<StudySessionResponse> create(@Valid @RequestBody StudySessionCreateRequest request) {
         try {
             return studySessionService.create(request.userId(), request);
-        } catch (DuplicateSessionException e) {
-            List<StudySessionResponse> concurrent =
-                    studySessionService.findExistingSubmission(request.userId(), request.startedAt());
-            if (!concurrent.isEmpty()) {
-                return concurrent;
+        } catch (DuplicateSessionException | ObjectOptimisticLockingFailureException e) {
+            // 자동 확정 스케줄러와의 유니크 레이스에서 진 경우 — 방금 확정된 auto_finalized(잠정) 행을
+            // 그대로 돌려주면 최종 제출이 영구 유실되므로, create를 1회 재시도해 대체 로직을 태운다
+            // (기존 클라본이면 멱등 반환, 전부 auto_finalized면 대체, 재충돌이면 아래 폴백) (ADR-0014).
+            try {
+                return studySessionService.create(request.userId(), request);
+            } catch (DuplicateSessionException retryEx) {
+                List<StudySessionResponse> concurrent =
+                        studySessionService.findExistingSubmission(request.userId(), request.startedAt());
+                if (!concurrent.isEmpty()) {
+                    return concurrent;
+                }
+                throw retryEx;
             }
-            throw e;
         }
     }
 }
