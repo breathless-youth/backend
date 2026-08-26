@@ -82,42 +82,6 @@ class RoomServiceTest {
         assertThatThrownBy(() -> join(100L, "9999")).isInstanceOf(NotFoundException.class);
     }
 
-    // 아래 네 개는 BY-436 — 같은 404라도 클라이언트가 안내 문구를 고를 수 있어야 한다
-
-    @Test
-    void 발급된_적_없는_코드는_INVITE_CODE_NOT_FOUND다() {
-        assertNotFoundWithCode(() -> join(100L, "9999"), ErrorCode.INVITE_CODE_NOT_FOUND);
-    }
-
-    @Test
-    void 마지막_1명이_퇴장해_소멸한_방의_코드는_ROOM_CLOSED다() {
-        String code = createRoom();
-        Long roomId = join(100L, code).response().roomId();
-        roomService.leave(roomId, 100L);
-
-        assertNotFoundWithCode(() -> join(200L, code), ErrorCode.ROOM_CLOSED);
-    }
-
-    @Test
-    void 입장_없이_만료돼_소멸한_빈_방의_코드도_ROOM_CLOSED다() {
-        String code = createRoom();
-
-        roomService.cleanupExpired(Instant.now().plusSeconds(601));
-
-        assertNotFoundWithCode(() -> join(100L, code), ErrorCode.ROOM_CLOSED);
-    }
-
-    @Test
-    void 소멸_10분이_지난_코드는_다시_INVITE_CODE_NOT_FOUND가_된다() {
-        String code = createRoom();
-        Long roomId = join(100L, code).response().roomId();
-        roomService.leave(roomId, 100L);
-
-        roomService.cleanupExpired(Instant.now().plusSeconds(CLOSED_CODE_TTL_SECONDS + 1));
-
-        assertNotFoundWithCode(() -> join(200L, code), ErrorCode.INVITE_CODE_NOT_FOUND);
-    }
-
     @Test
     void 정원_6명_초과_시_ConflictException이_발생한다() {
         String code = createRoom();

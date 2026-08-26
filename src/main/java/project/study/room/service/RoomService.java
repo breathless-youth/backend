@@ -29,13 +29,7 @@ import project.study.room.event.ParticipantLeftEvent;
 import project.study.room.event.RoomClosedEvent;
 import project.study.room.event.RoomCreatedEvent;
 
-/**
- * 인메모리 룸 상태 관리 (단일 인스턴스 전제).
- *
- * <p>동시성 전략: 상태를 바꾸거나 읽는 public 메서드 전부를 인스턴스 락(synchronized)으로 직렬화한다.
- * 방 몇 개 × 최대 6명 규모에서 연산은 마이크로초 단위라 경합이 무의미하고, 세밀한 락으로 생기는
- * 레이스(동시 1룸 위반, 정리-확정 경쟁, 빈 방 소멸-입장 경쟁, 세션 교체 유실)를 원천 차단한다.
- */
+/** 인메모리 룸 상태 관리. 동시성: public 메서드를 모두 synchronized로 직렬화하여 레이스를 원천 차단. */
 @Service
 public class RoomService {
 
