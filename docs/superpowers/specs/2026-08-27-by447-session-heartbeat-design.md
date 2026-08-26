@@ -110,6 +110,11 @@ ALTER TABLE study_session ADD COLUMN auto_finalized BOOLEAN NOT NULL DEFAULT fal
   매핑)을 먼저 시도하고 FormatMapper 호환이 안 되면 String으로 간다.
 - 스케줄러 조회는 `WHERE last_seen_at < now() - 5분` — 테이블 크기가 동시 공부
   세션 수라 인덱스 불필요.
+- 스냅샷 저장은 PostgreSQL 네이티브 `INSERT ... ON CONFLICT (user_id, started_at)
+  DO UPDATE ... WHERE 기존 reported_at < 새 reported_at` 한 문장 — 동시 첫 스냅샷
+  레이스와 역순 도착 가드를 원자적으로 함께 해결한다(레이스 패자·과거 스냅샷은
+  조용히 0행 갱신). 조회-후-갱신 방식은 유니크 충돌 flush 실패가 트랜잭션을
+  오염시켜(rollback-only) 레이스 시 204 대신 500이 나가는 문제가 있어 기각.
 
 ## 확정 스케줄러와 정합 정책
 
@@ -117,15 +122,21 @@ ALTER TABLE study_session ADD COLUMN auto_finalized BOOLEAN NOT NULL DEFAULT fal
 `last_seen_at` 5분 경과 draft를 확정한다. 30초 주기 기준 하트비트 10회 연속
 유실이어야 하므로 일시 단절 오탐이 사실상 없고, 확정 지연은 최대 유예 5분 + 스캔 1분.
 
-draft마다 독립 트랜잭션으로:
+draft마다 독립적으로 처리한다. 확정 메서드 자체에는 트랜잭션을 두지 않는다 —
+`create`가 자기 트랜잭션으로 돌아야, 유니크 충돌로 create가 롤백돼도(rollback-only
+오염) 후속 draft 정리가 별도 트랜잭션에서 살아남는다(컨트롤러의 재조회 패턴과 동일한
+이유):
 
 1. jsonb 이벤트를 역직렬화해 `endedAt := reportedAt`으로 **기존
-   `StudySessionService.create` 호출** — 검증·자정 분할·statDate 계산 전부 재사용,
-   `auto_finalized = true`로 저장. 성공하면 draft 삭제. 길이 무관 전부
+   `StudySessionService.create`를 자체 트랜잭션으로 호출** — 검증·자정 분할·statDate
+   계산 전부 재사용, `auto_finalized = true`로 저장. 성공 시 draft 삭제는 create
+   트랜잭션 안에서 함께 일어난다(최종 제출 경로와 동일). 길이 무관 전부
    확정한다(ADR-0009: 저장 무제한, 조회 1분·스트릭 10분 임계값이 노이즈를 거른다).
-2. `DuplicateSessionException`(이미 제출·확정됨) → draft만 삭제.
+2. `DuplicateSessionException`(별개 제출 조각과 시각 충돌) 또는 클라 제출본이 이미
+   있어 create가 멱등 반환한 경우 → 기록이 이미 있으니 draft만 삭제(별도 트랜잭션).
 3. 그 외 예외 → 하트비트 검증이 막았어야 할 상황이라 재시도해도 영원히 실패한다.
-   Sentry 로그 후 draft 삭제. 하나 실패해도 나머지 draft는 계속 처리.
+   스케줄러가 Sentry 로그 후 별도 트랜잭션으로 draft 폐기. 하나 실패해도 나머지
+   draft는 계속 처리.
 
 **정합 정책 — `auto_finalized` 세션은 잠정 기록이다:**
 
