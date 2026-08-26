@@ -232,6 +232,15 @@ public class RoomService {
         return confirmedMembers(room);
     }
 
+    // 스냅샷 재요청 인가+조회(BY-442) — 한 번의 원자 호출로 처리한다. 인가(isActiveSession)와
+    // 조회(getMembers)를 따로 부르면 그 사이 퇴장이 끼어들어 비멤버에게 스냅샷이 나갈 수 있다.
+    // 요청자의 "현재" 세션만 인정해 옛 세션·사칭 세션의 재요청을 차단하고, 빈 목록 = 발송 금지
+    // (활성 확정 멤버라면 목록에 자신이 반드시 포함되므로 빈 목록과 구분 불가한 경우가 없다)
+    public synchronized List<RoomMember> getMembersForActiveSession(Long roomId, Long userId, String stompSessionId) {
+        if (!isActiveSession(roomId, userId, stompSessionId)) return List.of();
+        return confirmedMembers(roomById.get(roomId));
+    }
+
     public synchronized boolean isConfirmedMember(Long roomId, Long userId) {
         Participant p = getParticipant(roomId, userId);
         return p != null && p.stompConfirmed;
