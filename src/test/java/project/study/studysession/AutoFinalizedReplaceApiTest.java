@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +45,13 @@ class AutoFinalizedReplaceApiTest {
                 Long.class,
                 UUID.randomUUID().toString(),
                 "tester-" + UUID.randomUUID());
+    }
+
+    // findByLastSeenAtBefore(스케줄러 조회)가 전 유저 대상 풀스캔이라, 이 테스트가 남긴 draft가 커밋된 채
+    // 남으면 다른 테스트 클래스(특히 ActiveSessionFinalizeTest)의 스캔 결과를 오염시킨다 — 매 테스트 뒤 정리한다.
+    @AfterEach
+    void cleanUpDraft() {
+        jdbcTemplate.update("DELETE FROM active_study_session WHERE user_id = ?", userId);
     }
 
     /** 자동 확정된 세션 흉내 — 스케줄러가 만든 것과 같은 형태의 행을 직접 넣는다. */
