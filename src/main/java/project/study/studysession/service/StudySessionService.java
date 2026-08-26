@@ -86,7 +86,7 @@ public class StudySessionService {
     }
 
     /** 원인 체인에서 위반된 제약 이름을 찾는다 — 없으면 null. */
-    private static String violatedConstraint(DataIntegrityViolationException e) {
+    static String violatedConstraint(DataIntegrityViolationException e) {
         for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
             if (cause instanceof ConstraintViolationException violation) {
                 return violation.getConstraintName();
