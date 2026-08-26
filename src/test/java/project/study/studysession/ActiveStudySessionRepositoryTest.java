@@ -10,7 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
 import project.study.TestcontainersConfiguration;
 import project.study.studysession.entity.ActiveStudySession;
 import project.study.studysession.repository.ActiveStudySessionRepository;
@@ -18,7 +17,6 @@ import project.study.studysession.repository.ActiveStudySessionRepository;
 /** BY-447 draft 테이블 라운드트립 — jsonb 매핑과 파생 쿼리가 실제 PostgreSQL에서 동작하는지 검증한다. */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
-@Transactional
 class ActiveStudySessionRepositoryTest {
 
     @Autowired
