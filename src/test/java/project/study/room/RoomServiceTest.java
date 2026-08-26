@@ -300,6 +300,52 @@ class RoomServiceTest {
         assertThat(members.getFirst().goal()).isEqualTo("정처기 합격");
     }
 
+    // 스냅샷 재요청(BY-442) — 인가와 조회가 한 번의 원자 호출이어야 한다 (검사-조회 사이 퇴장 레이스 차단)
+    @Test
+    void 활성_세션_멤버는_스냅샷_재요청으로_멤버_목록을_받는다() {
+        String code = createRoom();
+        Long roomId = join(100L, code).response().roomId();
+        roomService.confirmStomp(roomId, 100L, "session-1");
+        join(200L, code);
+        roomService.confirmStomp(roomId, 200L, "session-2");
+
+        List<RoomMember> members = roomService.getMembersForActiveSession(roomId, 100L, "session-1");
+
+        assertThat(members).extracting(RoomMember::userId).containsExactlyInAnyOrder(100L, 200L);
+    }
+
+    @Test
+    void 옛_세션의_스냅샷_재요청은_빈_목록을_받는다() {
+        String code = createRoom();
+        Long roomId = join(100L, code).response().roomId();
+        roomService.confirmStomp(roomId, 100L, "session-old");
+        roomService.confirmStomp(roomId, 100L, "session-new");
+
+        assertThat(roomService.getMembersForActiveSession(roomId, 100L, "session-old"))
+                .isEmpty();
+    }
+
+    @Test
+    void 확정_전_참가자의_스냅샷_재요청은_빈_목록을_받는다() {
+        String code = createRoom();
+        Long roomId = join(100L, code).response().roomId();
+
+        assertThat(roomService.getMembersForActiveSession(roomId, 100L, "session-1"))
+                .isEmpty();
+    }
+
+    @Test
+    void 비멤버와_없는_방의_스냅샷_재요청은_빈_목록을_받는다() {
+        String code = createRoom();
+        Long roomId = join(100L, code).response().roomId();
+        roomService.confirmStomp(roomId, 100L, "session-1");
+
+        assertThat(roomService.getMembersForActiveSession(roomId, 999L, "session-x"))
+                .isEmpty();
+        assertThat(roomService.getMembersForActiveSession(roomId + 1, 100L, "session-1"))
+                .isEmpty();
+    }
+
     @Test
     void 마지막_순공시간이_스냅샷에_실린다() {
         String code = createRoom();

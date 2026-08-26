@@ -1,6 +1,7 @@
 package project.study.room.websocket;
 
 import java.security.Principal;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -9,8 +10,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import project.study.room.dto.RoomMember;
 import project.study.room.dto.SignalPayload;
 import project.study.room.dto.StateUpdatePayload;
 import project.study.room.service.RoomService;
@@ -25,6 +28,33 @@ public class RoomStompHandler {
 
     private final RoomService roomService;
     private final SimpMessagingTemplate messagingTemplate;
+
+    // SNAPSHOT 재요청 (BY-442) — 구독 등록 전에 발사된 SNAPSHOT이 증발하는 레이스를 클라 재시도로 복구한다.
+    // body는 무시하고, 방 상태를 바꾸지 않으며, 비멤버·옛 세션은 에러 프레임 없이 조용히 무시한다
+    // (재시도가 조용히 소진되게). 레이스로 이번 요청이 세션 확정보다 먼저 도착해도 다음 재시도가 성공한다
+    @MessageMapping("/room/{roomId}/snapshot")
+    public void handleSnapshotRequest(
+            @DestinationVariable Long roomId, Principal principal, SimpMessageHeaderAccessor accessor) {
+        if (principal == null) return;
+
+        Long userId = Long.valueOf(principal.getName());
+        List<RoomMember> members = roomService.getMembersForActiveSession(roomId, userId, accessor.getSessionId());
+        if (members.isEmpty()) {
+            log.debug("snapshot 재요청 무시(비멤버 또는 비활성 세션): roomId={}, userId={}", roomId, userId);
+            return;
+        }
+
+        log.debug("snapshot 재발송: roomId={}, userId={}, 인원={}", roomId, userId, members.size());
+        // 세션 스코프 발송 — 같은 유저의 남은 옛 세션까지 배달되지 않도록 요청 세션에만 보낸다
+        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
+        headers.setSessionId(accessor.getSessionId());
+        headers.setLeaveMutable(true);
+        messagingTemplate.convertAndSendToUser(
+                principal.getName(),
+                "/queue/room",
+                Map.of("type", "SNAPSHOT", "members", members),
+                headers.getMessageHeaders());
+    }
 
     @MessageMapping("/room/{roomId}/signal")
     public void handleSignal(
