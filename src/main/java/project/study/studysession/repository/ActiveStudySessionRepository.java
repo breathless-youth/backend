@@ -42,6 +42,9 @@ public interface ActiveStudySessionRepository extends JpaRepository<ActiveStudyS
     // 확정 대상 draft 조회 — (userId, startedAt)이 draft의 멱등 키다
     Optional<ActiveStudySession> findByUserIdAndStartedAt(Long userId, Instant startedAt);
 
+    // 재접속 복구 조회(BY-448) — 옛 draft(확정 대기)와 새 draft가 공존할 수 있어 마지막 보고가 최신인 것을 준다
+    Optional<ActiveStudySession> findFirstByUserIdOrderByLastSeenAtDesc(Long userId);
+
     // 확정 스케줄러용 — 서버 시계 기준 무응답 draft. 테이블 크기가 동시 공부 세션 수라 인덱스 불필요
     List<ActiveStudySession> findByLastSeenAtBefore(Instant cutoff);
 

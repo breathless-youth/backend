@@ -147,4 +147,57 @@ class ActiveSessionSnapshotApiTest {
                         .exchange())
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
+
+    // ── 복구 조회 (BY-448) ──────────────────────────────────────────
+
+    private MvcTestResult restore(Long uid) {
+        return mvc.get().uri("/api/study-sessions/active?userId=" + uid).exchange();
+    }
+
+    @Test
+    void 재접속_조회는_저장된_최신_스냅샷을_돌려준다() {
+        // DB(마이크로초)·JSON 직렬화 왕복에서 표기가 어긋나지 않도록 초 단위로 자른 시각을 쓴다
+        Instant started = startedAt.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        String events = """
+				[{"status":"PHONE","startedAt":"%s","endedAt":"%s"}]""".formatted(started.plusSeconds(10), started.plusSeconds(20));
+        report(userId, started, started.plusSeconds(30), 20, 10, events);
+        report(userId, started, started.plusSeconds(60), 50, 40, events);
+
+        assertThat(restore(userId))
+                .hasStatus(HttpStatus.OK)
+                .bodyJson()
+                .hasPathSatisfying("$.startedAt", v -> assertThat(v).isEqualTo(started.toString()))
+                .hasPathSatisfying(
+                        "$.reportedAt",
+                        v -> assertThat(v).isEqualTo(started.plusSeconds(60).toString()))
+                .hasPathSatisfying("$.studySec", v -> assertThat(v).isEqualTo(50))
+                .hasPathSatisfying("$.focusSec", v -> assertThat(v).isEqualTo(40))
+                .hasPathSatisfying("$.events[0].status", v -> assertThat(v).isEqualTo("PHONE"));
+    }
+
+    @Test
+    void 진행중_draft가_없으면_조회는_404다() {
+        assertThat(restore(userId)).hasStatus(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void draft가_여러_개면_마지막_보고가_가장_최근인_것을_돌려준다() {
+        // 앱이 죽고 새 세션을 시작하면 옛 draft(확정 대기)와 새 draft가 잠깐 공존한다 — 복구는 최신 것이어야 한다
+        Instant oldStarted = startedAt.minusSeconds(20_000);
+        jdbcTemplate.update(
+                "INSERT INTO active_study_session (user_id, started_at, reported_at, last_seen_at, study_sec,"
+                        + " focus_sec, events) VALUES (?, ?, ?, ?, ?, ?, '[]'::jsonb)",
+                userId,
+                java.sql.Timestamp.from(oldStarted),
+                java.sql.Timestamp.from(oldStarted.plusSeconds(600)),
+                java.sql.Timestamp.from(startedAt.minusSeconds(19_000)),
+                999,
+                999);
+        report(userId, startedAt, startedAt.plusSeconds(30), 30, 30);
+
+        assertThat(restore(userId))
+                .hasStatus(HttpStatus.OK)
+                .bodyJson()
+                .hasPathSatisfying("$.studySec", v -> assertThat(v).isEqualTo(30));
+    }
 }
