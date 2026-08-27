@@ -1,6 +1,7 @@
 package project.study.studysession.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,13 +11,16 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.ErrorResponse;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
+import project.study.studysession.dto.ActiveSessionSnapshotResponse;
 import project.study.studysession.service.ActiveStudySessionService;
 
 @Tag(
@@ -70,5 +74,31 @@ public class ActiveStudySessionController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void report(@Valid @RequestBody ActiveSessionSnapshotRequest request) {
         activeStudySessionService.reportSnapshot(request);
+    }
+
+    @Operation(summary = "진행중 세션 복구 조회", description = """
+					재접속했는데 로컬 기록이 없을 때 호출한다 (BY-448). 서버가 보관 중인 진행 스냅샷 중 \
+					마지막 보고가 가장 최근인 1건을 돌려준다 — 스냅샷 보고 요청과 같은 모양이라 그대로 상태를 \
+					복원하면 된다.
+
+					받은 뒤 선택지는 둘 다 유효하다. **이어서 공부**: 받은 값으로 타이머를 복원하고 같은 startedAt으로 \
+					스냅샷 보고를 재개한다(앱이 죽어있던 공백은 studySec에 누적되지 않았으므로 기록은 정확하다). \
+					**즉시 마감**: endedAt = reportedAt으로 최종 제출하고 세션을 끝낸다.
+
+					조회 직후 서버가 그 세션을 자동 확정하는 극단적 타이밍이 겹쳐도 받은 데이터로 이어서 \
+					보고·제출하면 대체 정책이 더 완전한 기록으로 수렴시키므로 클라이언트가 따로 처리할 것은 없다.""")
+    @ApiResponse(responseCode = "200", description = "진행중 스냅샷 — startedAt/reportedAt/studySec/focusSec/events")
+    @ApiResponse(
+            responseCode = "404",
+            description = "진행중 세션 없음 — 이미 자동 확정됐거나 애초에 없던 경우. 확정본은 통계 조회에 이미 반영돼 있으므로 새로 시작하면 된다",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "진행중 세션 없음", value = "{\"message\": \"진행중인 세션이 없습니다\"}")))
+    @GetMapping("/active")
+    public ActiveSessionSnapshotResponse restore(
+            @Parameter(description = "세션 주인의 유저 ID", example = "1") @RequestParam Long userId) {
+        return activeStudySessionService.findLatestSnapshot(userId);
     }
 }

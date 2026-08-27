@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.NotFoundException;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
+import project.study.studysession.dto.ActiveSessionSnapshotResponse;
 import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.entity.ActiveStudySession;
@@ -63,6 +64,22 @@ public class ActiveStudySessionService {
             }
             throw e;
         }
+    }
+
+    /**
+     * 재접속 복구용 최신 스냅샷 조회 (BY-448) — 로컬 기록을 잃은 클라이언트가 draft를 내려받아 세션을
+     * 복원한다. 옛 draft(확정 대기)와 새 draft가 공존할 수 있으므로 마지막 보고(lastSeenAt)가 최신인 것을
+     * 준다. 없으면 404 — 이미 자동 확정됐거나 애초에 없던 경우로, 확정본은 통계 조회에 이미 반영돼 있다.
+     */
+    @Transactional(readOnly = true)
+    public ActiveSessionSnapshotResponse findLatestSnapshot(Long userId) {
+        ActiveStudySession draft = activeStudySessionRepository
+                .findFirstByUserIdOrderByLastSeenAtDesc(userId)
+                .orElseThrow(() -> new NotFoundException("진행중인 세션이 없습니다"));
+        List<StatusEventRequest> events =
+                objectMapper.readValue(draft.getEvents(), new TypeReference<List<StatusEventRequest>>() {});
+        return new ActiveSessionSnapshotResponse(
+                draft.getStartedAt(), draft.getReportedAt(), draft.getStudySec(), draft.getFocusSec(), events);
     }
 
     /** 이 시간 넘게 하트비트가 없으면 죽었다고 본다 — 30초 주기 기준 10회 연속 유실. 판정은 서버 시계(lastSeenAt). */
