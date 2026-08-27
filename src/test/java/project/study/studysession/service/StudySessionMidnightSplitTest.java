@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
 /** StudySessionServiceTest에서 자정 분할·배분 관련 테스트만 분리 — 파일 길이 제한(400줄) 준수 목적. */
@@ -37,12 +38,15 @@ class StudySessionMidnightSplitTest {
     @Mock
     private StudySessionRepository studySessionRepository;
 
+    @Mock
+    private ActiveStudySessionRepository activeStudySessionRepository;
+
     // createSessions는 순수 로직이라 리포지토리를 사용하지 않는다 — 저장 경로는 API 통합테스트가 검증
     private StudySessionService service;
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, CLOCK);
+        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
     }
 
     private StatusEvent event(EventStatus status, String startedAt, String endedAt) {

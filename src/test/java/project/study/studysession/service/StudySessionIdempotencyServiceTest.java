@@ -25,6 +25,7 @@ import project.study.common.NotFoundException;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
 /** 재전송(강제종료 후 복구 등) 멱등 처리 — 멱등 키는 (userId, startedAt) 루트 제출, 중복이면 저장 없이 기존 결과를 반환한다. */
@@ -46,11 +47,14 @@ class StudySessionIdempotencyServiceTest {
     @Mock
     private StudySessionRepository studySessionRepository;
 
+    @Mock
+    private ActiveStudySessionRepository activeStudySessionRepository;
+
     private StudySessionService service;
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, CLOCK);
+        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
     }
 
     private static StudySessionCreateRequest request(Instant startedAt, Instant endedAt) {

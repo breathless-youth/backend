@@ -20,6 +20,7 @@ import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,12 +36,15 @@ class StudySessionServiceTest {
     @Mock
     private StudySessionRepository studySessionRepository;
 
+    @Mock
+    private ActiveStudySessionRepository activeStudySessionRepository;
+
     // createSessions는 순수 로직이라 리포지토리를 사용하지 않는다 — 저장 경로는 API 통합테스트가 검증
     private StudySessionService service;
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, CLOCK);
+        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
     }
 
     private StatusEvent event(EventStatus status, String startedAt, String endedAt) {
