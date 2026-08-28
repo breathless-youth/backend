@@ -61,6 +61,10 @@ public class StudySession {
     @Column(name = "auto_finalized", nullable = false)
     private boolean autoFinalized;
 
+    // BY-455: 복구 확인 시각 — 복구 판별 API가 이 세션을 사용자에게 보여준 시점. NULL이면 미확인
+    @Column(name = "recovery_acknowledged_at")
+    private Instant recoveryAcknowledgedAt;
+
     // 검증·계산은 StudySessionService.createSessions가 담당한다 — 엔티티는 저장 데이터만 보관
     public StudySession(
             Long userId,

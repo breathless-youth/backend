@@ -5,8 +5,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 import project.study.metrics.dto.HeavyUser;
 import project.study.studysession.dto.DailyStudyStat;
 import project.study.studysession.entity.StudySession;
@@ -79,4 +81,22 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
 
     // 세션 단건 상세 조회 — 소유자(userId)가 맞는 세션만. 없거나 남의 것이면 empty → 서비스가 404로 변환
     Optional<StudySession> findByIdAndUserId(Long id, Long userId);
+
+    // 복구 판별용(BY-455) — 유저의 가장 최근 세션 1건(시작 시각 기준). 자정 분할이면 마지막 조각이 잡힌다
+    Optional<StudySession> findFirstByUserIdOrderByStartedAtDesc(Long userId);
+
+    // 복구 확인 처리(BY-455) — 한 제출(submissionStartedAt)의 미확인 자동 확정본 조각에만 확인 시각을 찍는다.
+    // IS NULL 조건이라 동시 복구 요청 중 실제로 갱신한(반환>0) 쪽만 세션을 노출한다 — 한 번만 노출 보장.
+    // auto_finalized 조건은 대체 레이스 방어다: 판정 read와 이 update 사이에 정상 제출이 그룹을 대체하면
+    // 새 정상 rows(auto_finalized=false)는 여기서 제외돼 stale 요약이 반환되지 않는다(반환 0 → 404).
+    @Modifying
+    @Transactional
+    @Query("""
+            update StudySession s set s.recoveryAcknowledgedAt = :at
+            where s.userId = :userId and s.submissionStartedAt = :submissionStartedAt
+              and s.autoFinalized = true and s.recoveryAcknowledgedAt is null""")
+    int acknowledgeRecovery(
+            @Param("userId") Long userId,
+            @Param("submissionStartedAt") Instant submissionStartedAt,
+            @Param("at") Instant at);
 }
