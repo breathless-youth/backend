@@ -22,6 +22,12 @@ spring:
     hibernate:
       ddl-auto: validate
 
+# p6spy는 classpath에는 있지만 prod에서는 DataSource 래핑 자체를 끈다 —
+# 쿼리마다 프록시가 끼는 오버헤드·로그 볼륨을 피하기 위함 (local/dev에서만 켠다).
+decorator:
+  datasource:
+    enabled: false
+
 oauth:
   google:
     # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
