@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,7 +22,9 @@ import org.springframework.web.bind.annotation.RestController;
 import project.study.common.ErrorResponse;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.dto.ActiveSessionSnapshotResponse;
+import project.study.studysession.dto.SessionRecoveryResponse;
 import project.study.studysession.service.ActiveStudySessionService;
+import project.study.studysession.service.SessionRecoveryService;
 
 @Tag(
         name = "StudySession",
@@ -32,6 +35,7 @@ import project.study.studysession.service.ActiveStudySessionService;
 public class ActiveStudySessionController {
 
     private final ActiveStudySessionService activeStudySessionService;
+    private final SessionRecoveryService sessionRecoveryService;
 
     @Operation(summary = "진행중 세션 스냅샷 보고", description = """
 				공부 중 30초마다 진행중 세션의 누적 스냅샷을 보고한다 (BY-447, ADR-0014). \
@@ -100,5 +104,34 @@ public class ActiveStudySessionController {
     public ActiveSessionSnapshotResponse restore(
             @Parameter(description = "세션 주인의 유저 ID", example = "1") @RequestParam Long userId) {
         return activeStudySessionService.findLatestSnapshot(userId);
+    }
+
+    @Operation(summary = "세션 복구 판별·확인", description = """
+					비정상 종료(크래시/강제종료) 후 홈에 재진입했을 때 호출한다 (BY-455). 이어하기용 복구 조회\
+					(`GET /active`)와 목적이 다르다 — 이건 **이어하지 않고, 자동 저장된 마지막 세션을 확인만** 하는 경로다.
+
+					동작:
+					1. **아직 정리되지 않은 진행중 세션(draft)이 있으면** 지금 확정하고 그 요약을 반환한다.
+					2. draft가 없고 **가장 최근 세션이 자동 확정본이며 아직 확인되지 않았으면** 그 요약을 반환한다.
+					3. 둘 다 아니면(마지막이 정상 종료 세션이거나, 이미 확인했거나, 기록이 없으면) `404`.
+
+					**한 번 반환한 세션은 확인 처리되어 다음 호출부터 재노출되지 않는다.** 자정을 걸친 세션은\
+					조각들을 한 건으로 집계해 내려준다(시작=최소, 종료=최대, 시간=합).
+
+					**주의:** 사용자가 '이어하기 아님'으로 판단했을 때만 호출해야 한다 — 무조건 호출하면 이어하려던\
+					draft까지 확정된다.""")
+    @ApiResponse(responseCode = "200", description = "복구 대상 요약 — statDate/startedAt/endedAt/studySec/focusSec")
+    @ApiResponse(
+            responseCode = "404",
+            description = "복구할 세션 없음 — 마지막이 정상 종료됐거나, 이미 확인했거나, 기록이 없다",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "복구 대상 없음", value = "{\"message\": \"복구할 세션이 없습니다\"}")))
+    @PostMapping("/recovery")
+    public SessionRecoveryResponse recover(
+            @Parameter(description = "세션 주인의 유저 ID", example = "1") @RequestParam Long userId) {
+        return sessionRecoveryService.recover(userId);
     }
 }
