@@ -1,6 +1,7 @@
 package project.study.studysession.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,9 +13,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.ErrorResponse;
@@ -141,5 +145,17 @@ public class StudySessionController {
                 throw retryEx;
             }
         }
+    }
+
+    @Operation(
+            summary = "세션 단건 상세 조회",
+            description = "세션 id로 상세를 조회한다(세션 바텀시트용). events에 비공부 상태 구간(status·시각)이 원시로 담긴다. "
+                    + "userId는 소유권 검증용 — 없거나 남의 세션이면 404.")
+    @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 상세 + 이벤트 구간")
+    @GetMapping("/{id}")
+    public StudySessionResponse detail(
+            @Parameter(description = "세션 ID", example = "10") @PathVariable Long id,
+            @Parameter(description = "소유권 검증용 유저 ID", example = "1") @RequestParam Long userId) {
+        return studySessionService.findById(userId, id);
     }
 }
