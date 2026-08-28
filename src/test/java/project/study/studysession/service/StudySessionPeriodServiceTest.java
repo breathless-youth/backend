@@ -38,7 +38,7 @@ class StudySessionPeriodServiceTest {
     }
 
     @Test
-    void 기록없는_날을_0으로_채우고_총합을_계산한다() {
+    void 기록없는_날을_0으로_채운_일별배열을_준다() {
         LocalDate from = LocalDate.of(2026, 8, 24);
         LocalDate to = LocalDate.of(2026, 8, 26);
         when(studySessionRepository.findDailyStudyStats(1L, from, to, 60))
@@ -46,18 +46,20 @@ class StudySessionPeriodServiceTest {
 
         StudyPeriodStatsResponse response = service.periodStats(1L, from, to, null, null);
 
-        assertThat(response.dailyFocusSec())
+        assertThat(response.dailyList())
                 .containsExactly(
                         new DailyStudyStat(from, 0L, 0L),
                         new DailyStudyStat(LocalDate.of(2026, 8, 25), 1800L, 1500L),
                         new DailyStudyStat(to, 0L, 0L));
-        assertThat(response.totalStudySec()).isEqualTo(1800L);
-        assertThat(response.totalFocusSec()).isEqualTo(1500L);
-        assertThat(response.previousTotalFocusSec()).isNull();
+        assertThat(response.from()).isEqualTo(from);
+        assertThat(response.to()).isEqualTo(to);
+        assertThat(response.compareFrom()).isNull();
+        assertThat(response.compareTo()).isNull();
+        assertThat(response.compareDailyList()).isEmpty();
     }
 
     @Test
-    void compare가_있으면_직전_구간_순공합을_채운다() {
+    void compare가_있으면_비교구간도_0으로_채운_일별배열로_준다() {
         LocalDate from = LocalDate.of(2026, 8, 24);
         LocalDate to = LocalDate.of(2026, 8, 30);
         LocalDate cFrom = LocalDate.of(2026, 8, 17);
@@ -68,8 +70,13 @@ class StudySessionPeriodServiceTest {
 
         StudyPeriodStatsResponse response = service.periodStats(1L, from, to, cFrom, cTo);
 
-        assertThat(response.previousTotalFocusSec()).isEqualTo(6000L);
-        assertThat(response.dailyFocusSec()).hasSize(7);
+        assertThat(response.compareFrom()).isEqualTo(cFrom);
+        assertThat(response.compareTo()).isEqualTo(cTo);
+        assertThat(response.dailyList()).hasSize(7);
+        assertThat(response.compareDailyList())
+                .hasSize(7)
+                .startsWith(new DailyStudyStat(cFrom, 5000L, 4000L))
+                .endsWith(new DailyStudyStat(cTo, 3000L, 2000L));
     }
 
     @Test
