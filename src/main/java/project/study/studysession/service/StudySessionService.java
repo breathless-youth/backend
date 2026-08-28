@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.NotFoundException;
 import project.study.studysession.dto.StatusEventRequest;
+import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionResponse;
@@ -384,7 +385,6 @@ public class StudySessionService {
         return streak;
     }
 
-    /** 전체 이력에서 가장 길었던 연속 공부일 — statDates는 내림차순 정렬·중복 없음을 전제한다. */
     private static int maxStreak(List<LocalDate> statDates) {
         int max = 0;
         int run = 0;
@@ -395,5 +395,11 @@ public class StudySessionService {
             previous = date;
         }
         return max;
+    }
+
+    @Transactional(readOnly = true)
+    public StudyPeriodStatsResponse periodStats(
+            Long userId, LocalDate from, LocalDate to, LocalDate cFrom, LocalDate cTo) {
+        return StudyPeriodStatsHelper.compute(studySessionRepository, userId, from, to, cFrom, cTo);
     }
 }
