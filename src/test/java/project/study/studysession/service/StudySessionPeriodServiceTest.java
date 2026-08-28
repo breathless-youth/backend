@@ -85,4 +85,22 @@ class StudySessionPeriodServiceTest {
                         1L, LocalDate.of(2026, 8, 24), LocalDate.of(2026, 8, 30), LocalDate.of(2026, 8, 17), null))
                 .isInstanceOf(InvalidSessionException.class);
     }
+
+    @Test
+    void 메인_범위가_366일을_초과하면_400() {
+        assertThatThrownBy(
+                        () -> service.periodStats(1L, LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 5), null, null))
+                .isInstanceOf(InvalidSessionException.class);
+    }
+
+    @Test
+    void 비교_범위가_366일을_초과하면_400() {
+        assertThatThrownBy(() -> service.periodStats(
+                        1L,
+                        LocalDate.of(2026, 8, 24),
+                        LocalDate.of(2026, 8, 30),
+                        LocalDate.of(2026, 1, 1),
+                        LocalDate.of(2027, 1, 5)))
+                .isInstanceOf(InvalidSessionException.class);
+    }
 }

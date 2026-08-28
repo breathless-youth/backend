@@ -21,7 +21,9 @@ import project.study.studysession.entity.StudySession;
 import project.study.studysession.repository.StudySessionRepository;
 
 /**
- * StudySessionService가 쓰는 순수 통계 계산 로직 모음 — 상태 없이 값만 계산한다.
+ * StudySessionService가 쓰는 상태 없는(stateless) 통계 헬퍼 모음.
+ * focusRate/countByStatus/longestFocusStreakSec 등은 순수 값 계산이지만,
+ * periodStats는 예외로 리포지토리를 받아 기간 집계 쿼리를 직접 실행한다.
  * StudySessionService.java가 checkstyle FileLength(400줄) 제약에 걸려 이쪽으로 뺐다.
  */
 final class StudySessionStatsCalculator {
@@ -72,6 +74,9 @@ final class StudySessionStatsCalculator {
             LocalDate compareTo) {
         validatePeriod(from, to);
         StudySessionService.validateRange(compareFrom, compareTo);
+        if (compareFrom != null) {
+            validateMaxDays(compareFrom, compareTo);
+        }
 
         Map<LocalDate, DailyStudyStat> byDate =
                 repository.findDailyStudyStats(userId, from, to, MIN_LIST_FOCUS_SEC).stream()
@@ -99,6 +104,11 @@ final class StudySessionStatsCalculator {
         if (from.isAfter(to)) {
             throw new InvalidSessionException("from은 to보다 이후일 수 없습니다");
         }
+        validateMaxDays(from, to);
+    }
+
+    /** 과도한 범위 방어 — [from, to]가 MAX_PERIOD_DAYS일을 넘으면 거절한다 (메인 구간·비교 구간 공용). */
+    private static void validateMaxDays(LocalDate from, LocalDate to) {
         if (ChronoUnit.DAYS.between(from, to) > MAX_PERIOD_DAYS) {
             throw new InvalidSessionException("조회 범위가 너무 넓습니다 (최대 " + MAX_PERIOD_DAYS + "일)");
         }
