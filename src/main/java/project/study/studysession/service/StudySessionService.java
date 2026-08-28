@@ -374,4 +374,12 @@ public class StudySessionService {
         return StudySessionStatsCalculator.periodStats(
                 studySessionRepository, userId, from, to, compareFrom, compareTo);
     }
+
+    @Transactional(readOnly = true)
+    public StudySessionResponse findById(Long userId, Long id) {
+        StudySession session = studySessionRepository
+                .findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new NotFoundException("세션을 찾을 수 없습니다"));
+        return toResponse(session);
+    }
 }

@@ -3,6 +3,7 @@ package project.study.studysession.repository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -75,4 +76,7 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             @Param("from") LocalDate from,
             @Param("to") LocalDate to,
             @Param("minFocusSec") int minFocusSec);
+
+    // 세션 단건 상세 조회 — 소유자(userId)가 맞는 세션만. 없거나 남의 것이면 empty → 서비스가 404로 변환
+    Optional<StudySession> findByIdAndUserId(Long id, Long userId);
 }
