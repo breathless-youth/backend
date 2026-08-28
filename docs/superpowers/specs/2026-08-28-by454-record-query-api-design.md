@@ -36,7 +36,9 @@
 
 ### 4.1 `GET /api/stats/period` — 기간 집계 조회
 
-주어진 날짜 구간 `[from, to]`에 대해 일별 순공시간 버킷과 기간 총합을 반환한다. `compareFrom`/`compareTo`를 주면 그 구간의 순공 총합도 함께 반환한다(증감 비교용).
+주어진 날짜 구간 `[from, to]`의 일별 순공/총공부 집계를 `dailyList`로 반환한다. `compareFrom`/`compareTo`를 주면 그 구간도 같은 방식의 일별 배열 `compareDailyList`로 함께 반환한다(증감 비교용). 총합·비교는 클라가 두 배열을 합산해 계산한다 — 서버는 원시 일별 집계만 준다.
+
+> **개정(BY-457):** 초기 계약은 `totalStudySec`/`totalFocusSec`/`previousTotalFocusSec`(단일 합)을 담았으나, 프론트 소비 전에 두 구간을 대칭 일별 배열(`dailyList`/`compareDailyList`)로 바꾸고 총합 필드는 제거했다(`dailyFocusSec` → `dailyList`).
 
 **요청 파라미터**
 
@@ -58,10 +60,9 @@
 {
   "from": "2026-08-24",
   "to": "2026-08-30",
-  "totalStudySec": 47700,           // 기간 총공부 합
-  "totalFocusSec": 41040,           // 기간 순공 합 (11시간 24분)
-  "previousTotalFocusSec": 33840,   // compare 구간 순공 합 (지난주). compare 미지정 시 null
-  "dailyFocusSec": [                // from~to 모든 날짜, 공부 없는 날도 0, statDate 오름차순
+  "compareFrom": "2026-08-17",      // compare 미지정 시 null
+  "compareTo": "2026-08-23",        // compare 미지정 시 null
+  "dailyList": [                    // from~to 모든 날짜, 공부 없는 날도 0, date 오름차순
     { "date": "2026-08-24", "studySec": 13800, "focusSec": 12240 },
     { "date": "2026-08-25", "studySec": 8700,  "focusSec": 7560  },
     { "date": "2026-08-26", "studySec": 17640, "focusSec": 16200 },
@@ -69,17 +70,21 @@
     { "date": "2026-08-28", "studySec": 0, "focusSec": 0 },
     { "date": "2026-08-29", "studySec": 0, "focusSec": 0 },
     { "date": "2026-08-30", "studySec": 0, "focusSec": 0 }
+  ],
+  "compareDailyList": [             // compareFrom~compareTo 모든 날짜, 0채움, date 오름차순. compare 미지정 시 []
+    { "date": "2026-08-17", "studySec": 0, "focusSec": 0 },
+    // ... 08-18 ~ 08-23
+    { "date": "2026-08-23", "studySec": 6000, "focusSec": 5040 }
   ]
-  // 합계 검증: focusSec 합 = 41040(= totalFocusSec), studySec 합 = 47700(= totalStudySec)
 }
 ```
 
 **응답 필드 규칙**
 
-- `dailyFocusSec`는 `from`~`to`의 **모든 날짜**를 빠짐없이 담는다(공부 없는 날은 `focusSec=0`, `studySec=0`). 클라가 요일/날짜 인덱스로 바로 매핑할 수 있게 하기 위함이다.
-- 발자국 유무 = `focusSec > 0`, 발자국 강도 = 클라가 `focusSec` 값으로 자체 임계값 매핑.
-- `previousTotalFocusSec`는 `compareFrom/To` 둘 다 있을 때만 계산, 아니면 `null`.
-- 존재하지 않는 userId·기록 없는 구간이면 총합 0, `dailyFocusSec`는 모든 날짜 0으로 채워진 배열.
+- `dailyList`는 `from`~`to`의 **모든 날짜**를 빠짐없이 담는다(공부 없는 날은 `focusSec=0`, `studySec=0`). 클라가 요일/날짜 인덱스로 바로 매핑할 수 있게 하기 위함이다.
+- `compareDailyList`는 `compareFrom`~`compareTo`에 대해 같은 규칙. compare 미지정 시 `compareFrom`/`compareTo`는 `null`, `compareDailyList`는 **빈 배열**.
+- 발자국 유무 = `focusSec > 0`, 발자국 강도 = 클라가 `focusSec` 값으로 자체 임계값 매핑. **주/월 총합과 지난 기간 대비 증감은 클라가 두 배열을 합산해 계산한다.**
+- 존재하지 않는 userId·기록 없는 구간이면 `dailyList`는 모든 날짜 0으로 채워진 배열.
 
 **입력 검증**
 
@@ -153,6 +158,6 @@
 ## 8. 테스트 관점 (구현 시)
 
 - **`period` 서비스 단위테스트**: 빈 구간(모든 날 0), 일부 날만 기록, `from>to` 400, compare 한쪽만 지정 400, 1분 미만 세션 제외 확인, 직전 기간 합 정확성.
-- **`period` 통합테스트(MockMvcTester)**: `dailyFocusSec`가 모든 날짜를 채우는지, `previousTotalFocusSec` null/값 케이스.
+- **`period` 통합테스트(MockMvcTester)**: `dailyList`가 from~to 모든 날짜를 채우는지, compare 지정 시 `compareDailyList`가 compare 범위를 채우고 `compareFrom`/`compareTo`가 에코되는지, compare 미지정 시 compare 필드가 null·빈 배열인지.
 - **`study-sessions/{id}` 통합테스트**: 정상 조회, 남의 세션 404, 없는 id 404, events 구간 포함 확인, 자정 분할 조각 단건 반환.
 - 통합테스트는 Testcontainers(실제 PostgreSQL) + `SecurityMockMvcRequestPostProcessors.authentication()` 패턴 사용.

@@ -64,7 +64,11 @@ final class StudySessionStatsCalculator {
         return Math.max(max, Duration.between(cursor, session.getEndedAt()).toSeconds());
     }
 
-    /** from~to 기간 집계 — 기록 없는 날은 0으로 채우고, compare 지정 시 직전 구간 순공 합계도 계산한다. */
+    /**
+     * from~to 기간 집계 — 기록 없는 날은 0으로 채운 일별 배열로 준다.
+     * compare 지정 시 compareFrom~compareTo도 같은 방식의 일별 배열로 함께 준다(미지정 시 빈 배열).
+     * 총합·비교 계산은 클라가 배열을 합산해 처리한다 — 서버는 원시 일별 집계만 책임진다.
+     */
     static StudyPeriodStatsResponse periodStats(
             StudySessionRepository repository,
             Long userId,
@@ -78,6 +82,16 @@ final class StudySessionStatsCalculator {
             validateMaxDays(compareFrom, compareTo);
         }
 
+        List<DailyStudyStat> dailyList = dailyList(repository, userId, from, to);
+        List<DailyStudyStat> compareDailyList =
+                compareFrom != null ? dailyList(repository, userId, compareFrom, compareTo) : List.of();
+
+        return new StudyPeriodStatsResponse(from, to, compareFrom, compareTo, dailyList, compareDailyList);
+    }
+
+    /** 한 구간의 일별 집계를 조회해 from~to 모든 날짜를 0으로 채운 오름차순 배열로 만든다. */
+    private static List<DailyStudyStat> dailyList(
+            StudySessionRepository repository, Long userId, LocalDate from, LocalDate to) {
         Map<LocalDate, DailyStudyStat> byDate =
                 repository.findDailyStudyStats(userId, from, to, MIN_LIST_FOCUS_SEC).stream()
                         .collect(Collectors.toMap(DailyStudyStat::date, Function.identity()));
@@ -86,17 +100,7 @@ final class StudySessionStatsCalculator {
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
             daily.add(byDate.getOrDefault(d, new DailyStudyStat(d, 0L, 0L)));
         }
-        long totalStudySec = daily.stream().mapToLong(DailyStudyStat::studySec).sum();
-        long totalFocusSec = daily.stream().mapToLong(DailyStudyStat::focusSec).sum();
-
-        Long previousTotalFocusSec = null;
-        if (compareFrom != null) {
-            previousTotalFocusSec =
-                    repository.findDailyStudyStats(userId, compareFrom, compareTo, MIN_LIST_FOCUS_SEC).stream()
-                            .mapToLong(DailyStudyStat::focusSec)
-                            .sum();
-        }
-        return new StudyPeriodStatsResponse(from, to, totalStudySec, totalFocusSec, previousTotalFocusSec, daily);
+        return daily;
     }
 
     /** from/to는 필수이고 from<=to, 범위는 최대 MAX_PERIOD_DAYS일. */

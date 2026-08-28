@@ -149,7 +149,7 @@ public class StudySessionController {
 
     @Operation(
             summary = "세션 단건 상세 조회",
-            description = "세션 id로 상세를 조회한다(세션 바텀시트용). events에 비공부 상태 구간(status·시각)이 원시로 담긴다. "
+            description = "세션 id로 단건 상세를 조회한다. events에 비공부 상태 구간(status·시각)이 원시로 담긴다. "
                     + "userId는 소유권 검증용 — 없거나 남의 세션이면 404.")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 상세 + 이벤트 구간")
     @ApiResponse(
