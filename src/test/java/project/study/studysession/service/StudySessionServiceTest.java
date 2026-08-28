@@ -176,21 +176,21 @@ class StudySessionServiceTest {
                 service.createSessions(1L, START, END, 6600, 6000, List.of()).get(0);
 
         // 6000 / 6600 × 100 = 90.909... → 90.9
-        assertThat(StudySessionService.focusRate(session.getFocusSec(), session.getStudySec()))
+        assertThat(StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()))
                 .isEqualTo(90.9);
     }
 
     @Test
     void 집중률은_소수_한_자리로_반올림된다() {
-        assertThat(StudySessionService.focusRate(1, 3)).isEqualTo(33.3);
-        assertThat(StudySessionService.focusRate(2, 3)).isEqualTo(66.7);
-        assertThat(StudySessionService.focusRate(7200, 7200)).isEqualTo(100.0);
-        assertThat(StudySessionService.focusRate(0, 7200)).isEqualTo(0.0);
+        assertThat(StudySessionStatsCalculator.focusRate(1, 3)).isEqualTo(33.3);
+        assertThat(StudySessionStatsCalculator.focusRate(2, 3)).isEqualTo(66.7);
+        assertThat(StudySessionStatsCalculator.focusRate(7200, 7200)).isEqualTo(100.0);
+        assertThat(StudySessionStatsCalculator.focusRate(0, 7200)).isEqualTo(0.0);
     }
 
     @Test
     void 총공부시간이_0이면_집중률은_0이다() {
-        assertThat(StudySessionService.focusRate(0, 0)).isEqualTo(0.0);
+        assertThat(StudySessionStatsCalculator.focusRate(0, 0)).isEqualTo(0.0);
     }
 
     @Test

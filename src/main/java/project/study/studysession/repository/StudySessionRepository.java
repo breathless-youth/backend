@@ -3,10 +3,12 @@ package project.study.studysession.repository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import project.study.metrics.dto.HeavyUser;
+import project.study.studysession.dto.DailyStudyStat;
 import project.study.studysession.entity.StudySession;
 
 public interface StudySessionRepository extends JpaRepository<StudySession, Long> {
@@ -60,4 +62,21 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
 
     // 특정 날짜의 인정 기준(focusSec >= minFocusSec) 충족 세션 수 — 유저 무관 전체 집계
     long countByStatDateAndFocusSecGreaterThanEqual(LocalDate statDate, int minFocusSec);
+
+    // period 조회용 — 기간 안 statDate별 총공부/순공 합계 (focusSec >= minFocusSec 세션만, 기록 있는 날만, 오름차순).
+    // 빈 날 채우기·직전 기간 합산은 서비스가 담당한다
+    @Query("""
+            select new project.study.studysession.dto.DailyStudyStat(s.statDate, sum(s.studySec), sum(s.focusSec))
+            from StudySession s
+            where s.userId = :userId and s.statDate between :from and :to and s.focusSec >= :minFocusSec
+            group by s.statDate
+            order by s.statDate""")
+    List<DailyStudyStat> findDailyStudyStats(
+            @Param("userId") Long userId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("minFocusSec") int minFocusSec);
+
+    // 세션 단건 상세 조회 — 소유자(userId)가 맞는 세션만. 없거나 남의 것이면 empty → 서비스가 404로 변환
+    Optional<StudySession> findByIdAndUserId(Long id, Long userId);
 }

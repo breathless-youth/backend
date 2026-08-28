@@ -11,7 +11,6 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.NotFoundException;
 import project.study.studysession.dto.StatusEventRequest;
+import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionResponse;
@@ -128,12 +128,12 @@ public class StudySessionService {
         long totalFocusSec =
                 sessions.stream().mapToLong(StudySession::getFocusSec).sum();
         long longestFocusSec = sessions.stream()
-                .mapToLong(StudySessionService::longestFocusStreakSec)
+                .mapToLong(StudySessionStatsCalculator::longestFocusStreakSec)
                 .max()
                 .orElse(0);
         List<StudySessionSummaryResponse> summaries =
                 sessions.stream().map(this::toSummaryResponse).toList();
-        Map<EventStatus, Long> totalEventCounts = countByStatus(
+        Map<EventStatus, Long> totalEventCounts = StudySessionStatsCalculator.countByStatus(
                 sessions.stream().flatMap(s -> s.getEvents().stream()).toList());
 
         YearMonth month = YearMonth.from(date);
@@ -146,42 +146,21 @@ public class StudySessionService {
                 totalStudySec,
                 totalFocusSec,
                 longestFocusSec,
-                focusRate(totalFocusSec, totalStudySec),
+                StudySessionStatsCalculator.focusRate(totalFocusSec, totalStudySec),
                 totalEventCounts,
                 studiedDatesInMonth);
     }
 
-    /** 세션 내부에서 이벤트(PHONE/DEVICE/AWAY/PAUSE)로 끊기지 않고 이어진 가장 긴 구간(초) — 이벤트가 없으면 세션 전체 길이. */
-    private static long longestFocusStreakSec(StudySession session) {
-        List<StatusEvent> sorted = session.getEvents().stream()
-                .sorted(Comparator.comparing(StatusEvent::getStartedAt))
-                .toList();
-        Instant cursor = session.getStartedAt();
-        long max = 0;
-        for (StatusEvent event : sorted) {
-            max = Math.max(max, Duration.between(cursor, event.getStartedAt()).toSeconds());
-            cursor = event.getEndedAt();
-        }
-        return Math.max(max, Duration.between(cursor, session.getEndedAt()).toSeconds());
-    }
-
-    /** 상태별 이벤트 발생 건수 — 프론트가 키 존재를 가정할 수 있도록 없는 상태도 0으로 채운다. */
-    private static Map<EventStatus, Long> countByStatus(List<StatusEvent> events) {
-        Map<EventStatus, Long> counts = new EnumMap<>(EventStatus.class);
-        for (EventStatus status : EventStatus.values()) {
-            counts.put(status, 0L);
-        }
-        events.forEach(event -> counts.merge(event.getStatus(), 1L, Long::sum));
-        return counts;
-    }
-
     private StudySessionResponse toResponse(StudySession session) {
-        return StudySessionResponse.from(session, focusRate(session.getFocusSec(), session.getStudySec()));
+        return StudySessionResponse.from(
+                session, StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()));
     }
 
     private StudySessionSummaryResponse toSummaryResponse(StudySession session) {
         return StudySessionSummaryResponse.from(
-                session, focusRate(session.getFocusSec(), session.getStudySec()), countByStatus(session.getEvents()));
+                session,
+                StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()),
+                StudySessionStatsCalculator.countByStatus(session.getEvents()));
     }
 
     /**
@@ -332,14 +311,6 @@ public class StudySessionService {
         return clipped;
     }
 
-    /** 집중률(%) — 순공시간 ÷ 총공부시간 × 100, 소수 1자리 반올림. */
-    static double focusRate(long focusSec, long studySec) {
-        if (studySec <= 0) {
-            return 0.0;
-        }
-        return Math.round(focusSec * 1000.0 / studySec) / 10.0;
-    }
-
     /**
      * 연속 공부일(스트릭) 조회 — 유저에 상태로 저장하지 않고 세션 이력(statDate)에서 매번 계산한다.
      * 그 날 세션 중 하나라도 순공시간이
@@ -362,8 +333,8 @@ public class StudySessionService {
                 currentStreak(statDates, today), maxStreak(statDates), studiedDatesInRange);
     }
 
-    /** from/to는 함께 지정해야 한다 — 하나만 있거나 from이 to보다 이후면 400. */
-    private static void validateRange(LocalDate from, LocalDate to) {
+    /** from/to는 함께 지정해야 한다 — 하나만 있거나 from이 to보다 이후면 400. periodStats의 compare 검증에서도 재사용한다. */
+    static void validateRange(LocalDate from, LocalDate to) {
         if ((from == null) != (to == null)) {
             throw new InvalidSessionException("from과 to는 함께 지정해야 합니다");
         }
@@ -395,5 +366,20 @@ public class StudySessionService {
             previous = date;
         }
         return max;
+    }
+
+    @Transactional(readOnly = true)
+    public StudyPeriodStatsResponse periodStats(
+            Long userId, LocalDate from, LocalDate to, LocalDate compareFrom, LocalDate compareTo) {
+        return StudySessionStatsCalculator.periodStats(
+                studySessionRepository, userId, from, to, compareFrom, compareTo);
+    }
+
+    @Transactional(readOnly = true)
+    public StudySessionResponse findById(Long userId, Long id) {
+        StudySession session = studySessionRepository
+                .findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new NotFoundException("세션을 찾을 수 없습니다"));
+        return toResponse(session);
     }
 }
