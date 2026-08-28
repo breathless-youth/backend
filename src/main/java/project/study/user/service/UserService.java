@@ -4,6 +4,8 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import project.study.common.BadRequestException;
 import project.study.common.ConflictException;
 import project.study.common.ErrorCode;
 import project.study.common.NotFoundException;
+import project.study.metrics.dto.NewUser;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
@@ -26,6 +29,8 @@ import project.study.user.repository.UserRepository;
 public class UserService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter HOUR_MINUTE =
+            DateTimeFormatter.ofPattern("HH:mm").withZone(KST);
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int AUTO_NICKNAME_MAX_ATTEMPTS = 10;
     private static final int COLOR_COUNT = 8;
@@ -140,5 +145,18 @@ public class UserService {
         Instant from = date.atStartOfDay(KST).toInstant();
         Instant to = date.plusDays(1).atStartOfDay(KST).toInstant();
         return userRepository.countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to);
+    }
+
+    /**
+     * 해당 날짜(KST)에 가입한 유저 목록 — 일일 리포트의 신규 가입 상세용. 가입 시각 오름차순,
+     * 시각은 KST "HH:mm"으로 포맷한다.
+     */
+    @Transactional(readOnly = true)
+    public List<NewUser> findNewUsersOn(LocalDate date) {
+        Instant from = date.atStartOfDay(KST).toInstant();
+        Instant to = date.plusDays(1).atStartOfDay(KST).toInstant();
+        return userRepository.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAt(from, to).stream()
+                .map(user -> new NewUser(user.getId(), HOUR_MINUTE.format(user.getCreatedAt())))
+                .toList();
     }
 }
