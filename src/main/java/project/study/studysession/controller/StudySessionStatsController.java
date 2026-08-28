@@ -16,7 +16,7 @@ import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.service.StudySessionService;
 
-@Tag(name = "StudySessionStats", description = "공부 세션 통계 조회 API 모음 — 하루 목록·합계, 연속 공부일(스트릭), 기간(주간/월간) 집계를 조회한다")
+@Tag(name = "StudySessionStats", description = "공부 세션 통계 조회 API 모음 — 하루 목록·합계, 연속 공부일(스트릭), 기간 집계를 조회한다")
 @RestController
 @RequestMapping("/api/stats")
 @RequiredArgsConstructor
@@ -86,11 +86,11 @@ public class StudySessionStatsController {
         return studySessionService.streak(userId, from, to);
     }
 
-    @Operation(summary = "기간 집계 조회 (주간/월간)", description = """
-                    from~to 구간의 일별 순공/총공부 집계를 dailyList로 반환한다 (주간 막대·월간 달력용). \
+    @Operation(summary = "기간 집계 조회", description = """
+                    from~to 구간의 일별 순공/총공부 집계를 dailyList로 반환한다. \
                     dailyList는 from~to 모든 날짜를 담으며 공부 없는 날은 0이다 (순공 1분 미만 세션은 집계 제외). \
                     compareFrom/compareTo를 함께 주면 그 구간도 같은 방식의 일별 배열 compareDailyList로 함께 준다(증감 비교용) — \
-                    미지정 시 compareFrom/compareTo는 null, compareDailyList는 빈 배열. 총합·비교는 클라가 배열을 합산해 계산한다. \
+                    미지정 시 compareFrom/compareTo는 null, compareDailyList는 빈 배열. 총합·비교는 응답의 배열을 합산해 계산한다. \
                     from>to, compare 한쪽만 지정, 366일 초과 범위(메인·비교 공통)는 400.""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — from~to 일별 배열 + (선택) compare 구간 일별 배열")
     @GetMapping("/period")
