@@ -16,7 +16,7 @@ import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.service.StudySessionService;
 
-@Tag(name = "StudySessionStats", description = "공부 세션 통계 조회 API 모음 — 하루 목록·합계와 연속 공부일(스트릭)을 조회한다")
+@Tag(name = "StudySessionStats", description = "공부 세션 통계 조회 API 모음 — 하루 목록·합계, 연속 공부일(스트릭), 기간(주간/월간) 집계를 조회한다")
 @RestController
 @RequestMapping("/api/stats")
 @RequiredArgsConstructor

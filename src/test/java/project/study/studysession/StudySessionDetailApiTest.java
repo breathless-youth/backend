@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
@@ -92,7 +93,7 @@ class StudySessionDetailApiTest {
                         .uri("/api/study-sessions/{id}", sessionId)
                         .param("userId", String.valueOf(other))
                         .exchange())
-                .hasStatus(org.springframework.http.HttpStatus.NOT_FOUND);
+                .hasStatus(HttpStatus.NOT_FOUND);
     }
 
     @Test
@@ -101,6 +102,6 @@ class StudySessionDetailApiTest {
                         .uri("/api/study-sessions/{id}", 999999)
                         .param("userId", String.valueOf(userId))
                         .exchange())
-                .hasStatus(org.springframework.http.HttpStatus.NOT_FOUND);
+                .hasStatus(HttpStatus.NOT_FOUND);
     }
 }

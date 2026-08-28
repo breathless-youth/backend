@@ -152,6 +152,14 @@ public class StudySessionController {
             description = "세션 id로 상세를 조회한다(세션 바텀시트용). events에 비공부 상태 구간(status·시각)이 원시로 담긴다. "
                     + "userId는 소유권 검증용 — 없거나 남의 세션이면 404.")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 상세 + 이벤트 구간")
+    @ApiResponse(
+            responseCode = "404",
+            description = "세션을 찾을 수 없음 — 존재하지 않거나 다른 유저의 세션",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "세션 없음", value = "{\"message\": \"세션을 찾을 수 없습니다\"}")))
     @GetMapping("/{id}")
     public StudySessionResponse detail(
             @Parameter(description = "세션 ID", example = "10") @PathVariable Long id,
