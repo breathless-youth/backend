@@ -57,7 +57,7 @@ class SessionRecoveryApiTest {
 
     @Test
     void 자동확정본을_요약으로_반환하고_확인_처리한다() throws Exception {
-        Instant started = Instant.now().minusSeconds(7200);
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
         Instant ended = started.plusSeconds(3600);
         jdbcTemplate.update(
                 "INSERT INTO study_session (user_id, stat_date, started_at, submission_started_at, ended_at,"
@@ -98,7 +98,7 @@ class SessionRecoveryApiTest {
 
     @Test
     void draft가_있으면_확정하고_요약을_반환한다() throws Exception {
-        Instant started = Instant.now().minusSeconds(7200);
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
         Instant reported = started.plusSeconds(1800);
         jdbcTemplate.update(
                 "INSERT INTO active_study_session (user_id, started_at, reported_at, last_seen_at, study_sec,"

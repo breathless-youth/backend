@@ -105,7 +105,7 @@ class SessionRecoveryServiceTest {
 
     @Test
     void draft가_있으면_확정하고_요약을_반환한다() {
-        Instant started = Instant.now().minusSeconds(7200);
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
         Instant reported = started.plusSeconds(1800);
         insertDraft(started, reported, Instant.now().minusSeconds(600), 1800, 1700);
 
@@ -123,7 +123,7 @@ class SessionRecoveryServiceTest {
 
     @Test
     void draft가_없고_최근_자동확정본이_미확인이면_요약을_반환하고_확인_처리한다() {
-        Instant started = Instant.now().minusSeconds(7200);
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
         Instant ended = started.plusSeconds(3600);
         insertSession(started, ended, started, 3600, 3400, true, null);
 
@@ -138,7 +138,7 @@ class SessionRecoveryServiceTest {
 
     @Test
     void 이미_확인된_자동확정본이면_404() {
-        Instant started = Instant.now().minusSeconds(7200);
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
         insertSession(
                 started,
                 started.plusSeconds(3600),
@@ -153,7 +153,7 @@ class SessionRecoveryServiceTest {
 
     @Test
     void 최근이_정상_종료_세션이면_404() {
-        Instant started = Instant.now().minusSeconds(7200);
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
         insertSession(started, started.plusSeconds(3600), started, 3600, 3400, false, null);
 
         assertThatThrownBy(() -> sessionRecoveryService.recover(userId)).isInstanceOf(NotFoundException.class);
@@ -166,7 +166,7 @@ class SessionRecoveryServiceTest {
 
     @Test
     void draft가_정상_제출_세션의_잔여물이면_확정만_하고_404() {
-        Instant started = Instant.now().minusSeconds(7200);
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
         Instant ended = started.plusSeconds(3600);
         // 정상 제출로 이미 저장된 세션(autoFinalized=false)
         insertSession(started, ended, started, 3600, 3400, false, null);
@@ -181,7 +181,7 @@ class SessionRecoveryServiceTest {
     @Test
     void acknowledgeRecovery는_자동확정본만_확인_처리한다() {
         // 대체 레이스 방어: read와 update 사이 정상 제출이 그룹을 대체해도 정상 rows는 확인 처리되면 안 된다
-        Instant started = Instant.now().minusSeconds(7200);
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
         insertSession(started, started.plusSeconds(3600), started, 3600, 3400, false, null);
 
         int claimed = studySessionRepository.acknowledgeRecovery(userId, started, Instant.now());
@@ -192,7 +192,7 @@ class SessionRecoveryServiceTest {
 
     @Test
     void 한_번_확인한_뒤_두_번째_복구는_404() {
-        Instant started = Instant.now().minusSeconds(7200);
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
         insertSession(started, started.plusSeconds(3600), started, 3600, 3400, true, null);
 
         sessionRecoveryService.recover(userId); // 첫 호출: 성공하며 확인 처리

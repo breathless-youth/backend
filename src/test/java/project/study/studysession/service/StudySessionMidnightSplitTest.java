@@ -1,6 +1,7 @@
 package project.study.studysession.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
@@ -161,12 +162,17 @@ class StudySessionMidnightSplitTest {
     }
 
     @Test
-    void 절삭으로_조각_수용량을_넘는_총공부시간은_거부한다() {
-        // 601.2초 세션이 자정에 걸치면 조각별 절삭(0초+600초) 때문에 담을 수 있는 총공부시간이 600초다
+    void 자정_분할_시_studySec은_원본_총시간까지_허용되고_초과분만_거부한다() {
+        // 601.2초 세션이 자정에 걸쳐도, 조각 길이를 합이 원본과 일치하게 반올림하므로(BY-471) 원본 정수초(601)까지
+        // 담을 수 있다. 예전엔 조각별 절삭(0초+600초)으로 600만 허용돼 601이 억울하게 거부됐다.
         Instant start = Instant.parse("2026-07-23T14:59:59.200Z");
         Instant end = Instant.parse("2026-07-23T15:10:00.400Z");
 
-        assertThatThrownBy(() -> service.createSessions(1L, start, end, 601, 0, List.of()))
+        // 원본 정수초(601)까지는 허용 — 1초 손실 없음
+        assertThatCode(() -> service.createSessions(1L, start, end, 601, 0, List.of()))
+                .doesNotThrowAnyException();
+        // 원본을 실제로 넘는 602는 거부
+        assertThatThrownBy(() -> service.createSessions(1L, start, end, 602, 0, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 

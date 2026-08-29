@@ -32,7 +32,7 @@ class ActiveSessionFinalizeTest {
 
     private Long userId;
 
-    private final Instant startedAt = Instant.now().minusSeconds(7200);
+    private final Instant startedAt = Instant.parse("2026-08-20T03:00:00Z");
 
     @BeforeEach
     void createUser() {
