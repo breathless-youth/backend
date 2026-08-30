@@ -39,6 +39,7 @@ app:
   cors:
     allowed-origins:
       - https://web.sunqstudio.kr
+      - https://web.focusmakers.app
 
 # 운영에서는 API 문서를 노출하지 않는다
 springdoc:
