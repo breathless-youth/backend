@@ -4,12 +4,10 @@ import static project.study.studysession.StudySessionThresholds.MIN_LIST_FOCUS_S
 import static project.study.studysession.StudySessionThresholds.MIN_STREAK_FOCUS_SEC;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -177,138 +175,13 @@ public class StudySessionService {
                 .toList();
         StudySessionValidator.validateEvents(startedAt, endedAt, sorted);
 
-        List<Instant> cuts = computeCuts(startedAt, endedAt);
-        SegmentWeights weights = computeSegmentWeights(cuts, sorted);
+        List<Instant> cuts = StudySessionSplitter.computeCuts(startedAt, endedAt);
+        StudySessionSplitter.SegmentWeights weights = StudySessionSplitter.computeSegmentWeights(cuts, sorted);
 
         StudySessionValidator.validateStudySec(studySec, weights.totalStudyActiveSec());
         StudySessionValidator.validateFocusSec(focusSec, studySec);
 
-        return buildSessions(userId, cuts, weights, studySec, focusSec);
-    }
-
-    /** 조각 경계를 확정한다 (KST 자정 기준 — 24시간 한도 덕에 조각은 최대 2개). */
-    private static List<Instant> computeCuts(Instant startedAt, Instant endedAt) {
-        List<Instant> cuts = new ArrayList<>();
-        cuts.add(startedAt);
-        for (Instant boundary = nextKstMidnight(startedAt);
-                boundary.isBefore(endedAt);
-                boundary = nextKstMidnight(boundary)) {
-            cuts.add(boundary);
-        }
-        cuts.add(endedAt);
-        return cuts;
-    }
-
-    /** 조각별 이벤트 클립과, studySec/focusSec 배분 가중치(studyActiveSec/focusActiveSec) 및 그 합계. */
-    private record SegmentWeights(
-            List<List<StatusEvent>> segmentEvents,
-            long[] studyActiveSecs,
-            long[] focusActiveSecs,
-            long totalStudyActiveSec,
-            long totalFocusActiveSec) {}
-
-    /**
-     * 검증·배분 기준은 원본 총 시간이 아니라 저장되는 조각별 총시간(내림 초)의 합이다 — sub-second
-     * 타임스탬프가 자정에 걸치면 원본 기준으로는 0으로 나누기나 절삭 손실이 생길 수 있어서다.
-     */
-    private static SegmentWeights computeSegmentWeights(List<Instant> cuts, List<StatusEvent> sorted) {
-        int segmentCount = cuts.size() - 1;
-        List<List<StatusEvent>> segmentEvents = new ArrayList<>(segmentCount);
-        long[] studyActiveSecs = new long[segmentCount];
-        long[] focusActiveSecs = new long[segmentCount];
-        long totalStudyActiveSec = 0;
-        long totalFocusActiveSec = 0;
-        for (int i = 0; i < segmentCount; i++) {
-            long segmentSec = Duration.between(cuts.get(i), cuts.get(i + 1)).toSeconds();
-            List<StatusEvent> clipped = clip(sorted, cuts.get(i), cuts.get(i + 1));
-            segmentEvents.add(clipped);
-            long stopSec = sumDuration(clipped, EventStatus.PAUSE);
-            long eventSec = sumDuration(clipped);
-            studyActiveSecs[i] = segmentSec - stopSec;
-            focusActiveSecs[i] = segmentSec - eventSec;
-            totalStudyActiveSec += studyActiveSecs[i];
-            totalFocusActiveSec += focusActiveSecs[i];
-        }
-        return new SegmentWeights(
-                segmentEvents, studyActiveSecs, focusActiveSecs, totalStudyActiveSec, totalFocusActiveSec);
-    }
-
-    /** 조각별 가중치대로 studySec/focusSec을 비례 배분해 세션들을 만든다 — 마지막 조각이 배분 나머지를 가져가 합이 항상 요청값과 같다. */
-    private static List<StudySession> buildSessions(
-            Long userId, List<Instant> cuts, SegmentWeights weights, int studySec, int focusSec) {
-        int segmentCount = cuts.size() - 1;
-        List<StudySession> sessions = new ArrayList<>();
-        long allocatedStudySec = 0;
-        long allocatedFocusSec = 0;
-        for (int i = 0; i < segmentCount; i++) {
-            long segmentStudySec;
-            long segmentFocusSec;
-            if (i == segmentCount - 1) {
-                segmentStudySec = studySec - allocatedStudySec;
-                segmentFocusSec = focusSec - allocatedFocusSec;
-            } else {
-                segmentStudySec =
-                        studySec == 0 ? 0 : studySec * weights.studyActiveSecs()[i] / weights.totalStudyActiveSec();
-                // focusActiveSec 합이 0(전 구간이 이벤트로 덮인 경우)이면 studyActiveSec 비율로 대체 배분
-                boolean noFocusActiveTime = weights.totalFocusActiveSec() == 0;
-                long focusWeight = noFocusActiveTime ? weights.studyActiveSecs()[i] : weights.focusActiveSecs()[i];
-                long focusWeightTotal =
-                        noFocusActiveTime ? weights.totalStudyActiveSec() : weights.totalFocusActiveSec();
-                segmentFocusSec = focusSec == 0 ? 0 : focusSec * focusWeight / focusWeightTotal;
-            }
-            sessions.add(buildSession(
-                    userId,
-                    cuts.get(i),
-                    cuts.get(i + 1),
-                    (int) segmentStudySec,
-                    (int) segmentFocusSec,
-                    weights.segmentEvents().get(i)));
-            allocatedStudySec += segmentStudySec;
-            allocatedFocusSec += segmentFocusSec;
-        }
-        // 조각들이 원본 제출의 시작 시각을 루트로 공유해야 재제출 판별·응답 조회가 조각 단위로 어긋나지 않는다
-        sessions.forEach(session -> session.attachToSubmission(cuts.get(0)));
-        return sessions;
-    }
-
-    /** 검증이 끝난 한 구간을 세션 엔티티로 만든다 — 통계 귀속 날짜(KST 시작 날짜)만 계산하고, 총공부·순공 시간은 배분받은 값을 그대로 담는다. */
-    private static StudySession buildSession(
-            Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
-        LocalDate statDate = startedAt.atZone(KST).toLocalDate();
-        return new StudySession(userId, statDate, startedAt, endedAt, studySec, focusSec, events);
-    }
-
-    private static long sumDuration(List<StatusEvent> events) {
-        return events.stream()
-                .mapToLong(
-                        e -> Duration.between(e.getStartedAt(), e.getEndedAt()).toSeconds())
-                .sum();
-    }
-
-    private static long sumDuration(List<StatusEvent> events, EventStatus status) {
-        return events.stream()
-                .filter(e -> e.getStatus() == status)
-                .mapToLong(
-                        e -> Duration.between(e.getStartedAt(), e.getEndedAt()).toSeconds())
-                .sum();
-    }
-
-    private static Instant nextKstMidnight(Instant instant) {
-        return instant.atZone(KST).toLocalDate().plusDays(1).atStartOfDay(KST).toInstant();
-    }
-
-    /** 이벤트들을 [segmentStart, segmentEnd) 구간으로 잘라낸다. 0초 조각은 버린다. */
-    private static List<StatusEvent> clip(List<StatusEvent> sortedEvents, Instant segmentStart, Instant segmentEnd) {
-        List<StatusEvent> clipped = new ArrayList<>();
-        for (StatusEvent event : sortedEvents) {
-            Instant start = event.getStartedAt().isAfter(segmentStart) ? event.getStartedAt() : segmentStart;
-            Instant end = event.getEndedAt().isBefore(segmentEnd) ? event.getEndedAt() : segmentEnd;
-            if (start.isBefore(end)) {
-                // 조각 세션들이 같은 이벤트 엔티티를 공유하면 cascade 저장 시 한쪽이 행을 가져가므로 항상 새로 만든다
-                clipped.add(new StatusEvent(event.getStatus(), start, end));
-            }
-        }
-        return clipped;
+        return StudySessionSplitter.buildSessions(userId, cuts, weights, studySec, focusSec);
     }
 
     /**
