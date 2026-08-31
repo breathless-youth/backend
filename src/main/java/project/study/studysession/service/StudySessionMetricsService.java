@@ -5,7 +5,9 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import project.study.metrics.dto.CohortFirstWeek;
 import project.study.metrics.dto.HeavyUser;
+import project.study.metrics.dto.QualifyingSession;
 import project.study.studysession.StudySessionThresholds;
 import project.study.studysession.repository.StudySessionRepository;
 
@@ -19,6 +21,8 @@ public class StudySessionMetricsService {
 
     // 헤비유저 판정 구간 — anchorDate를 포함한 최근 7일([anchorDate - 6일, anchorDate])
     private static final int WINDOW_DAYS = 7;
+    // 코호트 첫주 창 길이 — D0를 포함한 7일([D0, D0+6])
+    private static final int COHORT_WINDOW_DAYS = 7;
     // 헤비유저로 인정하는 최소 스트릭 인정일수(구간 안에서)
     private static final long MIN_ACTIVE_DAYS = 3;
 
@@ -53,5 +57,27 @@ public class StudySessionMetricsService {
     public long countQualifyingSessionsOn(LocalDate date) {
         return studySessionRepository.countByStatDateAndFocusSecGreaterThanEqual(
                 date, StudySessionThresholds.MIN_STREAK_FOCUS_SEC);
+    }
+
+    /**
+     * 해당 날짜의 10분 이상 세션 목록(소셜/싱글 판별 포함). 소셜 vs 싱글 순공 비교와 세션 상세가
+     * 같은 데이터를 쓰므로, 한 번 조회해 양쪽 지표를 파생시킨다.
+     */
+    @Transactional(readOnly = true)
+    public List<QualifyingSession> findQualifyingSessions(LocalDate date) {
+        return studySessionRepository.findQualifyingSessions(date, StudySessionThresholds.MIN_STREAK_FOCUS_SEC).stream()
+                .map(row -> new QualifyingSession(row.getUserId(), row.getFocusSec(), row.getSocial()))
+                .toList();
+    }
+
+    /**
+     * 코호트 첫주 평균 공부일수 — 생애 첫 10분 이상 공부일(D0)의 7일 창 {@code [D0, D0+6]}이 완결된
+     * (D0 ≤ {@code anchorDate} − 6) 유저들의, 창 안 10분 이상 공부일 수 평균.
+     */
+    @Transactional(readOnly = true)
+    public CohortFirstWeek cohortFirstWeek(LocalDate anchorDate) {
+        LocalDate cohortCutoff = anchorDate.minusDays(COHORT_WINDOW_DAYS - 1L);
+        return CohortFirstWeek.from(studySessionRepository.findCohortFirstWeekDays(
+                StudySessionThresholds.MIN_STREAK_FOCUS_SEC, cohortCutoff));
     }
 }
