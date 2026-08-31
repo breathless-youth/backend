@@ -34,7 +34,12 @@ USER appuser
 
 EXPOSE 8080
 
-# JVM 기본값은 컨테이너 메모리의 25%만 힙으로 잡아 1GB 태스크에서 메모리를 놀린다.
-# 힙 외 영역(메타스페이스·스레드 스택) 여유를 남기고 75%까지 사용한다.
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
+# 힙 상한 50% + direct 버퍼 상한 명시 (BY-491).
+# 부하테스트에서 OOM(exit 137)이 힙 455MB/1GiB 시점에 발생 — 주범이 힙이 아니라
+# 웹소켓 커넥션의 native 메모리(direct 버퍼·커널 소켓버퍼·스레드 스택)였다.
+# 75%는 native 몫을 25%만 남겨 웹소켓 1000+ 커넥션에서 부족하다. 50%로 낮춰
+# native 공간을 보장하고, 힙 부족은 컨테이너 킬 대신 진단 가능한 힙 OOM으로 죽게 한다.
+# (실측 힙 사용: 3초 체크포인트 1000명 기준 ~220MB — 50%로도 2배 이상 여유)
+# 환경별 오버라이드는 task definition의 JAVA_OPTS env로 가능하다.
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=50.0 -XX:MaxDirectMemorySize=256m"
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
