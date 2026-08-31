@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
@@ -22,6 +23,9 @@ import project.study.TestcontainersConfiguration;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
+// 이 테스트는 즉시 저장을 검증한다 — 버퍼를 꺼 직접 UPSERT 경로(검증·역순 가드)를 그대로 테스트한다.
+// 버퍼링(코얼레싱+지연 flush)은 ActiveSnapshotBufferTest에서 따로 검증한다. (BY-470)
+@TestPropertySource(properties = "active-session.buffer.enabled=false")
 class ActiveSessionSnapshotApiTest {
 
     @Autowired
