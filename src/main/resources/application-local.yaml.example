@@ -8,9 +8,25 @@ spring:
     username: study
     password: study
   jpa:
+    # SQL 로깅은 p6spy가 담당한다 (아래 decorator.datasource.p6spy). hibernate show-sql은
+    # '?' 자리표시자만 찍어 바인딩 값을 못 보여주므로 쓰지 않는다.
     open-in-view: false
     hibernate:
       ddl-auto: validate
+
+# p6spy — 바인딩 파라미터가 채워진 실제 실행 SQL을 slf4j 로거 'p6spy'로 출력한다.
+decorator:
+  datasource:
+    p6spy:
+      enable-logging: true
+      multiline: true
+      logging: slf4j
+
+# 웹소켓 연결/구독/해제, 룸 상태 변경 흐름을 추적하기 위한 DEBUG 로그.
+# prod에는 넣지 않는다 — 로그 볼륨·성능에 영향 없이 그쪽은 기본(INFO) 유지 (BY-426)
+logging:
+  level:
+    project.study: DEBUG
 
 # 로컬에서 프론트를 띄워 API를 호출할 때 필요하다.
 # 포트는 번들러마다 달라(Vite 5173, Next 3000 등) 열어둔다 — :[*]가 Spring의 포트 와일드카드 문법이다.
@@ -19,18 +35,32 @@ app:
     allowed-origins:
       - http://localhost:[*]
       - http://127.0.0.1:[*]
+  room:
+    turn:
+      # coturn static-auth-secret 방식 임시 자격 발급용. 운영에서는 coturn 서버의 시크릿과 일치시킬 것.
+      # urls가 비어 있으면 join 응답의 iceServers가 빈 배열로 내려간다 (로컬은 STUN/TURN 없이 개발 가능,
+      # 원격 P2P 연결에는 반드시 설정 필요)
+      secret: local-turn-secret
+      ttl-seconds: 7200
+      urls: []
+      # urls 예시:
+      #   - stun:turn.example.com:3478
+      #   - turn:turn.example.com:3478?transport=udp
 
-# AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
-#oauth:
-#  google:
-#    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
-#    # 값은 구글 클라우드 콘솔 > API 및 서비스 > 사용자 인증 정보에서 확인
-#    client-id: <웹-클라이언트-ID>.apps.googleusercontent.com
-#
-#jwt:
-#  # 로컬 전용 — 32자 이상 아무 문자열이면 됨 (dev/prod는 환경변수 JWT_SECRET 주입)
-#  secret: local-dev-secret-change-me-at-least-32-chars
-#  access-expiration: 1800000 # 30분
-#
-#refresh-token:
-#  expiration: 2592000000 # 한달 (opaque UUID, DB 저장)
+oauth:
+  google:
+    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
+    # 값은 구글 클라우드 콘솔 > API 및 서비스 > 사용자 인증 정보에서 확인
+    client-id: <웹-클라이언트-ID>.apps.googleusercontent.com
+  kakao:
+    app-key: <카카오-앱-키>
+  apple:
+    client-id: <애플-번들-ID>
+
+jwt:
+  # 로컬 전용 — 32자 이상 아무 문자열이면 됨 (dev/prod는 환경변수 JWT_SECRET 주입)
+  secret: local-dev-secret-change-me-at-least-32-chars
+  access-expiration: 1800000 # 30분
+
+refresh-token:
+  expiration: 2592000000 # 한달 (opaque UUID, DB 저장)

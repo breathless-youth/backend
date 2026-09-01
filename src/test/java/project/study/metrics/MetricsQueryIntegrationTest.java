@@ -73,7 +73,7 @@ class MetricsQueryIntegrationTest {
 
     @Test
     void 해당_날짜_KST_범위에_가입한_유저만_userId_가입시각과_함께_돌려준다() {
-        int before = userService.findRegisteredOn(TARGET).size();
+        int before = userService.findNewUsersOn(TARGET).size();
 
         // KST 2020-01-10 00:00:00 = UTC 2020-01-09 15:00:00 (경계 포함)
         Instant dayStart = Instant.parse("2020-01-09T15:00:00Z");
@@ -85,7 +85,7 @@ class MetricsQueryIntegrationTest {
         // KST 2020-01-11 00:00:00 — 다음날이라 제외
         long excludedAfter = insertUserCreatedAt(Instant.parse("2020-01-10T15:00:00Z"));
 
-        var registered = userService.findRegisteredOn(TARGET);
+        var registered = userService.findNewUsersOn(TARGET);
         assertThat(registered).hasSize(before + 2);
         assertThat(registered)
                 .extracting(NewUser::userId)
@@ -94,7 +94,7 @@ class MetricsQueryIntegrationTest {
         assertThat(registered)
                 .filteredOn(u -> u.userId() == included1)
                 .first()
-                .satisfies(u -> assertThat(u.registeredAt()).isEqualTo(dayStart));
+                .satisfies(u -> assertThat(u.joinedAt()).isEqualTo("00:00"));
     }
 
     @Test

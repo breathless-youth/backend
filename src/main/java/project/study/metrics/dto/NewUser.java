@@ -1,11 +1,9 @@
 package project.study.metrics.dto;
 
-import java.time.Instant;
-
 /**
- * 일일 리포트의 신규 가입 항목 — 기준일(KST)에 가입한 유저.
+ * 신규 가입 유저 한 명 — 유저 ID와 가입 시각(KST HH:mm).
  *
  * @param userId 유저 ID
- * @param registeredAt 가입 시각 (users.created_at)
+ * @param joinedAt 가입 시각(KST, "HH:mm")
  */
-public record NewUser(Long userId, Instant registeredAt) {}
+public record NewUser(long userId, String joinedAt) {}

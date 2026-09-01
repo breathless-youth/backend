@@ -25,6 +25,7 @@ import project.study.common.NotFoundException;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
 /** 재전송(강제종료 후 복구 등) 멱등 처리 — 멱등 키는 (userId, startedAt) 루트 제출, 중복이면 저장 없이 기존 결과를 반환한다. */
@@ -46,11 +47,14 @@ class StudySessionIdempotencyServiceTest {
     @Mock
     private StudySessionRepository studySessionRepository;
 
+    @Mock
+    private ActiveStudySessionRepository activeStudySessionRepository;
+
     private StudySessionService service;
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, CLOCK);
+        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
     }
 
     private static StudySessionCreateRequest request(Instant startedAt, Instant endedAt) {
@@ -71,7 +75,7 @@ class StudySessionIdempotencyServiceTest {
         when(studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(1L, START))
                 .thenReturn(List.of(session(START, END)));
 
-        List<StudySessionResponse> responses = service.create(request(START, END));
+        List<StudySessionResponse> responses = service.create(1L, request(START, END));
 
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).studySec()).isEqualTo(7200);
@@ -84,7 +88,7 @@ class StudySessionIdempotencyServiceTest {
         when(studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(1L, CROSS_START))
                 .thenReturn(List.of(session(CROSS_START, MIDNIGHT), session(MIDNIGHT, CROSS_END)));
 
-        List<StudySessionResponse> responses = service.create(request(CROSS_START, MIDNIGHT));
+        List<StudySessionResponse> responses = service.create(1L, request(CROSS_START, MIDNIGHT));
 
         assertThat(responses).hasSize(2);
         verify(studySessionRepository, never()).saveAll(any());
@@ -95,7 +99,7 @@ class StudySessionIdempotencyServiceTest {
         givenNoStoredSubmission(START);
         when(studySessionRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<StudySessionResponse> responses = service.create(request(START, END));
+        List<StudySessionResponse> responses = service.create(1L, request(START, END));
 
         assertThat(responses).hasSize(1);
         verify(studySessionRepository).saveAll(any());
@@ -111,7 +115,7 @@ class StudySessionIdempotencyServiceTest {
                 .when(studySessionRepository)
                 .flush();
 
-        assertThatThrownBy(() -> service.create(request(START, END))).isInstanceOf(DuplicateSessionException.class);
+        assertThatThrownBy(() -> service.create(1L, request(START, END))).isInstanceOf(DuplicateSessionException.class);
     }
 
     @Test
@@ -135,7 +139,7 @@ class StudySessionIdempotencyServiceTest {
                 .when(studySessionRepository)
                 .flush();
 
-        assertThatThrownBy(() -> service.create(request(START, END))).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service.create(1L, request(START, END))).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -145,7 +149,7 @@ class StudySessionIdempotencyServiceTest {
         DataIntegrityViolationException unknown = integrityViolation("some_other_constraint");
         doThrow(unknown).when(studySessionRepository).flush();
 
-        assertThatThrownBy(() -> service.create(request(START, END))).isSameAs(unknown);
+        assertThatThrownBy(() -> service.create(1L, request(START, END))).isSameAs(unknown);
     }
 
     /** 실제 저장 실패처럼 원인 체인에 Hibernate 제약 위반(제약 이름 포함)을 담은 예외를 만든다. */

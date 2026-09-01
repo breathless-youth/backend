@@ -26,7 +26,6 @@ import project.study.TestcontainersConfiguration;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-// 인증은 MVP 제외 (ADR-0004) — 재도입 시 @WithMockUser 등으로 인증 컨텍스트 추가 필요
 class StudySessionMinDurationApiTest {
 
     @Autowired
@@ -39,7 +38,6 @@ class StudySessionMinDurationApiTest {
 
     private Long userId;
 
-    // 미래 시각 검증과 자정 분할을 모두 피하도록 어제 KST 낮 12시 시작 세션을 쓴다
     private final LocalDate yesterday = LocalDate.now(KST).minusDays(1);
     private final Instant sessionStart =
             yesterday.atStartOfDay(KST).plusHours(12).toInstant();
@@ -55,7 +53,7 @@ class StudySessionMinDurationApiTest {
 
     private MockMvcTester.MockMvcRequestBuilder submitRequest(Instant startedAt, int durationSec) {
         String body = """
-                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(userId, startedAt, startedAt.plusSeconds(durationSec), durationSec, durationSec);
+                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(userId, startedAt, startedAt.plusSeconds(durationSec), durationSec, durationSec);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -108,7 +106,6 @@ class StudySessionMinDurationApiTest {
 
     @Test
     void 순공시간_10분_이상_세션_하나만_있어도_그날_스트릭에_잡힌다() {
-        // 짧은 세션(9분59초) + 긴 세션(10분) — 하루 합계가 아니라 세션 단위 기준이므로 긴 세션 하나로 충분하다
         assertThat(submitRequest(sessionStart, 599)).hasStatus(HttpStatus.CREATED);
         assertThat(submitRequest(sessionStart.plusSeconds(3600), 600)).hasStatus(HttpStatus.CREATED);
 

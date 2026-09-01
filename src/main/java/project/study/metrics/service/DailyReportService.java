@@ -3,10 +3,14 @@ package project.study.metrics.service;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import project.study.metrics.dto.DailyReport;
+import project.study.metrics.dto.QualifyingSession;
+import project.study.metrics.dto.RoomVsSingleFocus;
+import project.study.metrics.dto.UserSessionDetail;
 import project.study.metrics.slack.SlackNotifier;
 import project.study.studysession.service.StudySessionMetricsService;
 import project.study.user.service.UserService;
@@ -46,12 +50,21 @@ public class DailyReportService {
 
         // 발송 시각이 오전 10시라 오늘은 부분 집계다. 완결된 하루인 어제를 기준일로 쓴다
         LocalDate anchorDate = LocalDate.ofInstant(clock.instant(), KST).minusDays(1);
+
+        // ①③과 세션 건수는 같은 10분 이상 세션 데이터에서 파생하므로 한 번만 조회한다.
+        // 건수를 별도 쿼리로 세면 그 사이 삽입·정정으로 "10분 이상 세션: N건"이 아래 섹션과
+        // 어긋날 수 있어, 목록 크기에서 파생해 항상 일치시킨다
+        List<QualifyingSession> qualifyingSessions = studySessionMetricsService.findQualifyingSessions(anchorDate);
+
         DailyReport report = new DailyReport(
                 anchorDate,
                 userService.countTotal(),
-                userService.findRegisteredOn(anchorDate),
+                userService.findNewUsersOn(anchorDate),
                 studySessionMetricsService.findHeavyUsers(anchorDate),
-                studySessionMetricsService.countQualifyingSessionsOn(anchorDate));
+                qualifyingSessions.size(),
+                RoomVsSingleFocus.from(qualifyingSessions),
+                studySessionMetricsService.cohortFirstWeek(anchorDate),
+                UserSessionDetail.rank(qualifyingSessions));
 
         slackNotifier.send(report.toSlackMessage());
         log.info("일일 지표 리포트를 발송했다 (기준일={})", anchorDate);

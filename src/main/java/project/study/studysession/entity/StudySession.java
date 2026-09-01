@@ -57,6 +57,14 @@ public class StudySession {
     @OrderBy("startedAt ASC")
     private List<StatusEvent> events = new ArrayList<>();
 
+    // BY-447: 자동 확정본 표시 — true인 세션은 잠정 기록이라 늦은 최종 제출·재확정이 대체할 수 있다
+    @Column(name = "auto_finalized", nullable = false)
+    private boolean autoFinalized;
+
+    // BY-455: 복구 확인 시각 — 복구 판별 API가 이 세션을 사용자에게 보여준 시점. NULL이면 미확인
+    @Column(name = "recovery_acknowledged_at")
+    private Instant recoveryAcknowledgedAt;
+
     // 검증·계산은 StudySessionService.createSessions가 담당한다 — 엔티티는 저장 데이터만 보관
     public StudySession(
             Long userId,
@@ -79,5 +87,10 @@ public class StudySession {
     /** 자정 분할 조각을 루트 제출에 귀속시킨다 — 분할 직후 서비스만 호출한다 (기본값은 자신의 시작 시각 = 단독 세션). */
     public void attachToSubmission(Instant submissionStartedAt) {
         this.submissionStartedAt = submissionStartedAt;
+    }
+
+    /** 확정 스케줄러가 만든 세션임을 표시한다 — 저장 직전 서비스만 호출한다. */
+    public void markAutoFinalized() {
+        this.autoFinalized = true;
     }
 }

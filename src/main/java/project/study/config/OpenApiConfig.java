@@ -29,31 +29,17 @@ public class OpenApiConfig {
 
     private final Environment environment;
 
-    // AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 아래 주석 해제
-    // 필요 import (Spotless가 import 블록 내 주석을 지워 여기에 보존):
-    //   io.swagger.v3.oas.models.Components
-    //   io.swagger.v3.oas.models.security.SecurityRequirement
-    //   io.swagger.v3.oas.models.security.SecurityScheme
-    // private static final String BEARER_AUTH = "bearerAuth";
-
-    // AUTH-DISABLED: description의 인증 흐름 안내는 현재 스테일 (인증 재도입 시까지 유지)
     @Bean
     public OpenAPI openApi() {
         String description = """
                 공부 기록 앱 백엔드 API 문서.
+
+                **인증** — 현재 인증 없이 운영(ADR-0004). `POST /api/users`로 기기를 등록해 userId를 발급받고, \
+                이후 API 호출에 userId를 쿼리 파라미터 또는 요청 본문으로 전달한다.
                 """;
         if (environment.matchesProfiles("dev")) {
             description += DEV_MOCK_DATA_GUIDE;
         }
         return new OpenAPI().info(new Info().title("Study API").version("v1").description(description));
-        // AUTH-DISABLED
-        // .components(new Components()
-        //         .addSecuritySchemes(
-        //                 BEARER_AUTH,
-        //                 new SecurityScheme()
-        //                         .type(SecurityScheme.Type.HTTP)
-        //                         .scheme("bearer")
-        //                         .bearerFormat("JWT")))
-        // .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
     }
 }

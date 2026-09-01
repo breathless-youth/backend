@@ -20,6 +20,7 @@ import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,12 +36,15 @@ class StudySessionServiceTest {
     @Mock
     private StudySessionRepository studySessionRepository;
 
+    @Mock
+    private ActiveStudySessionRepository activeStudySessionRepository;
+
     // createSessions는 순수 로직이라 리포지토리를 사용하지 않는다 — 저장 경로는 API 통합테스트가 검증
     private StudySessionService service;
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, CLOCK);
+        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
     }
 
     private StatusEvent event(EventStatus status, String startedAt, String endedAt) {
@@ -172,21 +176,21 @@ class StudySessionServiceTest {
                 service.createSessions(1L, START, END, 6600, 6000, List.of()).get(0);
 
         // 6000 / 6600 × 100 = 90.909... → 90.9
-        assertThat(StudySessionService.focusRate(session.getFocusSec(), session.getStudySec()))
+        assertThat(StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()))
                 .isEqualTo(90.9);
     }
 
     @Test
     void 집중률은_소수_한_자리로_반올림된다() {
-        assertThat(StudySessionService.focusRate(1, 3)).isEqualTo(33.3);
-        assertThat(StudySessionService.focusRate(2, 3)).isEqualTo(66.7);
-        assertThat(StudySessionService.focusRate(7200, 7200)).isEqualTo(100.0);
-        assertThat(StudySessionService.focusRate(0, 7200)).isEqualTo(0.0);
+        assertThat(StudySessionStatsCalculator.focusRate(1, 3)).isEqualTo(33.3);
+        assertThat(StudySessionStatsCalculator.focusRate(2, 3)).isEqualTo(66.7);
+        assertThat(StudySessionStatsCalculator.focusRate(7200, 7200)).isEqualTo(100.0);
+        assertThat(StudySessionStatsCalculator.focusRate(0, 7200)).isEqualTo(0.0);
     }
 
     @Test
     void 총공부시간이_0이면_집중률은_0이다() {
-        assertThat(StudySessionService.focusRate(0, 0)).isEqualTo(0.0);
+        assertThat(StudySessionStatsCalculator.focusRate(0, 0)).isEqualTo(0.0);
     }
 
     @Test

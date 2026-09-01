@@ -4,14 +4,11 @@ import static project.study.studysession.StudySessionThresholds.MIN_LIST_FOCUS_S
 import static project.study.studysession.StudySessionThresholds.MIN_STREAK_FOCUS_SEC;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.NotFoundException;
 import project.study.studysession.dto.StatusEventRequest;
+import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionResponse;
@@ -30,6 +28,7 @@ import project.study.studysession.dto.StudySessionSummaryResponse;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
 @Service
@@ -42,49 +41,54 @@ public class StudySessionService {
     private static final String USER_FK_CONSTRAINT = "study_session_user_id_fkey";
 
     private final StudySessionRepository studySessionRepository;
+    private final ActiveStudySessionRepository activeStudySessionRepository;
     private final Clock clock;
 
     @Transactional
-    public List<StudySessionResponse> create(StudySessionCreateRequest request) {
-        // 같은 (userId, startedAt) 루트 제출이 이미 있으면 재전송(강제종료 후 복구 등)으로 보고 저장 없이
-        // 기존 결과(자정 분할 조각 포함)를 반환한다 — 재제출 본문의 다른 필드(endedAt 등)는 보지 않는다
+    public List<StudySessionResponse> create(Long userId, StudySessionCreateRequest request) {
+        return create(userId, request, false);
+    }
+
+    /** autoFinalized=true는 확정 스케줄러 전용 — 저장되는 세션에 자동 확정 표시를 남긴다. */
+    @Transactional
+    public List<StudySessionResponse> create(Long userId, StudySessionCreateRequest request, boolean autoFinalized) {
         List<StudySession> existing = studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
-                request.userId(), request.startedAt());
+                userId, request.startedAt());
         if (!existing.isEmpty()) {
-            return existing.stream().map(this::toResponse).toList();
+            // 클라 제출본이 하나라도 있으면 불가침 — 기존 멱등 동작(저장된 결과 반환)
+            if (!existing.stream().allMatch(StudySession::isAutoFinalized)) {
+                return existing.stream().map(this::toResponse).toList();
+            }
+            // 전부 자동 확정본이면 잠정 기록 — 새 도착분(최종 제출·재확정)으로 대체한다. 길이 비교는 하지 않는다: 스냅샷이 누적값이라 나중 도착분이 항상 상위집합이다 (ADR-0014)
+            studySessionRepository.deleteAll(existing);
+            studySessionRepository.flush();
         }
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
         List<StudySession> sessions = createSessions(
-                request.userId(),
-                request.startedAt(),
-                request.endedAt(),
-                request.studySec(),
-                request.focusSec(),
-                events);
+                userId, request.startedAt(), request.endedAt(), request.studySec(), request.focusSec(), events);
+        if (autoFinalized) {
+            sessions.forEach(StudySession::markAutoFinalized);
+        }
         try {
             List<StudySession> saved = studySessionRepository.saveAll(sessions);
-            // FK·유니크 위반을 트랜잭션 커밋 전에 감지하기 위해 즉시 flush (한 트랜잭션이라 분할 저장도 원자적)
             studySessionRepository.flush();
+            activeStudySessionRepository.deleteByUserIdAndStartedAt(userId, request.startedAt());
             return saved.stream().map(this::toResponse).toList();
         } catch (DataIntegrityViolationException e) {
-            // 제약 이름으로 원인을 특정한다 — 유니크 위반은 동시 재전송 레이스이거나 기존 세션과
-            // 시작 시각이 겹치는 제출(409), 유저 FK 위반은 404, 그 외 무결성 위반은 숨기지 않고 전파(500)
             String constraint = violatedConstraint(e);
             if (STARTED_AT_UNIQUE_CONSTRAINT.equalsIgnoreCase(constraint)) {
                 throw new DuplicateSessionException("이미 같은 시각에 시작한 세션이 저장되어 있습니다");
             }
             if (USER_FK_CONSTRAINT.equalsIgnoreCase(constraint)) {
-                throw new NotFoundException("존재하지 않는 사용자입니다: " + request.userId());
+                throw new NotFoundException("존재하지 않는 사용자입니다: " + userId);
             }
             throw e;
         }
     }
 
     /**
-     * 유니크 위반으로 create()가 던진 DuplicateSessionException을 받은 호출자가 재조회할 때 쓴다.
-     * create()의 트랜잭션은 flush 실패 시점에 이미 롤백되어 끝났으므로, 같은 (userId, submissionStartedAt)의
-     * 레이스에서 진 것뿐이라면 이 완전히 새 트랜잭션에서 상대가 커밋한 결과를 찾아 그대로 반환한다(멱등).
+     * 유니크 위반으로 create()가 던진 DuplicateSessionException을 받은 호출자가 재조회할 때 쓴다. create()의 트랜잭션은 flush 실패 시점에 이미 롤백되어 끝났으므로, 같은 (userId, submissionStartedAt)의 레이스에서 진 것뿐이라면 이 완전히 새 트랜잭션에서 상대가 커밋한 결과를 찾아 그대로 반환한다(멱등).
      */
     @Transactional(readOnly = true)
     public List<StudySessionResponse> findExistingSubmission(Long userId, Instant submissionStartedAt) {
@@ -96,7 +100,7 @@ public class StudySessionService {
     }
 
     /** 원인 체인에서 위반된 제약 이름을 찾는다 — 없으면 null. */
-    private static String violatedConstraint(DataIntegrityViolationException e) {
+    static String violatedConstraint(DataIntegrityViolationException e) {
         for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
             if (cause instanceof ConstraintViolationException violation) {
                 return violation.getConstraintName();
@@ -122,12 +126,12 @@ public class StudySessionService {
         long totalFocusSec =
                 sessions.stream().mapToLong(StudySession::getFocusSec).sum();
         long longestFocusSec = sessions.stream()
-                .mapToLong(StudySessionService::longestFocusStreakSec)
+                .mapToLong(StudySessionStatsCalculator::longestFocusStreakSec)
                 .max()
                 .orElse(0);
         List<StudySessionSummaryResponse> summaries =
                 sessions.stream().map(this::toSummaryResponse).toList();
-        Map<EventStatus, Long> totalEventCounts = countByStatus(
+        Map<EventStatus, Long> totalEventCounts = StudySessionStatsCalculator.countByStatus(
                 sessions.stream().flatMap(s -> s.getEvents().stream()).toList());
 
         YearMonth month = YearMonth.from(date);
@@ -140,42 +144,21 @@ public class StudySessionService {
                 totalStudySec,
                 totalFocusSec,
                 longestFocusSec,
-                focusRate(totalFocusSec, totalStudySec),
+                StudySessionStatsCalculator.focusRate(totalFocusSec, totalStudySec),
                 totalEventCounts,
                 studiedDatesInMonth);
     }
 
-    /** 세션 내부에서 이벤트(PHONE/DEVICE/AWAY/PAUSE)로 끊기지 않고 이어진 가장 긴 구간(초) — 이벤트가 없으면 세션 전체 길이. */
-    private static long longestFocusStreakSec(StudySession session) {
-        List<StatusEvent> sorted = session.getEvents().stream()
-                .sorted(Comparator.comparing(StatusEvent::getStartedAt))
-                .toList();
-        Instant cursor = session.getStartedAt();
-        long max = 0;
-        for (StatusEvent event : sorted) {
-            max = Math.max(max, Duration.between(cursor, event.getStartedAt()).toSeconds());
-            cursor = event.getEndedAt();
-        }
-        return Math.max(max, Duration.between(cursor, session.getEndedAt()).toSeconds());
-    }
-
-    /** 상태별 이벤트 발생 건수 — 프론트가 키 존재를 가정할 수 있도록 없는 상태도 0으로 채운다. */
-    private static Map<EventStatus, Long> countByStatus(List<StatusEvent> events) {
-        Map<EventStatus, Long> counts = new EnumMap<>(EventStatus.class);
-        for (EventStatus status : EventStatus.values()) {
-            counts.put(status, 0L);
-        }
-        events.forEach(event -> counts.merge(event.getStatus(), 1L, Long::sum));
-        return counts;
-    }
-
     private StudySessionResponse toResponse(StudySession session) {
-        return StudySessionResponse.from(session, focusRate(session.getFocusSec(), session.getStudySec()));
+        return StudySessionResponse.from(
+                session, StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()));
     }
 
     private StudySessionSummaryResponse toSummaryResponse(StudySession session) {
         return StudySessionSummaryResponse.from(
-                session, focusRate(session.getFocusSec(), session.getStudySec()), countByStatus(session.getEvents()));
+                session,
+                StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()),
+                StudySessionStatsCalculator.countByStatus(session.getEvents()));
     }
 
     /**
@@ -192,146 +175,13 @@ public class StudySessionService {
                 .toList();
         StudySessionValidator.validateEvents(startedAt, endedAt, sorted);
 
-        List<Instant> cuts = computeCuts(startedAt, endedAt);
-        SegmentWeights weights = computeSegmentWeights(cuts, sorted);
+        List<Instant> cuts = StudySessionSplitter.computeCuts(startedAt, endedAt);
+        StudySessionSplitter.SegmentWeights weights = StudySessionSplitter.computeSegmentWeights(cuts, sorted);
 
         StudySessionValidator.validateStudySec(studySec, weights.totalStudyActiveSec());
         StudySessionValidator.validateFocusSec(focusSec, studySec);
 
-        return buildSessions(userId, cuts, weights, studySec, focusSec);
-    }
-
-    /** 조각 경계를 확정한다 (KST 자정 기준 — 24시간 한도 덕에 조각은 최대 2개). */
-    private static List<Instant> computeCuts(Instant startedAt, Instant endedAt) {
-        List<Instant> cuts = new ArrayList<>();
-        cuts.add(startedAt);
-        for (Instant boundary = nextKstMidnight(startedAt);
-                boundary.isBefore(endedAt);
-                boundary = nextKstMidnight(boundary)) {
-            cuts.add(boundary);
-        }
-        cuts.add(endedAt);
-        return cuts;
-    }
-
-    /** 조각별 이벤트 클립과, studySec/focusSec 배분 가중치(studyActiveSec/focusActiveSec) 및 그 합계. */
-    private record SegmentWeights(
-            List<List<StatusEvent>> segmentEvents,
-            long[] studyActiveSecs,
-            long[] focusActiveSecs,
-            long totalStudyActiveSec,
-            long totalFocusActiveSec) {}
-
-    /**
-     * 검증·배분 기준은 원본 총 시간이 아니라 저장되는 조각별 총시간(내림 초)의 합이다 — sub-second
-     * 타임스탬프가 자정에 걸치면 원본 기준으로는 0으로 나누기나 절삭 손실이 생길 수 있어서다.
-     */
-    private static SegmentWeights computeSegmentWeights(List<Instant> cuts, List<StatusEvent> sorted) {
-        int segmentCount = cuts.size() - 1;
-        List<List<StatusEvent>> segmentEvents = new ArrayList<>(segmentCount);
-        long[] studyActiveSecs = new long[segmentCount];
-        long[] focusActiveSecs = new long[segmentCount];
-        long totalStudyActiveSec = 0;
-        long totalFocusActiveSec = 0;
-        for (int i = 0; i < segmentCount; i++) {
-            long segmentSec = Duration.between(cuts.get(i), cuts.get(i + 1)).toSeconds();
-            List<StatusEvent> clipped = clip(sorted, cuts.get(i), cuts.get(i + 1));
-            segmentEvents.add(clipped);
-            long stopSec = sumDuration(clipped, EventStatus.PAUSE);
-            long eventSec = sumDuration(clipped);
-            studyActiveSecs[i] = segmentSec - stopSec;
-            focusActiveSecs[i] = segmentSec - eventSec;
-            totalStudyActiveSec += studyActiveSecs[i];
-            totalFocusActiveSec += focusActiveSecs[i];
-        }
-        return new SegmentWeights(
-                segmentEvents, studyActiveSecs, focusActiveSecs, totalStudyActiveSec, totalFocusActiveSec);
-    }
-
-    /** 조각별 가중치대로 studySec/focusSec을 비례 배분해 세션들을 만든다 — 마지막 조각이 배분 나머지를 가져가 합이 항상 요청값과 같다. */
-    private static List<StudySession> buildSessions(
-            Long userId, List<Instant> cuts, SegmentWeights weights, int studySec, int focusSec) {
-        int segmentCount = cuts.size() - 1;
-        List<StudySession> sessions = new ArrayList<>();
-        long allocatedStudySec = 0;
-        long allocatedFocusSec = 0;
-        for (int i = 0; i < segmentCount; i++) {
-            long segmentStudySec;
-            long segmentFocusSec;
-            if (i == segmentCount - 1) {
-                segmentStudySec = studySec - allocatedStudySec;
-                segmentFocusSec = focusSec - allocatedFocusSec;
-            } else {
-                segmentStudySec =
-                        studySec == 0 ? 0 : studySec * weights.studyActiveSecs()[i] / weights.totalStudyActiveSec();
-                // focusActiveSec 합이 0(전 구간이 이벤트로 덮인 경우)이면 studyActiveSec 비율로 대체 배분
-                boolean noFocusActiveTime = weights.totalFocusActiveSec() == 0;
-                long focusWeight = noFocusActiveTime ? weights.studyActiveSecs()[i] : weights.focusActiveSecs()[i];
-                long focusWeightTotal =
-                        noFocusActiveTime ? weights.totalStudyActiveSec() : weights.totalFocusActiveSec();
-                segmentFocusSec = focusSec == 0 ? 0 : focusSec * focusWeight / focusWeightTotal;
-            }
-            sessions.add(buildSession(
-                    userId,
-                    cuts.get(i),
-                    cuts.get(i + 1),
-                    (int) segmentStudySec,
-                    (int) segmentFocusSec,
-                    weights.segmentEvents().get(i)));
-            allocatedStudySec += segmentStudySec;
-            allocatedFocusSec += segmentFocusSec;
-        }
-        // 조각들이 원본 제출의 시작 시각을 루트로 공유해야 재제출 판별·응답 조회가 조각 단위로 어긋나지 않는다
-        sessions.forEach(session -> session.attachToSubmission(cuts.get(0)));
-        return sessions;
-    }
-
-    /** 검증이 끝난 한 구간을 세션 엔티티로 만든다 — 통계 귀속 날짜(KST 시작 날짜)만 계산하고, 총공부·순공 시간은 배분받은 값을 그대로 담는다. */
-    private static StudySession buildSession(
-            Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
-        LocalDate statDate = startedAt.atZone(KST).toLocalDate();
-        return new StudySession(userId, statDate, startedAt, endedAt, studySec, focusSec, events);
-    }
-
-    private static long sumDuration(List<StatusEvent> events) {
-        return events.stream()
-                .mapToLong(
-                        e -> Duration.between(e.getStartedAt(), e.getEndedAt()).toSeconds())
-                .sum();
-    }
-
-    private static long sumDuration(List<StatusEvent> events, EventStatus status) {
-        return events.stream()
-                .filter(e -> e.getStatus() == status)
-                .mapToLong(
-                        e -> Duration.between(e.getStartedAt(), e.getEndedAt()).toSeconds())
-                .sum();
-    }
-
-    private static Instant nextKstMidnight(Instant instant) {
-        return instant.atZone(KST).toLocalDate().plusDays(1).atStartOfDay(KST).toInstant();
-    }
-
-    /** 이벤트들을 [segmentStart, segmentEnd) 구간으로 잘라낸다. 0초 조각은 버린다. */
-    private static List<StatusEvent> clip(List<StatusEvent> sortedEvents, Instant segmentStart, Instant segmentEnd) {
-        List<StatusEvent> clipped = new ArrayList<>();
-        for (StatusEvent event : sortedEvents) {
-            Instant start = event.getStartedAt().isAfter(segmentStart) ? event.getStartedAt() : segmentStart;
-            Instant end = event.getEndedAt().isBefore(segmentEnd) ? event.getEndedAt() : segmentEnd;
-            if (start.isBefore(end)) {
-                // 조각 세션들이 같은 이벤트 엔티티를 공유하면 cascade 저장 시 한쪽이 행을 가져가므로 항상 새로 만든다
-                clipped.add(new StatusEvent(event.getStatus(), start, end));
-            }
-        }
-        return clipped;
-    }
-
-    /** 집중률(%) — 순공시간 ÷ 총공부시간 × 100, 소수 1자리 반올림. */
-    static double focusRate(long focusSec, long studySec) {
-        if (studySec <= 0) {
-            return 0.0;
-        }
-        return Math.round(focusSec * 1000.0 / studySec) / 10.0;
+        return StudySessionSplitter.buildSessions(userId, cuts, weights, studySec, focusSec);
     }
 
     /**
@@ -356,8 +206,8 @@ public class StudySessionService {
                 currentStreak(statDates, today), maxStreak(statDates), studiedDatesInRange);
     }
 
-    /** from/to는 함께 지정해야 한다 — 하나만 있거나 from이 to보다 이후면 400. */
-    private static void validateRange(LocalDate from, LocalDate to) {
+    /** from/to는 함께 지정해야 한다 — 하나만 있거나 from이 to보다 이후면 400. periodStats의 compare 검증에서도 재사용한다. */
+    static void validateRange(LocalDate from, LocalDate to) {
         if ((from == null) != (to == null)) {
             throw new InvalidSessionException("from과 to는 함께 지정해야 합니다");
         }
@@ -389,5 +239,20 @@ public class StudySessionService {
             previous = date;
         }
         return max;
+    }
+
+    @Transactional(readOnly = true)
+    public StudyPeriodStatsResponse periodStats(
+            Long userId, LocalDate from, LocalDate to, LocalDate compareFrom, LocalDate compareTo) {
+        return StudySessionStatsCalculator.periodStats(
+                studySessionRepository, userId, from, to, compareFrom, compareTo);
+    }
+
+    @Transactional(readOnly = true)
+    public StudySessionResponse findById(Long userId, Long id) {
+        StudySession session = studySessionRepository
+                .findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new NotFoundException("세션을 찾을 수 없습니다"));
+        return toResponse(session);
     }
 }

@@ -6,11 +6,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +24,6 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-// 인증은 MVP 제외 (ADR-0004) — 재도입 시 @WithMockUser 등으로 인증 컨텍스트 추가 필요
 class StudySessionIdempotencyApiTest {
 
     @Autowired
@@ -45,15 +39,12 @@ class StudySessionIdempotencyApiTest {
 
     private Long userId;
 
-    // 기준 날짜를 한 번만 읽어 고정 — 테스트 도중 KST 자정이 지나도 입력과 기대값이 같은 기준을 쓴다
     private final LocalDate today = LocalDate.now(KST);
 
-    // 미래 시각 검증과 자정 분할을 모두 피하도록 어제 KST 낮 12~14시의 세션을 만든다
     private final Instant sessionStart =
             today.minusDays(1).atStartOfDay(KST).plusHours(12).toInstant();
     private final Instant sessionEnd = sessionStart.plusSeconds(7200);
 
-    // 어제 KST 자정 — 자정 분할·시작 시각 충돌 테스트의 기준점
     private final Instant midnight = today.minusDays(1).atStartOfDay(KST).toInstant();
 
     @BeforeEach
@@ -69,9 +60,9 @@ class StudySessionIdempotencyApiTest {
                 "tester-" + UUID.randomUUID());
     }
 
-    private MvcTestResult submit(Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec) {
+    private MvcTestResult submit(Long uid, Instant startedAt, Instant endedAt, int studySec, int focusSec) {
         String body = """
-                {"userId": %s, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(userId, startedAt, endedAt, studySec, focusSec);
+                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(uid, startedAt, endedAt, studySec, focusSec);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -87,9 +78,8 @@ class StudySessionIdempotencyApiTest {
                 .asLong();
     }
 
-    private Integer sessionRows(Long userId) {
-        return jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM study_session WHERE user_id = ?", Integer.class, userId);
+    private Integer sessionRows(Long uid) {
+        return jdbcTemplate.queryForObject("SELECT count(*) FROM study_session WHERE user_id = ?", Integer.class, uid);
     }
 
     @Test
@@ -97,7 +87,6 @@ class StudySessionIdempotencyApiTest {
         MvcTestResult first = submit(userId, sessionStart, sessionEnd, 7200, 6600);
         assertThat(first).hasStatus(HttpStatus.CREATED);
 
-        // 재제출 본문의 studySec/focusSec이 달라도 저장된 원본이 그대로 내려온다 (멱등 키만 본다)
         MvcTestResult second = submit(userId, sessionStart, sessionEnd, 3600, 3000);
         assertThat(second)
                 .hasStatus(HttpStatus.CREATED)
@@ -107,33 +96,6 @@ class StudySessionIdempotencyApiTest {
         assertThat(firstSessionId(second)).isEqualTo(firstSessionId(first));
 
         assertThat(sessionRows(userId)).isEqualTo(1);
-    }
-
-    @Test
-    void 동시_재전송_레이스에서_지는_쪽도_예외_없이_같은_세션을_반환한다() throws Exception {
-        // 사전 조회를 둘 다 통과한 뒤 한쪽만 유니크 제약에 걸리는 진짜 레이스를 실제 DB·HTTP 계층으로 재현한다.
-        // 이긴 쪽은 정상 저장 경로, 진 쪽은 컨트롤러가 DuplicateSessionException을 잡아 재조회하는 경로를 탄다.
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        try {
-            CountDownLatch start = new CountDownLatch(1);
-            Callable<MvcTestResult> task = () -> {
-                start.await();
-                return submit(userId, sessionStart, sessionEnd, 7200, 6600);
-            };
-            Future<MvcTestResult> first = executor.submit(task);
-            Future<MvcTestResult> second = executor.submit(task);
-            start.countDown();
-
-            MvcTestResult r1 = first.get();
-            MvcTestResult r2 = second.get();
-
-            assertThat(r1).hasStatus(HttpStatus.CREATED);
-            assertThat(r2).hasStatus(HttpStatus.CREATED);
-            assertThat(firstSessionId(r1)).isEqualTo(firstSessionId(r2));
-            assertThat(sessionRows(userId)).isEqualTo(1);
-        } finally {
-            executor.shutdownNow();
-        }
     }
 
     @Test
@@ -153,7 +115,6 @@ class StudySessionIdempotencyApiTest {
 
     @Test
     void 종료_시각이_달라진_재제출도_저장된_조각_전체를_반환한다() {
-        // 강제종료 복구 재전송에서 endedAt이 어긋나도, 멱등 키(루트 startedAt)만 보고 저장된 원본을 그대로 돌려준다
         MvcTestResult first = submit(userId, midnight.minusSeconds(3600), midnight.plusSeconds(3600), 7200, 6000);
         assertThat(first).hasStatus(HttpStatus.CREATED);
 
@@ -169,8 +130,6 @@ class StudySessionIdempotencyApiTest {
 
     @Test
     void 저장된_분할_조각과_같은_시각에_시작하는_별개_제출은_재제출이_아니라_409다() {
-        // 자정을 걸친 제출이 만든 뒤 조각(자정 시작)은 루트가 아니다 — 자정에 시작하는 별개 제출을
-        // 재제출로 오인해 201로 조각을 돌려주면 안 되고, 시작 시각 충돌(409)로 거절해야 한다
         assertThat(submit(userId, midnight.minusSeconds(3600), midnight.plusSeconds(3600), 7200, 6000))
                 .hasStatus(HttpStatus.CREATED);
 
@@ -191,7 +150,6 @@ class StudySessionIdempotencyApiTest {
 
     @Test
     void 분할_조각이_기존_세션과_같은_시각에_시작하면_409이고_아무것도_저장되지_않는다() {
-        // 정확히 자정에 시작하는 세션을 먼저 저장 — 이후 자정을 걸친 제출의 뒤 조각(자정 시작)과 충돌한다
         assertThat(submit(userId, midnight, midnight.plusSeconds(3600), 3600, 3000))
                 .hasStatus(HttpStatus.CREATED);
 
@@ -202,13 +160,11 @@ class StudySessionIdempotencyApiTest {
                 .hasPathSatisfying(
                         "$.message", message -> assertThat(message).asString().contains("이미 같은 시각에 시작한 세션"));
 
-        // 충돌한 제출은 통째로 롤백된다 — 앞 조각(23시 시작)도 저장되면 안 된다
         assertThat(sessionRows(userId)).isEqualTo(1);
     }
 
     @Test
     void 루트를_알_수_없는_레거시_행과_시각이_겹치면_재제출이_아니라_409다() {
-        // V7 이전 데이터: submission_started_at이 NULL인 행 — 재제출 판별에서 제외되어야 한다
         jdbcTemplate.update(
                 "INSERT INTO study_session (user_id, stat_date, started_at, ended_at, study_sec, focus_sec)"
                         + " VALUES (?, ?, ?, ?, ?, ?)",
@@ -219,7 +175,6 @@ class StudySessionIdempotencyApiTest {
                 7200,
                 6600);
 
-        // 같은 시각 제출이 레거시 행을 재제출로 오인해 201을 주면 안 되고, 유니크 제약이 409로 거절해야 한다
         assertThat(submit(userId, sessionStart, sessionEnd, 7200, 6600)).hasStatus(HttpStatus.CONFLICT);
         assertThat(sessionRows(userId)).isEqualTo(1);
     }

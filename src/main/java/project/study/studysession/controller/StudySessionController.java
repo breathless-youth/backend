@@ -1,6 +1,7 @@
 package project.study.studysession.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -11,9 +12,13 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.ErrorResponse;
@@ -52,8 +57,6 @@ public class StudySessionController {
 
                     **검증 규칙**
                     - 종료 시각은 시작 시각 이후여야 한다 (세션·이벤트 모두)
-                    - 세션은 10분 이상이어야 한다 — 10분 미만 세션은 저장되지 않고 `400`으로 거절된다 \
-                    (저장되지 않으므로 스트릭·통계에도 잡히지 않는다)
                     - 세션은 24시간을 초과할 수 없다
                     - 세션 종료 시각은 미래일 수 없다 (기기 시계 오차 5분까지 허용)
                     - 총 공부 시간(`studySec`)은 0 이상, (세션 총 시간 − `PAUSE` 이벤트 시간 합) 이하여야 한다
@@ -74,7 +77,8 @@ public class StudySessionController {
                     **멱등 재제출 — 중복 저장 방지.** `userId`+`startedAt`이 멱등 키다. 같은 키로 다시 제출하면 \
                     (앱 강제종료 후 재접속해 로컬 보관분을 재전송하는 경우 등) 새로 저장하지 않고 이미 저장된 \
                     세션 배열을 그대로 `201`로 돌려준다 — 재제출 본문의 다른 필드는 무시된다. \
-                    시작 시각이 기존 세션(자정 분할 조각 포함)과 겹치는 별개 제출이 동시에 들어오면 `409`로 거절된다.""")
+                    시작 시각이 기존 세션(자정 분할 조각 포함)과 겹치는 별개 제출이 동시에 들어오면 `409`로 거절된다. \
+                    자동 확정본(잠정 기록)이 이미 저장돼 있으면 재제출이 아니라 대체가 일어난다 — 진행중 세션 스냅샷 API 참고 (ADR-0014).""")
     @ApiResponse(
             responseCode = "201",
             description = "저장 성공 — studySec/focusSec/focusRate/statDate를 포함한 세션 배열 (자정 분할 시 2개)")
@@ -89,7 +93,6 @@ public class StudySessionController {
                                 @ExampleObject(
                                         name = "종료가 시작보다 빠름",
                                         value = "{\"message\": \"세션 종료 시각은 시작 시각 이후여야 합니다\"}"),
-                                @ExampleObject(name = "10분 미만", value = "{\"message\": \"세션은 10분 이상이어야 합니다\"}"),
                                 @ExampleObject(name = "24시간 초과", value = "{\"message\": \"세션은 24시간을 초과할 수 없습니다\"}"),
                                 @ExampleObject(name = "미래 시각", value = "{\"message\": \"세션 종료 시각이 미래일 수 없습니다\"}"),
                                 @ExampleObject(
@@ -126,17 +129,41 @@ public class StudySessionController {
     @ResponseStatus(HttpStatus.CREATED)
     public List<StudySessionResponse> create(@Valid @RequestBody StudySessionCreateRequest request) {
         try {
-            return studySessionService.create(request);
-        } catch (DuplicateSessionException e) {
-            // 동시에 들어온 같은 제출이 유니크 제약 레이스에서 졌을 수 있다 — create()의 트랜잭션은 이미
-            // 롤백되어 끝났으니, 완전히 새 트랜잭션에서 재조회해 상대가 커밋한 결과를 그대로 돌려준다(멱등).
-            // 다른 제출이 시각만 겹친 것뿐이면 재조회도 비어있으므로 원래 409를 그대로 던진다.
-            List<StudySessionResponse> concurrent =
-                    studySessionService.findExistingSubmission(request.userId(), request.startedAt());
-            if (!concurrent.isEmpty()) {
-                return concurrent;
+            return studySessionService.create(request.userId(), request);
+        } catch (DuplicateSessionException | ObjectOptimisticLockingFailureException e) {
+            // 자동 확정 스케줄러와의 유니크 레이스에서 진 경우 — 방금 확정된 auto_finalized(잠정) 행을
+            // 그대로 돌려주면 최종 제출이 영구 유실되므로, create를 1회 재시도해 대체 로직을 태운다
+            // (기존 클라본이면 멱등 반환, 전부 auto_finalized면 대체, 재충돌이면 아래 폴백) (ADR-0014).
+            try {
+                return studySessionService.create(request.userId(), request);
+            } catch (DuplicateSessionException retryEx) {
+                List<StudySessionResponse> concurrent =
+                        studySessionService.findExistingSubmission(request.userId(), request.startedAt());
+                if (!concurrent.isEmpty()) {
+                    return concurrent;
+                }
+                throw retryEx;
             }
-            throw e;
         }
+    }
+
+    @Operation(
+            summary = "세션 단건 상세 조회",
+            description = "세션 id로 단건 상세를 조회한다. events에 비공부 상태 구간(status·시각)이 원시로 담긴다. "
+                    + "userId는 소유권 검증용 — 없거나 남의 세션이면 404.")
+    @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 상세 + 이벤트 구간")
+    @ApiResponse(
+            responseCode = "404",
+            description = "세션을 찾을 수 없음 — 존재하지 않거나 다른 유저의 세션",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "세션 없음", value = "{\"message\": \"세션을 찾을 수 없습니다\"}")))
+    @GetMapping("/{id}")
+    public StudySessionResponse detail(
+            @Parameter(description = "세션 ID", example = "10") @PathVariable Long id,
+            @Parameter(description = "소유권 검증용 유저 ID", example = "1") @RequestParam Long userId) {
+        return studySessionService.findById(userId, id);
     }
 }

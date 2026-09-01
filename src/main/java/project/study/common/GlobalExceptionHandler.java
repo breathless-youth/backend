@@ -16,19 +16,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadRequestException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleBadRequest(BadRequestException e) {
-        return new ErrorResponse(e.getMessage());
+        return new ErrorResponse(ErrorCode.BAD_REQUEST, e.getMessage());
     }
 
     @ExceptionHandler(NotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ErrorResponse handleNotFound(NotFoundException e) {
-        return new ErrorResponse(e.getMessage());
+        return new ErrorResponse(e.getCode(), e.getMessage());
     }
 
     @ExceptionHandler(ConflictException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse handleConflict(ConflictException e) {
-        return new ErrorResponse(e.getMessage());
+        return new ErrorResponse(ErrorCode.CONFLICT, e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -36,15 +36,16 @@ public class GlobalExceptionHandler {
     public ErrorResponse handleValidation(MethodArgumentNotValidException e) {
         FieldError fieldError = e.getBindingResult().getFieldError();
         if (fieldError == null) {
-            return new ErrorResponse("요청 값이 올바르지 않습니다");
+            return new ErrorResponse(ErrorCode.VALIDATION_FAILED, "요청 값이 올바르지 않습니다");
         }
-        return new ErrorResponse(fieldError.getField() + ": " + fieldError.getDefaultMessage());
+        return new ErrorResponse(
+                ErrorCode.VALIDATION_FAILED, fieldError.getField() + ": " + fieldError.getDefaultMessage());
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleUnreadable(HttpMessageNotReadableException e) {
-        return new ErrorResponse("요청 본문을 읽을 수 없습니다");
+        return new ErrorResponse(ErrorCode.BAD_REQUEST, "요청 본문을 읽을 수 없습니다");
     }
 
     /**
@@ -62,11 +63,11 @@ public class GlobalExceptionHandler {
             HttpStatusCode status = standard.getStatusCode();
             // 표준 예외라도 5xx면 내부 사정을 노출하지 않는 서버 오류 메시지로 통일한다
             if (status.is5xxServerError()) {
-                return ResponseEntity.status(status).body(new ErrorResponse("서버 오류가 발생했습니다"));
+                return ResponseEntity.status(status).body(new ErrorResponse(ErrorCode.INTERNAL_ERROR, "서버 오류가 발생했습니다"));
             }
-            return ResponseEntity.status(status).body(new ErrorResponse("요청을 처리할 수 없습니다"));
+            return ResponseEntity.status(status).body(new ErrorResponse(ErrorCode.REQUEST_FAILED, "요청을 처리할 수 없습니다"));
         }
         // 내부 예외 메시지는 노출하지 않는다
-        return ResponseEntity.internalServerError().body(new ErrorResponse("서버 오류가 발생했습니다"));
+        return ResponseEntity.internalServerError().body(new ErrorResponse(ErrorCode.INTERNAL_ERROR, "서버 오류가 발생했습니다"));
     }
 }

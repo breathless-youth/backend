@@ -26,16 +26,16 @@ ext {
 dependencies {
 	// --- Web / API ---
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 
 	// --- Security / 인증 ---
-	// AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
-	// implementation 'org.springframework.boot:spring-boot-starter-security'
-	// implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
-	// runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
-	// runtimeOnly 'io.jsonwebtoken:jjwt-gson:0.13.0' // jjwt-jackson 대신 (Jackson 3 충돌 회피)
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
+	runtimeOnly 'io.jsonwebtoken:jjwt-gson:0.13.0' // jjwt-jackson 대신 (Jackson 3 충돌 회피)
 
 	// --- 모니터링 ---
 	// Boot 4 전용 모듈이다. sentry-spring-boot-starter-jakarta는 Boot 3용이라 여기선 동작하지 않는다.
@@ -51,6 +51,11 @@ dependencies {
 	annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
 	runtimeOnly 'org.postgresql:postgresql'
 
+	// 바인딩 파라미터가 채워진 실제 실행 SQL을 로깅한다 (hibernate show-sql은 '?'만 찍음).
+	// classpath에는 항상 있지만 prod 프로파일에서 decorator.datasource.enabled=false로 꺼둔다.
+	// v2.0.x가 Spring Boot 4 대응 버전이다 (2.0.0 "Prepare for Spring Boot 4").
+	implementation 'com.github.gavlyukovskiy:p6spy-spring-boot-starter:2.0.1'
+
 	// --- 코드 생성 / 유틸 ---
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
@@ -59,8 +64,7 @@ dependencies {
 	// --- 테스트 스타터 (각 스타터의 테스트 대응 모듈) ---
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
-	// AUTH-DISABLED: 로그인 MVP 제외 (ADR-0004) — 인증 재도입 시 주석 해제
-	// testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 
 	// --- 통합 테스트 / 실제 DB ---

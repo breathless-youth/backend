@@ -11,11 +11,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.ErrorResponse;
+import project.study.user.dto.ProfileResponse;
+import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
 import project.study.user.service.UserService;
@@ -60,5 +65,52 @@ public class UserController {
         // 신규 등록은 201, 같은 기기의 재등록(멱등)은 200
         HttpStatus status = response.isNew() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(response);
+    }
+
+    @Operation(summary = "프로필 조회", description = """
+                    유저의 프로필(닉네임·한줄 목표·카테고리·아바타 정보)을 조회한다. \
+                    최초 프로필은 유저 등록(POST /api/users) 시점에 자동 발급된다 — \
+                    닉네임 `포메{랜덤5자리}`, goal·category는 null.""")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
+    @ApiResponse(
+            responseCode = "404",
+            description = "존재하지 않는 사용자",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    @GetMapping("/{userId}/profile")
+    public ProfileResponse getProfile(@PathVariable Long userId) {
+        return userService.getProfile(userId);
+    }
+
+    @Operation(summary = "프로필 수정", description = """
+                    프로필의 일부 필드만 수정한다 — 요청에 담긴 필드만 반영되고 생략한 필드는 유지된다. \
+                    닉네임을 바꾸면 아바타 이니셜(`initial`)도 첫 글자로 갱신된다. `colorIndex`는 불변.""")
+    @ApiResponse(responseCode = "200", description = "수정 성공 — 수정된 전체 프로필 반환")
+    @ApiResponse(
+            responseCode = "400",
+            description = "검증 실패 — 닉네임 형식(2~12자 한글·영문·숫자), 목표 길이(20자), 카테고리 값",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = {
+                                @ExampleObject(
+                                        name = "닉네임 형식",
+                                        value = "{\"message\": \"닉네임은 2~12자의 한글·영문·숫자만 사용할 수 있습니다\"}"),
+                                @ExampleObject(name = "목표 길이", value = "{\"message\": \"목표는 공백 포함 20자 이하여야 합니다\"}"),
+                                @ExampleObject(name = "카테고리", value = "{\"message\": \"정의되지 않은 카테고리입니다\"}")
+                            }))
+    @ApiResponse(
+            responseCode = "409",
+            description = "이미 사용 중인 닉네임",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    @PatchMapping("/{userId}/profile")
+    public ProfileResponse updateProfile(@PathVariable Long userId, @RequestBody ProfileUpdateRequest request) {
+        return userService.updateProfile(userId, request);
     }
 }

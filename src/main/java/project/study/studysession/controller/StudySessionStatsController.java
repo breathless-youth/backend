@@ -11,11 +11,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.service.StudySessionService;
 
-@Tag(name = "StudySessionStats", description = "공부 세션 통계 조회 API 모음 — 하루 목록·합계와 연속 공부일(스트릭)을 조회한다")
+@Tag(name = "StudySessionStats", description = "공부 세션 통계 조회 API 모음 — 하루 목록·합계, 연속 공부일(스트릭), 기간 집계를 조회한다")
 @RestController
 @RequestMapping("/api/stats")
 @RequiredArgsConstructor
@@ -83,5 +84,34 @@ public class StudySessionStatsController {
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate to) {
         return studySessionService.streak(userId, from, to);
+    }
+
+    @Operation(summary = "기간 집계 조회", description = """
+                    from~to 구간의 일별 순공/총공부 집계를 dailyList로 반환한다. \
+                    dailyList는 from~to 모든 날짜를 담으며 공부 없는 날은 0이다 (순공 1분 미만 세션은 집계 제외). \
+                    compareFrom/compareTo를 함께 주면 그 구간도 같은 방식의 일별 배열 compareDailyList로 함께 준다(증감 비교용) — \
+                    미지정 시 compareFrom/compareTo는 null, compareDailyList는 빈 배열. 총합·비교는 응답의 배열을 합산해 계산한다. \
+                    from>to, compare 한쪽만 지정, 366일 초과 범위(메인·비교 공통)는 400.""")
+    @ApiResponse(responseCode = "200", description = "조회 성공 — from~to 일별 배열 + (선택) compare 구간 일별 배열")
+    @GetMapping("/period")
+    public StudyPeriodStatsResponse period(
+            @Parameter(description = "조회할 유저 ID", example = "1") @RequestParam Long userId,
+            @Parameter(description = "구간 시작일(ISO-8601, 포함)", example = "2026-08-24")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate from,
+            @Parameter(description = "구간 종료일(ISO-8601, 포함)", example = "2026-08-30")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate to,
+            @Parameter(description = "비교 구간 시작일 — compareTo와 함께 지정", example = "2026-08-17")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate compareFrom,
+            @Parameter(description = "비교 구간 종료일 — compareFrom과 함께 지정", example = "2026-08-23")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate compareTo) {
+        return studySessionService.periodStats(userId, from, to, compareFrom, compareTo);
     }
 }

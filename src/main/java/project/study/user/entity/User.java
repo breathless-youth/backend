@@ -34,8 +34,12 @@ public class User extends BaseTimeEntity {
     @Column(unique = true)
     private String nickname;
 
+    private String email;
     private String category;
     private String profileImage;
+    private String goal;
+    private String initial;
+    private Integer colorIndex;
 
     @Enumerated(value = EnumType.STRING)
     private UserStatus status;
@@ -47,5 +51,33 @@ public class User extends BaseTimeEntity {
         this.provider = provider;
         this.providerUserId = providerUserId;
         this.status = UserStatus.ACTIVE;
+    }
+
+    public User(Provider provider, String providerUserId, String email) {
+        this(provider, providerUserId);
+        this.email = email;
+    }
+
+    public void linkSocialAccount(Provider provider, String providerUserId, String email) {
+        if (this.provider != Provider.DEVICE) {
+            throw new project.study.common.ConflictException("이미 소셜 계정이 연동된 사용자입니다");
+        }
+        this.provider = provider;
+        this.providerUserId = providerUserId;
+        this.email = email;
+    }
+
+    // null이 아닌 필드만 반영한다. initial은 닉네임 첫 글자로 갱신, colorIndex는 최초 배정 후 불변
+    public void updateProfile(String nickname, String goal, String category) {
+        if (nickname != null) {
+            this.nickname = nickname;
+            this.initial = nickname.substring(0, 1);
+        }
+        if (goal != null) {
+            this.goal = goal;
+        }
+        if (category != null) {
+            this.category = category;
+        }
     }
 }
