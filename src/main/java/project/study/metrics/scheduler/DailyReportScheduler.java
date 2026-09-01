@@ -30,7 +30,7 @@ public class DailyReportScheduler {
      * 늘릴 계획이 생기면 그때 분산 락이나 외부 스케줄러(EventBridge)로 옮겨야 한다.
      */
     @Profile("prod")
-    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 0 10 * * *", zone = "Asia/Seoul")
     public void sendDailyReport() {
         try {
             dailyReportService.sendDailyReport();

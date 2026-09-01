@@ -52,6 +52,7 @@ app:
   cors:
     allowed-origins:
       - https://web.sunqstudio.kr
+      - https://web.focusmakers.app
   room:
     turn:
       # coturn(EC2)과 공유하는 static-auth-secret — ECS 태스크 정의가 SSM
