@@ -82,7 +82,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,wsstats
 
 # 일일 지표 리포트를 보낼 Slack Incoming Webhook.
 # URL이 없으면 발송기가 비활성으로 동작한다 — Sentry DSN과 같은 이유로 기본값을 둔다:

@@ -23,6 +23,7 @@ import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import project.study.room.service.RoomService;
 
@@ -65,6 +66,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(new UserIdChannelInterceptor(roomService));
+    }
+
+    // WS 전송 한도 (BY-491). 기본값(메시지 64KB, 세션당 송신버퍼 512KB)은 우리 메시지
+    // 실측(state ~200B, 시그널 ~300B, SNAPSHOT ~2KB) 대비 수십~수백 배 과하다.
+    // 송신버퍼는 CPU 포화로 브로드캐스트 flush가 밀릴 때 세션마다 쌓이는 곳이라,
+    // 기본 512KB × 1000세션 = 이론상 512MB 팽창이 OOM에 기여할 수 있다 → 64KB로 상한.
+    // 한도 초과한 느린/죽은 클라이언트는 세션이 종료된다(좀비 커넥션 정리 효과).
+    @Override
+    public void configureWebSocketTransport(WebSocketTransportRegistration registry) {
+        registry.setMessageSizeLimit(16 * 1024); // 최대 메시지(SNAPSHOT ~2KB)의 8배 여유
+        registry.setSendBufferSizeLimit(64 * 1024); // 세션당 송신 대기 상한 512KB → 64KB
+        registry.setSendTimeLimit(5_000); // 5초 내 못 보내는 세션은 정리
     }
 
     record StompPrincipal(String userId) implements Principal {
