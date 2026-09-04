@@ -78,6 +78,14 @@ done'
 수집되지만, 알람 7개는 prod 서비스 기준이라 staging엔 안 울린다 → 그래프로 직접 관찰.
 0.5 vCPU라 CPU부터 포화될 가능성이 높다.
 
+**앱 액세스 로그 끄기 (부하 전 필수):** 요청당 INFO 한 줄을 남기는 `RequestLoggingFilter`가
+켜져 있으면 k6 요청 수만큼 CloudWatch Logs 수집량(GB당 과금)이 붙는다. staging 태스크 정의의
+환경변수로 부하 도는 동안만 WARN으로 내린다 (이미지 재빌드 불필요):
+```
+LOGGING_LEVEL_PROJECT_STUDY_COMMON_LOGGING_REQUESTLOGGINGFILTER=WARN
+```
+prod는 그대로 INFO 유지 — 유저별 흐름 추적이 이 로그의 존재 이유다.
+
 **RDS (느린 쿼리):** prod `default.postgres17` 파라미터 그룹에 `pg_stat_statements`가
 이미 `shared_preload_libraries`에 로드돼 있다(스냅샷 복원 staging도 상속 → 리부트 불필요).
 DB에서 확장만 만들면 된다:

@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import project.study.common.logging.MdcTaskDecorator;
 
 /**
  * 룸 이력 기록 전용 비동기 실행기.
@@ -22,6 +23,8 @@ public class AsyncConfig {
         executor.setCorePoolSize(1);
         executor.setMaxPoolSize(1);
         executor.setThreadNamePrefix("room-history-");
+        // 발행 스레드(HTTP/STOMP)의 MDC를 넘겨 이력 기록 로그에도 userId·requestId가 붙게 한다
+        executor.setTaskDecorator(new MdcTaskDecorator());
         return executor;
     }
 }

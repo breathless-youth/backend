@@ -77,6 +77,12 @@ logging:
   structured:
     format:
       console: ecs
+  # 요청당 INFO 한 줄(액세스 로그, RequestLoggingFilter)은 평상시엔 켜 둔다 — 유저별 흐름 추적용.
+  # 부하테스트 때만 WARN으로 내려 끈다: k6 요청 수만큼 CloudWatch 수집량(GB당 과금)이 늘기 때문.
+  # 이미지 재빌드 없이 태스크 정의 환경변수로 내릴 수 있다:
+  #   LOGGING_LEVEL_PROJECT_STUDY_COMMON_LOGGING_REQUESTLOGGINGFILTER=WARN
+  # level:
+  #   project.study.common.logging.RequestLoggingFilter: WARN
 
 management:
   endpoints:
