@@ -1,15 +1,13 @@
 package project.study.room.service;
 
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,11 +45,13 @@ public class RoomService {
     private final Map<Long, Long> userToRoomId = new HashMap<>();
     private final Map<String, Long> sessionToUser = new HashMap<>();
     private final ClosedInviteCodes closedCodes = new ClosedInviteCodes();
+    // 만료 후보 인덱스(BY-593): 미확정 예약·끊김 유예만. 확정·연결 참가자는 만료되지 않아 제외 → 전체 방 순회 제거
+    private final Set<Participant> expiryCandidates = new HashSet<>();
+    // 첫 입장이 없는 빈 방만(입장 이력 방은 마지막 퇴장 때 즉시 소멸)
+    private final Map<Long, Room> emptyRooms = new HashMap<>();
     private long roomIdSequence = 0;
 
-    private final String turnSecret;
-    private final int turnTtlSeconds;
-    private final List<String> turnUrls;
+    private final TurnCredentialIssuer turnCredentials;
     private final ApplicationEventPublisher eventPublisher;
 
     public RoomService(
@@ -59,9 +59,7 @@ public class RoomService {
             @Value("${app.room.turn.ttl-seconds:86400}") int turnTtlSeconds,
             @Value("${app.room.turn.urls:}") List<String> turnUrls,
             ApplicationEventPublisher eventPublisher) {
-        this.turnSecret = turnSecret;
-        this.turnTtlSeconds = turnTtlSeconds;
-        this.turnUrls = turnUrls;
+        this.turnCredentials = new TurnCredentialIssuer(turnSecret, turnTtlSeconds, turnUrls);
         this.eventPublisher = eventPublisher;
     }
 
@@ -80,6 +78,7 @@ public class RoomService {
             Room room = new Room(++roomIdSequence, code, now);
             roomByCode.put(code, room);
             roomById.put(room.id, room);
+            emptyRooms.put(room.id, room); // 첫 입장 전까지 빈 방 TTL 후보
             // @Async 리스너 전제라 안전. 동기 리스너 추가 금지 (RoomHistoryRecorder 참고)
             publish(new RoomCreatedEvent(room.uid, userId, room.createdAt));
             return new RoomCreateResponse(room.id, code, EMPTY_ROOM_TTL_SECONDS);
@@ -104,18 +103,7 @@ public class RoomService {
 
         Participant existing = room.participants.get(userId);
         if (existing != null && existing.disconnectedAt != null) {
-            // 끊김 유예 내 재입장 — 같은 자리 복원 (프리뷰 생략, 카메라 상태 유지)
-            existing.disconnectedAt = null;
-            existing.stompConfirmed = false;
-            existing.reservedAt = Instant.now();
-            existing.nickname = nickname;
-            existing.goal = goal;
-            existing.category = category;
-            userToRoomId.put(userId, room.id);
-            log.debug("재입장(유예 중 복원): roomId={}, userId={}", room.id, userId);
-            return new JoinResult(
-                    new RoomJoinResponse(room.id, true, existing.cameraOn, generateIceServers(userId), turnTtlSeconds),
-                    null);
+            return restoreFromGrace(room, existing, nickname, goal, category);
         }
 
         // 정원 검사를 기존 방 퇴장보다 먼저 한다 — 대상 방이 가득이면 기존 방 자리를 잃지 않아야 한다
@@ -124,20 +112,48 @@ public class RoomService {
         }
 
         AutoLeave autoLeave = leaveCurrentRoomIfDifferent(userId, room.id);
-
-        if (existing != null) {
-            // 미확정 예약의 재시도 — 예약 시각을 갱신해 직후 정리 틱에 쓸려나가지 않게 한다
-            existing.reservedAt = Instant.now();
-            existing.nickname = nickname;
-            existing.goal = goal;
-            existing.category = category;
-        } else {
-            room.participants.put(userId, new Participant(userId, nickname, goal, category));
-        }
+        reserveSeat(room, existing, userId, nickname, goal, category);
         userToRoomId.put(userId, room.id);
         log.debug("신규 입장 예약: roomId={}, userId={}, autoLeave={}", room.id, userId, autoLeave);
+        List<RoomJoinResponse.IceServer> ice = turnCredentials.forUser(userId);
+        return new JoinResult(new RoomJoinResponse(room.id, false, null, ice, turnCredentials.ttlSeconds()), autoLeave);
+    }
+
+    // 자리 예약(신규) 또는 미확정 예약의 재시도 갱신. join의 전역 락 안에서만 호출된다
+    private void reserveSeat(
+            Room room, Participant existing, Long userId, String nickname, String goal, String category) {
+        if (existing == null) {
+            Participant participant = new Participant(room.id, userId, nickname, goal, category);
+            room.participants.put(userId, participant);
+            expiryCandidates.add(participant); // 신규 미확정 예약 — 확정 전까지 후보
+            emptyRooms.remove(room.id); // 첫 입장이 생겼으니 빈 방 후보 해제
+            return;
+        }
+        // 재시도 — 예약 시각을 갱신해 직후 정리 틱에 쓸려나가지 않게 한다
+        existing.reservedAt = Instant.now();
+        existing.nickname = nickname;
+        existing.goal = goal;
+        existing.category = category;
+        if (!existing.stompConfirmed) { // 확정·연결 멤버의 중복 join은 제외 — 만료는 안 되지만 순회 대상만 늘린다
+            expiryCandidates.add(existing); // 여전히 미확정 예약 — 후보 유지
+        }
+    }
+
+    // 끊김 유예 내 재입장 — 같은 자리 복원 (프리뷰 생략, 카메라 상태 유지). join의 전역 락 안에서만 호출된다
+    private JoinResult restoreFromGrace(
+            Room room, Participant existing, String nickname, String goal, String category) {
+        existing.disconnectedAt = null;
+        existing.stompConfirmed = false;
+        existing.reservedAt = Instant.now();
+        existing.nickname = nickname;
+        existing.goal = goal;
+        existing.category = category;
+        expiryCandidates.add(existing); // 유예 해제 후 미확정 예약 상태 — 예약 만료 후보로 유지
+        userToRoomId.put(existing.userId, room.id);
+        log.debug("재입장(유예 중 복원): roomId={}, userId={}", room.id, existing.userId);
+        List<RoomJoinResponse.IceServer> ice = turnCredentials.forUser(existing.userId);
         return new JoinResult(
-                new RoomJoinResponse(room.id, false, null, generateIceServers(userId), turnTtlSeconds), autoLeave);
+                new RoomJoinResponse(room.id, true, existing.cameraOn, ice, turnCredentials.ttlSeconds()), null);
     }
 
     public synchronized boolean leave(Long roomId, Long userId) {
@@ -165,6 +181,7 @@ public class RoomService {
         // 살아 있는 참가자를 유예 만료로 제거한다
         participant.disconnectedAt = null;
         sessionToUser.put(stompSessionId, userId);
+        expiryCandidates.remove(participant); // 확정+연결 완료 — 더는 만료 대상 아님(다시 끊기면 handleDisconnect가 재등록)
 
         if (participant.firstConfirmedAt == null) {
             participant.firstConfirmedAt = Instant.now();
@@ -187,6 +204,7 @@ public class RoomService {
         if (participant != null && stompSessionId.equals(participant.stompSessionId)) {
             participant.disconnectedAt = Instant.now();
             participant.stompSessionId = null;
+            expiryCandidates.add(participant); // 끊김 유예 시작 — 유예 만료 후보로 등록
             log.debug("연결 해제(유예 시작): userId={}, stompSessionId={}", userId, stompSessionId);
         } else {
             log.debug("연결 해제(이미 교체된 옛 세션이라 무시): userId={}, stompSessionId={}", userId, stompSessionId);
@@ -273,16 +291,16 @@ public class RoomService {
         // 방 정리보다 먼저 한다 — 이번 틱에 소멸시킨 방의 묘비를 같은 틱에 지워버리지 않기 위해
         closedCodes.purgeExpired(now);
 
-        for (Room room : List.copyOf(roomById.values())) {
-            for (Participant participant : List.copyOf(room.participants.values())) {
-                if (isExpired(participant, now)
-                        && removeParticipant(room.id, participant.userId, LeaveReason.DISCONNECT_TIMEOUT)) {
-                    removed.add(new AutoLeave(room.id, participant.userId));
-                }
+        // 전체 방 대신 만료 가능 후보만 검사한다(BY-593) — 확정·연결 참가자는 인덱스에 없다. 판정은 isExpired 그대로
+        for (Participant participant : List.copyOf(expiryCandidates)) {
+            if (isExpired(participant, now)
+                    && removeParticipant(participant.roomId, participant.userId, LeaveReason.DISCONNECT_TIMEOUT)) {
+                removed.add(new AutoLeave(participant.roomId, participant.userId));
             }
+        }
 
-            // 생성 후 아무도 입장하지 않은 빈 방은 10분 뒤 소멸한다
-            // (입장 이력이 있는 방은 마지막 퇴장 때 즉시 소멸하므로 여기 잡히지 않는다)
+        // 생성 후 아무도 입장하지 않은 빈 방만 10분 뒤 소멸한다 (입장 이력 방은 마지막 퇴장 때 즉시 소멸)
+        for (Room room : List.copyOf(emptyRooms.values())) {
             if (room.participants.isEmpty()
                     && roomById.containsKey(room.id)
                     && room.createdAt.plusSeconds(EMPTY_ROOM_TTL_SECONDS).isBefore(now)) {
@@ -325,6 +343,7 @@ public class RoomService {
         Participant removed = room.participants.remove(userId);
         if (removed == null) return false;
 
+        expiryCandidates.remove(removed); // 방에서 빠진 참가자는 만료 후보에서도 제거
         userToRoomId.remove(userId, roomId);
         if (removed.stompSessionId != null) {
             sessionToUser.remove(removed.stompSessionId);
@@ -342,6 +361,7 @@ public class RoomService {
     private void destroyRoom(Room room, CloseReason reason) {
         roomById.remove(room.id);
         roomByCode.remove(room.inviteCode);
+        emptyRooms.remove(room.id); // 빈 방 후보였다면 함께 제거(멱등)
         closedCodes.record(room.inviteCode, Instant.now());
         publish(new RoomClosedEvent(room.uid, Instant.now(), reason));
     }
@@ -372,28 +392,6 @@ public class RoomService {
             eventPublisher.publishEvent(event);
         } catch (RuntimeException e) {
             log.warn("룸 이력 이벤트 발행 실패: {}", event, e);
-        }
-    }
-
-    private List<RoomJoinResponse.IceServer> generateIceServers(Long userId) {
-        if (turnUrls == null || turnUrls.isEmpty() || turnUrls.getFirst().isBlank()) {
-            return List.of();
-        }
-
-        long expiry = Instant.now().getEpochSecond() + turnTtlSeconds;
-        String username = expiry + ":" + userId;
-        String credential = hmacSha1(turnSecret, username);
-
-        return List.of(new RoomJoinResponse.IceServer(turnUrls, username, credential));
-    }
-
-    private static String hmacSha1(String secret, String data) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA1");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA1"));
-            return Base64.getEncoder().encodeToString(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception e) {
-            throw new IllegalStateException("HMAC-SHA1 계산 실패", e);
         }
     }
 }
