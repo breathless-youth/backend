@@ -46,6 +46,12 @@ app:
       # urls 예시:
       #   - stun:turn.example.com:3478
       #   - turn:turn.example.com:3478?transport=udp
+      # Cloudflare TURN 폴백 (BY-587) — 대시보드 Realtime > TURN Server에서 키 발급. 비우면 비활성
+      # cloudflare:
+      #   key-id: <TURN-Key-ID>
+      #   api-token: <TURN-Key-API-Token>
+      #   ttl-seconds: 86400
+      #   primary: true   # Cloudflare를 앞에(기본) — coturn을 우선하려면 false
 
 oauth:
   google:

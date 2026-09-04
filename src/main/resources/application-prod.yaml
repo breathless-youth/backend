@@ -63,6 +63,14 @@ app:
       # ICE 서버 URL 목록 (쉼표 구분). coturn EIP에서 파생되므로 Terraform이
       # 태스크 정의 환경변수로 관리한다. 빈 값이면 iceServers 빈 배열로 동작
       urls: ${APP_ROOM_TURN_URLS:}
+      # Cloudflare Realtime TURN 폴백 (BY-587) — coturn(무료 VM)의 유입 pps 한계를 보완.
+      # key-id·api-token 둘 다 있어야 활성. api-token은 SSM room/cloudflare-turn-token으로 주입
+      cloudflare:
+        key-id: ${APP_ROOM_TURN_CF_KEY_ID:}
+        api-token: ${APP_ROOM_TURN_CF_TOKEN:}
+        # true면 ICE 목록에서 Cloudflare가 앞 = 평상시 릴레이를 Cloudflare(월 1TB 무료, pps 제한 없음)가 받고
+        # coturn(E2.1.Micro, 유입 ≈60쌍 한계)은 백업. A1 확보 등으로 coturn이 커지면 false로 되돌린다
+        primary: true
 
 # 운영에서는 API 문서를 노출하지 않는다
 springdoc:

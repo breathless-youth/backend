@@ -1,18 +1,13 @@
 package project.study.room.service;
 
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import project.study.common.BadRequestException;
@@ -28,6 +23,7 @@ import project.study.room.event.ParticipantJoinedEvent;
 import project.study.room.event.ParticipantLeftEvent;
 import project.study.room.event.RoomClosedEvent;
 import project.study.room.event.RoomCreatedEvent;
+import project.study.room.turn.IceServerFactory;
 
 /** 인메모리 룸 상태 관리. 동시성: public 메서드를 모두 synchronized로 직렬화하여 레이스를 원천 차단. */
 @Service
@@ -49,19 +45,11 @@ public class RoomService {
     private final ClosedInviteCodes closedCodes = new ClosedInviteCodes();
     private long roomIdSequence = 0;
 
-    private final String turnSecret;
-    private final int turnTtlSeconds;
-    private final List<String> turnUrls;
+    private final IceServerFactory iceServers;
     private final ApplicationEventPublisher eventPublisher;
 
-    public RoomService(
-            @Value("${app.room.turn.secret:draft-turn-secret}") String turnSecret,
-            @Value("${app.room.turn.ttl-seconds:86400}") int turnTtlSeconds,
-            @Value("${app.room.turn.urls:}") List<String> turnUrls,
-            ApplicationEventPublisher eventPublisher) {
-        this.turnSecret = turnSecret;
-        this.turnTtlSeconds = turnTtlSeconds;
-        this.turnUrls = turnUrls;
+    public RoomService(IceServerFactory iceServers, ApplicationEventPublisher eventPublisher) {
+        this.iceServers = iceServers;
         this.eventPublisher = eventPublisher;
     }
 
@@ -88,7 +76,20 @@ public class RoomService {
     }
 
     // nickname/goal은 호출자(컨트롤러)가 락 밖에서 DB 조회해 넘긴다 — 글로벌 락 안에서 I/O 금지
-    public synchronized JoinResult join(Long userId, String inviteCode, String nickname, String goal, String category) {
+    public JoinResult join(Long userId, String inviteCode, String nickname, String goal, String category) {
+        // ICE 자격(Cloudflare 폴백은 캐시 미스 시 HTTP 호출)은 전역 락 밖에서 먼저 만든다 —
+        // 락 안 I/O 금지 불변식(위 주석) 유지. 초대코드가 틀려도 한 번 호출되지만 캐시라 무시 가능한 비용
+        List<RoomJoinResponse.IceServer> ice = iceServers.forUser(userId);
+        return join(userId, inviteCode, nickname, goal, category, ice);
+    }
+
+    private synchronized JoinResult join(
+            Long userId,
+            String inviteCode,
+            String nickname,
+            String goal,
+            String category,
+            List<RoomJoinResponse.IceServer> ice) {
         if (inviteCode == null || !inviteCode.matches("\\d{4}")) {
             throw new BadRequestException("초대코드는 숫자 4자리여야 합니다");
         }
@@ -114,8 +115,7 @@ public class RoomService {
             userToRoomId.put(userId, room.id);
             log.debug("재입장(유예 중 복원): roomId={}, userId={}", room.id, userId);
             return new JoinResult(
-                    new RoomJoinResponse(room.id, true, existing.cameraOn, generateIceServers(userId), turnTtlSeconds),
-                    null);
+                    new RoomJoinResponse(room.id, true, existing.cameraOn, ice, iceServers.ttlSeconds()), null);
         }
 
         // 정원 검사를 기존 방 퇴장보다 먼저 한다 — 대상 방이 가득이면 기존 방 자리를 잃지 않아야 한다
@@ -136,8 +136,7 @@ public class RoomService {
         }
         userToRoomId.put(userId, room.id);
         log.debug("신규 입장 예약: roomId={}, userId={}, autoLeave={}", room.id, userId, autoLeave);
-        return new JoinResult(
-                new RoomJoinResponse(room.id, false, null, generateIceServers(userId), turnTtlSeconds), autoLeave);
+        return new JoinResult(new RoomJoinResponse(room.id, false, null, ice, iceServers.ttlSeconds()), autoLeave);
     }
 
     public synchronized boolean leave(Long roomId, Long userId) {
@@ -372,28 +371,6 @@ public class RoomService {
             eventPublisher.publishEvent(event);
         } catch (RuntimeException e) {
             log.warn("룸 이력 이벤트 발행 실패: {}", event, e);
-        }
-    }
-
-    private List<RoomJoinResponse.IceServer> generateIceServers(Long userId) {
-        if (turnUrls == null || turnUrls.isEmpty() || turnUrls.getFirst().isBlank()) {
-            return List.of();
-        }
-
-        long expiry = Instant.now().getEpochSecond() + turnTtlSeconds;
-        String username = expiry + ":" + userId;
-        String credential = hmacSha1(turnSecret, username);
-
-        return List.of(new RoomJoinResponse.IceServer(turnUrls, username, credential));
-    }
-
-    private static String hmacSha1(String secret, String data) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA1");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA1"));
-            return Base64.getEncoder().encodeToString(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception e) {
-            throw new IllegalStateException("HMAC-SHA1 계산 실패", e);
         }
     }
 }

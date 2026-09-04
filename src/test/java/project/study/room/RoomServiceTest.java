@@ -15,6 +15,7 @@ import project.study.common.NotFoundException;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomMember;
 import project.study.room.service.RoomService;
+import project.study.room.turn.IceServerTestSupport;
 
 class RoomServiceTest {
 
@@ -24,7 +25,7 @@ class RoomServiceTest {
 
     @BeforeEach
     void setUp() {
-        roomService = new RoomService("test-secret", 86400, List.of(), event -> {});
+        roomService = new RoomService(IceServerTestSupport.none(), event -> {});
     }
 
     private String createRoom() {

@@ -14,6 +14,7 @@ import project.study.room.event.ParticipantLeftEvent;
 import project.study.room.event.RoomClosedEvent;
 import project.study.room.event.RoomCreatedEvent;
 import project.study.room.service.RoomService;
+import project.study.room.turn.IceServerTestSupport;
 
 class RoomServiceEventTest {
 
@@ -23,7 +24,7 @@ class RoomServiceEventTest {
     @BeforeEach
     void setUp() {
         events = new ArrayList<>();
-        roomService = new RoomService("test-secret", 86400, List.of(), events::add);
+        roomService = new RoomService(IceServerTestSupport.none(), events::add);
     }
 
     private String createRoom() {

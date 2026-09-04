@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
-import java.util.List;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import project.study.common.ErrorCode;
 import project.study.common.NotFoundException;
 import project.study.room.service.RoomService;
+import project.study.room.turn.IceServerTestSupport;
 
 /** BY-436 초대코드 404 에러 코드 구분 — RoomServiceTest에서 분리(파일 400줄 제한). */
 class RoomInviteCodeErrorTest {
@@ -21,7 +21,7 @@ class RoomInviteCodeErrorTest {
 
     @BeforeEach
     void setUp() {
-        roomService = new RoomService("test-secret", 86400, List.of(), event -> {});
+        roomService = new RoomService(IceServerTestSupport.none(), event -> {});
     }
 
     private String createRoom() {
