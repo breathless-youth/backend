@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
+import project.study.common.logging.UserScopedRequest;
 
 public record StudySessionCreateRequest(
         @Schema(description = "세션 주인의 유저 ID (POST /api/users 로 발급받은 값)", example = "1") @NotNull
@@ -48,4 +49,5 @@ public record StudySessionCreateRequest(
                         + "순서는 뒤섞여 와도 된다(서버가 시작 시각 기준으로 정렬한다)")
         @NotNull
         @Valid
-        List<StatusEventRequest> events) {}
+        List<StatusEventRequest> events)
+        implements UserScopedRequest {}
