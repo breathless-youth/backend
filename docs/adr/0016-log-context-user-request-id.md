@@ -19,7 +19,8 @@ userId가 GET은 쿼리 파라미터, POST는 body, STOMP는 핸드셰이크 파
 1. **MDC 키는 `userId`, `requestId` 두 개.** Boot의 ECS 포맷은 MDC를 JSON 최상위 필드로 실으므로
    이 이름이 곧 CloudWatch Logs Insights 필드명이다. 로그 패턴·logback.xml은 건드리지 않는다.
 2. **`RequestLoggingFilter`(체인 맨 앞)가 requestId를 만들고 응답 헤더 `X-Request-Id`로 돌려준다.**
-   클라이언트가 보낸 `X-Request-Id`가 있으면 그대로 쓴다. 쿼리 파라미터 `userId`는 여기서 읽는다.
+   요청 ID는 항상 서버가 생성한다 — 클라이언트가 보내는 `X-Request-Id`는 읽지 않는다(앱이 보내지 않고,
+   외부 입력을 로그 키로 쓰지 않는다). 쿼리 파라미터 `userId`는 여기서 읽는다.
    응답 뒤 액세스 로그 한 줄(method, path, status, 소요 ms)을 INFO로 남기고 finally에서 MDC를 비운다.
    `/actuator/**`는 제외한다.
 3. **POST body의 userId는 `RequestBodyAdvice`가 역직렬화 직후 MDC에 넣는다.** 대상은 `UserScopedRequest`
