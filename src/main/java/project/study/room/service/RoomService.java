@@ -36,8 +36,6 @@ public class RoomService {
 
     static final int MAX_PARTICIPANTS = 6;
     static final int EMPTY_ROOM_TTL_SECONDS = 600;
-    private static final long RESERVATION_TTL_SECONDS = 30;
-    private static final long GRACE_PERIOD_SECONDS = 30;
     private static final int INVITE_CODE_MAX_ATTEMPTS = 100;
 
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -191,7 +189,7 @@ public class RoomService {
         }
 
         log.debug("STOMP 확정: roomId={}, userId={}, stompSessionId={}", roomId, userId, stompSessionId);
-        return confirmedMembers(room);
+        return room.confirmedMembers();
     }
 
     public synchronized void handleDisconnect(String stompSessionId) {
@@ -250,7 +248,7 @@ public class RoomService {
     public synchronized List<RoomMember> getMembers(Long roomId) {
         Room room = roomById.get(roomId);
         if (room == null) return List.of();
-        return confirmedMembers(room);
+        return room.confirmedMembers();
     }
 
     // 스냅샷 재요청 인가+조회(BY-442) — 한 번의 원자 호출로 처리한다. 인가(isActiveSession)와
@@ -259,7 +257,7 @@ public class RoomService {
     // (활성 확정 멤버라면 목록에 자신이 반드시 포함되므로 빈 목록과 구분 불가한 경우가 없다)
     public synchronized List<RoomMember> getMembersForActiveSession(Long roomId, Long userId, String stompSessionId) {
         if (!isActiveSession(roomId, userId, stompSessionId)) return List.of();
-        return confirmedMembers(roomById.get(roomId));
+        return roomById.get(roomId).confirmedMembers();
     }
 
     public synchronized boolean isConfirmedMember(Long roomId, Long userId) {
@@ -295,7 +293,7 @@ public class RoomService {
 
         // 전체 방 대신 만료 가능 후보만 검사한다(BY-593) — 확정·연결 참가자는 인덱스에 없다. 판정은 isExpired 그대로
         for (Participant participant : List.copyOf(expiryCandidates)) {
-            if (isExpired(participant, now)
+            if (participant.isExpired(now)
                     && removeParticipant(participant.roomId, participant.userId, LeaveReason.DISCONNECT_TIMEOUT)) {
                 removed.add(new AutoLeave(participant.roomId, participant.userId));
             }
@@ -314,16 +312,6 @@ public class RoomService {
             log.debug("만료 정리: 자동 퇴장 {}건 — {}", removed.size(), removed);
         }
         return removed;
-    }
-
-    // 예약 30초 미확정 또는 끊김 30초 유예 만료
-    private static boolean isExpired(Participant participant, Instant now) {
-        if (!participant.stompConfirmed
-                && participant.reservedAt.plusSeconds(RESERVATION_TTL_SECONDS).isBefore(now)) {
-            return true;
-        }
-        return participant.disconnectedAt != null
-                && participant.disconnectedAt.plusSeconds(GRACE_PERIOD_SECONDS).isBefore(now);
     }
 
     // 동시 1룸 제한 — 다른 방에 있으면 자동 퇴장시키고 그 사실을 반환한다 (호출자가 MEMBER_LEFT 브로드캐스트)
@@ -372,14 +360,6 @@ public class RoomService {
         Long roomId = userToRoomId.get(userId);
         if (roomId == null) return null;
         return getParticipant(roomId, userId);
-    }
-
-    private static List<RoomMember> confirmedMembers(Room room) {
-        return room.participants.values().stream()
-                .filter(p -> p.stompConfirmed)
-                .map(p -> new RoomMember(
-                        p.userId, p.nickname, p.goal, p.category, p.cameraOn, p.focusState, p.studySeconds))
-                .toList();
     }
 
     private Participant getParticipant(Long roomId, Long userId) {
