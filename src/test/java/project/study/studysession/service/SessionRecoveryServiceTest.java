@@ -16,7 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import project.study.TestcontainersConfiguration;
-import project.study.common.NotFoundException;
+import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.SessionRecoveryResponse;
 
 /** BY-455 세션 복구 판별·확인 — draft 확정/자동확정본 감지/재노출 방지/자정 집계를 검증한다. */

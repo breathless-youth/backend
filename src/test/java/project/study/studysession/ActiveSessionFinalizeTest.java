@@ -185,8 +185,7 @@ class ActiveSessionFinalizeTest {
     }
 
     // 최종 리뷰 Important 2 — 영구 실패(검증 불능)만 폐기하고, 하나가 실패해도 나머지 draft는 계속 처리된다는 것을
-    // 스케줄러 빈의 finalizeStaleDrafts()를 직접 호출해 검증한다(스케줄러 빈은 session-finalize.enabled=false로
-    // 컨텍스트에 없으므로 여기서 직접 생성한다).
+    // finalizeStaleDrafts()를 직접 호출해 검증한다(백그라운드 틱에 기대지 않도록 여기서 인스턴스를 직접 생성한다).
     @Test
     void 검증_불능_draft는_폐기되고_정상_draft는_확정되며_루프는_중단되지_않는다() {
         Instant invalidStartedAt = startedAt.plusSeconds(10_000);

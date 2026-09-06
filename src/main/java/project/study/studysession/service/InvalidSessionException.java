@@ -1,6 +1,6 @@
 package project.study.studysession.service;
 
-import project.study.common.BadRequestException;
+import project.study.common.exception.BadRequestException;
 
 public class InvalidSessionException extends BadRequestException {
 

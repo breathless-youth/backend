@@ -42,7 +42,7 @@ class StudySessionMidnightSplitTest {
     @Mock
     private ActiveStudySessionRepository activeStudySessionRepository;
 
-    // createSessions는 순수 로직이라 리포지토리를 사용하지 않는다 — 저장 경로는 API 통합테스트가 검증
+    // validateAndBuildSessions는 순수 로직이라 리포지토리를 사용하지 않는다 — 저장 경로는 API 통합테스트가 검증
     private StudySessionService service;
 
     @BeforeEach
@@ -56,7 +56,7 @@ class StudySessionMidnightSplitTest {
 
     @Test
     void 자정을_넘지_않으면_세션_한_개가_생성된다() {
-        List<StudySession> sessions = service.createSessions(1L, START, END, 7200, 6600, List.of());
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, START, END, 7200, 6600, List.of());
 
         assertThat(sessions).hasSize(1);
         assertThat(sessions.get(0).getStudySec()).isEqualTo(7200);
@@ -66,7 +66,8 @@ class StudySessionMidnightSplitTest {
 
     @Test
     void 자정을_넘으면_두_개로_분할된다() {
-        List<StudySession> sessions = service.createSessions(1L, CROSS_START, CROSS_END, 7200, 6000, List.of());
+        List<StudySession> sessions =
+                service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 7200, 6000, List.of());
 
         assertThat(sessions).hasSize(2);
         // 두 조각 모두 원본 제출의 시작 시각을 루트로 공유한다 — 재제출 판별·응답 조회의 기준
@@ -90,7 +91,7 @@ class StudySessionMidnightSplitTest {
         Instant start = Instant.parse("2026-07-23T13:00:00Z");
         Instant end = Instant.parse("2026-07-23T16:00:00Z");
 
-        List<StudySession> sessions = service.createSessions(1L, start, end, 9000, 6000, List.of());
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, start, end, 9000, 6000, List.of());
 
         assertThat(sessions.get(0).getStudySec()).isEqualTo(6000);
         assertThat(sessions.get(1).getStudySec()).isEqualTo(3000);
@@ -101,7 +102,8 @@ class StudySessionMidnightSplitTest {
     @Test
     void 자정_분할_배분이_나누어떨어지지_않아도_순공_시간_합이_보존된다() {
         // 5401초를 3600:3600 조각에 배분 — 앞 조각은 내림(2700), 나머지는 마지막 조각이 가져간다
-        List<StudySession> sessions = service.createSessions(1L, CROSS_START, CROSS_END, 7200, 5401, List.of());
+        List<StudySession> sessions =
+                service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 7200, 5401, List.of());
 
         assertThat(sessions.get(0).getFocusSec()).isEqualTo(2700);
         assertThat(sessions.get(1).getFocusSec()).isEqualTo(2701);
@@ -112,7 +114,7 @@ class StudySessionMidnightSplitTest {
         // PAUSE 10분이 앞 조각(23~24시)에만 있다 — studyActiveSec: 조각1=3000, 조각2=3600, 합 6600
         List<StatusEvent> events = List.of(event(EventStatus.PAUSE, "2026-07-23T14:00:00Z", "2026-07-23T14:10:00Z"));
 
-        List<StudySession> sessions = service.createSessions(1L, CROSS_START, CROSS_END, 6600, 0, events);
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 6600, 0, events);
 
         assertThat(sessions.get(0).getStudySec()).isEqualTo(3000);
         assertThat(sessions.get(1).getStudySec()).isEqualTo(3600);
@@ -123,7 +125,7 @@ class StudySessionMidnightSplitTest {
         // PHONE 10분이 앞 조각에만 있다 — PAUSE가 아니므로 총공부시간 배분엔 영향 없고, 순공시간 배분에만 영향
         List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-23T14:00:00Z", "2026-07-23T14:10:00Z"));
 
-        List<StudySession> sessions = service.createSessions(1L, CROSS_START, CROSS_END, 7200, 6600, events);
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 7200, 6600, events);
 
         assertThat(sessions.get(0).getStudySec()).isEqualTo(3600);
         assertThat(sessions.get(1).getStudySec()).isEqualTo(3600);
@@ -137,7 +139,7 @@ class StudySessionMidnightSplitTest {
         // PHONE이 전체 구간을 덮어 focusActiveSec 합계가 0이 되는 예외 케이스
         List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-23T14:00:00Z", "2026-07-23T16:00:00Z"));
 
-        List<StudySession> sessions = service.createSessions(1L, CROSS_START, CROSS_END, 7200, 4000, events);
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 7200, 4000, events);
 
         assertThat(sessions.get(0).getStudySec()).isEqualTo(3600);
         assertThat(sessions.get(1).getStudySec()).isEqualTo(3600);
@@ -152,7 +154,7 @@ class StudySessionMidnightSplitTest {
         Instant start = Instant.parse("2026-07-23T14:59:59.600Z");
         Instant end = Instant.parse("2026-07-23T15:10:00.000Z");
 
-        List<StudySession> sessions = service.createSessions(1L, start, end, 600, 600, List.of());
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, start, end, 600, 600, List.of());
 
         assertThat(sessions).hasSize(2);
         assertThat(sessions.get(0).getStudySec()).isEqualTo(0);
@@ -169,10 +171,10 @@ class StudySessionMidnightSplitTest {
         Instant end = Instant.parse("2026-07-23T15:10:00.400Z");
 
         // 원본 정수초(601)까지는 허용 — 1초 손실 없음
-        assertThatCode(() -> service.createSessions(1L, start, end, 601, 0, List.of()))
+        assertThatCode(() -> service.validateAndBuildSessions(1L, start, end, 601, 0, List.of()))
                 .doesNotThrowAnyException();
         // 원본을 실제로 넘는 602는 거부
-        assertThatThrownBy(() -> service.createSessions(1L, start, end, 602, 0, List.of()))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, start, end, 602, 0, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
@@ -181,7 +183,7 @@ class StudySessionMidnightSplitTest {
         // KST 23:50 ~ 00:10 폰 사용 → 각 세션에 10분씩 귀속
         List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-23T14:50:00Z", "2026-07-23T15:10:00Z"));
 
-        List<StudySession> sessions = service.createSessions(1L, CROSS_START, CROSS_END, 7200, 6000, events);
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 7200, 6000, events);
 
         assertThat(sessions.get(0).getEvents()).hasSize(1);
         assertThat(sessions.get(0).getEvents().get(0).getEndedAt()).isEqualTo(MIDNIGHT);
@@ -191,7 +193,8 @@ class StudySessionMidnightSplitTest {
 
     @Test
     void 정확히_자정에_끝나면_분할되지_않는다() {
-        List<StudySession> sessions = service.createSessions(1L, CROSS_START, MIDNIGHT, 3600, 3600, List.of());
+        List<StudySession> sessions =
+                service.validateAndBuildSessions(1L, CROSS_START, MIDNIGHT, 3600, 3600, List.of());
 
         assertThat(sessions).hasSize(1);
         assertThat(sessions.get(0).getStatDate()).isEqualTo(LocalDate.of(2026, 7, 23));
@@ -199,7 +202,7 @@ class StudySessionMidnightSplitTest {
 
     @Test
     void 정확히_자정에_시작하면_분할되지_않는다() {
-        List<StudySession> sessions = service.createSessions(1L, MIDNIGHT, CROSS_END, 3600, 3600, List.of());
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, MIDNIGHT, CROSS_END, 3600, 3600, List.of());
 
         assertThat(sessions).hasSize(1);
         assertThat(sessions.get(0).getStatDate()).isEqualTo(LocalDate.of(2026, 7, 24));
@@ -209,7 +212,7 @@ class StudySessionMidnightSplitTest {
     void 자정에_정확히_끝나는_이벤트는_둘째_세션에_조각을_남기지_않는다() {
         List<StatusEvent> events = List.of(event(EventStatus.AWAY, "2026-07-23T14:50:00Z", "2026-07-23T15:00:00Z"));
 
-        List<StudySession> sessions = service.createSessions(1L, CROSS_START, CROSS_END, 7200, 7200, events);
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 7200, 7200, events);
 
         assertThat(sessions.get(0).getEvents()).hasSize(1);
         assertThat(sessions.get(1).getEvents()).isEmpty();
@@ -221,7 +224,7 @@ class StudySessionMidnightSplitTest {
         Instant start = Instant.parse("2026-07-23T10:00:00Z");
         Instant end = Instant.parse("2026-07-24T11:00:00Z");
 
-        assertThatThrownBy(() -> service.createSessions(1L, start, end, 0, 0, List.of()))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, start, end, 0, 0, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
@@ -231,7 +234,7 @@ class StudySessionMidnightSplitTest {
                 event(EventStatus.PHONE, "2026-07-23T14:10:00Z", "2026-07-23T14:30:00Z"),
                 event(EventStatus.AWAY, "2026-07-23T14:20:00Z", "2026-07-23T14:40:00Z"));
 
-        assertThatThrownBy(() -> service.createSessions(1L, CROSS_START, CROSS_END, 0, 0, events))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 0, 0, events))
                 .isInstanceOf(InvalidSessionException.class);
     }
 }

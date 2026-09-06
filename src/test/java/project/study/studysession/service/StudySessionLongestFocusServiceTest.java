@@ -52,8 +52,7 @@ class StudySessionLongestFocusServiceTest {
     @Test
     void 이벤트가_없으면_최장집중시간은_세션_전체_길이다() {
         StudySession session = new StudySession(1L, DATE, START, END, 7200, 6600, List.of());
-        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        1L, DATE, DATE, 60))
+        when(studySessionRepository.findInPeriodWithMinFocusSec(1L, DATE, DATE, 60))
                 .thenReturn(List.of(session));
 
         StudySessionListResponse response = service.list(1L, DATE);
@@ -69,8 +68,7 @@ class StudySessionLongestFocusServiceTest {
                 event(EventStatus.PHONE, "2026-07-24T08:05:00Z", "2026-07-24T08:10:00Z"),
                 event(EventStatus.AWAY, "2026-07-24T09:50:00Z", "2026-07-24T09:55:00Z"));
         StudySession session = new StudySession(1L, DATE, START, END, 7200, 6600, events);
-        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        1L, DATE, DATE, 60))
+        when(studySessionRepository.findInPeriodWithMinFocusSec(1L, DATE, DATE, 60))
                 .thenReturn(List.of(session));
 
         StudySessionListResponse response = service.list(1L, DATE);
@@ -97,8 +95,7 @@ class StudySessionLongestFocusServiceTest {
                 10800,
                 10800,
                 List.of());
-        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        1L, DATE, DATE, 60))
+        when(studySessionRepository.findInPeriodWithMinFocusSec(1L, DATE, DATE, 60))
                 .thenReturn(List.of(shorter, longer));
 
         StudySessionListResponse response = service.list(1L, DATE);
@@ -108,8 +105,7 @@ class StudySessionLongestFocusServiceTest {
 
     @Test
     void 세션이_없으면_최장집중시간은_0이다() {
-        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        1L, DATE, DATE, 60))
+        when(studySessionRepository.findInPeriodWithMinFocusSec(1L, DATE, DATE, 60))
                 .thenReturn(List.of());
 
         StudySessionListResponse response = service.list(1L, DATE);

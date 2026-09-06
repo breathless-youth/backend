@@ -39,9 +39,6 @@ public interface ActiveStudySessionRepository extends JpaRepository<ActiveStudyS
             @Param("focusSec") int focusSec,
             @Param("events") String events);
 
-    // 확정 대상 draft 조회 — (userId, startedAt)이 draft의 멱등 키다
-    Optional<ActiveStudySession> findByUserIdAndStartedAt(Long userId, Instant startedAt);
-
     // 재접속 복구 조회(BY-448) — 옛 draft(확정 대기)와 새 draft가 공존할 수 있어 마지막 보고가 최신인 것을 준다
     Optional<ActiveStudySession> findFirstByUserIdOrderByLastSeenAtDesc(Long userId);
 

@@ -50,14 +50,18 @@ final class StudySessionSplitter {
      * 합이 원본과 일치하게 반올림한다.
      */
     static SegmentWeights computeSegmentWeights(List<Instant> cuts, List<StatusEvent> sorted) {
+        // 경계가 3개면 조각은 2개
         int segmentCount = cuts.size() - 1;
+
+        // 조각 시간 보정법
         long[] segmentSecs = roundedSegmentSecs(cuts);
+
         List<List<StatusEvent>> segmentEvents = new ArrayList<>(segmentCount);
         long[] studyActiveSecs = new long[segmentCount];
         long[] focusActiveSecs = new long[segmentCount];
-
         long totalStudyActiveSec = 0;
         long totalFocusActiveSec = 0;
+        // 조각 별로 나누기
         for (int i = 0; i < segmentCount; i++) {
             long segmentSec = segmentSecs[i];
             List<StatusEvent> clipped = clip(sorted, cuts.get(i), cuts.get(i + 1));

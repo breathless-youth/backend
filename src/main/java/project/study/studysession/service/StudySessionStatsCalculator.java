@@ -5,7 +5,6 @@ import static project.study.studysession.StudySessionThresholds.MIN_LIST_FOCUS_S
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -28,7 +27,8 @@ import project.study.studysession.repository.StudySessionRepository;
  */
 final class StudySessionStatsCalculator {
 
-    private static final long MAX_PERIOD_DAYS = 366;
+    // 순회형 기간 조회(periodStats)의 범위 상한 — 일별 배열을 from~to 전 날짜만큼 채우므로 자원 방어값(윤년 포함 1년)
+    private static final int MAX_PERIOD_DAYS = 366;
 
     private StudySessionStatsCalculator() {}
 
@@ -76,10 +76,11 @@ final class StudySessionStatsCalculator {
             LocalDate to,
             LocalDate compareFrom,
             LocalDate compareTo) {
-        validatePeriod(from, to);
-        StudySessionService.validateRange(compareFrom, compareTo);
+        StudySessionValidator.validateDateRange(from, to);
+        StudySessionValidator.validateDateRange(compareFrom, compareTo);
+        StudySessionValidator.validateMaxRangeDays(from, to, MAX_PERIOD_DAYS);
         if (compareFrom != null) {
-            validateMaxDays(compareFrom, compareTo);
+            StudySessionValidator.validateMaxRangeDays(compareFrom, compareTo, MAX_PERIOD_DAYS);
         }
 
         List<DailyStudyStat> dailyList = dailyList(repository, userId, from, to);
@@ -101,20 +102,5 @@ final class StudySessionStatsCalculator {
             daily.add(byDate.getOrDefault(d, new DailyStudyStat(d, 0L, 0L)));
         }
         return daily;
-    }
-
-    /** from/to는 필수이고 from<=to, 범위는 최대 MAX_PERIOD_DAYS일. */
-    private static void validatePeriod(LocalDate from, LocalDate to) {
-        if (from.isAfter(to)) {
-            throw new InvalidSessionException("from은 to보다 이후일 수 없습니다");
-        }
-        validateMaxDays(from, to);
-    }
-
-    /** 과도한 범위 방어 — [from, to]가 MAX_PERIOD_DAYS일을 넘으면 거절한다 (메인 구간·비교 구간 공용). */
-    private static void validateMaxDays(LocalDate from, LocalDate to) {
-        if (ChronoUnit.DAYS.between(from, to) > MAX_PERIOD_DAYS) {
-            throw new InvalidSessionException("조회 범위가 너무 넓습니다 (최대 " + MAX_PERIOD_DAYS + "일)");
-        }
     }
 }
