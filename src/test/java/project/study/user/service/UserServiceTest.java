@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,9 +22,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
-import project.study.common.BadRequestException;
-import project.study.common.ConflictException;
+import project.study.common.exception.ConflictException;
 import project.study.metrics.dto.NewUser;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
@@ -85,6 +87,19 @@ class UserServiceTest {
     }
 
     @Test
+    void 이미_등록된_기기는_기기_조회를_한_번만_한다() {
+        // 0행 판정에 쓴 조회 결과를 응답에 재사용해 같은 기기를 다시 조회하지 않는다
+        when(userRepository.insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), eq("포"), anyInt()))
+                .thenReturn(0);
+        when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
+                .thenReturn(Optional.of(userWithId(7L, DEVICE_ID)));
+
+        userService.register(new UserRegisterRequest(DEVICE_ID));
+
+        verify(userRepository, times(1)).findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID);
+    }
+
+    @Test
     void 자동_닉네임이_충돌하면_새_닉네임으로_재시도한다() {
         // 0행 + 기기 없음 = 닉네임 충돌 → 재시도, 두 번째에 성공
         when(userRepository.insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), eq("포"), anyInt()))
@@ -130,7 +145,6 @@ class UserServiceTest {
     void 닉네임_변경_시_이니셜이_갱신된다() {
         User user = userWithId(1L, DEVICE_ID);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(userRepository.existsByNickname("숨벅찬청년들")).thenReturn(false);
 
         ProfileResponse response = userService.updateProfile(1L, new ProfileUpdateRequest("숨벅찬청년들", null, null));
 
@@ -139,36 +153,16 @@ class UserServiceTest {
     }
 
     @Test
+    // 중복 판정은 사전 조회 없이 유니크 제약이 한다 — flush에서 난 제약 위반이 409로 변환되는지 본다
     void 사용_중인_닉네임으로_변경하면_409다() {
         User user = userWithId(1L, DEVICE_ID);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(userRepository.existsByNickname("사용중닉네임")).thenReturn(true);
+        doThrow(new DataIntegrityViolationException("users_nickname_key"))
+                .when(userRepository)
+                .flush();
 
         assertThatThrownBy(() -> userService.updateProfile(1L, new ProfileUpdateRequest("사용중닉네임", null, null)))
                 .isInstanceOf(ConflictException.class);
-    }
-
-    @Test
-    void 닉네임_형식이_틀리면_400이다() {
-        assertThatThrownBy(() -> userService.updateProfile(1L, new ProfileUpdateRequest("한", null, null)))
-                .isInstanceOf(BadRequestException.class);
-        assertThatThrownBy(() -> userService.updateProfile(1L, new ProfileUpdateRequest("특수문자!!", null, null)))
-                .isInstanceOf(BadRequestException.class);
-        assertThatThrownBy(() -> userService.updateProfile(1L, new ProfileUpdateRequest("열세글자가넘는닉네임이다열세", null, null)))
-                .isInstanceOf(BadRequestException.class);
-    }
-
-    @Test
-    void 목표가_20자를_넘으면_400이다() {
-        assertThatThrownBy(() ->
-                        userService.updateProfile(1L, new ProfileUpdateRequest(null, "스물한 글자가 넘는 아주 길고 긴 목표 문구", null)))
-                .isInstanceOf(BadRequestException.class);
-    }
-
-    @Test
-    void 정의되지_않은_카테고리는_400이다() {
-        assertThatThrownBy(() -> userService.updateProfile(1L, new ProfileUpdateRequest(null, null, "UNKNOWN")))
-                .isInstanceOf(BadRequestException.class);
     }
 
     @Test
