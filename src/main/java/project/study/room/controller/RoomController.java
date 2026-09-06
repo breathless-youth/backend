@@ -24,9 +24,7 @@ import project.study.room.dto.RoomCreateRequest;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinRequest;
 import project.study.room.dto.RoomJoinResponse;
-import project.study.room.service.RoomIdAllocator;
 import project.study.room.service.RoomService;
-import project.study.room.snapshot.RoomSnapshotRestorer;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.service.UserService;
 
@@ -39,8 +37,6 @@ public class RoomController {
     private final RoomService roomService;
     private final UserService userService;
     private final SimpMessagingTemplate messagingTemplate;
-    private final RoomIdAllocator roomIdAllocator;
-    private final RoomSnapshotRestorer snapshotRestorer;
 
     @Operation(summary = "방 생성", description = """
                     일회성 공부방을 만들고 초대코드(숫자 4자리)를 발급받는다. \
@@ -50,8 +46,7 @@ public class RoomController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoomCreateResponse create(@Valid @RequestBody RoomCreateRequest request) {
-        // 방 ID는 DB 시퀀스에서 락 밖에서 발급한다 (BY-626)
-        return roomService.create(request.userId(), roomIdAllocator.next());
+        return roomService.create(request.userId());
     }
 
     @Operation(summary = "초대코드 입장", description = """
@@ -107,10 +102,6 @@ public class RoomController {
         // 프로필(닉네임·목표)은 방 상태에 보관돼 SNAPSHOT/MEMBER_JOINED에 실린다.
         // RoomService는 글로벌 락이라 조회는 락 밖(여기)에서 한다. 없는 유저면 404
         ProfileResponse profile = userService.getProfile(request.userId());
-        // 배포 직후 이 태스크가 모르는 코드면 옛 태스크의 스냅샷을 먼저 이어받는다 (BY-626)
-        if (!roomService.roomExistsByCode(request.inviteCode())) {
-            snapshotRestorer.restoreIfAvailable();
-        }
         RoomService.JoinResult result = roomService.join(
                 request.userId(), request.inviteCode(), profile.nickname(), profile.goal(), profile.category());
 

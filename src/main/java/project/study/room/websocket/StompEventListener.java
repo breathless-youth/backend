@@ -64,7 +64,6 @@ public class StompEventListener {
         Long userId = Long.valueOf(principal.getName());
         String sessionId = accessor.getSessionId();
 
-        // 배포 직후 재접속의 스냅샷 복원은 인가 인터셉터(WebSocketConfig.allowSubscribe)가 이미 끝냈다 (BY-626)
         List<RoomMember> members = roomService.confirmStomp(roomId, userId, sessionId);
         if (members.isEmpty()) {
             log.debug("STOMP 확정 실패(방/참가자 없음): roomId={}, userId={}", roomId, userId);

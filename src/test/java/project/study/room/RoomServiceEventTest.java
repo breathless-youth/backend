@@ -17,14 +17,6 @@ import project.study.room.service.RoomService;
 
 class RoomServiceEventTest {
 
-    // 방 ID는 프로덕션에서 DB 시퀀스(RoomIdAllocator)가 발급한다 — 테스트는 카운터로 대신한다 (BY-626)
-    private static final java.util.concurrent.atomic.AtomicLong ROOM_IDS =
-            new java.util.concurrent.atomic.AtomicLong(1_000_000);
-
-    private static long nextRoomId() {
-        return ROOM_IDS.incrementAndGet();
-    }
-
     private RoomService roomService;
     private List<Object> events;
 
@@ -35,7 +27,7 @@ class RoomServiceEventTest {
     }
 
     private String createRoom() {
-        return roomService.create(1L, nextRoomId()).inviteCode();
+        return roomService.create(1L).inviteCode();
     }
 
     private RoomService.JoinResult join(Long userId, String code) {
@@ -48,7 +40,7 @@ class RoomServiceEventTest {
 
     @Test
     void 방을_만들면_RoomCreated가_발행된다() {
-        roomService.create(1L, nextRoomId());
+        roomService.create(1L);
 
         List<RoomCreatedEvent> created = eventsOf(RoomCreatedEvent.class);
         assertThat(created).hasSize(1);
@@ -111,7 +103,7 @@ class RoomServiceEventTest {
         String codeA = createRoom();
         long roomA = join(1L, codeA).response().roomId();
         roomService.confirmStomp(roomA, 1L, "session-1");
-        String codeB = roomService.create(2L, nextRoomId()).inviteCode();
+        String codeB = roomService.create(2L).inviteCode();
 
         join(1L, codeB);
 
@@ -187,7 +179,7 @@ class RoomServiceEventTest {
 
     @Test
     void 빈_방_만료_시_RoomClosed_EMPTY_EXPIRED가_발행된다() {
-        roomService.create(1L, nextRoomId());
+        roomService.create(1L);
 
         roomService.cleanupExpired(Instant.now().plusSeconds(601));
 

@@ -32,14 +32,6 @@ import tools.jackson.databind.ObjectMapper;
 @Import({TestcontainersConfiguration.class, RoomHistoryRecorderTest.SyncExecutorConfig.class})
 class RoomHistoryRecorderTest {
 
-    // 방 ID는 프로덕션에서 DB 시퀀스(RoomIdAllocator)가 발급한다 — 테스트는 카운터로 대신한다 (BY-626)
-    private static final java.util.concurrent.atomic.AtomicLong ROOM_IDS =
-            new java.util.concurrent.atomic.AtomicLong(1_000_000);
-
-    private static long nextRoomId() {
-        return ROOM_IDS.incrementAndGet();
-    }
-
     @TestConfiguration
     static class SyncExecutorConfig {
         // @Async("roomHistoryExecutor")가 이름으로 찾으므로 같은 이름의 동기 실행기로 교체한다
@@ -88,7 +80,7 @@ class RoomHistoryRecorderTest {
     void 생성부터_퇴장까지_이력이_기록된다() {
         long creator = registerUser();
 
-        String code = roomService.create(creator, nextRoomId()).inviteCode();
+        String code = roomService.create(creator).inviteCode();
         RoomHistory room = findRoomOfCreator(creator);
         assertThat(room.getClosedAt()).isNull();
 
@@ -123,7 +115,7 @@ class RoomHistoryRecorderTest {
     void 예약만_하고_확정하지_않으면_참여_기록이_없다() {
         long creator = registerUser();
 
-        String code = roomService.create(creator, nextRoomId()).inviteCode();
+        String code = roomService.create(creator).inviteCode();
         RoomHistory room = findRoomOfCreator(creator);
 
         roomService.join(creator, code, "포메테스트", null, null);
