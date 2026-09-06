@@ -3,11 +3,6 @@ package project.study.room.service;
 import java.time.Instant;
 
 class Participant {
-    // 예약 후 이 시간 안에 STOMP 확정이 없으면 자리를 회수한다
-    static final long RESERVATION_TTL_SECONDS = 30;
-    // 끊김 후 이 시간 안에 재접속이 없으면 자리를 회수한다
-    static final long GRACE_PERIOD_SECONDS = 30;
-
     // 만료 후보 인덱스(RoomService.expiryCandidates)가 방을 역참조해 제거할 때 쓴다
     final Long roomId;
     final Long userId;
@@ -38,14 +33,5 @@ class Participant {
         this.studySeconds = 0;
         this.reservedAt = Instant.now();
         this.stompConfirmed = false;
-    }
-
-    // 예약 30초 미확정 또는 끊김 30초 유예 만료
-    boolean isExpired(Instant now) {
-        if (!stompConfirmed && reservedAt.plusSeconds(RESERVATION_TTL_SECONDS).isBefore(now)) {
-            return true;
-        }
-        return disconnectedAt != null
-                && disconnectedAt.plusSeconds(GRACE_PERIOD_SECONDS).isBefore(now);
     }
 }

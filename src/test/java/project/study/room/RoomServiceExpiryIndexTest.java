@@ -14,14 +14,6 @@ import project.study.room.service.RoomService;
  */
 class RoomServiceExpiryIndexTest {
 
-    // 방 ID는 프로덕션에서 DB 시퀀스(RoomIdAllocator)가 발급한다 — 테스트는 카운터로 대신한다 (BY-626)
-    private static final java.util.concurrent.atomic.AtomicLong ROOM_IDS =
-            new java.util.concurrent.atomic.AtomicLong(1_000_000);
-
-    private static long nextRoomId() {
-        return ROOM_IDS.incrementAndGet();
-    }
-
     private RoomService roomService;
 
     @BeforeEach
@@ -30,7 +22,7 @@ class RoomServiceExpiryIndexTest {
     }
 
     private String createRoom() {
-        return roomService.create(1L, nextRoomId()).inviteCode();
+        return roomService.create(1L).inviteCode();
     }
 
     private RoomService.JoinResult join(Long userId, String code) {

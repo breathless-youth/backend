@@ -31,11 +31,6 @@ class ClosedInviteCodes {
         return closedAt != null && isAlive(closedAt, now);
     }
 
-    /** 스냅샷용 사본 — 종료 시점의 묘비를 새 태스크가 이어받아 10분 회수 규칙이 배포를 넘겨 유지된다. */
-    Map<String, Instant> entries() {
-        return Map.copyOf(closedAtByCode);
-    }
-
     void purgeExpired(Instant now) {
         closedAtByCode.values().removeIf(closedAt -> !isAlive(closedAt, now));
     }

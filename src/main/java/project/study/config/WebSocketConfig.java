@@ -27,7 +27,6 @@ import org.springframework.web.socket.config.annotation.WebSocketTransportRegist
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import project.study.common.logging.StompMdcChannelInterceptor;
 import project.study.room.service.RoomService;
-import project.study.room.snapshot.RoomSnapshotRestorer;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -38,7 +37,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private static final long HEARTBEAT_INTERVAL_MS = 10_000L;
 
     private final RoomService roomService;
-    private final RoomSnapshotRestorer snapshotRestorer;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
@@ -69,8 +67,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         // 인가 인터셉터가 CONNECT에서 프린시펄을 세팅하므로 MDC 인터셉터는 그 뒤에 둔다
-        registration.interceptors(
-                new UserIdChannelInterceptor(roomService, snapshotRestorer), new StompMdcChannelInterceptor());
+        registration.interceptors(new UserIdChannelInterceptor(roomService), new StompMdcChannelInterceptor());
     }
 
     // WS 전송 한도 (BY-491). 기본값(메시지 64KB, 세션당 송신버퍼 512KB)은 우리 메시지
@@ -122,7 +119,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         private static final Pattern ROOM_TOPIC_PATTERN = Pattern.compile("^/topic/room/(\\d+)$");
 
         private final RoomService roomService;
-        private final RoomSnapshotRestorer snapshotRestorer;
 
         @Override
         public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -182,13 +178,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
             Long roomId = Long.valueOf(matcher.group(1));
             Long userId = Long.valueOf(principal.getName());
-            // 배포 직후 재접속: 이 태스크가 모르는 방이면 옛 태스크의 스냅샷을 먼저 이어받는다 (BY-626).
-            // 인가가 여기서 먼저 걸려 프레임이 버려지면 SessionSubscribeEvent 자체가 뜨지 않으므로,
-            // 복원 트리거는 이 지점이어야 한다. 모르는 방일 때만 DB를 한 번 보고(복원 뒤엔 I/O 없음),
-            // 인가 판정(hasParticipant)은 그대로 유지한다
-            if (!roomService.roomExists(roomId)) {
-                snapshotRestorer.restoreIfAvailable();
-            }
             return roomService.hasParticipant(roomId, userId);
         }
     }
