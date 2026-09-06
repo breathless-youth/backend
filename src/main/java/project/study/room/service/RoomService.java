@@ -35,8 +35,6 @@ public class RoomService {
 
     static final int MAX_PARTICIPANTS = 6;
     static final int EMPTY_ROOM_TTL_SECONDS = 600;
-    private static final long RESERVATION_TTL_SECONDS = 30;
-    private static final long GRACE_PERIOD_SECONDS = 30;
     private static final int INVITE_CODE_MAX_ATTEMPTS = 100;
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -49,7 +47,8 @@ public class RoomService {
     private final Set<Participant> expiryCandidates = new HashSet<>();
     // 첫 입장이 없는 빈 방만(입장 이력 방은 마지막 퇴장 때 즉시 소멸)
     private final Map<Long, Room> emptyRooms = new HashMap<>();
-    private long roomIdSequence = 0;
+    private final RoomSnapshotSupport snapshots =
+            new RoomSnapshotSupport(roomById, roomByCode, userToRoomId, expiryCandidates, emptyRooms, closedCodes);
 
     private final TurnCredentialIssuer turnCredentials;
     private final ApplicationEventPublisher eventPublisher;
@@ -68,14 +67,15 @@ public class RoomService {
     public record AutoLeave(Long roomId, Long userId) {}
 
     // 생성만으로는 입장 상태가 아니다 — 생성자도 join으로만 입장한다
-    public synchronized RoomCreateResponse create(Long userId) {
+    // roomId는 호출자가 락 밖에서 DB 시퀀스(RoomIdAllocator)로 받아 넘긴다 — 락 안 I/O 금지, 재시작 후 토픽 충돌 방지(BY-626)
+    public synchronized RoomCreateResponse create(Long userId, long roomId) {
         Instant now = Instant.now();
         for (int attempt = 0; attempt < INVITE_CODE_MAX_ATTEMPTS; attempt++) {
             String code = String.format("%04d", RANDOM.nextInt(10000));
             if (roomByCode.containsKey(code) || closedCodes.contains(code, now)) {
                 continue;
             }
-            Room room = new Room(++roomIdSequence, code, now);
+            Room room = new Room(roomId, code, now);
             roomByCode.put(code, room);
             roomById.put(room.id, room);
             emptyRooms.put(room.id, room); // 첫 입장 전까지 빈 방 TTL 후보
@@ -189,7 +189,7 @@ public class RoomService {
         }
 
         log.debug("STOMP 확정: roomId={}, userId={}, stompSessionId={}", roomId, userId, stompSessionId);
-        return confirmedMembers(room);
+        return room.confirmedMembers();
     }
 
     public synchronized void handleDisconnect(String stompSessionId) {
@@ -248,7 +248,7 @@ public class RoomService {
     public synchronized List<RoomMember> getMembers(Long roomId) {
         Room room = roomById.get(roomId);
         if (room == null) return List.of();
-        return confirmedMembers(room);
+        return room.confirmedMembers();
     }
 
     // 스냅샷 재요청 인가+조회(BY-442) — 한 번의 원자 호출로 처리한다. 인가(isActiveSession)와
@@ -257,7 +257,7 @@ public class RoomService {
     // (활성 확정 멤버라면 목록에 자신이 반드시 포함되므로 빈 목록과 구분 불가한 경우가 없다)
     public synchronized List<RoomMember> getMembersForActiveSession(Long roomId, Long userId, String stompSessionId) {
         if (!isActiveSession(roomId, userId, stompSessionId)) return List.of();
-        return confirmedMembers(roomById.get(roomId));
+        return roomById.get(roomId).confirmedMembers();
     }
 
     public synchronized boolean isConfirmedMember(Long roomId, Long userId) {
@@ -281,8 +281,22 @@ public class RoomService {
         return userToRoomId.get(userId);
     }
 
+    public synchronized boolean roomExistsByCode(String inviteCode) {
+        return roomByCode.containsKey(inviteCode);
+    }
+
     public synchronized boolean roomExists(Long roomId) {
         return roomById.containsKey(roomId);
+    }
+
+    /** 종료 훅용 스냅샷 내보내기 (BY-626) — 규칙은 {@link RoomSnapshotSupport} 참고. I/O 없음. */
+    public synchronized RoomStateSnapshot exportSnapshot(Instant now) {
+        return snapshots.export(now);
+    }
+
+    /** 옛 태스크 스냅샷 이어받기 (BY-626) — 읽기는 호출자가 락 밖에서. @return 복원한 방 수 */
+    public synchronized int importSnapshot(RoomStateSnapshot snapshot, Instant now) {
+        return snapshots.restore(snapshot, now);
     }
 
     public synchronized List<AutoLeave> cleanupExpired(Instant now) {
@@ -293,7 +307,7 @@ public class RoomService {
 
         // 전체 방 대신 만료 가능 후보만 검사한다(BY-593) — 확정·연결 참가자는 인덱스에 없다. 판정은 isExpired 그대로
         for (Participant participant : List.copyOf(expiryCandidates)) {
-            if (isExpired(participant, now)
+            if (participant.isExpired(now)
                     && removeParticipant(participant.roomId, participant.userId, LeaveReason.DISCONNECT_TIMEOUT)) {
                 removed.add(new AutoLeave(participant.roomId, participant.userId));
             }
@@ -312,16 +326,6 @@ public class RoomService {
             log.debug("만료 정리: 자동 퇴장 {}건 — {}", removed.size(), removed);
         }
         return removed;
-    }
-
-    // 예약 30초 미확정 또는 끊김 30초 유예 만료
-    private static boolean isExpired(Participant participant, Instant now) {
-        if (!participant.stompConfirmed
-                && participant.reservedAt.plusSeconds(RESERVATION_TTL_SECONDS).isBefore(now)) {
-            return true;
-        }
-        return participant.disconnectedAt != null
-                && participant.disconnectedAt.plusSeconds(GRACE_PERIOD_SECONDS).isBefore(now);
     }
 
     // 동시 1룸 제한 — 다른 방에 있으면 자동 퇴장시키고 그 사실을 반환한다 (호출자가 MEMBER_LEFT 브로드캐스트)
@@ -370,14 +374,6 @@ public class RoomService {
         Long roomId = userToRoomId.get(userId);
         if (roomId == null) return null;
         return getParticipant(roomId, userId);
-    }
-
-    private static List<RoomMember> confirmedMembers(Room room) {
-        return room.participants.values().stream()
-                .filter(p -> p.stompConfirmed)
-                .map(p -> new RoomMember(
-                        p.userId, p.nickname, p.goal, p.category, p.cameraOn, p.focusState, p.studySeconds))
-                .toList();
     }
 
     private Participant getParticipant(Long roomId, Long userId) {
