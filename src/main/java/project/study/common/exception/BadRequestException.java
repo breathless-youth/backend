@@ -1,4 +1,4 @@
-package project.study.common;
+package project.study.common.exception;
 
 public class BadRequestException extends RuntimeException {
 

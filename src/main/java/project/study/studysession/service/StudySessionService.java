@@ -37,6 +37,7 @@ public class StudySessionService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final String STARTED_AT_UNIQUE_CONSTRAINT = "uq_study_session_user_started_at";
+
     // V1이 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
     private static final String USER_FK_CONSTRAINT = "study_session_user_id_fkey";
 
@@ -130,6 +131,7 @@ public class StudySessionService {
                 .max()
                 .orElse(0);
         List<StudySessionSummaryResponse> summaries =
+
                 sessions.stream().map(this::toSummaryResponse).toList();
         Map<EventStatus, Long> totalEventCounts = StudySessionStatsCalculator.countByStatus(
                 sessions.stream().flatMap(s -> s.getEvents().stream()).toList());
@@ -198,10 +200,12 @@ public class StudySessionService {
         // 시계 오차 허용(5분) 탓에 자정 직후 조각이 내일 날짜로 저장될 수 있다 — 공부일은 오늘까지만 센다
         List<LocalDate> statDates = studySessionRepository.findDistinctStatDates(userId, MIN_STREAK_FOCUS_SEC).stream()
                 .filter(date -> !date.isAfter(today))
+
                 .toList();
         List<LocalDate> studiedDatesInRange = from == null
                 ? List.of()
                 : studySessionRepository.findDistinctStatDatesBetween(userId, from, to, MIN_STREAK_FOCUS_SEC);
+
         return new StudySessionStreakResponse(
                 currentStreak(statDates, today), maxStreak(statDates), studiedDatesInRange);
     }

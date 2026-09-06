@@ -20,10 +20,10 @@ import project.study.room.dto.RoomMember;
 import project.study.room.service.RoomService;
 
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class StompEventListener {
 
-    private static final Logger log = LoggerFactory.getLogger(StompEventListener.class);
     private static final Pattern ROOM_TOPIC_PATTERN = Pattern.compile("^/topic/room/(\\d+)$");
 
     private final RoomService roomService;

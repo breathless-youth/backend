@@ -55,6 +55,7 @@ final class StudySessionSplitter {
         List<List<StatusEvent>> segmentEvents = new ArrayList<>(segmentCount);
         long[] studyActiveSecs = new long[segmentCount];
         long[] focusActiveSecs = new long[segmentCount];
+
         long totalStudyActiveSec = 0;
         long totalFocusActiveSec = 0;
         for (int i = 0; i < segmentCount; i++) {

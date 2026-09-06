@@ -28,6 +28,7 @@ import project.study.room.event.RoomClosedEvent;
 import project.study.room.event.RoomCreatedEvent;
 
 /** 인메모리 룸 상태 관리. 동시성: public 메서드를 모두 synchronized로 직렬화하여 레이스를 원천 차단. */
+@Slf4j
 @Service
 public class RoomService {
 
@@ -38,6 +39,7 @@ public class RoomService {
     private static final long RESERVATION_TTL_SECONDS = 30;
     private static final long GRACE_PERIOD_SECONDS = 30;
     private static final int INVITE_CODE_MAX_ATTEMPTS = 100;
+
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final Map<Long, Room> roomById = new HashMap<>();

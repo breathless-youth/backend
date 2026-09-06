@@ -19,10 +19,10 @@ import project.study.room.dto.StateUpdatePayload;
 import project.study.room.service.RoomService;
 
 @Controller
+@Slf4j
 @RequiredArgsConstructor
 public class RoomStompHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(RoomStompHandler.class);
     private static final Set<String> SIGNAL_KINDS = Set.of("OFFER", "ANSWER", "CANDIDATE");
     private static final Set<String> FOCUS_STATES = Set.of("FOCUS", "DISTRACTED");
 

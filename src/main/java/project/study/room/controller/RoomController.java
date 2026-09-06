@@ -1,5 +1,7 @@
 package project.study.room.controller;
 
+import static project.study.room.service.RoomService.*;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -19,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import project.study.common.ErrorResponse;
+import project.study.common.exception.ErrorResponse;
 import project.study.room.dto.RoomCreateRequest;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinRequest;
@@ -100,13 +102,12 @@ public class RoomController {
     @PostMapping("/join")
     public RoomJoinResponse join(@Valid @RequestBody RoomJoinRequest request) {
         // 프로필(닉네임·목표)은 방 상태에 보관돼 SNAPSHOT/MEMBER_JOINED에 실린다.
-        // RoomService는 글로벌 락이라 조회는 락 밖(여기)에서 한다. 없는 유저면 404
         ProfileResponse profile = userService.getProfile(request.userId());
-        RoomService.JoinResult result = roomService.join(
+        JoinResult result = roomService.join(
                 request.userId(), request.inviteCode(), profile.nickname(), profile.goal(), profile.category());
 
         if (result.autoLeave() != null) {
-            RoomService.AutoLeave al = result.autoLeave();
+            AutoLeave al = result.autoLeave();
             messagingTemplate.convertAndSend(
                     "/topic/room/" + al.roomId(), (Object) Map.of("type", "MEMBER_LEFT", "userId", al.userId()));
         }
