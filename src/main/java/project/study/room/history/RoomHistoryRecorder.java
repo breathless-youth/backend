@@ -21,8 +21,7 @@ import project.study.room.repository.RoomParticipationRepository;
  *
  * <p>모든 메서드는 {@code roomHistoryExecutor}(1스레드)에서 발행 순서대로 실행된다.
  * 기록 실패는 async 예외 핸들러가 로그로 남길 뿐 룸 동작에 영향을 주지 않는다.
- * 여기에 동기(@Async 없는) 리스너를 추가하면 RoomService의 글로벌 락 안에서 DB I/O가
- * 실행되므로 금지한다.
+ * 여기에 동기(@Async 없는) 리스너를 추가하면 RoomService의 글로벌 락 안에서 DB I/O가 실행됨
  */
 @Component
 @RequiredArgsConstructor

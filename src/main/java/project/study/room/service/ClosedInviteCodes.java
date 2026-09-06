@@ -13,8 +13,6 @@ import java.util.Map;
  *
  * <p>같은 기간 동안 그 코드의 재발급도 막는다 — 묘비가 남은 코드를 새 방에 다시 내주면
  * 종료된 방을 찾던 사람이 엉뚱한 방에 입장한다.
- *
- * <p>동기화는 하지 않는다 — 소유자인 {@link RoomService}가 모든 진입점을 인스턴스 락으로 직렬화한다.
  */
 class ClosedInviteCodes {
 

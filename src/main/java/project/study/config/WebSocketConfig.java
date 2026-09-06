@@ -46,13 +46,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // 하트비트가 없으면 클라이언트가 종료 신호 없이 사라졌을 때(전파 이탈, 배터리
-        // 방전 등) 서버가 끊김을 인지하지 못해 유예(grace period)가 시작되지 않고
-        // 유령 멤버가 방에 영원히 남는다. heartbeat 값 설정에는 TaskScheduler가 필수다.
+        // /topic, /queue는 메세지 브로커가 관리
         registry.enableSimpleBroker("/topic", "/queue")
+                // [0]은 서버가 클라이언트에게 보내는 주기, [1]은 클라이언트가 서버에게 보내는 주기 - 클라이언트도 CONNECT시에 보내는데 더 큰 값으로 합의
+                // 클라이언트가 0으로 보내면 HeartBeat는 비활성화
                 .setHeartbeatValue(new long[] {HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS})
                 .setTaskScheduler(heartbeatTaskScheduler());
+        // /app은 브로커가 아니라 controller로 보내는 기능
         registry.setApplicationDestinationPrefixes("/app");
+        // /user는 특정 사용자에게멘 보내는 기능
         registry.setUserDestinationPrefix("/user");
     }
 
@@ -60,6 +62,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(1);
         scheduler.setThreadNamePrefix("stomp-heartbeat-");
+        // 빈으로 등록하지 않으면 스스로 초기화해줘야한다
         scheduler.initialize();
         return scheduler;
     }
@@ -73,7 +76,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     // WS 전송 한도 (BY-491). 기본값(메시지 64KB, 세션당 송신버퍼 512KB)은 우리 메시지
     // 실측(state ~200B, 시그널 ~300B, SNAPSHOT ~2KB) 대비 수십~수백 배 과하다.
     // 송신버퍼는 CPU 포화로 브로드캐스트 flush가 밀릴 때 세션마다 쌓이는 곳이라,
-    // 기본 512KB × 1000세션 = 이론상 512MB 팽창이 OOM에 기여할 수 있다 → 64KB로 상한.
     // 한도 초과한 느린/죽은 클라이언트는 세션이 종료된다(좀비 커넥션 정리 효과).
     @Override
     public void configureWebSocketTransport(WebSocketTransportRegistration registry) {
@@ -99,6 +101,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             if (request instanceof ServletServerHttpRequest servletRequest) {
                 String userId = servletRequest.getServletRequest().getParameter(USER_ID_ATTR);
                 if (userId != null) {
+                    // 핸드셰이크 이후에는 HTTP가 끝나므로 세션 저장소에 userId 저장
                     attributes.put(USER_ID_ATTR, userId);
                 }
             }
@@ -113,15 +116,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 Exception exception) {}
     }
 
+    // STOMP 보안
     @RequiredArgsConstructor
     static class UserIdChannelInterceptor implements ChannelInterceptor {
 
+        // 정규식을 미리 컴파일해서 static으로 보관
         private static final Pattern ROOM_TOPIC_PATTERN = Pattern.compile("^/topic/room/(\\d+)$");
 
         private final RoomService roomService;
 
         @Override
         public Message<?> preSend(Message<?> message, MessageChannel channel) {
+            // Message는 Spring 메시징의 범용 타입이라, STOMP 메세지 안전하게 꺼내기
             StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
             if (accessor == null) return message;
 
@@ -129,8 +135,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             if (command == null) return message; // heartbeat 등 커맨드 없는 프레임
 
             return switch (command) {
-                // STOMP 1.2는 CONNECT 대신 STOMP 커맨드도 유효한 연결 프레임이다
+                // CONNECT 대신 STOMP 커맨드도 유효한 연결 프레임
                 case CONNECT, STOMP -> {
+                    // Principal 세팅
                     setPrincipalFromSession(accessor);
                     yield message;
                 }
@@ -155,7 +162,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         }
 
         // 클라이언트 SEND는 /app/** 만 허용 — 브로커 목적지(/topic, /queue)로의 직접 발행을 차단해
-        // 핸들러의 인가·검증(isActiveSession, 화이트리스트)을 우회한 위조 이벤트 주입을 막는다
+        // 핸들러의 인가·검증을 우회한 위조 이벤트 주입을 막는다
         private static boolean allowSend(StompHeaderAccessor accessor) {
             String destination = accessor.getDestination();
             return destination != null && destination.startsWith("/app/");
@@ -163,8 +170,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
         // SUBSCRIBE 인가 — deny-by-default. simple broker는 Ant 패턴 구독(/topic/room/** 등)을
         // 지원하므로 정확히 일치하는 두 목적지만 허용한다. false = 메시지 드랍 → 구독 미생성.
-        // 알려진 한계(초안): leave 후에도 기존 구독은 살아 있다 — simple broker에 구독 강제 해제
-        // API가 없어 세션 종료 장치가 필요하다. 후속 작업으로 남긴다
         private boolean allowSubscribe(StompHeaderAccessor accessor) {
             String destination = accessor.getDestination();
             if (destination == null) return false;

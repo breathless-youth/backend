@@ -9,8 +9,7 @@ import javax.crypto.spec.SecretKeySpec;
 import project.study.room.dto.RoomJoinResponse;
 
 /**
- * coturn 시한부 자격(RFC 8489 ephemeral credential) 발급. username = "만료초:userId", credential = HMAC-SHA1(secret,
- * username). 룸 상태 관리(RoomService)와 관심사가 달라 분리했다.
+ * coturn 발급. username = "만료초:userId", credential = HMAC-SHA1(secret,username)..
  */
 class TurnCredentialIssuer {
 

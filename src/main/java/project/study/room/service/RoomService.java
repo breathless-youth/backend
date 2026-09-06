@@ -8,15 +8,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import project.study.common.BadRequestException;
-import project.study.common.ConflictException;
-import project.study.common.ErrorCode;
-import project.study.common.NotFoundException;
+import project.study.common.exception.BadRequestException;
+import project.study.common.exception.ConflictException;
+import project.study.common.exception.ErrorCode;
+import project.study.common.exception.NotFoundException;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinResponse;
 import project.study.room.dto.RoomMember;
@@ -28,26 +27,32 @@ import project.study.room.event.RoomClosedEvent;
 import project.study.room.event.RoomCreatedEvent;
 
 /** 인메모리 룸 상태 관리. 동시성: public 메서드를 모두 synchronized로 직렬화하여 레이스를 원천 차단. */
-@Slf4j
 @Service
+@Slf4j
 public class RoomService {
 
-    private static final Logger log = LoggerFactory.getLogger(RoomService.class);
-
+    // 방 정원
     static final int MAX_PARTICIPANTS = 6;
+    // 방 소멸 시간
     static final int EMPTY_ROOM_TTL_SECONDS = 600;
+    // 방 생성 재시도
     private static final int INVITE_CODE_MAX_ATTEMPTS = 100;
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    // 방 아이디
     private final Map<Long, Room> roomById = new HashMap<>();
+    // 방 초대코드
     private final Map<String, Room> roomByCode = new HashMap<>();
+    // 유저ID -> 방ID
     private final Map<Long, Long> userToRoomId = new HashMap<>();
+    // STOMP ID -> userID
     private final Map<String, Long> sessionToUser = new HashMap<>();
+    // 소멸한 방의 초대코드 묘비 유예 1분
     private final ClosedInviteCodes closedCodes = new ClosedInviteCodes();
-    // 만료 후보 인덱스(BY-593): 미확정 예약·끊김 유예만. 확정·연결 참가자는 만료되지 않아 제외 → 전체 방 순회 제거
+    // 만료 후보 인덱스: 미확정 예약·끊김 유예만. 확정·연결 참가자는 만료되지 않아 제외 → 스케쥴러로 전체 방 순회 제거
     private final Set<Participant> expiryCandidates = new HashSet<>();
-    // 첫 입장이 없는 빈 방만(입장 이력 방은 마지막 퇴장 때 즉시 소멸)
+    // 첫 입장이 없는 빈 방만(입장 이력 방은 마지막 퇴장 때 즉시 소멸) - 빈 방인지 방금 만든 방인지 구분
     private final Map<Long, Room> emptyRooms = new HashMap<>();
     private long roomIdSequence = 0;
 
@@ -79,14 +84,14 @@ public class RoomService {
             roomByCode.put(code, room);
             roomById.put(room.id, room);
             emptyRooms.put(room.id, room); // 첫 입장 전까지 빈 방 TTL 후보
-            // @Async 리스너 전제라 안전. 동기 리스너 추가 금지 (RoomHistoryRecorder 참고)
+
             publish(new RoomCreatedEvent(room.uid, userId, room.createdAt));
             return new RoomCreateResponse(room.id, code, EMPTY_ROOM_TTL_SECONDS);
         }
         throw new ConflictException("사용 가능한 초대코드가 없습니다");
     }
 
-    // nickname/goal은 호출자(컨트롤러)가 락 밖에서 DB 조회해 넘긴다 — 글로벌 락 안에서 I/O 금지
+    // 자리 예약만 하고 30초 안에 STOMP가 붙여서 자리 확정
     public synchronized JoinResult join(Long userId, String inviteCode, String nickname, String goal, String category) {
         if (inviteCode == null || !inviteCode.matches("\\d{4}")) {
             throw new BadRequestException("초대코드는 숫자 4자리여야 합니다");
@@ -94,15 +99,16 @@ public class RoomService {
 
         Room room = roomByCode.get(inviteCode);
         if (room == null) {
-            // 동시 퇴장 등으로 방이 막 사라진 경우까지 "코드 오타"로 안내하면 안 된다 (BY-436)
             if (closedCodes.contains(inviteCode, Instant.now())) {
                 throw new NotFoundException(ErrorCode.ROOM_CLOSED, "방이 종료되었어요");
             }
             throw new NotFoundException(ErrorCode.INVITE_CODE_NOT_FOUND, "코드를 다시 확인해 주세요");
         }
 
+        // 끊김 후 재입장인지 체크
         Participant existing = room.participants.get(userId);
         if (existing != null && existing.disconnectedAt != null) {
+            // 끊김 후 재입장이면 복원
             return restoreFromGrace(room, existing, nickname, goal, category);
         }
 

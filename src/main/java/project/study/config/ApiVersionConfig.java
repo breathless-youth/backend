@@ -15,7 +15,6 @@ public class ApiVersionConfig implements WebMvcConfigurer {
 
     @Override
     public void configureApiVersioning(ApiVersionConfigurer configurer) {
-        // 기본버전은 지원 버전 목록에도 자동 포함되므로 addSupportedVersions 불필요.
         // 이후 버전(2, 3…)은 매핑의 version 속성에서 자동 감지된다 (ApiVersionApiTest로 검증)
         configurer.useRequestHeader("API-Version").setDefaultVersion("1");
     }
