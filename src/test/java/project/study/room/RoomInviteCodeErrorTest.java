@@ -15,6 +15,14 @@ import project.study.room.service.RoomService;
 /** BY-436 초대코드 404 에러 코드 구분 — RoomServiceTest에서 분리(파일 400줄 제한). */
 class RoomInviteCodeErrorTest {
 
+    // 방 ID는 프로덕션에서 DB 시퀀스(RoomIdAllocator)가 발급한다 — 테스트는 카운터로 대신한다 (BY-626)
+    private static final java.util.concurrent.atomic.AtomicLong ROOM_IDS =
+            new java.util.concurrent.atomic.AtomicLong(1_000_000);
+
+    private static long nextRoomId() {
+        return ROOM_IDS.incrementAndGet();
+    }
+
     private static final long CLOSED_CODE_TTL_SECONDS = 600;
 
     private RoomService roomService;
@@ -25,7 +33,7 @@ class RoomInviteCodeErrorTest {
     }
 
     private String createRoom() {
-        return roomService.create(1L).inviteCode();
+        return roomService.create(1L, nextRoomId()).inviteCode();
     }
 
     private static void assertNotFoundWithCode(ThrowingCallable call, ErrorCode expected) {

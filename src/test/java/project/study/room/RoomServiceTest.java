@@ -18,6 +18,14 @@ import project.study.room.service.RoomService;
 
 class RoomServiceTest {
 
+    // 방 ID는 프로덕션에서 DB 시퀀스(RoomIdAllocator)가 발급한다 — 테스트는 카운터로 대신한다 (BY-626)
+    private static final java.util.concurrent.atomic.AtomicLong ROOM_IDS =
+            new java.util.concurrent.atomic.AtomicLong(1_000_000);
+
+    private static long nextRoomId() {
+        return ROOM_IDS.incrementAndGet();
+    }
+
     private static final long CLOSED_CODE_TTL_SECONDS = 600;
 
     private RoomService roomService;
@@ -28,7 +36,7 @@ class RoomServiceTest {
     }
 
     private String createRoom() {
-        return roomService.create(1L).inviteCode();
+        return roomService.create(1L, nextRoomId()).inviteCode();
     }
 
     private static void assertNotFoundWithCode(ThrowingCallable call, ErrorCode expected) {
@@ -44,7 +52,7 @@ class RoomServiceTest {
 
     @Test
     void 방을_만들면_숫자_4자리_초대코드가_발급된다() {
-        RoomCreateResponse response = roomService.create(1L);
+        RoomCreateResponse response = roomService.create(1L, nextRoomId());
 
         assertThat(response.roomId()).isNotNull();
         assertThat(response.inviteCode()).matches("\\d{4}");
@@ -53,7 +61,7 @@ class RoomServiceTest {
 
     @Test
     void 생성만으로는_입장_상태가_아니다() {
-        roomService.create(1L);
+        roomService.create(1L, nextRoomId());
 
         assertThat(roomService.getRoomIdForUser(1L)).isNull();
     }
@@ -94,8 +102,8 @@ class RoomServiceTest {
 
     @Test
     void 다른_방에_있으면_자동_퇴장_후_새_방에_입장한다() {
-        String codeA = roomService.create(1L).inviteCode();
-        String codeB = roomService.create(2L).inviteCode();
+        String codeA = roomService.create(1L, nextRoomId()).inviteCode();
+        String codeB = roomService.create(2L, nextRoomId()).inviteCode();
         Long roomA = join(100L, codeA).response().roomId();
         join(200L, codeA); // roomA가 소멸하지 않도록 다른 참가자 유지
 
@@ -200,8 +208,8 @@ class RoomServiceTest {
 
     @Test
     void 대상_방이_가득_차면_기존_방_자리를_잃지_않는다() {
-        String codeA = roomService.create(1L).inviteCode();
-        String codeB = roomService.create(2L).inviteCode();
+        String codeA = roomService.create(1L, nextRoomId()).inviteCode();
+        String codeB = roomService.create(2L, nextRoomId()).inviteCode();
         Long roomA = join(100L, codeA).response().roomId();
         for (long i = 1; i <= 6; i++) {
             join(200 + i, codeB);
@@ -371,7 +379,7 @@ class RoomServiceTest {
         Long roomId = join(100L, code).response().roomId();
         roomService.leave(roomId, 100L);
         for (int i = 0; i < 50; i++) {
-            roomService.create(1L);
+            roomService.create(1L, nextRoomId());
         }
 
         assertThat(roomService.roomExists(roomId)).isFalse();

@@ -15,6 +15,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.web.socket.messaging.SessionConnectEvent;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
+import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 import project.study.room.service.RoomService;
 import project.study.room.websocket.StompEventListener;
 
@@ -52,5 +53,15 @@ class StompEventListenerTest {
 
         assertThatCode(() -> listener.handleConnected(event)).doesNotThrowAnyException();
         verifyNoInteractions(roomService, messagingTemplate);
+    }
+
+    private static SessionSubscribeEvent subscribeEvent(String sessionId, long roomId, long userId) {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setSessionId(sessionId);
+        accessor.setDestination("/topic/room/" + roomId);
+        java.security.Principal principal = () -> String.valueOf(userId);
+        accessor.setUser(principal);
+        Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+        return new SessionSubscribeEvent(new Object(), message, principal);
     }
 }
