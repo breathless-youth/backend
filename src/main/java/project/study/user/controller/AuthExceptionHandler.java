@@ -8,7 +8,7 @@ package project.study.user.controller;
 // import org.springframework.web.bind.annotation.ExceptionHandler;
 // import org.springframework.web.bind.annotation.ResponseStatus;
 // import org.springframework.web.bind.annotation.RestControllerAdvice;
-// import project.study.common.ErrorResponse;
+// import project.study.common.exception.ErrorResponse;
 // import project.study.user.oauth.InvalidOAuthTokenException;
 // import project.study.user.service.InvalidRefreshTokenException;
 //

@@ -65,7 +65,7 @@ public class StudySession {
     @Column(name = "recovery_acknowledged_at")
     private Instant recoveryAcknowledgedAt;
 
-    // 검증·계산은 StudySessionService.createSessions가 담당한다 — 엔티티는 저장 데이터만 보관
+    // 검증·계산은 StudySessionService.validateAndBuildSessions가 담당한다 — 엔티티는 저장 데이터만 보관
     public StudySession(
             Long userId,
             LocalDate statDate,

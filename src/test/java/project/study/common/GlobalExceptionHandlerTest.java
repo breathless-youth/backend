@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import project.study.common.exception.*;
 
 /**
  * 전역 예외 핸들러가 내리는 상태코드와 응답 포맷만 검증한다.

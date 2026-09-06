@@ -61,7 +61,7 @@ class RequestLoggingFilterTest {
     }
 
     @Test
-    void 요청_ID_헤더가_없으면_생성해서_MDC와_응답_헤더에_싣는다() throws ServletException, IOException {
+    void 요청_ID를_생성해서_MDC와_응답_헤더에_싣는다() throws ServletException, IOException {
         CapturingChain chain = new CapturingChain();
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -73,7 +73,7 @@ class RequestLoggingFilterTest {
     }
 
     @Test
-    void 요청_ID_헤더가_오면_그_값을_그대로_쓴다() throws ServletException, IOException {
+    void 클라이언트가_보낸_요청_ID_헤더는_무시하고_서버가_새로_생성한다() throws ServletException, IOException {
         CapturingChain chain = new CapturingChain();
         MockHttpServletRequest request = get("/api/rooms");
         request.addHeader("X-Request-Id", "client-abc");
@@ -81,8 +81,9 @@ class RequestLoggingFilterTest {
 
         filter.doFilter(request, response, chain);
 
-        assertThat(chain.mdcInsideChain).containsEntry(LogContext.REQUEST_ID, "client-abc");
-        assertThat(response.getHeader("X-Request-Id")).isEqualTo("client-abc");
+        String requestId = chain.mdcInsideChain.get(LogContext.REQUEST_ID);
+        assertThat(requestId).isNotBlank().isNotEqualTo("client-abc");
+        assertThat(response.getHeader("X-Request-Id")).isEqualTo(requestId);
     }
 
     @Test

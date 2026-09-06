@@ -8,8 +8,8 @@ import java.util.List;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import project.study.common.ErrorCode;
-import project.study.common.NotFoundException;
+import project.study.common.exception.ErrorCode;
+import project.study.common.exception.NotFoundException;
 import project.study.room.service.RoomService;
 
 /** BY-436 초대코드 404 에러 코드 구분 — RoomServiceTest에서 분리(파일 400줄 제한). */

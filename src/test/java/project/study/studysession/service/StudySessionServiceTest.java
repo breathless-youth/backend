@@ -39,7 +39,7 @@ class StudySessionServiceTest {
     @Mock
     private ActiveStudySessionRepository activeStudySessionRepository;
 
-    // createSessions는 순수 로직이라 리포지토리를 사용하지 않는다 — 저장 경로는 API 통합테스트가 검증
+    // validateAndBuildSessions는 순수 로직이라 리포지토리를 사용하지 않는다 — 저장 경로는 API 통합테스트가 검증
     private StudySessionService service;
 
     @BeforeEach
@@ -57,8 +57,8 @@ class StudySessionServiceTest {
                 event(EventStatus.DEVICE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
                 event(EventStatus.PHONE, "2026-07-24T08:30:00Z", "2026-07-24T08:40:00Z"));
 
-        StudySession session =
-                service.createSessions(1L, START, END, 6600, 5000, events).get(0);
+        StudySession session = service.validateAndBuildSessions(1L, START, END, 6600, 5000, events)
+                .get(0);
 
         assertThat(session.getStudySec()).isEqualTo(6600);
         // 이벤트 구간과 무관하게 요청의 focusSec가 저장된다
@@ -69,23 +69,23 @@ class StudySessionServiceTest {
 
     @Test
     void 순공_시간이_음수면_거부한다() {
-        assertThatThrownBy(() -> service.createSessions(1L, START, END, 7200, -1, List.of()))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, END, 7200, -1, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
     @Test
     void 순공_시간이_총공부시간을_초과하면_거부한다() {
-        assertThatThrownBy(() -> service.createSessions(1L, START, END, 7000, 7001, List.of()))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, END, 7000, 7001, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
     @Test
     void 순공_시간은_0과_총공부시간_경계값을_허용한다() {
-        assertThat(service.createSessions(1L, START, END, 7200, 0, List.of())
+        assertThat(service.validateAndBuildSessions(1L, START, END, 7200, 0, List.of())
                         .get(0)
                         .getFocusSec())
                 .isEqualTo(0);
-        assertThat(service.createSessions(1L, START, END, 7200, 7200, List.of())
+        assertThat(service.validateAndBuildSessions(1L, START, END, 7200, 7200, List.of())
                         .get(0)
                         .getFocusSec())
                 .isEqualTo(7200);
@@ -93,13 +93,13 @@ class StudySessionServiceTest {
 
     @Test
     void 총공부시간이_음수면_거부한다() {
-        assertThatThrownBy(() -> service.createSessions(1L, START, END, -1, 0, List.of()))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, END, -1, 0, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
     @Test
     void 총공부시간이_방_체류시간을_초과하면_거부한다() {
-        assertThatThrownBy(() -> service.createSessions(1L, START, END, 7201, 0, List.of()))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, END, 7201, 0, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
@@ -108,8 +108,8 @@ class StudySessionServiceTest {
         // PAUSE 10분 → 방 체류시간(7200) - PAUSE(600) = 6600초까지 허용
         List<StatusEvent> events = List.of(event(EventStatus.PAUSE, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"));
 
-        StudySession session =
-                service.createSessions(1L, START, END, 6600, 6600, events).get(0);
+        StudySession session = service.validateAndBuildSessions(1L, START, END, 6600, 6600, events)
+                .get(0);
 
         assertThat(session.getStudySec()).isEqualTo(6600);
     }
@@ -118,7 +118,7 @@ class StudySessionServiceTest {
     void PAUSE를_제외한_시간을_초과하는_총공부시간은_거부된다() {
         List<StatusEvent> events = List.of(event(EventStatus.PAUSE, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"));
 
-        assertThatThrownBy(() -> service.createSessions(1L, START, END, 6601, 0, events))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, END, 6601, 0, events))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
@@ -127,8 +127,8 @@ class StudySessionServiceTest {
         // PHONE은 순공시간 타이머만 멈춘다 — 총공부시간 상한은 방 체류시간 그대로
         List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"));
 
-        StudySession session =
-                service.createSessions(1L, START, END, 7200, 0, events).get(0);
+        StudySession session = service.validateAndBuildSessions(1L, START, END, 7200, 0, events)
+                .get(0);
 
         assertThat(session.getStudySec()).isEqualTo(7200);
     }
@@ -139,8 +139,8 @@ class StudySessionServiceTest {
         Instant start = Instant.parse("2026-07-23T16:30:00Z");
         Instant end = Instant.parse("2026-07-23T18:30:00Z");
 
-        StudySession session =
-                service.createSessions(1L, start, end, 3600, 3600, List.of()).get(0);
+        StudySession session = service.validateAndBuildSessions(1L, start, end, 3600, 3600, List.of())
+                .get(0);
 
         assertThat(session.getStatDate()).isEqualTo(LocalDate.of(2026, 7, 24));
     }
@@ -151,8 +151,8 @@ class StudySessionServiceTest {
                 event(EventStatus.AWAY, "2026-07-24T09:00:00Z", "2026-07-24T09:10:00Z"),
                 event(EventStatus.DEVICE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"));
 
-        StudySession session =
-                service.createSessions(1L, START, END, 7000, 6300, events).get(0);
+        StudySession session = service.validateAndBuildSessions(1L, START, END, 7000, 6300, events)
+                .get(0);
 
         assertThat(session.getEvents().get(0).getStatus()).isEqualTo(EventStatus.DEVICE);
         assertThat(session.getEvents().get(1).getStatus()).isEqualTo(EventStatus.AWAY);
@@ -164,16 +164,16 @@ class StudySessionServiceTest {
                 event(EventStatus.DEVICE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
                 event(EventStatus.PHONE, "2026-07-24T08:05:00Z", "2026-07-24T08:10:00Z"));
 
-        StudySession session =
-                service.createSessions(1L, START, END, 7200, 6600, events).get(0);
+        StudySession session = service.validateAndBuildSessions(1L, START, END, 7200, 6600, events)
+                .get(0);
 
         assertThat(session.getEvents()).hasSize(2);
     }
 
     @Test
     void 세션의_집중률을_계산한다() {
-        StudySession session =
-                service.createSessions(1L, START, END, 6600, 6000, List.of()).get(0);
+        StudySession session = service.validateAndBuildSessions(1L, START, END, 6600, 6000, List.of())
+                .get(0);
 
         // 6000 / 6600 × 100 = 90.909... → 90.9
         assertThat(StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()))
@@ -195,14 +195,14 @@ class StudySessionServiceTest {
 
     @Test
     void 종료가_시작보다_빠르거나_같으면_거부한다() {
-        assertThatThrownBy(() -> service.createSessions(1L, START, START, 0, 0, List.of()))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, START, 0, 0, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
     @Test
     void 십분_미만_세션도_저장된다() {
         // 9분 59초 — 세션 길이와 무관하게 저장된다(조회·스트릭 인정 여부는 focusSec 기준으로 별도 판단)
-        StudySession session = service.createSessions(1L, START, START.plusSeconds(599), 599, 599, List.of())
+        StudySession session = service.validateAndBuildSessions(1L, START, START.plusSeconds(599), 599, 599, List.of())
                 .get(0);
 
         assertThat(session.getStudySec()).isEqualTo(599);
@@ -210,7 +210,7 @@ class StudySessionServiceTest {
 
     @Test
     void 몇_초짜리_세션도_저장된다() {
-        StudySession session = service.createSessions(1L, START, START.plusSeconds(5), 5, 5, List.of())
+        StudySession session = service.validateAndBuildSessions(1L, START, START.plusSeconds(5), 5, 5, List.of())
                 .get(0);
 
         assertThat(session.getStudySec()).isEqualTo(5);
@@ -221,7 +221,7 @@ class StudySessionServiceTest {
         Instant start = NOW.minusSeconds(60 * 60 * 25);
         Instant end = start.plusSeconds(60 * 60 * 24 + 1);
 
-        assertThatThrownBy(() -> service.createSessions(1L, start, end, 0, 0, List.of()))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, start, end, 0, 0, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
@@ -229,7 +229,7 @@ class StudySessionServiceTest {
     void 종료_시각이_허용_오차를_넘는_미래이면_거부한다() {
         Instant end = NOW.plusSeconds(60 * 6); // now + 6분 (허용 오차 5분 초과)
 
-        assertThatThrownBy(() -> service.createSessions(1L, START, end, 0, 0, List.of()))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, end, 0, 0, List.of()))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
@@ -237,7 +237,7 @@ class StudySessionServiceTest {
     void 이벤트의_종료가_시작보다_빠르거나_같으면_거부한다() {
         List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-24T08:30:00Z", "2026-07-24T08:30:00Z"));
 
-        assertThatThrownBy(() -> service.createSessions(1L, START, END, 0, 0, events))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, END, 0, 0, events))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
@@ -245,7 +245,7 @@ class StudySessionServiceTest {
     void 세션_구간을_벗어난_이벤트는_거부한다() {
         List<StatusEvent> events = List.of(event(EventStatus.AWAY, "2026-07-24T09:50:00Z", "2026-07-24T10:10:00Z"));
 
-        assertThatThrownBy(() -> service.createSessions(1L, START, END, 0, 0, events))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, END, 0, 0, events))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
@@ -255,15 +255,14 @@ class StudySessionServiceTest {
                 event(EventStatus.DEVICE, "2026-07-24T08:00:00Z", "2026-07-24T08:10:00Z"),
                 event(EventStatus.PHONE, "2026-07-24T08:05:00Z", "2026-07-24T08:15:00Z"));
 
-        assertThatThrownBy(() -> service.createSessions(1L, START, END, 0, 0, events))
+        assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, END, 0, 0, events))
                 .isInstanceOf(InvalidSessionException.class);
     }
 
     @Test
     void date로_조회하면_그_날짜_하루_기간으로_조회한다() {
         LocalDate date = LocalDate.of(2026, 7, 24);
-        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        1L, date, date, 60))
+        when(studySessionRepository.findInPeriodWithMinFocusSec(1L, date, date, 60))
                 .thenReturn(List.of());
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
@@ -271,8 +270,7 @@ class StudySessionServiceTest {
 
         service.list(1L, date);
 
-        verify(studySessionRepository)
-                .findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(1L, date, date, 60);
+        verify(studySessionRepository).findInPeriodWithMinFocusSec(1L, date, date, 60);
     }
 
     @Test
@@ -280,8 +278,7 @@ class StudySessionServiceTest {
         LocalDate date = LocalDate.of(2026, 7, 24);
         StudySession first = new StudySession(1L, date, START, END, 7200, 6600, List.of());
         StudySession second = new StudySession(1L, date, START, END, 3600, 3000, List.of());
-        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        1L, date, date, 60))
+        when(studySessionRepository.findInPeriodWithMinFocusSec(1L, date, date, 60))
                 .thenReturn(List.of(first, second));
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
@@ -298,8 +295,7 @@ class StudySessionServiceTest {
     void 목록_응답에_그_달_공부한_날짜_목록이_담긴다() {
         LocalDate date = LocalDate.of(2026, 7, 24);
         List<LocalDate> studiedDates = List.of(LocalDate.of(2026, 7, 3), LocalDate.of(2026, 7, 24));
-        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        1L, date, date, 60))
+        when(studySessionRepository.findInPeriodWithMinFocusSec(1L, date, date, 60))
                 .thenReturn(List.of());
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
@@ -324,8 +320,7 @@ class StudySessionServiceTest {
                         event(EventStatus.PHONE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
                         event(EventStatus.PHONE, "2026-07-24T08:10:00Z", "2026-07-24T08:15:00Z"),
                         event(EventStatus.PAUSE, "2026-07-24T08:20:00Z", "2026-07-24T08:25:00Z")));
-        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        1L, date, date, 60))
+        when(studySessionRepository.findInPeriodWithMinFocusSec(1L, date, date, 60))
                 .thenReturn(List.of(session));
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
@@ -361,8 +356,7 @@ class StudySessionServiceTest {
                 List.of(
                         event(EventStatus.PHONE, "2026-07-24T08:00:00Z", "2026-07-24T08:05:00Z"),
                         event(EventStatus.AWAY, "2026-07-24T08:10:00Z", "2026-07-24T08:15:00Z")));
-        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        1L, date, date, 60))
+        when(studySessionRepository.findInPeriodWithMinFocusSec(1L, date, date, 60))
                 .thenReturn(List.of(first, second));
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), 60))
@@ -378,8 +372,7 @@ class StudySessionServiceTest {
     @Test
     void date가_달의_마지막날이어도_그달_전체_범위로_조회한다() {
         LocalDate date = LocalDate.of(2026, 2, 28);
-        when(studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        1L, date, date, 60))
+        when(studySessionRepository.findInPeriodWithMinFocusSec(1L, date, date, 60))
                 .thenReturn(List.of());
         when(studySessionRepository.findDistinctStatDatesBetween(
                         1L, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28), 60))

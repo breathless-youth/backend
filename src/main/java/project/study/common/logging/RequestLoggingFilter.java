@@ -50,7 +50,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         long startNanos = System.nanoTime();
         try {
-            String requestId = resolveRequestId(request);
+            String requestId = UUID.randomUUID().toString();
             MDC.put(LogContext.REQUEST_ID, requestId);
             LogContext.putUserId(request.getParameter(USER_ID_PARAM));
             // 클라이언트가 문의할 때 이 ID를 대면 CloudWatch에서 해당 요청 로그를 바로 찾을 수 있다
@@ -73,10 +73,5 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             // 톰캣 스레드는 재사용된다 — 비우지 않으면 다음 요청에 이전 유저의 ID가 묻어간다
             MDC.clear();
         }
-    }
-
-    private static String resolveRequestId(HttpServletRequest request) {
-        String fromClient = request.getHeader(REQUEST_ID_HEADER);
-        return (fromClient == null || fromClient.isBlank()) ? UUID.randomUUID().toString() : fromClient;
     }
 }

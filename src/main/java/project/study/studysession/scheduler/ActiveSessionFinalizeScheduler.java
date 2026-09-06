@@ -3,10 +3,9 @@ package project.study.studysession.scheduler;
 import io.sentry.Sentry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import project.study.common.NotFoundException;
+import project.study.common.exception.NotFoundException;
 import project.study.studysession.service.ActiveStudySessionService;
 import project.study.studysession.service.InvalidSessionException;
 import tools.jackson.core.JacksonException;
@@ -22,35 +21,34 @@ import tools.jackson.core.JacksonException;
  * draft를 보존해 다음 틱에 자연 재시도되게 한다 — 확정은 멱등 수렴이라 재시도가 안전하고,
  * 여기서 함부로 폐기하면 이 기능이 막으려던 세션 유실을 서버가 대신 일으키게 된다(최종 리뷰 Important 2).
  *
- * <p>테스트에서는 session-finalize.enabled=false로 꺼서 백그라운드 확정이 테스트 데이터를
- * 건드리지 않게 한다 — 확정 로직 자체는 서비스 메서드 직접 호출로 검증한다.
+ * <p>테스트는 확정 로직을 서비스 메서드 직접 호출로 검증하고, 스케줄러 루프는 인스턴스를 직접 만들어
+ * 호출한다 — 백그라운드 틱(첫 실행 60초 뒤)에 기대지 않는다.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "session-finalize.enabled", havingValue = "true", matchIfMissing = true)
 public class ActiveSessionFinalizeScheduler {
 
     private final ActiveStudySessionService activeStudySessionService;
 
     @Scheduled(initialDelay = 60_000, fixedDelay = 60_000)
     public void finalizeStaleDrafts() {
-        for (Long draftId : activeStudySessionService.findStaleDraftIds()) {
+        for (Long draftId : activeStudySessionService.findStaleDraftIds()) { // 5분이 지난 draft 순회
             try {
                 activeStudySessionService.finalizeDraft(draftId);
             } catch (InvalidSessionException | NotFoundException | JacksonException e) {
-                log.error("진행중 세션 자동 확정 영구 실패 — draft를 폐기한다: draftId={}", draftId, e);
+                log.error("진행중 세션 자동 확정 영구 실패 - draft 폐기: draftId={}", draftId, e);
                 Sentry.captureException(e);
                 try {
                     activeStudySessionService.discardDraft(draftId);
                 } catch (Exception discardEx) {
-                    log.error("draft 폐기 자체가 실패했다 — draftId={}", draftId, discardEx);
+                    log.error("draft 폐기 실패 — draftId={}", draftId, discardEx);
                     Sentry.captureException(discardEx);
                 }
             } catch (Exception e) {
                 // 일시적 인프라 오류로 추정 — draft를 보존한다. 다음 틱에 last_seen_at 조건을 다시
                 // 만족해 재시도되고, 확정이 멱등 수렴이라 여러 번 실패해도 안전하다
-                log.error("진행중 세션 자동 확정 실패(일시적 추정) — draft를 보존하고 다음 틱에 재시도한다: draftId={}", draftId, e);
+                log.error("진행중 세션 자동 확정 실패 — draft를 보존 후 다음 틱에 재시도: draftId={}", draftId, e);
                 Sentry.captureException(e);
             }
         }

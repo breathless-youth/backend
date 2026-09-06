@@ -3,6 +3,7 @@ package project.study.studysession.buffer;
 import io.sentry.Sentry;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class ActiveSnapshotBuffer {
     public void offer(ActiveSessionSnapshotRequest request) {
         Key key = new Key(request.userId(), request.startedAt());
         Pending incoming = new Pending(request, clock.instant());
+        // 더 미래의 스냅샷을 저장
         pending.merge(
                 key,
                 incoming,
@@ -69,7 +71,7 @@ public class ActiveSnapshotBuffer {
         if (pending.isEmpty()) {
             return;
         }
-        List<SnapshotRow> rows = new java.util.ArrayList<>();
+        List<SnapshotRow> rows = new ArrayList<>();
         for (Key key : List.copyOf(pending.keySet())) {
             Pending p = pending.remove(key);
             if (p == null) {
@@ -92,7 +94,7 @@ public class ActiveSnapshotBuffer {
                 try {
                     batchRepository.bulkUpsert(List.of(row));
                 } catch (Exception rowEx) {
-                    log.error("스냅샷 개별 flush 실패 — 건너뛴다: userId={}, startedAt={}", row.userId(), row.startedAt(), rowEx);
+                    log.error("스냅샷 개별 flush 실패: userId={}, startedAt={}", row.userId(), row.startedAt(), rowEx);
                     Sentry.captureException(rowEx);
                 }
             }

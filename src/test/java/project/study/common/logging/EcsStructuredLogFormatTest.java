@@ -28,15 +28,17 @@ class EcsStructuredLogFormatTest {
 
     @Test
     void 액세스_로그_JSON에_userId와_requestId가_최상위_필드로_실린다(CapturedOutput output) {
-        mvc.get()
+        String requestId = mvc.get()
                 .uri("/api/stats/streak")
                 .param("userId", "77")
-                .header("X-Request-Id", "req-ecs-check")
-                .exchange();
+                .exchange()
+                .getResponse()
+                .getHeader("X-Request-Id");
+        assertThat(requestId).isNotBlank();
 
         String accessLine = output.getOut()
                 .lines()
-                .filter(line -> line.contains("\"requestId\":\"req-ecs-check\""))
+                .filter(line -> line.contains("\"requestId\":\"" + requestId + "\""))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("액세스 로그 JSON 줄을 찾지 못했다:\n" + output.getOut()));
 

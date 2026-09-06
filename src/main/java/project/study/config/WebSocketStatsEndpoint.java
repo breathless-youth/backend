@@ -2,6 +2,7 @@ package project.study.config;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
 import org.springframework.stereotype.Component;
@@ -20,14 +21,13 @@ import org.springframework.web.socket.messaging.SubProtocolWebSocketHandler;
 @Endpoint(id = "wsstats")
 public class WebSocketStatsEndpoint {
 
-    private static final long LOGGING_PERIOD_MS = 30_000L;
-
     private final WebSocketMessageBrokerStats stats;
 
-    public WebSocketStatsEndpoint(WebSocketMessageBrokerStats stats) {
+    public WebSocketStatsEndpoint(
+            WebSocketMessageBrokerStats stats,
+            @Value("${app.ws.stats-logging-period-ms:1800000}") long loggingPeriodMs) {
         this.stats = stats;
-        // 기본 30분 주기 로그를 30초로 — 부하 중 로그로도 추이가 남게 한다
-        stats.setLoggingPeriod(LOGGING_PERIOD_MS);
+        stats.setLoggingPeriod(loggingPeriodMs);
     }
 
     @ReadOperation

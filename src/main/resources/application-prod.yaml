@@ -28,6 +28,7 @@ decorator:
   datasource:
     enabled: false
 
+
 oauth:
   google:
     # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
@@ -49,6 +50,8 @@ refresh-token:
 # (relaxed binding은 하이픈을 제거한다 — APP_CORS_ALLOWED_ORIGINS로는 바인딩되지 않는다).
 # 값은 기동 시점에 한 번 바인딩되므로 바꾸면 태스크를 새로 띄워야 한다.
 app:
+  ws:
+    stats-logging-period-ms: 1800000   # 30분 (기본)
   cors:
     allowed-origins:
       - https://web.sunqstudio.kr

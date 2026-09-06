@@ -1,4 +1,4 @@
-package project.study.common;
+package project.study.common.exception;
 
 /**
  * 클라이언트가 분기에 쓰는 기계 판독용 에러 식별자.

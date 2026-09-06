@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import project.study.common.ErrorResponse;
+import project.study.common.exception.ErrorResponse;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
@@ -34,8 +34,7 @@ public class UserController {
     private final UserService userService;
 
     @Operation(summary = "익명 기기 유저 등록", description = """
-                    로그인이 없는 MVP에서 사용자를 만드는 유일한 방법이다. \
-                    앱은 첫 실행 때 **기기 UUID**를 하나 생성해 기기 보안 저장소에 보관하고, \
+                    앱은 첫 실행 때 **UUID**를 하나 생성해 기기 보안 저장소에 보관하고, \
                     이 API로 보내 우리 서비스의 `userId`를 발급받는다. \
                     이후 모든 API 호출(공부 세션 제출·조회 등)에 이 `userId`를 사용한다.
 
@@ -98,9 +97,11 @@ public class UserController {
                             examples = {
                                 @ExampleObject(
                                         name = "닉네임 형식",
-                                        value = "{\"message\": \"닉네임은 2~12자의 한글·영문·숫자만 사용할 수 있습니다\"}"),
-                                @ExampleObject(name = "목표 길이", value = "{\"message\": \"목표는 공백 포함 20자 이하여야 합니다\"}"),
-                                @ExampleObject(name = "카테고리", value = "{\"message\": \"정의되지 않은 카테고리입니다\"}")
+                                        value = "{\"message\": \"nickname: 닉네임은 2~12자의 한글·영문·숫자만 사용할 수 있습니다\"}"),
+                                @ExampleObject(
+                                        name = "목표 길이",
+                                        value = "{\"message\": \"goal: 목표는 공백 포함 20자 이하여야 합니다\"}"),
+                                @ExampleObject(name = "카테고리", value = "{\"message\": \"category: 정의되지 않은 카테고리입니다\"}")
                             }))
     @ApiResponse(
             responseCode = "409",
@@ -110,7 +111,7 @@ public class UserController {
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
     @PatchMapping("/{userId}/profile")
-    public ProfileResponse updateProfile(@PathVariable Long userId, @RequestBody ProfileUpdateRequest request) {
+    public ProfileResponse updateProfile(@PathVariable Long userId, @Valid @RequestBody ProfileUpdateRequest request) {
         return userService.updateProfile(userId, request);
     }
 }

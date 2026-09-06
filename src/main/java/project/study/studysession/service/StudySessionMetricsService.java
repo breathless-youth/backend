@@ -1,5 +1,7 @@
 package project.study.studysession.service;
 
+import static project.study.studysession.StudySessionThresholds.*;
+
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -8,8 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.metrics.dto.CohortFirstWeek;
 import project.study.metrics.dto.HeavyUser;
 import project.study.metrics.dto.QualifyingSession;
-import project.study.studysession.StudySessionThresholds;
-import project.study.studysession.repository.StudySessionRepository;
+import project.study.studysession.repository.StudySessionMetricsRepository;
 
 /**
  * 지표 집계 전용 서비스(매일 오전 10시 Slack 리포트 등) — 앱 화면용 {@code StudySessionService}와는
@@ -26,7 +27,7 @@ public class StudySessionMetricsService {
     // 헤비유저로 인정하는 최소 스트릭 인정일수(구간 안에서)
     private static final long MIN_ACTIVE_DAYS = 3;
 
-    private final StudySessionRepository studySessionRepository;
+    private final StudySessionMetricsRepository studySessionMetricsRepository;
 
     /**
      * 헤비유저 조회 — {@code anchorDate}를 포함한 최근 {@value #WINDOW_DAYS}일 구간에서, 스트릭 인정
@@ -45,8 +46,7 @@ public class StudySessionMetricsService {
     @Transactional(readOnly = true)
     public List<HeavyUser> findHeavyUsers(LocalDate anchorDate) {
         LocalDate from = anchorDate.minusDays(WINDOW_DAYS - 1L);
-        return studySessionRepository.findHeavyUsers(
-                from, anchorDate, StudySessionThresholds.MIN_STREAK_FOCUS_SEC, MIN_ACTIVE_DAYS);
+        return studySessionMetricsRepository.findHeavyUsers(from, anchorDate, MIN_STREAK_FOCUS_SEC, MIN_ACTIVE_DAYS);
     }
 
     /**
@@ -55,8 +55,7 @@ public class StudySessionMetricsService {
      */
     @Transactional(readOnly = true)
     public long countQualifyingSessionsOn(LocalDate date) {
-        return studySessionRepository.countByStatDateAndFocusSecGreaterThanEqual(
-                date, StudySessionThresholds.MIN_STREAK_FOCUS_SEC);
+        return studySessionMetricsRepository.countByStatDateAndFocusSecGreaterThanEqual(date, MIN_STREAK_FOCUS_SEC);
     }
 
     /**
@@ -65,7 +64,7 @@ public class StudySessionMetricsService {
      */
     @Transactional(readOnly = true)
     public List<QualifyingSession> findQualifyingSessions(LocalDate date) {
-        return studySessionRepository.findQualifyingSessions(date, StudySessionThresholds.MIN_STREAK_FOCUS_SEC).stream()
+        return studySessionMetricsRepository.findQualifyingSessions(date, MIN_STREAK_FOCUS_SEC).stream()
                 .map(row -> new QualifyingSession(row.getUserId(), row.getFocusSec(), row.getSocial()))
                 .toList();
     }
@@ -77,7 +76,7 @@ public class StudySessionMetricsService {
     @Transactional(readOnly = true)
     public CohortFirstWeek cohortFirstWeek(LocalDate anchorDate) {
         LocalDate cohortCutoff = anchorDate.minusDays(COHORT_WINDOW_DAYS - 1L);
-        return CohortFirstWeek.from(studySessionRepository.findCohortFirstWeekDays(
-                StudySessionThresholds.MIN_STREAK_FOCUS_SEC, cohortCutoff));
+        return CohortFirstWeek.from(
+                studySessionMetricsRepository.findCohortFirstWeekDays(MIN_STREAK_FOCUS_SEC, cohortCutoff));
     }
 }

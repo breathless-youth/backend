@@ -51,7 +51,7 @@ public class DailyReportService {
         // 발송 시각이 오전 10시라 오늘은 부분 집계다. 완결된 하루인 어제를 기준일로 쓴다
         LocalDate anchorDate = LocalDate.ofInstant(clock.instant(), KST).minusDays(1);
 
-        // ①③과 세션 건수는 같은 10분 이상 세션 데이터에서 파생하므로 한 번만 조회한다.
+        // 세션 건수·룸비율·유저 상세는 모두 이 10분 이상 세션 목록에서 파생하므로 한 번만 조회한다.
         // 건수를 별도 쿼리로 세면 그 사이 삽입·정정으로 "10분 이상 세션: N건"이 아래 섹션과
         // 어긋날 수 있어, 목록 크기에서 파생해 항상 일치시킨다
         List<QualifyingSession> qualifyingSessions = studySessionMetricsService.findQualifyingSessions(anchorDate);

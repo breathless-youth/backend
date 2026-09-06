@@ -5,8 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -20,9 +19,9 @@ import project.study.room.service.RoomService;
 
 @Controller
 @RequiredArgsConstructor
+@Slf4j
 public class RoomStompHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(RoomStompHandler.class);
     private static final Set<String> SIGNAL_KINDS = Set.of("OFFER", "ANSWER", "CANDIDATE");
     private static final Set<String> FOCUS_STATES = Set.of("FOCUS", "DISTRACTED");
 

@@ -7,14 +7,14 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import project.study.common.BadRequestException;
-import project.study.common.ConflictException;
-import project.study.common.ErrorCode;
-import project.study.common.NotFoundException;
+import project.study.common.exception.ConflictException;
+import project.study.common.exception.ErrorCode;
+import project.study.common.exception.NotFoundException;
 import project.study.metrics.dto.NewUser;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
@@ -32,14 +32,9 @@ public class UserService {
     private static final DateTimeFormatter HOUR_MINUTE =
             DateTimeFormatter.ofPattern("HH:mm").withZone(KST);
     private static final SecureRandom RANDOM = new SecureRandom();
+    // 자동 닉네임 공간이 10만 개(5자리)라 자동 닉네임 유저가 수만 명을 넘으면 재시도 횟수보다 공간이 병목이 된다
     private static final int AUTO_NICKNAME_MAX_ATTEMPTS = 10;
     private static final int COLOR_COUNT = 8;
-    private static final int NICKNAME_MIN_LENGTH = 2;
-    private static final int NICKNAME_MAX_LENGTH = 12;
-    private static final int GOAL_MAX_LENGTH = 20;
-    private static final String NICKNAME_PATTERN = "[가-힣a-zA-Z0-9]+";
-    private static final Set<String> CATEGORIES =
-            Set.of("PROFESSIONAL", "CSAT", "JOB", "CERTIFICATE", "CIVIL_SERVICE", "LANGUAGE", "ETC");
 
     private final UserRepository userRepository;
 
@@ -49,29 +44,26 @@ public class UserService {
         // 플랫폼마다 UUID 대소문자 표기가 달라 같은 기기가 유저를 중복 생성하지 않도록 정규화
         String deviceId = request.deviceId().toLowerCase(Locale.ROOT);
 
-        boolean isNew = insertWithAutoNickname(deviceId);
-        User user = userRepository
+        Optional<User> existing = insertWithAutoNickname(deviceId);
+        User user = existing.orElseGet(() -> userRepository
                 .findByProviderAndProviderUserId(Provider.DEVICE, deviceId)
-                .orElseThrow(() -> new IllegalStateException("등록 이후 조회 실패"));
+                .orElseThrow(() -> new IllegalStateException("등록 이후 조회 실패")));
 
-        return new UserRegisterResponse(user.getId(), isNew);
+        return new UserRegisterResponse(user.getId(), existing.isEmpty());
     }
 
     // 자동 닉네임(포메{랜덤5자리})이 기존 닉네임과 충돌하면 재생성해서 재시도한다.
-    // insertIfAbsent는 타겟 없는 on conflict do nothing이라 어떤 유니크 충돌이든 0행으로 떨어진다 —
-    // 0행일 때 기기(deviceId)가 이미 있으면 멱등 재등록, 없으면 닉네임 충돌이므로 재시도
-    private boolean insertWithAutoNickname(String deviceId) {
+    private Optional<User> insertWithAutoNickname(String deviceId) {
         for (int attempt = 0; attempt < AUTO_NICKNAME_MAX_ATTEMPTS; attempt++) {
             String nickname = "포메" + String.format("%05d", RANDOM.nextInt(100000));
             int inserted = userRepository.insertIfAbsent(
                     Provider.DEVICE.name(), deviceId, nickname, "포", RANDOM.nextInt(COLOR_COUNT));
             if (inserted > 0) {
-                return true;
+                return Optional.empty();
             }
-            if (userRepository
-                    .findByProviderAndProviderUserId(Provider.DEVICE, deviceId)
-                    .isPresent()) {
-                return false;
+            Optional<User> existing = userRepository.findByProviderAndProviderUserId(Provider.DEVICE, deviceId);
+            if (existing.isPresent()) {
+                return existing;
             }
         }
         throw new IllegalStateException("자동 닉네임 발급에 실패했습니다");
@@ -85,40 +77,16 @@ public class UserService {
 
     @Transactional
     public ProfileResponse updateProfile(Long userId, ProfileUpdateRequest request) {
-        validateProfile(request);
         User user = findUser(userId);
-
-        if (request.nickname() != null
-                && !request.nickname().equals(user.getNickname())
-                && userRepository.existsByNickname(request.nickname())) {
-            throw new ConflictException("이미 사용 중인 닉네임입니다");
-        }
 
         user.updateProfile(request.nickname(), request.goal(), request.category());
         try {
-            // 위의 exists 검사는 동시 요청 사이에 낡을 수 있다 — 최종 판정은 유니크 제약이 하고,
-            // 커밋 시점의 위반이 500으로 새지 않도록 여기서 flush해 409로 변환한다
+            // 닉네임 유니크 제약이 최종 판정이다 — 커밋 시점의 위반이 500으로 새지 않도록 여기서 flush해 409로 변환한다
             userRepository.flush();
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException e) {
             throw new ConflictException("이미 사용 중인 닉네임입니다");
         }
         return toProfileResponse(user);
-    }
-
-    private void validateProfile(ProfileUpdateRequest request) {
-        String nickname = request.nickname();
-        if (nickname != null
-                && (nickname.length() < NICKNAME_MIN_LENGTH
-                        || nickname.length() > NICKNAME_MAX_LENGTH
-                        || !nickname.matches(NICKNAME_PATTERN))) {
-            throw new BadRequestException("닉네임은 2~12자의 한글·영문·숫자만 사용할 수 있습니다");
-        }
-        if (request.goal() != null && request.goal().length() > GOAL_MAX_LENGTH) {
-            throw new BadRequestException("목표는 공백 포함 20자 이하여야 합니다");
-        }
-        if (request.category() != null && !CATEGORIES.contains(request.category())) {
-            throw new BadRequestException("정의되지 않은 카테고리입니다");
-        }
     }
 
     private User findUser(Long userId) {

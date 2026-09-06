@@ -473,7 +473,7 @@ private Long mergeInto(User source, User target) {
 }
 ```
 
-클래스에 로거 추가: `@Slf4j` (lombok) 어노테이션을 `@Service` 위에 추가하고 `import lombok.extern.slf4j.Slf4j;`. import 추가: `project.study.common.ConflictException`(이미 있음), `java.util.Optional`(이미 있음).
+클래스에 로거 추가: `@Slf4j` (lombok) 어노테이션을 `@Service` 위에 추가하고 `import lombok.extern.slf4j.Slf4j;`. import 추가: `project.study.common.exception.ConflictException`(이미 있음), `java.util.Optional`(이미 있음).
 
 - [ ] **Step 5: Task 1 단위 테스트에 stub 추가**
 

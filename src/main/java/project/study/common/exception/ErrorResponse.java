@@ -1,4 +1,4 @@
-package project.study.common;
+package project.study.common.exception;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 

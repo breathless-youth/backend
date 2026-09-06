@@ -1,7 +1,8 @@
 package project.study.studysession.service;
 
-import static project.study.studysession.StudySessionThresholds.MIN_LIST_FOCUS_SEC;
-import static project.study.studysession.StudySessionThresholds.MIN_STREAK_FOCUS_SEC;
+import static project.study.studysession.service.StudySessionSplitter.*;
+import static project.study.studysession.service.StudySessionSplitter.computeCuts;
+import static project.study.studysession.service.StudySessionValidator.*;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -17,7 +18,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import project.study.common.NotFoundException;
+import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
@@ -36,18 +37,19 @@ import project.study.studysession.repository.StudySessionRepository;
 public class StudySessionService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
     private static final String STARTED_AT_UNIQUE_CONSTRAINT = "uq_study_session_user_started_at";
     // V1이 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
     private static final String USER_FK_CONSTRAINT = "study_session_user_id_fkey";
 
+    /** 1분 — 조회에 보이는 최소 순공시간. */
+    public static final int MIN_LIST_FOCUS_SEC = 60;
+    /** 10분 — 스트릭 인정 최소 순공시간(세션 단위). */
+    public static final int MIN_STREAK_FOCUS_SEC = 600;
+
     private final StudySessionRepository studySessionRepository;
     private final ActiveStudySessionRepository activeStudySessionRepository;
     private final Clock clock;
-
-    @Transactional
-    public List<StudySessionResponse> create(Long userId, StudySessionCreateRequest request) {
-        return create(userId, request, false);
-    }
 
     /** autoFinalized=true는 확정 스케줄러 전용 — 저장되는 세션에 자동 확정 표시를 남긴다. */
     @Transactional
@@ -65,7 +67,7 @@ public class StudySessionService {
         }
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
-        List<StudySession> sessions = createSessions(
+        List<StudySession> sessions = validateAndBuildSessions(
                 userId, request.startedAt(), request.endedAt(), request.studySec(), request.focusSec(), events);
         if (autoFinalized) {
             sessions.forEach(StudySession::markAutoFinalized);
@@ -88,7 +90,8 @@ public class StudySessionService {
     }
 
     /**
-     * 유니크 위반으로 create()가 던진 DuplicateSessionException을 받은 호출자가 재조회할 때 쓴다. create()의 트랜잭션은 flush 실패 시점에 이미 롤백되어 끝났으므로, 같은 (userId, submissionStartedAt)의 레이스에서 진 것뿐이라면 이 완전히 새 트랜잭션에서 상대가 커밋한 결과를 찾아 그대로 반환한다(멱등).
+     * 유니크 위반으로 create()가 던진 DuplicateSessionException을 받은 호출자가 재조회할 때 쓴다.
+     * create()의 트랜잭션은 flush 실패 시점에 이미 롤백되어 끝났으므로, 같은 (userId, submissionStartedAt)의 레이스에서 진 것뿐이라면 이 완전히 새 트랜잭션에서 상대가 커밋한 결과를 찾아 그대로 반환한다(멱등).
      */
     @Transactional(readOnly = true)
     public List<StudySessionResponse> findExistingSubmission(Long userId, Instant submissionStartedAt) {
@@ -119,8 +122,7 @@ public class StudySessionService {
     @Transactional(readOnly = true)
     public StudySessionListResponse list(Long userId, LocalDate date) {
         List<StudySession> sessions =
-                studySessionRepository.findByUserIdAndStatDateBetweenAndFocusSecGreaterThanEqualOrderByStartedAtDesc(
-                        userId, date, date, MIN_LIST_FOCUS_SEC);
+                studySessionRepository.findInPeriodWithMinFocusSec(userId, date, date, MIN_LIST_FOCUS_SEC);
         long totalStudySec =
                 sessions.stream().mapToLong(StudySession::getStudySec).sum();
         long totalFocusSec =
@@ -129,6 +131,7 @@ public class StudySessionService {
                 .mapToLong(StudySessionStatsCalculator::longestFocusStreakSec)
                 .max()
                 .orElse(0);
+
         List<StudySessionSummaryResponse> summaries =
                 sessions.stream().map(this::toSummaryResponse).toList();
         Map<EventStatus, Long> totalEventCounts = StudySessionStatsCalculator.countByStatus(
@@ -166,22 +169,24 @@ public class StudySessionService {
      * studySec/focusSec은 제출값을 조각 길이 비례로 배분한다. PAUSE는 총공부·순공 타이머를 모두 멈추므로
      * 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY)는 순공 타이머만 멈추므로 focusSec 배분에서만 빠진다.
      */
-    List<StudySession> createSessions(
+    List<StudySession> validateAndBuildSessions(
             Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
         // 분할 후 조각은 항상 24시간 이내가 되므로, 24시간 한도 등은 반드시 분할 전 원본 기준으로 먼저 검증한다
-        StudySessionValidator.validatePeriod(startedAt, endedAt, clock.instant());
+        validatePeriod(startedAt, endedAt, clock.instant());
+
         List<StatusEvent> sorted = events.stream()
                 .sorted(Comparator.comparing(StatusEvent::getStartedAt))
                 .toList();
-        StudySessionValidator.validateEvents(startedAt, endedAt, sorted);
+        validateEvents(startedAt, endedAt, sorted);
 
-        List<Instant> cuts = StudySessionSplitter.computeCuts(startedAt, endedAt);
-        StudySessionSplitter.SegmentWeights weights = StudySessionSplitter.computeSegmentWeights(cuts, sorted);
+        List<Instant> cuts = computeCuts(startedAt, endedAt);
+        SegmentWeights weights = computeSegmentWeights(cuts, sorted);
 
-        StudySessionValidator.validateStudySec(studySec, weights.totalStudyActiveSec());
-        StudySessionValidator.validateFocusSec(focusSec, studySec);
+        // 조각 이후에 검증
+        validateStudySec(studySec, weights.totalStudyActiveSec());
+        validateFocusSec(focusSec, studySec);
 
-        return StudySessionSplitter.buildSessions(userId, cuts, weights, studySec, focusSec);
+        return buildSessions(userId, cuts, weights, studySec, focusSec);
     }
 
     /**
@@ -193,27 +198,19 @@ public class StudySessionService {
      */
     @Transactional(readOnly = true)
     public StudySessionStreakResponse streak(Long userId, LocalDate from, LocalDate to) {
-        validateRange(from, to);
+        StudySessionValidator.validateDateRange(from, to);
         LocalDate today = clock.instant().atZone(KST).toLocalDate();
+
         // 시계 오차 허용(5분) 탓에 자정 직후 조각이 내일 날짜로 저장될 수 있다 — 공부일은 오늘까지만 센다
         List<LocalDate> statDates = studySessionRepository.findDistinctStatDates(userId, MIN_STREAK_FOCUS_SEC).stream()
                 .filter(date -> !date.isAfter(today))
                 .toList();
+
         List<LocalDate> studiedDatesInRange = from == null
                 ? List.of()
                 : studySessionRepository.findDistinctStatDatesBetween(userId, from, to, MIN_STREAK_FOCUS_SEC);
         return new StudySessionStreakResponse(
                 currentStreak(statDates, today), maxStreak(statDates), studiedDatesInRange);
-    }
-
-    /** from/to는 함께 지정해야 한다 — 하나만 있거나 from이 to보다 이후면 400. periodStats의 compare 검증에서도 재사용한다. */
-    static void validateRange(LocalDate from, LocalDate to) {
-        if ((from == null) != (to == null)) {
-            throw new InvalidSessionException("from과 to는 함께 지정해야 합니다");
-        }
-        if (from != null && from.isAfter(to)) {
-            throw new InvalidSessionException("from은 to보다 이후일 수 없습니다");
-        }
     }
 
     /** 오늘(기록이 아직 없으면 어제)부터 거꾸로 이어진 연속 공부일. 오늘이 지나기 전엔 스트릭이 끊긴 게 아니다. */

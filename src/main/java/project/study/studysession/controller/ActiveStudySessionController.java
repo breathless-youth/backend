@@ -19,16 +19,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import project.study.common.ErrorResponse;
+import project.study.common.exception.ErrorResponse;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.dto.ActiveSessionSnapshotResponse;
 import project.study.studysession.dto.SessionRecoveryResponse;
 import project.study.studysession.service.ActiveStudySessionService;
 import project.study.studysession.service.SessionRecoveryService;
 
-@Tag(
-        name = "StudySession",
-        description = "공부 세션 기록 API 모음 — 방 퇴장 시 세션 전체를 한 번에 제출받아 검증·계산·저장한다 (ADR-0003). 통계 조회는 StudySessionStats 참고")
+@Tag(name = "StudySession", description = "공부 세션 기록 API 모음.  통계 조회는 StudySessionStats 참고")
 @RestController
 @RequestMapping("/api/study-sessions")
 @RequiredArgsConstructor
@@ -38,9 +36,9 @@ public class ActiveStudySessionController {
     private final SessionRecoveryService sessionRecoveryService;
 
     @Operation(summary = "진행중 세션 스냅샷 보고", description = """
-				공부 중 30초마다 진행중 세션의 누적 스냅샷을 보고한다 (BY-447, ADR-0014). \
+				공부 중 1초마다 진행중 세션의 누적 스냅샷을 보고한다. \
 				앱이 최종 제출 없이 죽어도 서버가 마지막 스냅샷 기준으로 세션을 자동 확정해 유실을 막는다 — \
-				최악 유실은 마지막 스냅샷 이후 30초.
+				최악 유실은 마지막 스냅샷 이후 1초.
 
 				**스냅샷은 누적값이다.** 매 보고가 "지금까지의 studySec/focusSec + 비공부 이벤트 전체"를 담고 \
 				서버 draft를 통째로 덮어쓴다(멱등 PUT). 진행 중인 이벤트는 reportedAt에서 닫아서 보낸다 — \

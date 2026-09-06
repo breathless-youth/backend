@@ -83,7 +83,7 @@ Sentry의 `SentryExceptionResolver`는 기본적으로 최우선순위(`Integer.
 `GlobalExceptionHandler`의 최종 핸들러에서 `Sentry.captureException`을 직접 호출한다.
 별도 추상화 계층을 두지 않는다.
 
-**`project.study.common.GlobalExceptionHandler`** — 최종 핸들러 추가
+**`project.study.common.exception.GlobalExceptionHandler`** — 최종 핸들러 추가
 
 ```java
 @ExceptionHandler(Exception.class)
@@ -112,7 +112,7 @@ public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
 모두 500으로 바뀐다. `org.springframework.web.ErrorResponse`는 이런 표준 예외들이 구현하는
 인터페이스이므로, `instanceof`로 걸러 원래 상태코드를 유지한다.
 
-인터페이스 이름이 기존 `project.study.common.ErrorResponse` record와 겹치므로
+인터페이스 이름이 기존 `project.study.common.exception.ErrorResponse` record와 겹치므로
 **코드에서는 FQCN으로 명시**해 혼동을 막는다.
 
 부수 효과로, 지금까지 Spring 기본 포맷(`timestamp`/`status`/`error`/`path`)으로 나가던
