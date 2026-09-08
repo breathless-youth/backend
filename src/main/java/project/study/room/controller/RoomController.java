@@ -46,6 +46,16 @@ public class RoomController {
                     **생성만으로는 입장 상태가 아니다** — 생성자도 join으로만 입장한다. \
                     생성 후 10분 내 아무도 입장하지 않으면 방과 코드가 자동 소멸한다.""")
     @ApiResponse(responseCode = "201", description = "생성 성공 — 방 ID와 초대코드")
+    @ApiResponse(
+            responseCode = "404",
+            description = "존재하지 않는 사용자",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples =
+                                    @ExampleObject(
+                                            value = "{\"code\": \"USER_NOT_FOUND\", \"message\": \"존재하지 않는 사용자입니다\"}")))
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoomCreateResponse create(@Valid @RequestBody RoomCreateRequest request) {
