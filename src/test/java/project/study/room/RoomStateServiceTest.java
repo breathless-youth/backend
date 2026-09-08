@@ -91,6 +91,7 @@ class RoomStateServiceTest {
                 .as("자기 자신에게도 허용(k6 경로)")
                 .isTrue();
         assertThat(state.authorizeSignal(roomId, me, "old", peer)).as("옛 세션").isFalse();
+        assertThat(state.authorizeSignal(roomId, me, null, peer)).as("세션 없음").isFalse();
         assertThat(state.authorizeSignal(roomId, me, "s1", 999_999L))
                 .as("비멤버 수신자")
                 .isFalse();
