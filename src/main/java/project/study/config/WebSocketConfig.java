@@ -27,6 +27,8 @@ import org.springframework.web.socket.config.annotation.WebSocketTransportRegist
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import project.study.common.logging.StompMdcChannelInterceptor;
 import project.study.room.service.RoomService;
+import project.study.room.websocket.SessionRegistry;
+import project.study.room.websocket.SessionTrackingDecorator;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -37,6 +39,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private static final long HEARTBEAT_INTERVAL_MS = 10_000L;
 
     private final RoomService roomService;
+    private final SessionRegistry sessionRegistry;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
@@ -82,6 +85,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.setMessageSizeLimit(16 * 1024); // 최대 메시지(SNAPSHOT ~2KB)의 8배 여유
         registry.setSendBufferSizeLimit(64 * 1024); // 세션당 송신 대기 상한 512KB → 64KB
         registry.setSendTimeLimit(5_000); // 5초 내 못 보내는 세션은 정리
+
+        // 소켓 핸들을 레지스트리에 등록한다 — confirm 사전/사후 검사와 펜싱(전체 닫기)에 쓴다 (BY-626)
+        registry.addDecoratorFactory(handler -> new SessionTrackingDecorator(handler, sessionRegistry));
     }
 
     record StompPrincipal(String userId) implements Principal {
