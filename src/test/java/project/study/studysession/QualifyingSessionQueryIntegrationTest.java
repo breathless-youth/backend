@@ -114,17 +114,15 @@ class QualifyingSessionQueryIntegrationTest {
     }
 
     @Test
-    void 종료시각이_없는_stale_참여는_소셜로_치지_않는다() {
-        // 서버가 룸 도중 재시작하면 left_at이 NULL로 남는다 — BY-415 설계문서는 이를
-        // "비정상 종료 구간"으로 규정하고 분석에서 제외하라고 명시한다. 리포트는 어제 세션을
-        // 다음날 오전 10시에 집계하므로, 그 시점에 아직 열린(NULL) 참여는 사실상 전부 이 잔재다.
-        // 제외하지 않으면 그 유저의 이후 모든 세션이 매일 소셜로 오분류된다.
+    void 아직_진행_중인_참여도_소셜이다() {
+        // BY-626 이후 left_at NULL은 "지금 방에 있음"이다(죽은 태스크의 잔재는 리스 스윕이 30초+30초 안에 닫는다).
+        // 어제 저녁부터 밤새 방에 있던 유저가 아침 집계 때 아직 방에 있어도 어제 세션은 소셜이어야 한다.
         long userId = insertUser();
         insertSession(userId, at(1), at(3), QUALIFYING);
         long room = insertRoom(userId);
-        insertParticipation(room, userId, at(2), null); // left_at 없음 = 재시작 잔재
+        insertParticipation(room, userId, at(2), null);
 
-        assertThat(socialOf(userId)).isFalse();
+        assertThat(socialOf(userId)).isTrue();
     }
 
     @Test
