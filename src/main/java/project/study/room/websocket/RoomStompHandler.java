@@ -28,7 +28,7 @@ public class RoomStompHandler {
     private final RoomService roomService;
     private final SimpMessagingTemplate messagingTemplate;
 
-    // SNAPSHOT 재요청 (BY-442) — 구독 등록 전에 발사된 SNAPSHOT이 증발하는 레이스를 클라 재시도로 복구한다.
+    // SNAPSHOT 재요청 — 구독 등록 전에 발사된 SNAPSHOT이 증발하는 레이스를 클라 재시도로 복구한다.
     // body는 무시하고, 방 상태를 바꾸지 않으며, 비멤버·옛 세션은 에러 프레임 없이 조용히 무시한다
     // (재시도가 조용히 소진되게). 레이스로 이번 요청이 세션 확정보다 먼저 도착해도 다음 재시도가 성공한다
     @MessageMapping("/room/{roomId}/snapshot")
@@ -37,6 +37,7 @@ public class RoomStompHandler {
         if (principal == null) return;
 
         Long userId = Long.valueOf(principal.getName());
+        //
         List<RoomMember> members = roomService.getMembersForActiveSession(roomId, userId, accessor.getSessionId());
         if (members.isEmpty()) {
             log.debug("snapshot 재요청 무시(비멤버 또는 비활성 세션): roomId={}, userId={}", roomId, userId);
@@ -48,6 +49,7 @@ public class RoomStompHandler {
         SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
         headers.setSessionId(accessor.getSessionId());
         headers.setLeaveMutable(true);
+        // 프론트에 멤버 목록 전달
         messagingTemplate.convertAndSendToUser(
                 principal.getName(),
                 "/queue/room",

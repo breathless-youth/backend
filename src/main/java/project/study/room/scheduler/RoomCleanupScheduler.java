@@ -1,5 +1,7 @@
 package project.study.room.scheduler;
 
+import static project.study.room.service.RoomService.*;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -18,8 +20,8 @@ public class RoomCleanupScheduler {
 
     @Scheduled(fixedRate = 5000)
     public void cleanup() {
-        List<RoomService.AutoLeave> removed = roomService.cleanupExpired(Instant.now());
-        for (RoomService.AutoLeave al : removed) {
+        List<AutoLeave> removed = roomService.cleanupExpired(Instant.now());
+        for (AutoLeave al : removed) {
             messagingTemplate.convertAndSend(
                     "/topic/room/" + al.roomId(), (Object) Map.of("type", "MEMBER_LEFT", "userId", al.userId()));
         }

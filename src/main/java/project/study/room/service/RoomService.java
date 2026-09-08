@@ -46,13 +46,13 @@ public class RoomService {
     private final Map<String, Room> roomByCode = new HashMap<>();
     // 유저ID -> 방ID
     private final Map<Long, Long> userToRoomId = new HashMap<>();
-    // STOMP ID -> userID
+    // DICONNECT에는 유저아아디가 없다 그래서 SESSION ID -> userID
     private final Map<String, Long> sessionToUser = new HashMap<>();
-    // 소멸한 방의 초대코드 묘비 유예 1분
+    // 소멸한 방의 초대코드 묘비 10분 후 정리
     private final ClosedInviteCodes closedCodes = new ClosedInviteCodes();
-    // 만료 후보 인덱스: 미확정 예약·끊김 유예만. 확정·연결 참가자는 만료되지 않아 제외 → 스케쥴러로 전체 방 순회 제거
+    // 만료 후보 유저: 미확정 예약·끊김 유예만. -> 스케쥴러로 전체 방 순회 제거
     private final Set<Participant> expiryCandidates = new HashSet<>();
-    // 첫 입장이 없는 빈 방만(입장 이력 방은 마지막 퇴장 때 즉시 소멸) - 빈 방인지 방금 만든 방인지 구분
+    // 첫 입장이 없는 빈 방만(입장 이력 방은 마지막 퇴장 때 즉시 소멸)
     private final Map<Long, Room> emptyRooms = new HashMap<>();
     private long roomIdSequence = 0;
 
@@ -83,7 +83,7 @@ public class RoomService {
             Room room = new Room(++roomIdSequence, code, now);
             roomByCode.put(code, room);
             roomById.put(room.id, room);
-            emptyRooms.put(room.id, room); // 첫 입장 전까지 빈 방 TTL 후보
+            emptyRooms.put(room.id, room);
 
             publish(new RoomCreatedEvent(room.uid, userId, room.createdAt));
             return new RoomCreateResponse(room.id, code, EMPTY_ROOM_TTL_SECONDS);
@@ -117,25 +117,29 @@ public class RoomService {
             throw new ConflictException("방이 가득 찼어요");
         }
 
+        // 이미 참여하고 있는 방이 존재하는지 체크
         AutoLeave autoLeave = leaveCurrentRoomIfDifferent(userId, room.id);
+
+        // 방 예약 - 확정은 STOMP연결로
         reserveSeat(room, existing, userId, nickname, goal, category);
+
         userToRoomId.put(userId, room.id);
         log.debug("신규 입장 예약: roomId={}, userId={}, autoLeave={}", room.id, userId, autoLeave);
         List<RoomJoinResponse.IceServer> ice = turnCredentials.forUser(userId);
         return new JoinResult(new RoomJoinResponse(room.id, false, null, ice, turnCredentials.ttlSeconds()), autoLeave);
     }
 
-    // 자리 예약(신규) 또는 미확정 예약의 재시도 갱신. join의 전역 락 안에서만 호출된다
+    // 자리 예약
     private void reserveSeat(
             Room room, Participant existing, Long userId, String nickname, String goal, String category) {
         if (existing == null) {
             Participant participant = new Participant(room.id, userId, nickname, goal, category);
             room.participants.put(userId, participant);
             expiryCandidates.add(participant); // 신규 미확정 예약 — 확정 전까지 후보
-            emptyRooms.remove(room.id); // 첫 입장이 생겼으니 빈 방 후보 해제
+            emptyRooms.remove(room.id); // 입장이 생겼으니 빈 방 후보 해제
             return;
         }
-        // 재시도 — 예약 시각을 갱신해 직후 정리 틱에 쓸려나가지 않게 한다
+        // 예약 중 재시도 — 예약 시각을 갱신해 직후 정리 틱에 쓸려나가지 않게 한다
         existing.reservedAt = Instant.now();
         existing.nickname = nickname;
         existing.goal = goal;
@@ -168,6 +172,7 @@ public class RoomService {
         return left;
     }
 
+    // 예약 후 확정
     public synchronized List<RoomMember> confirmStomp(Long roomId, Long userId, String stompSessionId) {
         Room room = roomById.get(roomId);
         if (room == null) {
@@ -294,10 +299,10 @@ public class RoomService {
     public synchronized List<AutoLeave> cleanupExpired(Instant now) {
         List<AutoLeave> removed = new ArrayList<>();
 
-        // 방 정리보다 먼저 한다 — 이번 틱에 소멸시킨 방의 묘비를 같은 틱에 지워버리지 않기 위해
+        // 소멸한 지 10분 지난 초대코드 묘비에서 지우기
         closedCodes.purgeExpired(now);
 
-        // 전체 방 대신 만료 가능 후보만 검사한다(BY-593) — 확정·연결 참가자는 인덱스에 없다. 판정은 isExpired 그대로
+        // 전체 방 대신 만료 가능 후보만 검사한다
         for (Participant participant : List.copyOf(expiryCandidates)) {
             if (participant.isExpired(now)
                     && removeParticipant(participant.roomId, participant.userId, LeaveReason.DISCONNECT_TIMEOUT)) {
