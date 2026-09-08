@@ -19,7 +19,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.NotFoundException;
-import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionListResponse;
@@ -65,8 +64,8 @@ public class StudySessionService {
             studySessionRepository.deleteAll(existing);
             studySessionRepository.flush();
         }
-        List<StatusEvent> events =
-                request.events().stream().map(StatusEventRequest::toEntity).toList();
+        List<StatusEvent> events = request.getStatusEventList();
+
         List<StudySession> sessions = validateAndBuildSessions(
                 userId, request.startedAt(), request.endedAt(), request.studySec(), request.focusSec(), events);
         if (autoFinalized) {

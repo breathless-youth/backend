@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
 import project.study.common.logging.UserScopedRequest;
+import project.study.studysession.entity.StatusEvent;
 
 public record StudySessionCreateRequest(
         @Schema(description = "세션 주인의 유저 ID (POST /api/users 로 발급받은 값)", example = "1") @NotNull
@@ -50,4 +51,8 @@ public record StudySessionCreateRequest(
         @NotNull
         @Valid
         List<StatusEventRequest> events)
-        implements UserScopedRequest {}
+        implements UserScopedRequest {
+    public List<StatusEvent> getStatusEventList() {
+        return this.events().stream().map(StatusEventRequest::toEntity).toList();
+    }
+}
