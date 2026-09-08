@@ -317,10 +317,10 @@ class RoomServiceTest {
         roomService.confirmStomp(roomId, 100L, "session-1");
 
         // 확정 직후 초기값은 0 — 새 입장자가 빈 값을 보지 않는다
-        assertThat(roomService.getMembers(roomId).getFirst().studySeconds()).isZero();
+        assertThat(roomService.getMembers(roomId).getFirst().focusSec()).isZero();
 
         assertThat(roomService.updateStudyTime(roomId, 100L, 1500)).isTrue();
-        assertThat(roomService.getMembers(roomId).getFirst().studySeconds()).isEqualTo(1500);
+        assertThat(roomService.getMembers(roomId).getFirst().focusSec()).isEqualTo(1500);
     }
 
     @Test

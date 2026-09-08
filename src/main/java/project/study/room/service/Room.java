@@ -23,7 +23,14 @@ class Room {
         return participants.values().stream()
                 .filter(p -> p.stompConfirmed)
                 .map(p -> new RoomMember(
-                        p.userId, p.nickname, p.goal, p.category, p.cameraOn, p.focusState, p.studySeconds))
+                        p.userId,
+                        p.nickname,
+                        p.goal,
+                        p.category,
+                        p.cameraOn,
+                        p.focusState,
+                        p.studySeconds,
+                        p.disconnectedAt != null))
                 .toList();
     }
 }

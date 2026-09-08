@@ -105,12 +105,12 @@ public class RoomStompHandler {
 
         Long userId = Long.valueOf(principal.getName());
         log.debug(
-                "state 요청: roomId={}, userId={}, cameraOn={}, focusState={}, studySeconds={}",
+                "state 요청: roomId={}, userId={}, cameraOn={}, focusState={}, focusSec={}",
                 roomId,
                 userId,
                 payload.cameraOn(),
                 payload.focusState(),
-                payload.studySeconds());
+                payload.focusSec());
         if (!roomService.isActiveSession(roomId, userId, accessor.getSessionId())) {
             log.debug("state 인가 실패(비활성 세션): roomId={}, userId={}", roomId, userId);
             return;
@@ -118,7 +118,7 @@ public class RoomStompHandler {
 
         broadcastCameraChange(roomId, userId, payload.cameraOn());
         broadcastFocusChange(roomId, userId, payload.focusState());
-        broadcastStudyTime(roomId, userId, payload.studySeconds());
+        broadcastStudyTime(roomId, userId, payload.focusSec());
     }
 
     private void broadcastCameraChange(Long roomId, Long userId, Boolean cameraOn) {
@@ -137,12 +137,12 @@ public class RoomStompHandler {
                 Map.of("type", "FOCUS_CHANGED", "userId", userId, "focusState", focusState));
     }
 
-    private void broadcastStudyTime(Long roomId, Long userId, Integer studySeconds) {
+    private void broadcastStudyTime(Long roomId, Long userId, Integer focusSec) {
         // camera/focus와 동일하게 저장이 성공했을 때만 브로드캐스트 — 마지막 값은 SNAPSHOT에 실린다
-        if (studySeconds == null || studySeconds < 0 || !roomService.updateStudyTime(roomId, userId, studySeconds)) {
+        if (focusSec == null || focusSec < 0 || !roomService.updateStudyTime(roomId, userId, focusSec)) {
             return;
         }
-        messagingTemplate.convertAndSend("/topic/room/" + roomId, (Object)
-                Map.of("type", "STUDY_TIME", "userId", userId, "studySeconds", studySeconds));
+        messagingTemplate.convertAndSend(
+                "/topic/room/" + roomId, (Object) Map.of("type", "STUDY_TIME", "userId", userId, "focusSec", focusSec));
     }
 }
