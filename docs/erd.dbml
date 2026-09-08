@@ -221,7 +221,7 @@ Table room_participations {
 }
 
 Table live_task {
-  task_id varchar [primary key]
+  task_id varchar [primary key, note: 'ECS 태스크 ID(로그 스트림과 일치), 없으면 UUID']
   heartbeat_at timestamptz [not null]
-  reclaimed_at timestamptz [note: 'NOT NULL = 다른 태스크가 회수함(펜싱 신호)']
+  reclaimed_at timestamptz [note: 'NOT NULL = 다른 태스크가 죽었다고 보고 참가자를 회수함(펜싱 신호)']
 }
