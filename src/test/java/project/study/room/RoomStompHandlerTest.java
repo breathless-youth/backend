@@ -21,7 +21,8 @@ import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import project.study.room.dto.RoomMember;
-import project.study.room.service.RoomService;
+import project.study.room.dto.StateUpdatePayload;
+import project.study.room.service.RoomStateService;
 import project.study.room.websocket.RoomStompHandler;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,7 +32,7 @@ class RoomStompHandlerTest {
     private static final Principal USER_1 = () -> "1";
 
     @Mock
-    private RoomService roomService;
+    private RoomStateService roomStateService;
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
@@ -50,7 +51,8 @@ class RoomStompHandlerTest {
         List<RoomMember> members = List.of(
                 new RoomMember(1L, "닉네임", "목표", "수능", true, "FOCUS", 120, false),
                 new RoomMember(2L, "친구", "목표2", "수능", false, "DISTRACTED", 45, false));
-        when(roomService.getMembersForActiveSession(ROOM_ID, 1L, "session-1")).thenReturn(members);
+        when(roomStateService.getMembersForActiveSession(ROOM_ID, 1L, "session-1"))
+                .thenReturn(members);
 
         handler.handleSnapshotRequest(ROOM_ID, USER_1, accessorWithSession("session-1"));
 
@@ -69,20 +71,21 @@ class RoomStompHandlerTest {
 
     @Test
     void 스냅샷_재요청은_방_상태를_변경하지_않는다() {
-        when(roomService.getMembersForActiveSession(ROOM_ID, 1L, "session-1"))
+        when(roomStateService.getMembersForActiveSession(ROOM_ID, 1L, "session-1"))
                 .thenReturn(List.of(new RoomMember(1L, "닉네임", null, null, false, "FOCUS", 0, false)));
 
         handler.handleSnapshotRequest(ROOM_ID, USER_1, accessorWithSession("session-1"));
         handler.handleSnapshotRequest(ROOM_ID, USER_1, accessorWithSession("session-1"));
 
         // 멱등 — 몇 번을 받아도 원자 조회 외의 호출(상태 변경)이 없다
-        verify(roomService, times(2)).getMembersForActiveSession(ROOM_ID, 1L, "session-1");
-        verifyNoMoreInteractions(roomService);
+        verify(roomStateService, times(2)).getMembersForActiveSession(ROOM_ID, 1L, "session-1");
+        verifyNoMoreInteractions(roomStateService);
     }
 
     @Test
     void 비멤버나_옛_세션의_스냅샷_재요청은_조용히_무시한다() {
-        when(roomService.getMembersForActiveSession(ROOM_ID, 1L, "session-1")).thenReturn(List.of());
+        when(roomStateService.getMembersForActiveSession(ROOM_ID, 1L, "session-1"))
+                .thenReturn(List.of());
 
         handler.handleSnapshotRequest(ROOM_ID, USER_1, accessorWithSession("session-1"));
 
@@ -94,6 +97,41 @@ class RoomStompHandlerTest {
     void principal이_없으면_스냅샷_재요청을_무시한다() {
         handler.handleSnapshotRequest(ROOM_ID, null, accessorWithSession("session-1"));
 
-        verifyNoInteractions(roomService, messagingTemplate);
+        verifyNoInteractions(roomStateService, messagingTemplate);
+    }
+
+    @Test
+    void state는_무효한_필드만_무시하고_유효한_필드는_저장_후_방송한다() {
+        when(roomStateService.updateState(ROOM_ID, 1L, "session-1", true, null, null))
+                .thenReturn(true);
+
+        handler.handleState(
+                ROOM_ID, new StateUpdatePayload(true, "INVALID", -1), USER_1, accessorWithSession("session-1"));
+
+        verify(messagingTemplate).convertAndSend("/topic/room/" + ROOM_ID, (Object)
+                Map.of("type", "CAMERA_CHANGED", "userId", 1L, "cameraOn", true));
+        verifyNoMoreInteractions(messagingTemplate);
+    }
+
+    @Test
+    void state_저장이_거부되면_아무것도_방송하지_않는다() {
+        when(roomStateService.updateState(ROOM_ID, 1L, "session-1", null, "DISTRACTED", 120))
+                .thenReturn(false);
+
+        handler.handleState(
+                ROOM_ID, new StateUpdatePayload(null, "DISTRACTED", 120), USER_1, accessorWithSession("session-1"));
+
+        verifyNoInteractions(messagingTemplate);
+    }
+
+    @Test
+    void 순공시간은_focusSec_키로_방송된다() {
+        when(roomStateService.updateState(ROOM_ID, 1L, "session-1", null, null, 120))
+                .thenReturn(true);
+
+        handler.handleState(ROOM_ID, new StateUpdatePayload(null, null, 120), USER_1, accessorWithSession("session-1"));
+
+        verify(messagingTemplate).convertAndSend("/topic/room/" + ROOM_ID, (Object)
+                Map.of("type", "STUDY_TIME", "userId", 1L, "focusSec", 120));
     }
 }

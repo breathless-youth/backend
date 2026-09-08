@@ -26,7 +26,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import project.study.common.logging.StompMdcChannelInterceptor;
-import project.study.room.service.RoomService;
+import project.study.room.service.RoomStateService;
 import project.study.room.websocket.SessionRegistry;
 import project.study.room.websocket.SessionTrackingDecorator;
 
@@ -38,7 +38,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private static final String USER_ID_ATTR = "userId";
     private static final long HEARTBEAT_INTERVAL_MS = 10_000L;
 
-    private final RoomService roomService;
+    private final RoomStateService roomStateService;
     private final SessionRegistry sessionRegistry;
 
     @Override
@@ -73,7 +73,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         // 인가 인터셉터가 CONNECT에서 프린시펄을 세팅하므로 MDC 인터셉터는 그 뒤에 둔다
-        registration.interceptors(new UserIdChannelInterceptor(roomService), new StompMdcChannelInterceptor());
+        registration.interceptors(new UserIdChannelInterceptor(roomStateService), new StompMdcChannelInterceptor());
     }
 
     // WS 전송 한도 (BY-491). 기본값(메시지 64KB, 세션당 송신버퍼 512KB)은 우리 메시지
@@ -129,7 +129,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // 정규식을 미리 컴파일해서 static으로 보관
         private static final Pattern ROOM_TOPIC_PATTERN = Pattern.compile("^/topic/room/(\\d+)$");
 
-        private final RoomService roomService;
+        private final RoomStateService roomStateService;
 
         @Override
         public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -189,7 +189,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
             Long roomId = Long.valueOf(matcher.group(1));
             Long userId = Long.valueOf(principal.getName());
-            return roomService.hasParticipant(roomId, userId);
+            return roomStateService.hasParticipant(roomId, userId);
         }
     }
 }

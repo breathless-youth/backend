@@ -1,6 +1,8 @@
 package project.study.room.websocket;
 
 import java.security.Principal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -16,6 +18,7 @@ import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 import project.study.room.dto.RoomMember;
+import project.study.room.lease.TaskIdentity;
 import project.study.room.service.RoomService;
 
 @Component
@@ -27,6 +30,9 @@ public class StompEventListener {
 
     private final RoomService roomService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final SessionRegistry sessionRegistry;
+    private final TaskIdentity taskIdentity;
+    private final Clock clock;
 
     // CONNECT 프레임 수신 — 아직 인증 principal이 없을 수 있다(핸드셰이크 단계 이후 STOMP 레벨 연결 요청)
     @EventListener
@@ -62,8 +68,9 @@ public class StompEventListener {
         Long roomId = Long.valueOf(matcher.group(1));
         Long userId = Long.valueOf(principal.getName());
         String sessionId = accessor.getSessionId();
+        Instant openedAt = sessionRegistry.openedAt(sessionId).orElseGet(clock::instant);
 
-        List<RoomMember> members = roomService.confirmStomp(roomId, userId, sessionId);
+        List<RoomMember> members = roomService.confirmStomp(roomId, userId, sessionId, openedAt, taskIdentity.id());
         if (members.isEmpty()) {
             log.debug("STOMP 확정 실패(방/참가자 없음): roomId={}, userId={}", roomId, userId);
             return;

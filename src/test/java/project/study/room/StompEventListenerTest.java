@@ -3,6 +3,7 @@ package project.study.room;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,7 +16,9 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.web.socket.messaging.SessionConnectEvent;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
+import project.study.room.lease.TaskIdentity;
 import project.study.room.service.RoomService;
+import project.study.room.websocket.SessionRegistry;
 import project.study.room.websocket.StompEventListener;
 
 @ExtendWith(MockitoExtension.class)
@@ -26,6 +29,15 @@ class StompEventListenerTest {
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
+
+    @Mock
+    private SessionRegistry sessionRegistry;
+
+    @Mock
+    private TaskIdentity taskIdentity;
+
+    @Mock
+    private Clock clock;
 
     @InjectMocks
     private StompEventListener listener;

@@ -1,16 +1,19 @@
 package project.study.room.service;
 
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
 import project.study.common.exception.ErrorCode;
@@ -18,349 +21,198 @@ import project.study.common.exception.NotFoundException;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinResponse;
 import project.study.room.dto.RoomMember;
-import project.study.room.entity.CloseReason;
 import project.study.room.entity.LeaveReason;
+import project.study.room.repository.RoomParticipationRepository;
+import project.study.room.repository.RoomParticipationRepository.Profile;
+import project.study.room.repository.RoomParticipationRepository.Row;
+import project.study.room.repository.RoomRepository;
+import project.study.room.repository.RoomRepository.RoomRow;
 
-/** 인메모리 룸 상태 관리. 동시성: public 메서드를 모두 synchronized로 직렬화하여 레이스를 원천 차단. */
+/**
+ * 룸 멤버십 (스펙 §2.1~§2.6). 진실 원천은 DB다.
+ *
+ * <p>락 순서: 유저 advisory → 방 행(id 오름차순) → 참가자 행 → 코드 advisory(닫을 때만). 락을 잡기 전에 읽은
+ * 값은 판단에 쓰지 않는다 — 방 락을 잡은 뒤 참가자 행을 다시 잠가 읽고 그 값으로 분기한다. 이것이 옛 전역
+ * synchronized 락이 주던 "읽기와 쓰기 사이에 아무도 끼어들지 않음"을 대신한다. 모든 갱신은 건수를 확인한다.
+ */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class RoomService {
 
-    // 방 정원
-    static final int MAX_PARTICIPANTS = 6;
-    // 방 소멸 시간
-    static final int EMPTY_ROOM_TTL_SECONDS = 600;
-    // 방 생성 재시도
+    public static final int MAX_PARTICIPANTS = 6;
+    public static final int EMPTY_ROOM_TTL_SECONDS = RoomCleanupService.EMPTY_ROOM_TTL_SECONDS;
+    public static final int CLOSED_CODE_TTL_SECONDS = 600;
     private static final int INVITE_CODE_MAX_ATTEMPTS = 100;
-
     private static final SecureRandom RANDOM = new SecureRandom();
-
-    // 방 아이디
-    private final Map<Long, Room> roomById = new HashMap<>();
-    // 방 초대코드
-    private final Map<String, Room> roomByCode = new HashMap<>();
-    // 유저ID -> 방ID
-    private final Map<Long, Long> userToRoomId = new HashMap<>();
-    // DICONNECT에는 유저아아디가 없다 그래서 SESSION ID -> userID
-    private final Map<String, Long> sessionToUser = new HashMap<>();
-    // 소멸한 방의 초대코드 묘비 10분 후 정리
-    private final ClosedInviteCodes closedCodes = new ClosedInviteCodes();
-    // 만료 후보 유저: 미확정 예약·끊김 유예만. -> 스케쥴러로 전체 방 순회 제거
-    private final Set<Participant> expiryCandidates = new HashSet<>();
-    // 첫 입장이 없는 빈 방만(입장 이력 방은 마지막 퇴장 때 즉시 소멸)
-    private final Map<Long, Room> emptyRooms = new HashMap<>();
-    private long roomIdSequence = 0;
-
-    private final TurnCredentialIssuer turnCredentials;
-
-    public RoomService(
-            @Value("${app.room.turn.secret:draft-turn-secret}") String turnSecret,
-            @Value("${app.room.turn.ttl-seconds:86400}") int turnTtlSeconds,
-            @Value("${app.room.turn.urls:}") List<String> turnUrls) {
-        this.turnCredentials = new TurnCredentialIssuer(turnSecret, turnTtlSeconds, turnUrls);
-    }
 
     public record JoinResult(RoomJoinResponse response, AutoLeave autoLeave) {}
 
-    public record AutoLeave(Long roomId, Long userId) {}
+    public record LeaveResult(boolean removed, boolean roomStillOpen) {
+        public static final LeaveResult NONE = new LeaveResult(false, false);
+    }
 
-    // 생성만으로는 입장 상태가 아니다 — 생성자도 join으로만 입장한다
-    public synchronized RoomCreateResponse create(Long userId) {
-        Instant now = Instant.now();
+    private final RoomRepository rooms;
+    private final RoomParticipationRepository participations;
+    private final ParticipantRemover remover;
+    private final TurnCredentialIssuer turnCredentials;
+    private final TransactionTemplate tx;
+    private final Clock clock;
+
+    // 생성만으로는 입장 상태가 아니다 — 생성자도 join으로만 입장한다. 시도마다 짧은 트랜잭션(코드 락 + INSERT 한 문장)
+    public RoomCreateResponse create(Long userId) {
+        Instant now = clock.instant();
+        Instant tombstoneCutoff = now.minusSeconds(CLOSED_CODE_TTL_SECONDS);
         for (int attempt = 0; attempt < INVITE_CODE_MAX_ATTEMPTS; attempt++) {
             String code = String.format("%04d", RANDOM.nextInt(10000));
-            if (roomByCode.containsKey(code) || closedCodes.contains(code, now)) {
-                continue;
+            Optional<Long> roomId = tx.execute(status -> rooms.insertIfCodeFree(code, userId, now, tombstoneCutoff));
+            if (roomId != null && roomId.isPresent()) {
+                return new RoomCreateResponse(roomId.get(), code, EMPTY_ROOM_TTL_SECONDS);
             }
-            Room room = new Room(++roomIdSequence, code, now);
-            roomByCode.put(code, room);
-            roomById.put(room.id, room);
-            emptyRooms.put(room.id, room);
-
-            return new RoomCreateResponse(room.id, code, EMPTY_ROOM_TTL_SECONDS);
         }
         throw new ConflictException("사용 가능한 초대코드가 없습니다");
     }
 
-    // 자리 예약만 하고 30초 안에 STOMP가 붙여서 자리 확정
-    public synchronized JoinResult join(Long userId, String inviteCode, String nickname, String goal, String category) {
+    // 자리 예약만 하고 30초 안에 STOMP 구독으로 확정한다 (스펙 §2.2)
+    @Transactional
+    public JoinResult join(Long userId, String inviteCode, String nickname, String goal, String category) {
         if (inviteCode == null || !inviteCode.matches("\\d{4}")) {
             throw new BadRequestException("초대코드는 숫자 4자리여야 합니다");
         }
+        Instant now = clock.instant();
+        Profile profile = new Profile(nickname, goal, category);
 
-        Room room = roomByCode.get(inviteCode);
-        if (room == null) {
-            if (closedCodes.contains(inviteCode, Instant.now())) {
-                throw new NotFoundException(ErrorCode.ROOM_CLOSED, "방이 종료되었어요");
+        rooms.lockUser(userId);
+        RoomRow target = findJoinableRoom(inviteCode, now);
+        Optional<Long> currentRoomId = participations.findLiveRoomIdOfUser(userId);
+        Map<Long, RoomRow> locked = lockRooms(target.id(), currentRoomId);
+        RoomRow lockedTarget = locked.get(target.id());
+        if (lockedTarget == null || !lockedTarget.isOpen()) {
+            throw new NotFoundException(ErrorCode.ROOM_CLOSED, "방이 종료되었어요"); // 조회와 락 사이에 닫힘
+        }
+
+        // 락 아래에서 다시 읽는다 — 이 값만 판단에 쓴다
+        Optional<Row> current = participations.lockLiveOfUser(userId);
+        if (current.isPresent() && current.get().roomId().equals(lockedTarget.id())) {
+            return rejoin(current.get(), lockedTarget, profile, now);
+        }
+        current.ifPresent(row -> {
+            if (!locked.containsKey(row.roomId())) {
+                throw new IllegalStateException("유저 락 아래에서 잠그지 않은 방의 자리가 나타남: userId=" + userId);
             }
-            throw new NotFoundException(ErrorCode.INVITE_CODE_NOT_FOUND, "코드를 다시 확인해 주세요");
-        }
+        });
+        return takeSeat(lockedTarget, current, locked, userId, profile, now);
+    }
 
-        // 끊김 후 재입장인지 체크
-        Participant existing = room.participants.get(userId);
-        if (existing != null && existing.disconnectedAt != null) {
-            // 끊김 후 재입장이면 복원
-            return restoreFromGrace(room, existing, nickname, goal, category);
+    private RoomRow findJoinableRoom(String inviteCode, Instant now) {
+        RoomRow room = rooms.findLatestByCode(inviteCode)
+                .orElseThrow(() -> new NotFoundException(ErrorCode.INVITE_CODE_NOT_FOUND, "코드를 다시 확인해 주세요"));
+        if (room.isOpen()) {
+            return room;
         }
+        if (room.closedAt().plusSeconds(CLOSED_CODE_TTL_SECONDS).isAfter(now)) {
+            throw new NotFoundException(ErrorCode.ROOM_CLOSED, "방이 종료되었어요");
+        }
+        throw new NotFoundException(ErrorCode.INVITE_CODE_NOT_FOUND, "코드를 다시 확인해 주세요");
+    }
 
-        // 정원 검사를 기존 방 퇴장보다 먼저 한다 — 대상 방이 가득이면 기존 방 자리를 잃지 않아야 한다
-        if (existing == null && room.participants.size() >= MAX_PARTICIPANTS) {
+    private Map<Long, RoomRow> lockRooms(Long targetId, Optional<Long> currentRoomId) {
+        List<Long> ids = Stream.concat(Stream.of(targetId), currentRoomId.stream())
+                .distinct()
+                .toList();
+        return rooms.lockByIds(ids).stream().collect(Collectors.toMap(RoomRow::id, Function.identity()));
+    }
+
+    // 같은 방에 이미 자리가 있다 — 유예 복귀(끊김 상태) 또는 예약 재시도·확정 멤버의 중복 join
+    private JoinResult rejoin(Row current, RoomRow room, Profile profile, Instant now) {
+        if (current.disconnectedAt() != null) {
+            expectOne(participations.restoreFromGrace(current.id(), profile, now), "유예 복귀");
+            log.debug("재입장(유예 중 복원): roomId={}, userId={}", room.id(), current.userId());
+            return new JoinResult(response(room.id(), true, current.cameraOn(), current.userId()), null);
+        }
+        expectOne(participations.refreshReservation(current.id(), profile, now), "예약 갱신");
+        return new JoinResult(response(room.id(), false, null, current.userId()), null);
+    }
+
+    // 정원 검사를 기존 방 퇴장보다 먼저 한다 — 대상 방이 가득이면 기존 방 자리를 잃지 않아야 한다
+    private JoinResult takeSeat(
+            RoomRow target,
+            Optional<Row> current,
+            Map<Long, RoomRow> locked,
+            Long userId,
+            Profile profile,
+            Instant now) {
+        if (participations.countLive(target.id()) >= MAX_PARTICIPANTS) {
             throw new ConflictException("방이 가득 찼어요");
         }
-
-        // 이미 참여하고 있는 방이 존재하는지 체크
-        AutoLeave autoLeave = leaveCurrentRoomIfDifferent(userId, room.id);
-
-        // 방 예약 - 확정은 STOMP연결로
-        reserveSeat(room, existing, userId, nickname, goal, category);
-
-        userToRoomId.put(userId, room.id);
-        log.debug("신규 입장 예약: roomId={}, userId={}, autoLeave={}", room.id, userId, autoLeave);
-        List<RoomJoinResponse.IceServer> ice = turnCredentials.forUser(userId);
-        return new JoinResult(new RoomJoinResponse(room.id, false, null, ice, turnCredentials.ttlSeconds()), autoLeave);
-    }
-
-    // 자리 예약
-    private void reserveSeat(
-            Room room, Participant existing, Long userId, String nickname, String goal, String category) {
-        if (existing == null) {
-            Participant participant = new Participant(room.id, userId, nickname, goal, category);
-            room.participants.put(userId, participant);
-            expiryCandidates.add(participant); // 신규 미확정 예약 — 확정 전까지 후보
-            emptyRooms.remove(room.id); // 입장이 생겼으니 빈 방 후보 해제
-            return;
-        }
-        // 예약 중 재시도 — 예약 시각을 갱신해 직후 정리 틱에 쓸려나가지 않게 한다
-        existing.reservedAt = Instant.now();
-        existing.nickname = nickname;
-        existing.goal = goal;
-        existing.category = category;
-        if (!existing.stompConfirmed) { // 확정·연결 멤버의 중복 join은 제외 — 만료는 안 되지만 순회 대상만 늘린다
-            expiryCandidates.add(existing); // 여전히 미확정 예약 — 후보 유지
-        }
-    }
-
-    // 끊김 유예 내 재입장 — 같은 자리 복원 (프리뷰 생략, 카메라 상태 유지). join의 전역 락 안에서만 호출된다
-    private JoinResult restoreFromGrace(
-            Room room, Participant existing, String nickname, String goal, String category) {
-        existing.disconnectedAt = null;
-        existing.stompConfirmed = false;
-        existing.reservedAt = Instant.now();
-        existing.nickname = nickname;
-        existing.goal = goal;
-        existing.category = category;
-        expiryCandidates.add(existing); // 유예 해제 후 미확정 예약 상태 — 예약 만료 후보로 유지
-        userToRoomId.put(existing.userId, room.id);
-        log.debug("재입장(유예 중 복원): roomId={}, userId={}", room.id, existing.userId);
-        List<RoomJoinResponse.IceServer> ice = turnCredentials.forUser(existing.userId);
-        return new JoinResult(
-                new RoomJoinResponse(room.id, true, existing.cameraOn, ice, turnCredentials.ttlSeconds()), null);
-    }
-
-    public synchronized boolean leave(Long roomId, Long userId) {
-        boolean left = removeParticipant(roomId, userId, LeaveReason.EXPLICIT);
-        log.debug("퇴장 요청: roomId={}, userId={}, 처리됨={}", roomId, userId, left);
-        return left;
-    }
-
-    // 예약 후 확정
-    public synchronized List<RoomMember> confirmStomp(Long roomId, Long userId, String stompSessionId) {
-        Room room = roomById.get(roomId);
-        if (room == null) {
-            log.debug("STOMP 확정 실패(방 없음): roomId={}, userId={}", roomId, userId);
-            return List.of();
-        }
-
-        Participant participant = room.participants.get(userId);
-        if (participant == null) {
-            log.debug("STOMP 확정 실패(참가자 없음): roomId={}, userId={}", roomId, userId);
-            return List.of();
-        }
-
-        participant.stompConfirmed = true;
-        participant.stompSessionId = stompSessionId;
-        // 유예 중이던 참가자가 새 세션으로 확정되면 유예를 해제한다 — 남겨두면 cleanupExpired가
-        // 살아 있는 참가자를 유예 만료로 제거한다
-        participant.disconnectedAt = null;
-        sessionToUser.put(stompSessionId, userId);
-        expiryCandidates.remove(participant); // 확정+연결 완료 — 더는 만료 대상 아님(다시 끊기면 handleDisconnect가 재등록)
-
-        if (participant.firstConfirmedAt == null) {
-            participant.firstConfirmedAt = Instant.now();
-        }
-
-        log.debug("STOMP 확정: roomId={}, userId={}, stompSessionId={}", roomId, userId, stompSessionId);
-        return room.confirmedMembers();
-    }
-
-    public synchronized void handleDisconnect(String stompSessionId) {
-        Long userId = sessionToUser.remove(stompSessionId);
-        if (userId == null) {
-            log.debug("연결 해제(알 수 없는 세션): stompSessionId={}", stompSessionId);
-            return;
-        }
-
-        Participant participant = findParticipantOfUser(userId);
-        // 재접속이 옛 세션의 끊김 이벤트보다 먼저 도착할 수 있다 — 지금 세션의 끊김일 때만 유예를 시작한다
-        if (participant != null && stompSessionId.equals(participant.stompSessionId)) {
-            participant.disconnectedAt = Instant.now();
-            participant.stompSessionId = null;
-            expiryCandidates.add(participant); // 끊김 유예 시작 — 유예 만료 후보로 등록
-            log.debug("연결 해제(유예 시작): userId={}, stompSessionId={}", userId, stompSessionId);
-        } else {
-            log.debug("연결 해제(이미 교체된 옛 세션이라 무시): userId={}, stompSessionId={}", userId, stompSessionId);
-        }
-    }
-
-    public synchronized boolean updateCamera(Long roomId, Long userId, boolean cameraOn) {
-        Participant p = getParticipant(roomId, userId);
-        if (p == null || !p.stompConfirmed) {
-            log.debug("카메라 상태 변경 거부(미확정 참가자): roomId={}, userId={}", roomId, userId);
-            return false;
-        }
-        p.cameraOn = cameraOn;
-        log.debug("카메라 상태 변경: roomId={}, userId={}, cameraOn={}", roomId, userId, cameraOn);
-        return true;
-    }
-
-    public synchronized boolean updateFocusState(Long roomId, Long userId, String focusState) {
-        Participant p = getParticipant(roomId, userId);
-        if (p == null || !p.stompConfirmed) {
-            log.debug("집중 상태 변경 거부(미확정 참가자): roomId={}, userId={}", roomId, userId);
-            return false;
-        }
-        p.focusState = focusState;
-        log.debug("집중 상태 변경: roomId={}, userId={}, focusState={}", roomId, userId, focusState);
-        return true;
-    }
-
-    // 마지막 순공시간을 보관해 SNAPSHOT에 싣는다 (새 입장자가 다음 틱까지 빈 값 안 봄)
-    public synchronized boolean updateStudyTime(Long roomId, Long userId, int studySeconds) {
-        Participant p = getParticipant(roomId, userId);
-        if (p == null || !p.stompConfirmed) {
-            log.debug("순공시간 변경 거부(미확정 참가자): roomId={}, userId={}", roomId, userId);
-            return false;
-        }
-        p.studySeconds = studySeconds;
-        log.debug("순공시간 변경: roomId={}, userId={}, studySeconds={}", roomId, userId, studySeconds);
-        return true;
-    }
-
-    public synchronized List<RoomMember> getMembers(Long roomId) {
-        Room room = roomById.get(roomId);
-        if (room == null) return List.of();
-        return room.confirmedMembers();
-    }
-
-    // 스냅샷 재요청 인가+조회(BY-442) — 한 번의 원자 호출로 처리한다. 인가(isActiveSession)와
-    // 조회(getMembers)를 따로 부르면 그 사이 퇴장이 끼어들어 비멤버에게 스냅샷이 나갈 수 있다.
-    // 요청자의 "현재" 세션만 인정해 옛 세션·사칭 세션의 재요청을 차단하고, 빈 목록 = 발송 금지
-    // (활성 확정 멤버라면 목록에 자신이 반드시 포함되므로 빈 목록과 구분 불가한 경우가 없다)
-    public synchronized List<RoomMember> getMembersForActiveSession(Long roomId, Long userId, String stompSessionId) {
-        if (!isActiveSession(roomId, userId, stompSessionId)) return List.of();
-        return roomById.get(roomId).confirmedMembers();
-    }
-
-    public synchronized boolean isConfirmedMember(Long roomId, Long userId) {
-        Participant p = getParticipant(roomId, userId);
-        return p != null && p.stompConfirmed;
-    }
-
-    // inbound 메시지 인가 — principal userId만이 아니라 그 유저의 "현재" STOMP 세션에서 온 메시지인지 검사한다.
-    // 재접속으로 세션이 교체된 뒤에도 살아 있는 옛 세션이 같은 userId로 발신하는 것을 차단
-    public synchronized boolean isActiveSession(Long roomId, Long userId, String stompSessionId) {
-        Participant p = getParticipant(roomId, userId);
-        return p != null && p.stompConfirmed && stompSessionId != null && stompSessionId.equals(p.stompSessionId);
-    }
-
-    // SUBSCRIBE 인가 — 자리 예약자(미확정 포함)만 방 토픽을 구독할 수 있다 (구독 자체가 확정 절차)
-    public synchronized boolean hasParticipant(Long roomId, Long userId) {
-        return getParticipant(roomId, userId) != null;
-    }
-
-    public synchronized Long getRoomIdForUser(Long userId) {
-        return userToRoomId.get(userId);
-    }
-
-    public synchronized boolean roomExists(Long roomId) {
-        return roomById.containsKey(roomId);
-    }
-
-    public synchronized List<AutoLeave> cleanupExpired(Instant now) {
-        List<AutoLeave> removed = new ArrayList<>();
-
-        // 소멸한 지 10분 지난 초대코드 묘비에서 지우기
-        closedCodes.purgeExpired(now);
-
-        // 전체 방 대신 만료 가능 후보만 검사한다
-        for (Participant participant : List.copyOf(expiryCandidates)) {
-            if (participant.isExpired(now)
-                    && removeParticipant(participant.roomId, participant.userId, LeaveReason.DISCONNECT_TIMEOUT)) {
-                removed.add(new AutoLeave(participant.roomId, participant.userId));
+        AutoLeave autoLeave = null;
+        if (current.isPresent()) {
+            RoomRow oldRoom = locked.get(current.get().roomId());
+            if (remover.remove(current.get(), oldRoom, LeaveReason.SWITCHED_ROOM, now, null)
+                    .removed()) {
+                autoLeave = new AutoLeave(oldRoom.id(), userId);
             }
         }
-
-        // 생성 후 아무도 입장하지 않은 빈 방만 10분 뒤 소멸한다 (입장 이력 방은 마지막 퇴장 때 즉시 소멸)
-        for (Room room : List.copyOf(emptyRooms.values())) {
-            if (room.participants.isEmpty()
-                    && roomById.containsKey(room.id)
-                    && room.createdAt.plusSeconds(EMPTY_ROOM_TTL_SECONDS).isBefore(now)) {
-                destroyRoom(room, CloseReason.EMPTY_EXPIRED);
-            }
-        }
-
-        if (!removed.isEmpty()) {
-            log.debug("만료 정리: 자동 퇴장 {}건 — {}", removed.size(), removed);
-        }
-        return removed;
+        participations.insertReservation(target.id(), userId, profile, now);
+        log.debug("신규 입장 예약: roomId={}, userId={}, autoLeave={}", target.id(), userId, autoLeave);
+        return new JoinResult(response(target.id(), false, null, userId), autoLeave);
     }
 
-    // 동시 1룸 제한 — 다른 방에 있으면 자동 퇴장시키고 그 사실을 반환한다 (호출자가 MEMBER_LEFT 브로드캐스트)
-    private AutoLeave leaveCurrentRoomIfDifferent(Long userId, Long targetRoomId) {
-        Long currentRoomId = userToRoomId.get(userId);
-        if (currentRoomId != null
-                && !currentRoomId.equals(targetRoomId)
-                && removeParticipant(currentRoomId, userId, LeaveReason.SWITCHED_ROOM)) {
-            return new AutoLeave(currentRoomId, userId);
+    private RoomJoinResponse response(Long roomId, boolean graceRejoin, Boolean cameraOn, Long userId) {
+        return new RoomJoinResponse(
+                roomId, graceRejoin, cameraOn, turnCredentials.forUser(userId), turnCredentials.ttlSeconds());
+    }
+
+    @Transactional
+    public LeaveResult leave(Long roomId, Long userId) {
+        Optional<RoomRow> room = rooms.lockById(roomId).filter(RoomRow::isOpen);
+        if (room.isEmpty()) {
+            return LeaveResult.NONE;
         }
-        return null;
-    }
-
-    // 참가자 제거 — 마지막 1명이 빠지면(명시적 퇴장·예약 만료·유예 만료 공통) 방과 코드가 소멸한다
-    private boolean removeParticipant(Long roomId, Long userId, LeaveReason reason) {
-        Room room = roomById.get(roomId);
-        if (room == null) return false;
-
-        Participant removed = room.participants.remove(userId);
-        if (removed == null) return false;
-
-        expiryCandidates.remove(removed); // 방에서 빠진 참가자는 만료 후보에서도 제거
-        userToRoomId.remove(userId, roomId);
-        if (removed.stompSessionId != null) {
-            sessionToUser.remove(removed.stompSessionId);
+        Optional<Row> row = participations.lockLive(roomId, userId);
+        if (row.isEmpty()) {
+            return LeaveResult.NONE;
         }
-        if (room.participants.isEmpty()) {
-            destroyRoom(room, CloseReason.LAST_LEFT);
+        var removed = remover.remove(row.get(), room.get(), LeaveReason.EXPLICIT, clock.instant(), null);
+        log.debug("퇴장 요청: roomId={}, userId={}, 처리됨={}", roomId, userId, removed.removed());
+        return new LeaveResult(removed.removed(), !removed.roomClosed());
+    }
+
+    /**
+     * STOMP 구독으로 자리를 확정한다. 0행이면 빈 목록(방·참가자 없음, 또는 더 늦게 열린 세션이 이미 확정됨).
+     * 방 락은 잡지 않는다 — 인원이 안 바뀐다. join이 이 행을 잠그고 있으면 그 커밋 뒤에 적용된다.
+     */
+    @Transactional
+    public List<RoomMember> confirmStomp(
+            Long roomId, Long userId, String sessionId, Instant sessionOpenedAt, String taskId) {
+        int confirmed = participations.confirm(roomId, userId, sessionId, sessionOpenedAt, taskId, clock.instant());
+        if (confirmed == 0) {
+            log.debug("STOMP 확정 실패(방/참가자 없음 또는 옛 세션): roomId={}, userId={}", roomId, userId);
+            return List.of();
         }
-        return true;
+        log.debug("STOMP 확정: roomId={}, userId={}, stompSessionId={}", roomId, userId, sessionId);
+        return participations.findConfirmedMembers(roomId);
     }
 
-    private void destroyRoom(Room room, CloseReason reason) {
-        roomById.remove(room.id);
-        roomByCode.remove(room.inviteCode);
-        emptyRooms.remove(room.id); // 빈 방 후보였다면 함께 제거(멱등)
-        closedCodes.record(room.inviteCode, Instant.now());
+    /** 끊김 — 세션 ID로 바로 찾는다. 재접속이 먼저 도착했으면 0행(옛 세션의 뒤늦은 끊김)이라 무시된다. */
+    @Transactional
+    public boolean handleDisconnect(String sessionId) {
+        if (sessionId == null) {
+            return false;
+        }
+        boolean started = participations.markDisconnected(sessionId, clock.instant()) == 1;
+        log.debug("연결 해제: stompSessionId={}, 유예 시작={}", sessionId, started);
+        return started;
     }
 
-    private Participant findParticipantOfUser(Long userId) {
-        Long roomId = userToRoomId.get(userId);
-        if (roomId == null) return null;
-        return getParticipant(roomId, userId);
+    @Transactional(readOnly = true)
+    public boolean roomExists(Long roomId) {
+        return rooms.isOpen(roomId);
     }
 
-    private Participant getParticipant(Long roomId, Long userId) {
-        Room room = roomById.get(roomId);
-        if (room == null) return null;
-        return room.participants.get(userId);
+    private static void expectOne(int updated, String what) {
+        if (updated != 1) {
+            throw new IllegalStateException(what + " 갱신 행 수가 1이 아님: " + updated);
+        }
     }
 }
