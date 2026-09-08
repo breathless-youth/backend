@@ -3,6 +3,7 @@ package project.study.room.lease;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -103,5 +104,19 @@ class TaskLeaseTest {
 
         verify(registry, never()).fence();
         assertThat(lease.canReclaim()).isTrue();
+    }
+
+    @Test
+    void 리스_되살리기가_실패해도_관찰_기간은_리셋된다() {
+        for (int i = 0; i < 6; i++) {
+            beatAfter(5, OK);
+        }
+        assertThat(lease.canReclaim()).isTrue();
+
+        doThrow(new RuntimeException("db down")).when(leases).register(any(), any());
+        beatAfter(5, new Heartbeat(true, T0.plusSeconds(4)));
+
+        assertThat(lease.canReclaim()).isFalse();
+        verify(registry).fence();
     }
 }

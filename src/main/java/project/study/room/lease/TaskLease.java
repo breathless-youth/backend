@@ -33,6 +33,10 @@ public class TaskLease implements SmartLifecycle {
     public static final long HEARTBEAT_SECONDS = 5;
     public static final long STALE_SECONDS = 30;
 
+    // since·last를 한 스냅샷으로 묶어 하나의 volatile 참조로 읽고 쓴다 — canReclaim()이 스케줄러 스레드에서
+    // beat()와 동시에 실행될 수 있어, 별도 volatile 두 개였다면 "새 last + 옛 since"가 섞인 틈새 값을 읽을 수 있었다.
+    private record Continuity(Instant since, Instant last) {}
+
     private final TaskIdentity identity;
     private final LeaseConnectionFactory connectionFactory;
     private final SessionRegistry sessionRegistry;
@@ -42,8 +46,7 @@ public class TaskLease implements SmartLifecycle {
     private LeaseConnection connection;
     private ScheduledExecutorService executor;
     private volatile boolean running;
-    private volatile Instant lastCommittedBeat;
-    private volatile Instant continuousSince;
+    private volatile Continuity continuity;
 
     public TaskLease(
             TaskIdentity identity,
@@ -63,8 +66,7 @@ public class TaskLease implements SmartLifecycle {
         connection = connectionFactory.open();
         Instant now = clock.instant();
         connection.leases().register(identity.id(), now);
-        lastCommittedBeat = now;
-        continuousSince = now;
+        continuity = new Continuity(now, now);
         executor = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "task-lease");
             thread.setDaemon(true);
@@ -117,24 +119,26 @@ public class TaskLease implements SmartLifecycle {
 
     /** 남을 죽었다고 판정해도 되는가 — 내 커밋된 heartbeat가 관찰 기간 이상 stale 초과 공백 없이 이어졌을 때만. */
     public boolean canReclaim() {
-        Instant since = continuousSince;
-        Instant last = lastCommittedBeat;
-        return since != null && last != null && Duration.between(since, last).getSeconds() >= observationSeconds;
+        Continuity current = continuity;
+        return current != null
+                && Duration.between(current.since(), current.last()).getSeconds() >= observationSeconds;
     }
 
     private void recordBeat(Instant now) {
-        Instant last = lastCommittedBeat;
-        if (last == null || Duration.between(last, now).getSeconds() > STALE_SECONDS) {
-            continuousSince = now;
-        }
-        lastCommittedBeat = now;
+        Continuity current = continuity;
+        boolean gapExceeded =
+                current == null || Duration.between(current.last(), now).getSeconds() > STALE_SECONDS;
+        Instant since = gapExceeded ? now : current.since();
+        continuity = new Continuity(since, now);
     }
 
+    // 펜싱된 상태를 먼저 반영해야 실패-안전이다 — register()가 예외를 던져도(beat()가 삼킴) 이미 죽었다고
+    // 판정된 관찰 구간이 살아남지 않는다. 되살리기는 다음 틱에 heartbeat가 다시 시도한다(reclaimed_at이
+    // 아직 남아 있으므로).
     private void fence(Instant now) {
+        continuity = new Continuity(now, now);
         int closed = sessionRegistry.fence();
         connection.leases().register(identity.id(), now);
-        continuousSince = now;
-        lastCommittedBeat = now;
         log.warn("펜싱: 리스가 회수되어 세션 {}개를 닫고 리스를 되살림 taskId={}", closed, identity.id());
     }
 }
