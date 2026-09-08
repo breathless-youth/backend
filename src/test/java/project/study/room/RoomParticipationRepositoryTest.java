@@ -169,7 +169,12 @@ class RoomParticipationRepositoryTest {
 
         List<Candidate> candidates = participations.findExpiryCandidates(WINDOW);
 
-        assertThat(candidates).extracting(Candidate::userId).containsExactlyInAnyOrder(userId, graced);
+        // 전역 조회라 다른(트랜잭션 없는) 테스트가 커밋한 후보가 섞일 수 있다 — 우리가 만든 두 건의 포함과
+        // fresh 제외만 검증한다
+        assertThat(candidates)
+                .extracting(Candidate::userId)
+                .contains(userId, graced)
+                .doesNotContain(fresh);
     }
 
     @Test
