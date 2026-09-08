@@ -129,6 +129,11 @@ class RoomRepositoryTest {
     }
 
     @Test
+    void 빈_목록을_잠그면_빈_결과다() {
+        assertThat(rooms.lockByIds(List.of())).isEmpty();
+    }
+
+    @Test
     void 참가자_없이_기한이_지난_열린_방만_빈_방_후보다() {
         long old = rooms.insertIfCodeFree("1111", owner, NOW.minusSeconds(601), CUTOFF)
                 .orElseThrow();

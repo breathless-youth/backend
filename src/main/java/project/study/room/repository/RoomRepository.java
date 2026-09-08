@@ -107,6 +107,9 @@ public class RoomRepository {
 
     /** 여러 방을 id 오름차순으로 잠근다 — join의 방 전환에서 데드락을 피하는 고정 순서. */
     public List<RoomRow> lockByIds(Collection<Long> roomIds) {
+        if (roomIds.isEmpty()) {
+            return List.of();
+        }
         return jdbc.sql("SELECT " + COLUMNS + " FROM rooms WHERE id IN (:ids) ORDER BY id FOR UPDATE")
                 .param("ids", roomIds)
                 .query(ROW)
