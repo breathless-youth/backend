@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
@@ -19,12 +18,8 @@ import project.study.common.exception.NotFoundException;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinResponse;
 import project.study.room.dto.RoomMember;
-import project.study.room.event.CloseReason;
-import project.study.room.event.LeaveReason;
-import project.study.room.event.ParticipantJoinedEvent;
-import project.study.room.event.ParticipantLeftEvent;
-import project.study.room.event.RoomClosedEvent;
-import project.study.room.event.RoomCreatedEvent;
+import project.study.room.entity.CloseReason;
+import project.study.room.entity.LeaveReason;
 
 /** 인메모리 룸 상태 관리. 동시성: public 메서드를 모두 synchronized로 직렬화하여 레이스를 원천 차단. */
 @Service
@@ -57,15 +52,12 @@ public class RoomService {
     private long roomIdSequence = 0;
 
     private final TurnCredentialIssuer turnCredentials;
-    private final ApplicationEventPublisher eventPublisher;
 
     public RoomService(
             @Value("${app.room.turn.secret:draft-turn-secret}") String turnSecret,
             @Value("${app.room.turn.ttl-seconds:86400}") int turnTtlSeconds,
-            @Value("${app.room.turn.urls:}") List<String> turnUrls,
-            ApplicationEventPublisher eventPublisher) {
+            @Value("${app.room.turn.urls:}") List<String> turnUrls) {
         this.turnCredentials = new TurnCredentialIssuer(turnSecret, turnTtlSeconds, turnUrls);
-        this.eventPublisher = eventPublisher;
     }
 
     public record JoinResult(RoomJoinResponse response, AutoLeave autoLeave) {}
@@ -85,7 +77,6 @@ public class RoomService {
             roomById.put(room.id, room);
             emptyRooms.put(room.id, room);
 
-            publish(new RoomCreatedEvent(room.uid, userId, room.createdAt));
             return new RoomCreateResponse(room.id, code, EMPTY_ROOM_TTL_SECONDS);
         }
         throw new ConflictException("사용 가능한 초대코드가 없습니다");
@@ -196,7 +187,6 @@ public class RoomService {
 
         if (participant.firstConfirmedAt == null) {
             participant.firstConfirmedAt = Instant.now();
-            publish(new ParticipantJoinedEvent(room.uid, userId, participant.firstConfirmedAt));
         }
 
         log.debug("STOMP 확정: roomId={}, userId={}, stompSessionId={}", roomId, userId, stompSessionId);
@@ -349,10 +339,6 @@ public class RoomService {
         if (removed.stompSessionId != null) {
             sessionToUser.remove(removed.stompSessionId);
         }
-        // 확정된 적 없는 예약자는 참여 이력이 없으므로 퇴장 이벤트도 없다
-        if (removed.firstConfirmedAt != null) {
-            publish(new ParticipantLeftEvent(room.uid, userId, Instant.now(), reason, removed.studySeconds));
-        }
         if (room.participants.isEmpty()) {
             destroyRoom(room, CloseReason.LAST_LEFT);
         }
@@ -364,7 +350,6 @@ public class RoomService {
         roomByCode.remove(room.inviteCode);
         emptyRooms.remove(room.id); // 빈 방 후보였다면 함께 제거(멱등)
         closedCodes.record(room.inviteCode, Instant.now());
-        publish(new RoomClosedEvent(room.uid, Instant.now(), reason));
     }
 
     private Participant findParticipantOfUser(Long userId) {
@@ -377,14 +362,5 @@ public class RoomService {
         Room room = roomById.get(roomId);
         if (room == null) return null;
         return room.participants.get(userId);
-    }
-
-    // 발행 실패가 룸 동작으로 전파되면 안 된다 (best-effort, 스펙 불변식)
-    private void publish(Object event) {
-        try {
-            eventPublisher.publishEvent(event);
-        } catch (RuntimeException e) {
-            log.warn("룸 이력 이벤트 발행 실패: {}", event, e);
-        }
     }
 }

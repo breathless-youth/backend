@@ -55,18 +55,20 @@ class QualifyingSessionQueryIntegrationTest {
                 focusSec);
     }
 
-    private UUID insertRoom(long createdBy) {
-        UUID roomUid = UUID.randomUUID();
-        jdbcTemplate.update(
-                "insert into rooms (room_uid, created_by, created_at) values (?, ?, now())", roomUid, createdBy);
-        return roomUid;
+    private long insertRoom(long createdBy) {
+        return jdbcTemplate.queryForObject(
+                "insert into rooms (invite_code, created_by, created_at) values ('0000', ?, now()) returning id",
+                Long.class,
+                createdBy);
     }
 
-    private void insertParticipation(UUID roomUid, long userId, Instant joinedAt, Instant leftAt) {
+    private void insertParticipation(long roomId, long userId, Instant joinedAt, Instant leftAt) {
         jdbcTemplate.update(
-                "insert into room_participations (room_uid, user_id, joined_at, left_at) values (?, ?, ?, ?)",
-                roomUid,
+                "insert into room_participations (room_id, user_id, reserved_at, stomp_confirmed, joined_at, left_at) "
+                        + "values (?, ?, ?, true, ?, ?)",
+                roomId,
                 userId,
+                Timestamp.from(joinedAt),
                 Timestamp.from(joinedAt),
                 leftAt == null ? null : Timestamp.from(leftAt));
     }
@@ -87,7 +89,7 @@ class QualifyingSessionQueryIntegrationTest {
     void 룸_참여구간_안의_세션은_소셜이다() {
         long userId = insertUser();
         insertSession(userId, at(1), at(3), QUALIFYING);
-        UUID room = insertRoom(userId);
+        long room = insertRoom(userId);
         insertParticipation(room, userId, at(0), at(4));
 
         assertThat(socialOf(userId)).isTrue();
@@ -105,7 +107,7 @@ class QualifyingSessionQueryIntegrationTest {
     void 부분만_겹쳐도_소셜이다() {
         long userId = insertUser();
         insertSession(userId, at(1), at(3), QUALIFYING);
-        UUID room = insertRoom(userId);
+        long room = insertRoom(userId);
         insertParticipation(room, userId, at(2), at(5)); // 세션 뒷부분만 겹침
 
         assertThat(socialOf(userId)).isTrue();
@@ -119,7 +121,7 @@ class QualifyingSessionQueryIntegrationTest {
         // 제외하지 않으면 그 유저의 이후 모든 세션이 매일 소셜로 오분류된다.
         long userId = insertUser();
         insertSession(userId, at(1), at(3), QUALIFYING);
-        UUID room = insertRoom(userId);
+        long room = insertRoom(userId);
         insertParticipation(room, userId, at(2), null); // left_at 없음 = 재시작 잔재
 
         assertThat(socialOf(userId)).isFalse();
@@ -129,7 +131,7 @@ class QualifyingSessionQueryIntegrationTest {
     void 겹치지_않는_참여는_싱글이다() {
         long userId = insertUser();
         insertSession(userId, at(1), at(3), QUALIFYING);
-        UUID room = insertRoom(userId);
+        long room = insertRoom(userId);
         insertParticipation(room, userId, at(5), at(6)); // 세션 이후
 
         assertThat(socialOf(userId)).isFalse();
@@ -140,7 +142,7 @@ class QualifyingSessionQueryIntegrationTest {
         long owner = insertUser();
         long other = insertUser();
         insertSession(owner, at(1), at(3), QUALIFYING);
-        UUID room = insertRoom(other);
+        long room = insertRoom(other);
         insertParticipation(room, other, at(0), at(4));
 
         assertThat(socialOf(owner)).isFalse();

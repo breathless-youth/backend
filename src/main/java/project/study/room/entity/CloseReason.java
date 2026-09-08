@@ -1,4 +1,4 @@
-package project.study.room.event;
+package project.study.room.entity;
 
 public enum CloseReason {
     LAST_LEFT,

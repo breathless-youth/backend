@@ -21,7 +21,7 @@ class RoomInviteCodeErrorTest {
 
     @BeforeEach
     void setUp() {
-        roomService = new RoomService("test-secret", 86400, List.of(), event -> {});
+        roomService = new RoomService("test-secret", 86400, List.of());
     }
 
     private String createRoom() {
