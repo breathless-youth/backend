@@ -112,8 +112,10 @@ class TaskLeaseTest {
         verify(registry).fence();
     }
 
+    // 실패는 삼키되(스케줄이 죽지 않게) 회수 자격은 그 자리에서 잃는다 — 마지막 성공이 아직 stale 이내라도
+    // 회복 직후의 cleanup 틱이 옛 연속 구간을 들고 아직 못 돌아온 상대를 회수하면 안 된다
     @Test
-    void heartbeat_실패는_삼키고_상태를_바꾸지_않는다() {
+    void heartbeat_실패는_삼키되_회수_자격을_즉시_잃는다() {
         for (int i = 0; i < 6; i++) {
             beatAfter(5, OK);
         }
@@ -123,7 +125,7 @@ class TaskLeaseTest {
         lease.beat();
 
         verify(registry, never()).fence();
-        assertThat(lease.canReclaim()).isTrue();
+        assertThat(lease.canReclaim()).as("실패 직후 — 다음 성공까지 회수 불가").isFalse();
     }
 
     // 실패한 beat는 5초짜리라 간격만 보면 공백으로 안 잡힌다 — 순단에서 먼저 회복한 쪽이 옛 연속 구간을
@@ -138,7 +140,7 @@ class TaskLeaseTest {
         clock.advance(Duration.ofSeconds(5));
         doThrow(new RuntimeException("db down")).when(leases).heartbeat(any(), any());
         lease.beat();
-        assertThat(lease.canReclaim()).as("실패만으로는 옛 연속 구간이 남는다").isTrue();
+        assertThat(lease.canReclaim()).as("실패 직후 — 회수 불가").isFalse();
 
         beatAfter(5, OK);
 
