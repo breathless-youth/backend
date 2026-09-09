@@ -21,6 +21,11 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  # 5초 룸 정리 스윕이 일일 리포트·세션 확정 스케줄러와 스레드를 나눠 쓰지 않게 (기본 풀 크기 1)
+  task:
+    scheduling:
+      pool:
+        size: 2
 
 # p6spy는 classpath에는 있지만 prod에서는 DataSource 래핑 자체를 끈다 —
 # 쿼리마다 프록시가 끼는 오버헤드·로그 볼륨을 피하기 위함 (local/dev에서만 켠다).

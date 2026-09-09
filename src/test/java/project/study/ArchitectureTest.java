@@ -18,8 +18,8 @@ class ArchitectureTest {
             .haveSimpleNameEndingWith("Controller")
             .should()
             .dependOnClassesThat()
-            .haveSimpleNameEndingWith("Repository")
-            .because("컨트롤러는 서비스를 거쳐야 한다")
+            .resideInAPackage("..repository..")
+            .because("컨트롤러는 서비스를 거쳐야 한다 (이름이 아니라 repository 패키지 기준)")
             .allowEmptyShould(true);
 
     @ArchTest

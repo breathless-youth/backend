@@ -17,3 +17,12 @@ refresh-token:
 # BY-447 확정 스케줄러 — 테스트에서는 끈다 (백그라운드 확정이 테스트 데이터를 건드리는 경합 방지)
 session-finalize:
   enabled: false
+
+# BY-626 태스크 리스 — 테스트는 관찰 기간 없이 바로 회수 판정이 가능하게 한다 (운영 기본 30초)
+app:
+  room:
+    # 룸 정리 스케줄러는 테스트에서 끈다 — 5초마다 도는 백그라운드 스윕이 테스트가 커밋한 행을 건드리는 경합 방지
+    cleanup:
+      enabled: false
+    lease:
+      observation-seconds: 0

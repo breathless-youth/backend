@@ -51,27 +51,6 @@ public class ActiveStudySessionController {
 				세션을 확정한다(자정 분할 포함, 길이 무관). 자동 확정본은 잠정 기록이라, 이후 같은 startedAt으로 \
 				최종 제출이 도착하면 그것으로 대체된다. 정상 최종 제출 시 draft는 함께 삭제되므로 \
 				앱은 확정 여부를 신경 쓸 필요 없이 늘 하던 대로 제출하면 된다.""")
-    @ApiResponse(responseCode = "204", description = "스냅샷 반영 완료 (역순 도착으로 무시된 경우 포함)")
-    @ApiResponse(
-            responseCode = "400",
-            description = "검증 실패 — 최종 제출과 같은 시간·범위·이벤트 규칙",
-            content =
-                    @Content(
-                            mediaType = MediaType.APPLICATION_JSON_VALUE,
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples =
-                                    @ExampleObject(
-                                            name = "기준 시점이 시작보다 빠름",
-                                            value = "{\"message\": \"세션 종료 시각은 시작 시각 이후여야 합니다\"}")))
-    @ApiResponse(
-            responseCode = "404",
-            description = "존재하지 않는 userId",
-            content =
-                    @Content(
-                            mediaType = MediaType.APPLICATION_JSON_VALUE,
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples =
-                                    @ExampleObject(name = "유저 없음", value = "{\"message\": \"존재하지 않는 사용자입니다: 999\"}")))
     @PutMapping("/active")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void report(@Valid @RequestBody ActiveSessionSnapshotRequest request) {
