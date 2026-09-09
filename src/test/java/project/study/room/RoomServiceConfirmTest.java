@@ -202,10 +202,11 @@ class RoomServiceConfirmTest extends RoomTestBase {
         // join 재호출 없이 STOMP 재구독만으로 복귀하는 경로
         confirm(roomId, userId, "session-2");
 
-        // 유예 해제는 확정 직후에 본다 — cleanupAfter는 리스 없는 task_id(테스트 픽스처)를 끊김으로 되돌린다
-        assertThat(roomState.getMembers(roomId).getFirst().disconnected()).isFalse();
         assertThat(cleanupAfter(31, roomId)).isEmpty();
         assertThat(roomState.isConfirmedMember(roomId, userId)).isTrue();
+        assertThat(roomState.getMembers(roomId).getFirst().disconnected())
+                .as("스윕을 한 번 돌려도 유예가 해제된 채로 남는다")
+                .isFalse();
     }
 
     @Test

@@ -55,9 +55,13 @@ class QualifyingSessionQueryIntegrationTest {
                 focusSec);
     }
 
+    // 이미 닫힌 방으로 넣는다 — rooms_open_code_uidx는 열린 방 전체에 걸린 부분 유니크 인덱스라,
+    // 고정 코드 '0000'을 열린 채로 두면 랜덤 코드로 방을 커밋하는 다른 테스트와 충돌할 수 있다.
+    // 소셜 판정은 방의 열림 여부가 아니라 참여 구간만 보므로 닫힌 방이어도 검증에는 영향이 없다.
     private long insertRoom(long createdBy) {
         return jdbcTemplate.queryForObject(
-                "insert into rooms (invite_code, created_by, created_at) values ('0000', ?, now()) returning id",
+                "insert into rooms (invite_code, created_by, created_at, closed_at, close_reason) "
+                        + "values ('0000', ?, now(), now(), 'LAST_LEFT') returning id",
                 Long.class,
                 createdBy);
     }
@@ -123,6 +127,18 @@ class QualifyingSessionQueryIntegrationTest {
         insertParticipation(room, userId, at(2), null);
 
         assertThat(socialOf(userId)).isTrue();
+    }
+
+    @Test
+    void 세션_종료_후_시작된_진행_중_참여는_소셜이_아니다() {
+        // left_at NULL을 "지금까지 계속"으로 읽으면 세션이 끝난 뒤 시작한 참여까지 겹침이 된다 —
+        // 겹침은 어디까지나 [joined_at, left_at) 구간과 세션 구간의 교집합으로만 판정해야 한다
+        long userId = insertUser();
+        insertSession(userId, at(1), at(3), QUALIFYING);
+        long room = insertRoom(userId);
+        insertParticipation(room, userId, at(5), null);
+
+        assertThat(socialOf(userId)).isFalse();
     }
 
     @Test
