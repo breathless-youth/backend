@@ -77,6 +77,24 @@ class TaskLeaseTest {
     }
 
     @Test
+    void 마지막_커밋_beat가_stale을_넘기면_회수할_수_없다() {
+        for (int i = 0; i < 6; i++) {
+            beatAfter(5, OK);
+        }
+        assertThat(lease.canReclaim()).isTrue();
+
+        // beat 없이 시간만 흐른다 (DB 순단) — 연속 구간은 30초를 채웠지만 최신성이 깨졌다
+        clock.advance(Duration.ofSeconds(31));
+        assertThat(lease.canReclaim())
+                .as("마지막 커밋 beat가 31초 전 — 상대를 죽었다고 판정할 자격이 없다")
+                .isFalse();
+
+        // 순단이 풀려 beat가 커밋돼도 공백(36초)이 stale을 넘었으므로 관찰 기간이 처음부터 다시 찬다
+        beatAfter(5, OK);
+        assertThat(lease.canReclaim()).as("공백 뒤 첫 beat — 관찰 기간 리셋").isFalse();
+    }
+
+    @Test
     void 리스가_회수됐으면_소켓을_전부_닫고_리스를_되살린다() {
         beatAfter(5, new Heartbeat(true, T0.plusSeconds(4)));
 

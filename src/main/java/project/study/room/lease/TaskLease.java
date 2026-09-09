@@ -112,16 +112,25 @@ public class TaskLease implements SmartLifecycle {
             } else {
                 recordBeat(now);
             }
-        } catch (RuntimeException e) {
-            log.warn("heartbeat 실패: taskId={}", identity.id(), e);
+        } catch (Throwable t) {
+            // Error까지 잡는다 — scheduleAtFixedRate는 태스크가 던지면 스케줄 자체를 취소해버려,
+            // 한 번의 OOM/LinkageError로 heartbeat가 조용히 영영 멈추고 펜싱도 불가능해진다.
+            log.warn("heartbeat 실패: taskId={}", identity.id(), t);
         }
     }
 
-    /** 남을 죽었다고 판정해도 되는가 — 내 커밋된 heartbeat가 관찰 기간 이상 stale 초과 공백 없이 이어졌을 때만. */
+    /**
+     * 남을 죽었다고 판정해도 되는가 — 내 커밋된 heartbeat가 관찰 기간 이상 stale 초과 공백 없이 이어졌고,
+     * 그 마지막 커밋 beat가 지금으로부터 stale 이내일 때만.
+     *
+     * <p>최신성 항이 없으면 DB 순단 뒤 두 태스크가 모두 옛 연속 구간을 든 채 깨어난다 — 그중 cleanup 틱이
+     * 자기 heartbeat 틱보다 먼저 DB에 닿은 쪽이 멀쩡한 상대를 회수해버린다.
+     */
     public boolean canReclaim() {
         Continuity current = continuity;
         return current != null
-                && Duration.between(current.since(), current.last()).getSeconds() >= observationSeconds;
+                && Duration.between(current.since(), current.last()).getSeconds() >= observationSeconds
+                && Duration.between(current.last(), clock.instant()).getSeconds() <= STALE_SECONDS;
     }
 
     private void recordBeat(Instant now) {

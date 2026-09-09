@@ -1,6 +1,5 @@
 package project.study.room.websocket;
 
-import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
@@ -61,7 +60,9 @@ public class SessionRegistry {
             closed++;
             try {
                 entry.session().close(CloseStatus.GOING_AWAY);
-            } catch (IOException e) {
+            } catch (Exception e) {
+                // IOException뿐 아니라 컨테이너가 던지는 런타임 예외까지 잡는다 — 소켓 하나가 터져도
+                // 나머지 세션 닫기를 중단시키면 안 된다 (펜싱은 전부 닫아야 완성된다)
                 log.warn("세션 닫기 실패: sessionId={}", entry.session().getId(), e);
             }
         }

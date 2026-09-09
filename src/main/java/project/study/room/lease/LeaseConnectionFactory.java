@@ -34,6 +34,10 @@ public class LeaseConnectionFactory {
         config.setMaximumPoolSize(1);
         config.setMinimumIdle(1);
         config.setConnectionTimeout(5_000);
+        // 멈춘 소켓이 단 하나뿐인 heartbeat 스레드를 영영 붙잡으면 이 태스크는 reclaimed_at을 볼 수 없어
+        // 끝내 펜싱하지 못한다 — 회수당한 뒤에도 살아 있는 소켓이 남는다. (pgjdbc 속성, socketTimeout은 초)
+        config.addDataSourceProperty("socketTimeout", "5");
+        config.addDataSourceProperty("tcpKeepAlive", "true");
         HikariDataSource dataSource = new HikariDataSource(config);
         return new LeaseConnection(new TaskLeaseRepository(JdbcClient.create(dataSource)), dataSource::close);
     }
