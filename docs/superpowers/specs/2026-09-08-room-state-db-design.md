@@ -369,7 +369,9 @@ UPDATE room_participations
   `ExecutorConfigurationSupport.onApplicationEvent`) graceful shutdown이 끝나기 전에 주기 작업을 멈춘다. 그러면
   드레인 중(소켓은 살아 있음)에 heartbeat가 끊겨 다른 태스크가 정상 드레인 중인 참가자를 회수한다. 자체
   executor는 `stop()`에서만 멈춘다.
-- **heartbeat 커넥션은 전용**: 최대 1개짜리 별도 `HikariDataSource`(`connectionTimeout` 5초). HTTP·STOMP·cleanup이
+- **heartbeat 커넥션은 전용**: 최대 1개짜리 별도 `HikariDataSource`(`connectionTimeout` 5초, pgjdbc `socketTimeout` 5초·
+  `tcpKeepAlive`). 소켓이 블랙홀이 되어도 단일 heartbeat 스레드가 영구 정지하지 않는다 — 정지하면 `reclaimed_at`을
+  영영 못 보고 펜싱도 못 하는 좀비가 된다(최종 리뷰 반영). HTTP·STOMP·cleanup이
   기본 풀 10개를 다 점유해도 heartbeat는 기다리지 않는다. "전용 스레드"만으로는 커넥션 대기를 못 피한다.
 - **등록은 먼저**: `start()`에서 `INSERT INTO live_task (task_id, heartbeat_at, reclaimed_at) VALUES (:me, :now, NULL)
   ON CONFLICT (task_id) DO UPDATE SET heartbeat_at = EXCLUDED.heartbeat_at, reclaimed_at = NULL`. 요청을 받기
@@ -390,7 +392,13 @@ UPDATE room_participations
   동안 5초 간격으로 끊김 없이 이어졌을 때만** §2.10-1을 실행한다(관찰 기간). DB 순단 뒤에는 양쪽 다 30초간
   회수를 건너뛰고 heartbeat만 찍으므로, 늦게 회복한 쪽이 아직 커넥션을 못 잡았더라도 먼저 회복한 쪽이 곧바로
   회수하지 않는다. 30초가 지나도 못 돌아온 태스크는 실제로 요청도 못 받는 상태이므로 회수한다.
+  구현은 두 항의 AND다: `continuousSince → lastCommittedBeat` 폭이 관찰 기간 이상이고, **`lastCommittedBeat`가
+  지금(주입된 Clock)으로부터 30초 이내**여야 한다. 두 번째 항이 없으면 DB 순단 뒤 옛 연속 구간이 남은 채로
+  cleanup 틱이 heartbeat 틱보다 먼저 돌아 건강한 상대를 회수한다(최종 리뷰 반영). 연속성 상태는 불변 record
+  하나를 volatile로 교체해 다른 스레드가 찢어진 스냅샷을 보지 않게 한다.
 - **펜싱**(heartbeat가 회수 신호를 받았을 때, 이 순서로):
+  0. 연속성 상태(`Continuity`)를 먼저 리셋한다(fail-safe) — 아래 2의 되살리기가 던져도 관찰 기간이 리셋된 채 남고,
+     `reclaimed_at`이 아직 있으므로 다음 beat가 펜싱을 재시도한다(Codex 2차·Task 4 리뷰 반영).
   1. `SessionRegistry.fence()`: 모든 세션을 레지스트리에서 닫힘으로 표시한 뒤 `GOING_AWAY`로 닫는다. 이후
      들어오는 `confirmStomp`는 §2.5-1의 사전 검사에서 거절된다.
   2. 리스 되살리기: `INSERT ... ON CONFLICT (task_id) DO UPDATE SET heartbeat_at = :now, reclaimed_at = NULL`.

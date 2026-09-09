@@ -29,7 +29,7 @@
 | advisory lock 키 `hashtext(code)` / `userId` | `pg_advisory_xact_lock(:userId)` / `pg_advisory_xact_lock(1099511627776 + hashtext(:code))` | 유저 ID와 코드 해시가 같은 키 공간에서 충돌하지 않게 2^40 오프셋으로 분리 |
 | 테스트용 `JpaRepository` 유지 | JPA 저장소 없음. 테스트는 `JdbcClient` 프로브(`RoomProbe`)로 행을 조회 | 프로덕션에 미사용 빈을 두지 않는다 |
 | 관찰 기간 30초 상수 | 프로퍼티 `app.room.lease.observation-seconds`(기본 30, 테스트 0) | 통합 테스트에서 30초 대기 없이 회수 경로 검증 |
-| 연속성 판정에 `now` 비교 | 커밋된 beat 사이 간격만으로 판정(`continuousSince`→`lastCommittedBeat` 폭 ≥ 관찰 기간, 간격 > stale이면 리셋) | cleanup 테스트가 `now`를 미래로 넘겨도 판정이 흔들리지 않게 |
+| 연속성 판정에 `now` 비교 | ~~커밋된 beat 사이 간격만으로 판정~~ → 최종 리뷰에서 되돌림: `since→last` 폭 ≥ 관찰 기간 **그리고** `last`가 주입된 `Clock` 기준 stale 이내 | `now` 항을 빼면 DB 순단 뒤 cleanup 틱이 heartbeat 틱보다 먼저 돌 때 건강한 상대를 회수함. 테스트는 cleanup의 `now` 파라미터가 아니라 주입 Clock을 보므로 영향 없음 |
 | `RoomController.create`가 유저 검증 없음 | `userService.getProfile(userId)`로 404 `USER_NOT_FOUND` 선검사 | `rooms.created_by` FK 위반이 500으로 새지 않게. join과 동일 규칙 |
 
 ## 파일 구조 (최종)
