@@ -72,6 +72,21 @@ class RoomCleanupIsolationTest {
     }
 
     @Test
+    void 자기_태스크_ID는_회수하지_않는다() {
+        when(taskLease.canReclaim()).thenReturn(true);
+        when(taskLease.taskId()).thenReturn("me");
+        // 미래 시각으로 스윕을 돌리면 내 리스도 낡아 보인다 — 그래도 나를 회수하면 내 참가자가 통째로 끊긴다
+        when(leases.findStaleUnreclaimed(any())).thenReturn(List.of("me"));
+        when(participations.findExpiryCandidates(any())).thenReturn(List.of());
+        when(rooms.findEmptyOpenRoomsCreatedBefore(any())).thenReturn(List.of());
+
+        service().cleanupExpired(NOW);
+
+        org.mockito.Mockito.verify(leases, org.mockito.Mockito.never()).reclaim(any(), any(), any());
+        org.mockito.Mockito.verify(participations, org.mockito.Mockito.never()).reclaimByTask(any(), any());
+    }
+
+    @Test
     void 관찰_기간이_안_찼으면_리스_회수를_건너뛴다() {
         when(taskLease.canReclaim()).thenReturn(false);
         when(participations.findExpiryCandidates(any())).thenReturn(List.of());

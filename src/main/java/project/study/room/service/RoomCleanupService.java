@@ -1,5 +1,6 @@
 package project.study.room.service;
 
+import io.sentry.Sentry;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -63,20 +64,7 @@ public class RoomCleanupService {
             return;
         }
         Instant threshold = now.minusSeconds(TaskLease.STALE_SECONDS);
-        for (String dead : leases.findStaleUnreclaimed(threshold)) {
-            if (dead.equals(taskLease.taskId())) {
-                continue; // 나 자신은 회수하지 않는다 — 호출자가 미래 시각(now)을 넘겨도 내 리스가 낡아 보이면 안 된다
-            }
-            quietly(
-                    "리스 회수 " + dead,
-                    () -> tx.execute(status -> {
-                        if (leases.reclaim(dead, threshold, now)) {
-                            int reclaimed = participations.reclaimByTask(dead, now);
-                            log.warn("죽은 태스크 회수: taskId={}, 참가자 {}명 끊김 전환", dead, reclaimed);
-                        }
-                        return null;
-                    }));
-        }
+        quietly("죽은 태스크 조회", () -> reclaimEach(leases.findStaleUnreclaimed(threshold), threshold, now));
         quietly("리스 없는 참가자 회수", () -> tx.execute(status -> participations.reclaimOrphansWithoutLease(now)));
         quietly(
                 "회수된 리스 정리",
@@ -84,17 +72,36 @@ public class RoomCleanupService {
                         status -> leases.deleteReclaimedBefore(now.minusSeconds(RECLAIMED_LEASE_TTL_SECONDS))));
     }
 
+    private void reclaimEach(List<String> dead, Instant threshold, Instant now) {
+        for (String taskId : dead) {
+            if (taskId.equals(taskLease.taskId())) {
+                continue; // 나 자신은 회수하지 않는다 — 호출자가 미래 시각(now)을 넘겨도 내 리스가 낡아 보이면 안 된다
+            }
+            quietly(
+                    "리스 회수 " + taskId,
+                    () -> tx.execute(status -> {
+                        if (leases.reclaim(taskId, threshold, now)) {
+                            int reclaimed = participations.reclaimByTask(taskId, now);
+                            log.warn("죽은 태스크 회수: taskId={}, 참가자 {}명 끊김 전환", taskId, reclaimed);
+                        }
+                        return null;
+                    }));
+        }
+    }
+
     private void expireParticipants(Instant now, Consumer<AutoLeave> onRemoved) {
         ExpiryWindow window =
                 new ExpiryWindow(now.minusSeconds(RESERVATION_TTL_SECONDS), now.minusSeconds(GRACE_PERIOD_SECONDS));
-        Map<Long, List<Candidate>> byRoom =
-                participations.findExpiryCandidates(window).stream().collect(Collectors.groupingBy(Candidate::roomId));
-        byRoom.forEach((roomId, candidates) -> quietly("만료 정리 room=" + roomId, () -> {
-            List<AutoLeave> removed = tx.execute(status -> expireRoom(roomId, candidates, window, now));
-            if (removed != null) {
-                removed.forEach(onRemoved);
-            }
-        }));
+        quietly("만료 후보 조회", () -> {
+            Map<Long, List<Candidate>> byRoom = participations.findExpiryCandidates(window).stream()
+                    .collect(Collectors.groupingBy(Candidate::roomId));
+            byRoom.forEach((roomId, candidates) -> quietly("만료 정리 room=" + roomId, () -> {
+                List<AutoLeave> removed = tx.execute(status -> expireRoom(roomId, candidates, window, now));
+                if (removed != null) {
+                    removed.forEach(onRemoved);
+                }
+            }));
+        });
     }
 
     private List<AutoLeave> expireRoom(Long roomId, List<Candidate> candidates, ExpiryWindow window, Instant now) {
@@ -118,24 +125,30 @@ public class RoomCleanupService {
 
     private void closeEmptyRooms(Instant now) {
         Instant deadline = now.minusSeconds(EMPTY_ROOM_TTL_SECONDS);
-        for (RoomRow candidate : rooms.findEmptyOpenRoomsCreatedBefore(deadline)) {
-            quietly(
-                    "빈 방 종료 " + candidate.id(),
-                    () -> tx.execute(status -> {
-                        rooms.lockById(candidate.id())
-                                .filter(RoomRow::isOpen)
-                                .ifPresent(room -> rooms.closeIfEmpty(
-                                        room.id(), room.inviteCode(), CloseReason.EMPTY_EXPIRED, now));
-                        return null;
-                    }));
-        }
+        quietly("빈 방 조회", () -> {
+            for (RoomRow candidate : rooms.findEmptyOpenRoomsCreatedBefore(deadline)) {
+                quietly(
+                        "빈 방 종료 " + candidate.id(),
+                        () -> tx.execute(status -> {
+                            rooms.lockById(candidate.id())
+                                    .filter(RoomRow::isOpen)
+                                    .ifPresent(room -> rooms.closeIfEmpty(
+                                            room.id(), room.inviteCode(), CloseReason.EMPTY_EXPIRED, now));
+                            return null;
+                        }));
+            }
+        });
     }
 
+    // 단계의 드라이버 쿼리까지 이 안에서 실행한다 — 조회 하나가 터졌다고 뒤 단계가 통째로 건너뛰면
+    // (예: 만료 후보 조회 실패 → 빈 방이 영영 안 닫힘) 스윕이 한 틱 이상 멈춘 것과 같다
     private void quietly(String step, Runnable action) {
         try {
             action.run();
         } catch (RuntimeException e) {
             log.warn("cleanup 단계 실패({}) — 다음 틱에 재시도", step, e);
+            // 삼킨 예외도 Sentry에는 올린다 — 로그만 남으면 스윕이 조용히 실패한 채로 남는다
+            Sentry.captureException(e);
         }
     }
 }

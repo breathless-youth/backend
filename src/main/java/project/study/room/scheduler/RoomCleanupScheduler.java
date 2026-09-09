@@ -1,5 +1,6 @@
 package project.study.room.scheduler;
 
+import io.sentry.Sentry;
 import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -27,10 +28,20 @@ public class RoomCleanupScheduler {
     private final RoomCleanupService roomCleanupService;
     private final SimpMessagingTemplate messagingTemplate;
 
-    // 방 하나를 커밋할 때마다 그 방의 MEMBER_LEFT를 즉시 보낸다 — 뒤 방의 실패가 앞 방의 알림을 막지 않는다
-    @Scheduled(fixedRate = 5000)
+    // 방 하나를 커밋할 때마다 그 방의 MEMBER_LEFT를 즉시 보낸다 — 뒤 방의 실패가 앞 방의 알림을 막지 않는다.
+    //
+    // 예외를 직접 잡아 Sentry로 올린다 — @Scheduled 메서드에서 예외가 밖으로 나가면 Spring이
+    // 로그만 남기고 삼킨다 (다른 스케줄러와 동일).
+    // fixedDelay다 — fixedRate는 한 틱이 밀리면 밀린 만큼 몰아서 실행해(catch-up) 공유 스케줄러
+    // 스레드를 더 오래 붙잡는다 (형제 스케줄러도 fixedDelay).
+    @Scheduled(fixedDelay = 5000)
     public void cleanup() {
-        roomCleanupService.cleanupExpired(Instant.now(), this::broadcastLeft);
+        try {
+            roomCleanupService.cleanupExpired(Instant.now(), this::broadcastLeft);
+        } catch (Exception e) {
+            log.error("룸 정리 실패", e);
+            Sentry.captureException(e);
+        }
     }
 
     // 발송 실패를 자리마다 가둔다 — 한 건이 터져도 같은 방의 남은 MEMBER_LEFT가 함께 사라지지 않는다
