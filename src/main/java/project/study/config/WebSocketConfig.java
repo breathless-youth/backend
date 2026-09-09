@@ -199,8 +199,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             Long roomId = Long.valueOf(matcher.group(1));
             Long userId = Long.valueOf(principal.getName());
             boolean allowed = roomStateService.hasParticipant(roomId, userId);
-            if (!allowed) {
-                // 프레임은 버리되 요청 세션에만 알린다 — 지금까지는 조용히 버려져 FE가 거부를 알 길이 없었다
+            // 프레임은 버리되 요청 세션에만 알린다 — 지금까지는 조용히 버려져 FE가 거부를 알 길이 없었다.
+            // sessionId가 없으면 보내지 않는다 — 세션 없는 발송은 유저 스코프가 되어 그 유저의 다른 세션까지 팬아웃한다
+            if (!allowed && accessor.getSessionId() != null) {
                 messenger.getObject().roomUnavailable(principal.getName(), accessor.getSessionId(), roomId);
             }
             return allowed;

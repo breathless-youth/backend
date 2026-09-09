@@ -9,7 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
-import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 import project.study.room.dto.RoomMember;
@@ -26,6 +25,7 @@ public class RoomStompHandler {
     private static final Set<String> FOCUS_STATES = Set.of("FOCUS", "DISTRACTED");
 
     private final RoomStateService roomStateService;
+    private final RoomMessenger roomMessenger;
     private final SimpMessagingTemplate messagingTemplate;
 
     // SNAPSHOT 재요청 — 구독 등록 전에 발사된 SNAPSHOT이 증발하는 레이스를 클라 재시도로 복구한다.
@@ -44,15 +44,10 @@ public class RoomStompHandler {
         }
 
         log.debug("snapshot 재발송: roomId={}, userId={}, 인원={}", roomId, userId, members.size());
-        // 세션 스코프 발송 — 같은 유저의 남은 옛 세션까지 배달되지 않도록 요청 세션에만 보낸다
-        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
-        headers.setSessionId(accessor.getSessionId());
-        headers.setLeaveMutable(true);
-        messagingTemplate.convertAndSendToUser(
-                principal.getName(),
-                "/queue/room",
-                Map.of("type", "SNAPSHOT", "members", members),
-                headers.getMessageHeaders());
+        // 세션 스코프 발송 — 같은 유저의 남은 옛 세션까지 배달되지 않도록 요청 세션에만 보낸다.
+        // 헤더 구성은 RoomMessenger 한 곳에만 둔다 (ROOM_UNAVAILABLE과 같은 경로)
+        roomMessenger.toSession(
+                principal.getName(), accessor.getSessionId(), Map.of("type", "SNAPSHOT", "members", members));
     }
 
     @MessageMapping("/room/{roomId}/signal")

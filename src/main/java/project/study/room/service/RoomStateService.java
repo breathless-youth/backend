@@ -31,7 +31,8 @@ public class RoomStateService {
     /** 발신자가 현재 세션의 확정 멤버이고 수신자가 확정 멤버인지 한 번의 조회로 판정한다. */
     @Transactional(readOnly = true)
     public boolean authorizeSignal(Long roomId, Long fromUserId, String sessionId, Long toUserId) {
-        if (sessionId == null) {
+        // id가 null이면 목록 구성(List.of)에서 NPE가 난다 — 호출자(핸들러)가 이미 거르지만 여기서도 막는다
+        if (sessionId == null || fromUserId == null || toUserId == null) {
             return false;
         }
         List<Row> rows = participations.findLiveByRoomAndUsers(roomId, List.of(fromUserId, toUserId));

@@ -29,8 +29,12 @@ class UserIdChannelInterceptorTest {
     }
 
     private static Message<byte[]> subscribe(String destination, String userId) {
+        return subscribe(destination, userId, "s1");
+    }
+
+    private static Message<byte[]> subscribe(String destination, String userId, String sessionId) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
-        accessor.setSessionId("s1");
+        if (sessionId != null) accessor.setSessionId(sessionId);
         accessor.setDestination(destination);
         if (userId != null) accessor.setUser(() -> userId);
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
@@ -52,6 +56,16 @@ class UserIdChannelInterceptorTest {
         assertThat(interceptor().preSend(subscribe("/topic/room/3", "7"), mock(MessageChannel.class)))
                 .isNull();
         verify(messenger).roomUnavailable("7", "s1", 3L);
+    }
+
+    @Test
+    void 세션_ID가_없으면_거부해도_ROOM_UNAVAILABLE을_보내지_않는다() {
+        when(roomState.hasParticipant(3L, 7L)).thenReturn(false);
+
+        // 세션 없는 발송은 유저 스코프가 되어 그 유저의 다른 세션까지 팬아웃한다 — 아예 보내지 않는다
+        assertThat(interceptor().preSend(subscribe("/topic/room/3", "7", null), mock(MessageChannel.class)))
+                .isNull();
+        verifyNoInteractions(messenger);
     }
 
     @Test

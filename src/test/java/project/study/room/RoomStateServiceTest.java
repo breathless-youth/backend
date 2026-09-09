@@ -92,6 +92,9 @@ class RoomStateServiceTest {
                 .isTrue();
         assertThat(state.authorizeSignal(roomId, me, "old", peer)).as("옛 세션").isFalse();
         assertThat(state.authorizeSignal(roomId, me, null, peer)).as("세션 없음").isFalse();
+        assertThat(state.authorizeSignal(roomId, me, "s1", null))
+                .as("수신자 ID 없음 — 목록 구성 전에 거절")
+                .isFalse();
         assertThat(state.authorizeSignal(roomId, me, "s1", 999_999L))
                 .as("비멤버 수신자")
                 .isFalse();

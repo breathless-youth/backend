@@ -1,7 +1,5 @@
 package project.study.room;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -13,16 +11,15 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import project.study.room.dto.RoomMember;
 import project.study.room.dto.StateUpdatePayload;
 import project.study.room.service.RoomStateService;
+import project.study.room.websocket.RoomMessenger;
 import project.study.room.websocket.RoomStompHandler;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,6 +30,9 @@ class RoomStompHandlerTest {
 
     @Mock
     private RoomStateService roomStateService;
+
+    @Mock
+    private RoomMessenger roomMessenger;
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
@@ -56,17 +56,11 @@ class RoomStompHandlerTest {
 
         handler.handleSnapshotRequest(ROOM_ID, USER_1, accessorWithSession("session-1"));
 
-        // 같은 유저의 남은 옛 세션이 아니라 요청 세션에만 배달되도록 세션 스코프 헤더를 확인한다
-        ArgumentCaptor<MessageHeaders> headers = ArgumentCaptor.forClass(MessageHeaders.class);
-        verify(messagingTemplate)
-                .convertAndSendToUser(
-                        eq("1"),
-                        eq("/queue/room"),
-                        eq(Map.of("type", "SNAPSHOT", "members", members)),
-                        headers.capture());
-        assertThat(headers.getValue()).containsEntry(SimpMessageHeaderAccessor.SESSION_ID_HEADER, "session-1");
+        // 같은 유저의 남은 옛 세션이 아니라 요청 세션에만 배달되도록 세션 스코프 발송을 쓴다
+        verify(roomMessenger).toSession("1", "session-1", Map.of("type", "SNAPSHOT", "members", members));
+        verifyNoMoreInteractions(roomMessenger);
         // 다른 멤버에게는 어떤 브로드캐스트도 없다
-        verifyNoMoreInteractions(messagingTemplate);
+        verifyNoInteractions(messagingTemplate);
     }
 
     @Test
@@ -90,14 +84,14 @@ class RoomStompHandlerTest {
         handler.handleSnapshotRequest(ROOM_ID, USER_1, accessorWithSession("session-1"));
 
         // 에러 프레임도, 개인 큐 발송도 없다 — 클라 재시도가 조용히 소진되게
-        verifyNoInteractions(messagingTemplate);
+        verifyNoInteractions(roomMessenger, messagingTemplate);
     }
 
     @Test
     void principal이_없으면_스냅샷_재요청을_무시한다() {
         handler.handleSnapshotRequest(ROOM_ID, null, accessorWithSession("session-1"));
 
-        verifyNoInteractions(roomStateService, messagingTemplate);
+        verifyNoInteractions(roomStateService, roomMessenger, messagingTemplate);
     }
 
     @Test
