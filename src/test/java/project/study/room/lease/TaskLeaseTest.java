@@ -3,6 +3,7 @@ package project.study.room.lease;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -44,9 +45,10 @@ class TaskLeaseTest {
         lease.stop();
     }
 
+    // doReturn을 쓴다 — 실패 스텁이 걸린 뒤 when(leases.heartbeat(...))로 다시 스텁하면 스텁하는 호출 자체가 던진다
     private void beatAfter(long seconds, Heartbeat result) {
         clock.advance(Duration.ofSeconds(seconds));
-        when(leases.heartbeat(any(), any())).thenReturn(result);
+        doReturn(result).when(leases).heartbeat(any(), any());
         lease.beat();
     }
 
@@ -122,6 +124,25 @@ class TaskLeaseTest {
 
         verify(registry, never()).fence();
         assertThat(lease.canReclaim()).isTrue();
+    }
+
+    // 실패한 beat는 5초짜리라 간격만 보면 공백으로 안 잡힌다 — 순단에서 먼저 회복한 쪽이 옛 연속 구간을
+    // 그대로 들고 아직 못 돌아온 상대를 회수하지 않도록, 실패 뒤 첫 성공이 관찰 기간을 다시 시작해야 한다
+    @Test
+    void heartbeat_실패_뒤_첫_성공은_관찰_기간을_다시_시작한다() {
+        for (int i = 0; i < 6; i++) {
+            beatAfter(5, OK);
+        }
+        assertThat(lease.canReclaim()).isTrue();
+
+        clock.advance(Duration.ofSeconds(5));
+        doThrow(new RuntimeException("db down")).when(leases).heartbeat(any(), any());
+        lease.beat();
+        assertThat(lease.canReclaim()).as("실패만으로는 옛 연속 구간이 남는다").isTrue();
+
+        beatAfter(5, OK);
+
+        assertThat(lease.canReclaim()).as("실패 뒤 첫 성공 — 관찰 기간 재시작").isFalse();
     }
 
     @Test

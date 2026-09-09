@@ -47,6 +47,8 @@ public class TaskLease implements SmartLifecycle {
     private ScheduledExecutorService executor;
     private volatile boolean running;
     private volatile Continuity continuity;
+    // 마지막 beat가 실패했는가 — 다음 성공 beat가 관찰 기간을 처음부터 다시 세게 만든다
+    private volatile boolean beatFailed;
 
     public TaskLease(
             TaskIdentity identity,
@@ -102,7 +104,9 @@ public class TaskLease implements SmartLifecycle {
         return identity.id();
     }
 
-    /** heartbeat 한 번. 실패는 기록하지 않고 다음 틱에 다시 시도한다 — 커밋된 beat만 연속성에 센다. */
+    /**
+     * heartbeat 한 번. 실패는 연속 구간에 세지 않고 다음 틱에 다시 시도한다 — 커밋된 beat만 연속성에 센다.
+     */
     public void beat() {
         Instant now = clock.instant();
         try {
@@ -115,6 +119,7 @@ public class TaskLease implements SmartLifecycle {
         } catch (Throwable t) {
             // Error까지 잡는다 — scheduleAtFixedRate는 태스크가 던지면 스케줄 자체를 취소해버려,
             // 한 번의 OOM/LinkageError로 heartbeat가 조용히 영영 멈추고 펜싱도 불가능해진다.
+            beatFailed = true;
             log.warn("heartbeat 실패: taskId={}", identity.id(), t);
         }
     }
@@ -133,12 +138,15 @@ public class TaskLease implements SmartLifecycle {
                 && Duration.between(current.last(), clock.instant()).getSeconds() <= STALE_SECONDS;
     }
 
+    // 실패한 beat도 관찰 기간을 끊는다 — 간격만 보면 5초짜리 실패가 공백으로 안 잡혀, DB 순단에서 먼저
+    // 회복한 태스크가 옛 연속 구간을 든 채 아직 못 돌아온 상대를 곧바로 회수한다 (스펙 §3의 복구 후 30초 관찰)
     private void recordBeat(Instant now) {
         Continuity current = continuity;
-        boolean gapExceeded =
-                current == null || Duration.between(current.last(), now).getSeconds() > STALE_SECONDS;
-        Instant since = gapExceeded ? now : current.since();
+        boolean restart =
+                current == null || Duration.between(current.last(), now).getSeconds() > STALE_SECONDS || beatFailed;
+        Instant since = restart ? now : current.since();
         continuity = new Continuity(since, now);
+        beatFailed = false;
     }
 
     // 펜싱된 상태를 먼저 반영해야 실패-안전이다 — register()가 예외를 던져도(beat()가 삼킴) 이미 죽었다고

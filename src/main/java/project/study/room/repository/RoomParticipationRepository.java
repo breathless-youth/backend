@@ -328,10 +328,16 @@ public class RoomParticipationRepository {
                 .list();
     }
 
+    // 회수 대상을 id 순으로 먼저 잠근다 — cleanup의 만료 경로는 방 행을 잡은 뒤 후보를 id 순으로 하나씩
+    // 잠그므로, 순서 없는 bulk UPDATE가 반대 방향으로 잠그면 두 경로가 서로를 기다리는 데드락이 된다
+    private static final String RECLAIM_SET =
+            "UPDATE room_participations SET disconnected_at = COALESCE(disconnected_at, :now), "
+                    + "stomp_session_id = NULL, task_id = NULL WHERE id IN ";
+
     /** 죽은 태스크의 참가자를 끊김으로 전환한다 — 이후는 유예 만료 경로가 처리. */
     public int reclaimByTask(String taskId, Instant now) {
-        return jdbc.sql("UPDATE room_participations SET disconnected_at = COALESCE(disconnected_at, :now), "
-                        + "stomp_session_id = NULL, task_id = NULL WHERE task_id = :taskId AND left_at IS NULL")
+        return jdbc.sql(RECLAIM_SET + "(SELECT id FROM room_participations "
+                        + "WHERE task_id = :taskId AND left_at IS NULL ORDER BY id FOR UPDATE)")
                 .param("now", ts(now))
                 .param("taskId", taskId)
                 .update();
@@ -339,9 +345,10 @@ public class RoomParticipationRepository {
 
     /** 리스 행이 아예 없는 task_id의 참가자(등록 전에 죽은 태스크)도 같은 전환을 적용한다. */
     public int reclaimOrphansWithoutLease(Instant now) {
-        return jdbc.sql("UPDATE room_participations SET disconnected_at = COALESCE(disconnected_at, :now), "
-                        + "stomp_session_id = NULL, task_id = NULL WHERE left_at IS NULL AND task_id IS NOT NULL "
-                        + "AND NOT EXISTS (SELECT 1 FROM live_task t WHERE t.task_id = room_participations.task_id)")
+        return jdbc.sql(RECLAIM_SET + "(SELECT id FROM room_participations "
+                        + "WHERE left_at IS NULL AND task_id IS NOT NULL AND NOT EXISTS "
+                        + "(SELECT 1 FROM live_task t WHERE t.task_id = room_participations.task_id) "
+                        + "ORDER BY id FOR UPDATE)")
                 .param("now", ts(now))
                 .update();
     }
