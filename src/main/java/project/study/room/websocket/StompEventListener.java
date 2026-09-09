@@ -1,10 +1,10 @@
 package project.study.room.websocket;
 
 import java.security.Principal;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +31,6 @@ public class StompEventListener {
     private final RoomMessenger messenger;
     private final SessionRegistry sessionRegistry;
     private final TaskIdentity taskIdentity;
-    private final Clock clock;
 
     @EventListener
     public void handleConnect(SessionConnectEvent event) {
@@ -70,9 +69,16 @@ public class StompEventListener {
             log.debug("닫힌 세션의 구독 무시: roomId={}, userId={}, sessionId={}", roomId, userId, sessionId);
             return;
         }
-        Instant openedAt = sessionRegistry.openedAt(sessionId).orElseGet(clock::instant);
+        // 레지스트리에 오픈 시각이 없으면 이미 닫혔거나 이 태스크가 모르는 세션이다. "지금"으로 대신하면
+        // session_opened_at <= :openedAt이 통과해 옛 세션의 뒤늦은 SUBSCRIBE가 새 세션을 덮는다 (스펙 §2.5-2)
+        Optional<Instant> openedAt = sessionRegistry.openedAt(sessionId);
+        if (openedAt.isEmpty()) {
+            log.debug("레지스트리에 없는 세션의 구독 무시: roomId={}, userId={}, sessionId={}", roomId, userId, sessionId);
+            return;
+        }
 
-        List<RoomMember> members = roomService.confirmStomp(roomId, userId, sessionId, openedAt, taskIdentity.id());
+        List<RoomMember> members =
+                roomService.confirmStomp(roomId, userId, sessionId, openedAt.get(), taskIdentity.id());
         if (members.isEmpty()) {
             // 인가는 통과했는데 그 사이 자리가 회수됐거나 옛 세션 — FE가 join을 다시 부르게 알린다
             messenger.roomUnavailable(principal.getName(), sessionId, roomId);

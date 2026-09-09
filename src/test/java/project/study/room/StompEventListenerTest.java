@@ -7,7 +7,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -45,9 +44,6 @@ class StompEventListenerTest {
 
     @Mock
     private TaskIdentity taskIdentity;
-
-    @Mock
-    private Clock clock;
 
     @InjectMocks
     private StompEventListener listener;
@@ -103,8 +99,7 @@ class StompEventListenerTest {
     @Test
     void 확정에_실패하면_요청_세션에_ROOM_UNAVAILABLE을_보낸다() {
         when(sessionRegistry.isOpen("s1")).thenReturn(true);
-        when(sessionRegistry.openedAt("s1")).thenReturn(Optional.empty());
-        when(clock.instant()).thenReturn(Instant.parse("2026-09-09T00:00:00Z"));
+        when(sessionRegistry.openedAt("s1")).thenReturn(Optional.of(Instant.parse("2026-09-09T00:00:00Z")));
         when(taskIdentity.id()).thenReturn("task-A");
         when(roomService.confirmStomp(any(), any(), any(), any(), any())).thenReturn(List.of());
 
@@ -112,6 +107,17 @@ class StompEventListenerTest {
 
         verify(messenger).roomUnavailable("7", "s1", 3L);
         verifyNoMoreInteractions(messenger);
+    }
+
+    // 오픈 시각을 "지금"으로 대신하면 옛 세션의 뒤늦은 SUBSCRIBE가 단조 조건을 통과해 새 세션을 덮는다
+    @Test
+    void 레지스트리에_오픈_시각이_없는_세션은_확정하지_않는다() {
+        when(sessionRegistry.isOpen("s1")).thenReturn(true);
+        when(sessionRegistry.openedAt("s1")).thenReturn(Optional.empty());
+
+        listener.handleSubscribe(new SessionSubscribeEvent(this, subscribe("s1", "/topic/room/3", "7")));
+
+        verifyNoInteractions(roomService, messenger);
     }
 
     @Test

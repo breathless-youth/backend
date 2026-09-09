@@ -3,6 +3,8 @@ package project.study.room;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -16,6 +18,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import project.study.room.lease.TaskLease;
 import project.study.room.repository.RoomParticipationRepository;
 import project.study.room.repository.RoomParticipationRepository.Candidate;
+import project.study.room.repository.RoomParticipationRepository.LiveSession;
 import project.study.room.repository.RoomParticipationRepository.Row;
 import project.study.room.repository.RoomRepository;
 import project.study.room.repository.RoomRepository.RoomRow;
@@ -24,6 +27,7 @@ import project.study.room.service.AutoLeave;
 import project.study.room.service.ParticipantRemover;
 import project.study.room.service.ParticipantRemover.Removed;
 import project.study.room.service.RoomCleanupService;
+import project.study.room.websocket.SessionRegistry;
 
 class RoomCleanupIsolationTest {
 
@@ -33,6 +37,7 @@ class RoomCleanupIsolationTest {
     private final RoomParticipationRepository participations = mock(RoomParticipationRepository.class);
     private final TaskLeaseRepository leases = mock(TaskLeaseRepository.class);
     private final TaskLease taskLease = mock(TaskLease.class);
+    private final SessionRegistry sessions = mock(SessionRegistry.class);
     private final ParticipantRemover remover = mock(ParticipantRemover.class);
     private final TransactionTemplate tx = mock(TransactionTemplate.class);
 
@@ -41,7 +46,7 @@ class RoomCleanupIsolationTest {
         when(tx.execute(any()))
                 .thenAnswer(inv ->
                         ((TransactionCallback<?>) inv.getArgument(0)).doInTransaction(mock(TransactionStatus.class)));
-        return new RoomCleanupService(rooms, participations, leases, taskLease, remover, tx);
+        return new RoomCleanupService(rooms, participations, leases, taskLease, sessions, remover, tx);
     }
 
     private static RoomRow open(long id) {
@@ -84,6 +89,21 @@ class RoomCleanupIsolationTest {
 
         org.mockito.Mockito.verify(leases, org.mockito.Mockito.never()).reclaim(any(), any(), any());
         org.mockito.Mockito.verify(participations, org.mockito.Mockito.never()).reclaimByTask(any(), any());
+    }
+
+    // 소켓이 살아 있는 참가자를 대조가 끊김으로 바꾸면 멀쩡한 세션이 통째로 죽는다
+    @Test
+    void 소켓이_열려_있는_자기_세션은_대조가_건드리지_않는다() {
+        when(taskLease.canReclaim()).thenReturn(false);
+        when(taskLease.taskId()).thenReturn("me");
+        when(participations.findLiveSessionsOfTask("me")).thenReturn(List.of(new LiveSession(1L, "s-open")));
+        when(sessions.isOpen("s-open")).thenReturn(true);
+        when(participations.findExpiryCandidates(any())).thenReturn(List.of());
+        when(rooms.findEmptyOpenRoomsCreatedBefore(any())).thenReturn(List.of());
+
+        service().cleanupExpired(NOW);
+
+        verify(participations, never()).markDisconnected(any(), any());
     }
 
     @Test

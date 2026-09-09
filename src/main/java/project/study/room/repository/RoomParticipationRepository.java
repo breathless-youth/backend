@@ -51,6 +51,9 @@ public class RoomParticipationRepository {
 
     public record Candidate(Long id, Long roomId, Long userId) {}
 
+    /** 한 태스크가 쥐고 있는 살아 있는 STOMP 세션 — 실제 소켓과 대조하는 자기 세션 복구용 (스펙 §2.10). */
+    public record LiveSession(Long id, String stompSessionId) {}
+
     private static final String COLUMNS = "id, room_id, user_id, nickname, goal, category, camera_on, focus_state, "
             + "focus_sec, reserved_at, stomp_confirmed, stomp_session_id, session_opened_at, task_id, "
             + "disconnected_at, joined_at, left_at, leave_reason";
@@ -94,6 +97,9 @@ public class RoomParticipationRepository {
 
     private static final RowMapper<Candidate> CANDIDATE =
             (rs, n) -> new Candidate(rs.getLong("id"), rs.getLong("room_id"), rs.getLong("user_id"));
+
+    private static final RowMapper<LiveSession> LIVE_SESSION =
+            (rs, n) -> new LiveSession(rs.getLong("id"), rs.getString("stomp_session_id"));
 
     private final JdbcClient jdbc;
 
@@ -309,6 +315,16 @@ public class RoomParticipationRepository {
                                 + EXPIRED + " ORDER BY room_id, id"),
                         window)
                 .query(CANDIDATE)
+                .list();
+    }
+
+    /** 한 태스크가 쥔 확정 세션들 — 스윕이 실제 소켓과 대조해 놓친 끊김을 복구한다 (스펙 §2.10). */
+    public List<LiveSession> findLiveSessionsOfTask(String taskId) {
+        return jdbc.sql("SELECT id, stomp_session_id FROM room_participations "
+                        + "WHERE task_id = :taskId AND left_at IS NULL AND stomp_session_id IS NOT NULL "
+                        + "ORDER BY id")
+                .param("taskId", taskId)
+                .query(LIVE_SESSION)
                 .list();
     }
 

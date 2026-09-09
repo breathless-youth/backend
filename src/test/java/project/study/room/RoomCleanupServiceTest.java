@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import project.study.TestcontainersConfiguration;
+import project.study.room.lease.TaskLease;
 import project.study.room.repository.RoomParticipationRepository;
 import project.study.room.repository.RoomParticipationRepository.Profile;
 import project.study.room.repository.RoomRepository;
@@ -38,6 +39,9 @@ class RoomCleanupServiceTest {
 
     @Autowired
     private TaskLeaseRepository leases;
+
+    @Autowired
+    private TaskLease taskLease;
 
     @Autowired
     private JdbcClient jdbc;
@@ -141,6 +145,21 @@ class RoomCleanupServiceTest {
         assertThat(probe.participation(roomId, userId).orElseThrow().disconnectedAt())
                 .isNotNull();
         assertThat(probe.heartbeatAt("task-old")).isEmpty();
+    }
+
+    // disconnect의 DB 갱신이 실패하면 소켓은 없는데 행은 확정 상태로 남는다 — heartbeat가 살아 있어
+    // 리스 회수에도 안 걸리므로, 자기 세션 대조가 유일한 복구 경로다
+    @Test
+    void 소켓이_없는_자기_태스크의_참가자는_끊김으로_전환된다() {
+        long roomId = openRoom(now.minusSeconds(100));
+        participations.insertReservation(roomId, userId, PROFILE, now);
+        participations.confirm(roomId, userId, "ghost-session", now, taskLease.taskId(), now);
+
+        cleanup.cleanupExpired(now);
+
+        RoomProbe.Participation reconciled = probe.participation(roomId, userId).orElseThrow();
+        assertThat(reconciled.disconnectedAt()).isNotNull();
+        assertThat(reconciled.taskId()).isNull();
     }
 
     @Test
