@@ -31,6 +31,9 @@ logging:
 # 로컬에서 프론트를 띄워 API를 호출할 때 필요하다.
 # 포트는 번들러마다 달라(Vite 5173, Next 3000 등) 열어둔다 — :[*]가 Spring의 포트 와일드카드 문법이다.
 app:
+  # 데모 유저·세션 목데이터 시딩. 값이 없으면 꺼짐 — 로컬에서 Swagger 안내와 함께 보고 싶을 때만 true (BY-640)
+  # seed:
+  #   enabled: true
   cors:
     allowed-origins:
       - http://localhost:[*]

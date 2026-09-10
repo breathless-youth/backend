@@ -30,6 +30,13 @@ class ArchitectureTest {
             .because("생성자 주입만 사용한다");
 
     @ArchTest
+    static final ArchRule noProfileBranching = noClasses()
+            .should()
+            .dependOnClassesThat()
+            .haveFullyQualifiedName("org.springframework.context.annotation.Profile")
+            .because("프로필은 환경별 yaml 선택 전용이다 — 기능은 @ConditionalOnProperty + 프로퍼티로 켜고 끈다 (BY-640)");
+
+    @ArchTest
     static final ArchRule servicesShouldBeInDomainPackages = classes()
             .that()
             .haveSimpleNameEndingWith("Service")
