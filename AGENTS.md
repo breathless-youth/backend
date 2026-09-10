@@ -23,6 +23,9 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
 - 각 도메인 안: `XxxController`, `XxxService`, `XxxRepository`, 엔티티, DTO(record)
 - 도메인 간 직접 참조 최소화. 공통은 `common/`, 보안 설정은 `config/`
 - 규칙은 ArchUnit 테스트(`ArchitectureTest`)로 강제됨 — 어기면 check 실패
+- 코드에서 프로필 이름을 묻지 않는다(`@Profile`, `matchesProfiles` 금지 — ArchUnit이 `@Profile`을 막는다). 프로필은
+  환경별 yaml 선택 전용이고, 기능 토글은 `@ConditionalOnProperty` + `app.<기능>.enabled` 프로퍼티로 한다.
+  운영에 켜지면 위험한 편의 기능(시딩·API 문서)은 값이 없을 때 꺼지는 것이 기본 (BY-640)
 
 ## 기술 스택 주의사항 (중요)
 - **Spring Boot 4.x다.** 학습 데이터의 3.x 지식과 다른 부분:

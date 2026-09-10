@@ -13,7 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.studysession.dto.StatusEventRequest;
@@ -25,7 +25,9 @@ import project.study.user.dto.UserRegisterRequest;
 import project.study.user.service.UserService;
 
 /**
- * dev 프로필 전용 목데이터 시더 — 데모 유저와 엣지케이스 세션 5건 + 최근 30일 하루 0~8개 랜덤 세션을 시딩한다.
+ * 목데이터 시더 — 데모 유저와 엣지케이스 세션 5건 + 최근 30일 하루 0~8개 랜덤 세션을 시딩한다.
+ * {@code app.seed.enabled=true}일 때만 뜬다(dev yaml에서 켠다). 프로필 이름이 아니라 스위치에 묶는 이유: 고정 deviceId는
+ * 우리 인증 모델에서 곧 자격증명이라, 프로필 값이 잘못 들어온 운영에서 조용히 켜지면 안 된다 — 값이 없으면 꺼짐 (BY-640).
  * 세션이 아예 없는 날도 섞여있어 스트릭이 끊기는 케이스, 빈 날짜 조회도 데모 데이터로 확인할 수 있다.
  * 서비스 레이어를 그대로 통과시켜 검증·계산·자정 분할이 실제 제출과 동일하게 적용되고,
  * 재시작할 때마다 서버 시작 시각 기준 날짜로 갈아끼워 하루 조회 API에서 항상 데이터가 보인다.
@@ -33,7 +35,7 @@ import project.study.user.service.UserService;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class DevDataSeeder implements ApplicationRunner {
 

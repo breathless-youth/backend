@@ -2,6 +2,7 @@ package project.study.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.swagger.v3.oas.models.OpenAPI;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -10,16 +11,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import project.study.TestcontainersConfiguration;
 
-@SpringBootTest
+// 시딩은 프로필이 아니라 스위치가 켠다 (BY-640) — 켜면 컨텍스트 기동 시 DevDataSeeder가 자동 실행된다
+@SpringBootTest(properties = "app.seed.enabled=true")
 @Import(TestcontainersConfiguration.class)
-@ActiveProfiles("dev") // dev 프로필이라 컨텍스트 기동 시 DevDataSeeder가 자동 실행된다
 class DevDataSeederTest {
 
     @Autowired
     private DevDataSeeder seeder;
+
+    @Autowired
+    private OpenAPI openApi;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -84,5 +87,10 @@ class DevDataSeederTest {
                 DevDataSeeder.DEMO_DEVICE_ID);
         assertThat(demoUsers).isEqualTo(1);
         assertThat(sessionCount(userId)).isEqualTo(before);
+    }
+
+    @Test
+    void 시딩_스위치가_켜지면_API_문서에_목데이터_안내가_함께_붙는다() {
+        assertThat(openApi.getInfo().getDescription()).contains("목데이터 안내").contains(DevDataSeeder.DEMO_DEVICE_ID);
     }
 }
