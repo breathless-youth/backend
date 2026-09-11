@@ -1,0 +1,100 @@
+# dev 서버(EC2 docker compose: app + postgres) 프로필.
+# 시크릿은 prod와 같은 이름의 환경변수로만 받고 기본값을 두지 않는다 (BY-642). 실제 값은 서버의
+# .env(compose env_file)에만 있고, 로컬 개발은 gitignore 대상인 application-local.yaml에 둔다.
+# 누락 시 동작: @Value로 읽는 값(카카오 앱 키, TURN 시크릿)은 'Could not resolve placeholder'로 즉시 기동 실패.
+# datasource는 @ConfigurationProperties 바인딩이라 미해결 placeholder 문자열이 그대로 비밀번호로 쓰여
+# DB 인증 실패로 기동이 멈춘다(조용히 뜨지는 않음). JWT_SECRET은 인증 파킹 중이라 지금은 읽는 코드가 없다.
+spring:
+  application:
+    name: study
+  http:
+    client:
+      connect-timeout: 5s
+      read-timeout: 5s
+  jpa:
+    # SQL 로깅은 p6spy가 담당한다 (아래 decorator.datasource.p6spy). hibernate show-sql은
+    # '?' 자리표시자만 찍어 바인딩 값을 못 보여주므로 끈다 — 두 곳에서 중복 출력도 방지.
+    show-sql: false
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  datasource:
+    # compose 안의 postgres 서비스가 기본. 비밀번호는 기본값 없음 — 누락 시 위 헤더 참고(인증 실패로 드러남)
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres/study}
+    username: ${SPRING_DATASOURCE_USERNAME:study}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  # 5초 룸 정리 스윕이 일일 리포트·세션 확정 스케줄러와 스레드를 나눠 쓰지 않게 (기본 풀 크기 1)
+  task:
+    scheduling:
+      pool:
+        size: 2
+
+# p6spy — 바인딩 파라미터가 채워진 실제 실행 SQL을 slf4j 로거 'p6spy'로 출력한다.
+decorator:
+  datasource:
+    p6spy:
+      enable-logging: true
+      multiline: true
+      logging: slf4j
+
+oauth:
+  google:
+    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
+    client-id: ${OAUTH_GOOGLE_CLIENT_ID:320200622450-5bqjf3j6lu8akp20p4oikiio7t8brjtd.apps.googleusercontent.com}
+  kakao:
+    app-key: ${OAUTH_KAKAO_APP_KEY}
+  apple:
+    client-id: ${OAUTH_APPLE_CLIENT_ID:com.breathlessyouth.mobile}
+
+springdoc:
+  override-with-generic-response: false
+
+jwt:
+  secret: ${JWT_SECRET} # 32자 이상 랜덤 문자열. 인증 재도입(JwtUtil 복구) 시 @Value가 읽으며 그때부터 누락 = 기동 실패
+  access-expiration: 1800000 # 30분
+
+refresh-token:
+  expiration: 2592000000 # 한달 (opaque UUID, DB 저장)
+
+# 웹소켓 연결/구독/해제, 룸 상태 변경 흐름을 추적하기 위한 DEBUG 로그.
+# prod에는 넣지 않는다 — 로그 볼륨·성능에 영향 없이 그쪽은 기본(INFO) 유지 (BY-426)
+logging:
+  level:
+    project.study: DEBUG
+  # dev 로그를 prod처럼 한 줄 JSON(ECS)으로 보려면 아래를 켠다. 예전 파일의 최상위 `environment:` 키는
+  # Spring이 읽지 않는 자리라 효과가 없었다 — 필요하면 이 프로퍼티(또는 env LOGGING_STRUCTURED_FORMAT_CONSOLE)로
+  # structured:
+  #   format:
+  #     console: ecs
+
+# 프론트를 로컬에서 띄운 채 dev 서버 API를 호출하는 경우가 있어 localhost도 허용한다.
+# 포트는 번들러마다 달라(Vite 5173, Next 3000 등) 열어둔다 — :[*]가 Spring의 포트 와일드카드 문법이다.
+# prod에는 넣지 않는다.
+app:
+  # 데모 데이터 시딩 + Swagger 목데이터 안내 (BY-640: 프로필 대신 스위치). dev 서버 전용 편의 기능
+  seed:
+    enabled: true
+  ws:
+    stats-logging-period-ms: 30000   # 30초
+  cors:
+    allowed-origins:
+      - https://*-breathless-youth.vercel.app
+      - http://localhost:[*]
+      - http://127.0.0.1:[*]
+      - https://web-dev.focusmakers.app
+
+  # 실시간 룸 WebRTC의 TURN 서버 접속 정보.
+  # BY-578: coturn을 Oracle Cloud로 이전 (egress 10TB/월 무료) — AWS coturn은 폐기.
+  room:
+    turn:
+      # Oracle coturn·prod(SSM room/turn-secret)와 공유하는 static-auth-secret. 기본값 없음
+      secret: ${APP_ROOM_TURN_SECRET}
+      # Oracle Cloud coturn (ap-osaka-1) — IPv4는 예약 공인 IP라 불변.
+      # ★ IPv6는 VNIC 재생성 시 바뀐다 — Oracle 인스턴스 갈아타면 이 기본값도 갱신할 것 (쉼표 구분)
+      urls: ${APP_ROOM_TURN_URLS:stun:161.33.27.117:3478, turn:161.33.27.117:3478?transport=udp, turn:161.33.27.117:3478?transport=tcp, turn:[2603:c023:17:d800:0:c9c4:dc84:33a9]:3478?transport=udp, turn:[2603:c023:17:d800:0:c9c4:dc84:33a9]:3478?transport=tcp}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,wsstats

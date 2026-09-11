@@ -9,7 +9,7 @@ Vision AI 기술을 활용해 사용자의 실제 공부 상태를 감지하고,
 
 ## 자주 쓰는 명령어
 ```bash
-cp src/main/resources/application-local.yaml{.example,}     # 최초 세팅: 로컬 설정 생성 (gitignore 대상)
+cp src/main/resources/application-local.yaml{.example,}     # 최초 세팅: 로컬 설정 생성 (gitignore 대상, 실제 시크릿은 여기에만)
 docker compose up -d                                        # PostgreSQL 기동
 ./gradlew check                                             # 전체 검증 (테스트+포맷+린트+아키텍처)
 ./gradlew test --tests "project.study.<도메인>.*"           # 특정 패키지 테스트만
