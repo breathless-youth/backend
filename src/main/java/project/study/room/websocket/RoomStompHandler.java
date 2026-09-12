@@ -5,31 +5,30 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
-import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 import project.study.room.dto.RoomMember;
 import project.study.room.dto.SignalPayload;
 import project.study.room.dto.StateUpdatePayload;
-import project.study.room.service.RoomService;
+import project.study.room.service.RoomStateService;
 
 @Controller
 @RequiredArgsConstructor
+@Slf4j
 public class RoomStompHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(RoomStompHandler.class);
     private static final Set<String> SIGNAL_KINDS = Set.of("OFFER", "ANSWER", "CANDIDATE");
     private static final Set<String> FOCUS_STATES = Set.of("FOCUS", "DISTRACTED");
 
-    private final RoomService roomService;
+    private final RoomStateService roomStateService;
+    private final RoomMessenger roomMessenger;
     private final SimpMessagingTemplate messagingTemplate;
 
-    // SNAPSHOT 재요청 (BY-442) — 구독 등록 전에 발사된 SNAPSHOT이 증발하는 레이스를 클라 재시도로 복구한다.
+    // SNAPSHOT 재요청 — 구독 등록 전에 발사된 SNAPSHOT이 증발하는 레이스를 클라 재시도로 복구한다.
     // body는 무시하고, 방 상태를 바꾸지 않으며, 비멤버·옛 세션은 에러 프레임 없이 조용히 무시한다
     // (재시도가 조용히 소진되게). 레이스로 이번 요청이 세션 확정보다 먼저 도착해도 다음 재시도가 성공한다
     @MessageMapping("/room/{roomId}/snapshot")
@@ -38,22 +37,17 @@ public class RoomStompHandler {
         if (principal == null) return;
 
         Long userId = Long.valueOf(principal.getName());
-        List<RoomMember> members = roomService.getMembersForActiveSession(roomId, userId, accessor.getSessionId());
+        List<RoomMember> members = roomStateService.getMembersForActiveSession(roomId, userId, accessor.getSessionId());
         if (members.isEmpty()) {
             log.debug("snapshot 재요청 무시(비멤버 또는 비활성 세션): roomId={}, userId={}", roomId, userId);
             return;
         }
 
         log.debug("snapshot 재발송: roomId={}, userId={}, 인원={}", roomId, userId, members.size());
-        // 세션 스코프 발송 — 같은 유저의 남은 옛 세션까지 배달되지 않도록 요청 세션에만 보낸다
-        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
-        headers.setSessionId(accessor.getSessionId());
-        headers.setLeaveMutable(true);
-        messagingTemplate.convertAndSendToUser(
-                principal.getName(),
-                "/queue/room",
-                Map.of("type", "SNAPSHOT", "members", members),
-                headers.getMessageHeaders());
+        // 세션 스코프 발송 — 같은 유저의 남은 옛 세션까지 배달되지 않도록 요청 세션에만 보낸다.
+        // 헤더 구성은 RoomMessenger 한 곳에만 둔다 (ROOM_UNAVAILABLE과 같은 경로)
+        roomMessenger.toSession(
+                principal.getName(), accessor.getSessionId(), Map.of("type", "SNAPSHOT", "members", members));
     }
 
     @MessageMapping("/room/{roomId}/signal")
@@ -73,20 +67,9 @@ public class RoomStompHandler {
         }
 
         Long fromUserId = Long.valueOf(principal.getName());
-        log.debug(
-                "signal 요청: roomId={}, fromUserId={}, toUserId={}, kind={}",
-                roomId,
-                fromUserId,
-                payload.toUserId(),
-                payload.kind());
-        // 발신자의 "현재" 세션에서 온 메시지인지 + 수신자가 방 멤버인지 검사 — 옛 세션·비멤버의 시그널 주입 차단
-        if (!roomService.isActiveSession(roomId, fromUserId, accessor.getSessionId())
-                || !roomService.isConfirmedMember(roomId, payload.toUserId())) {
-            log.debug(
-                    "signal 인가 실패(비활성 세션 또는 비멤버): roomId={}, fromUserId={}, toUserId={}",
-                    roomId,
-                    fromUserId,
-                    payload.toUserId());
+        // 발신자의 "현재" 세션 + 수신자가 확정 멤버인지를 한 번의 조회로 — 옛 세션·비멤버의 시그널 주입 차단
+        if (!roomStateService.authorizeSignal(roomId, fromUserId, accessor.getSessionId(), payload.toUserId())) {
+            log.debug("signal 인가 실패: roomId={}, fromUserId={}, toUserId={}", roomId, fromUserId, payload.toUserId());
             return;
         }
 
@@ -94,6 +77,7 @@ public class RoomStompHandler {
                 "type", "SIGNAL", "fromUserId", fromUserId, "kind", payload.kind(), "payload", payload.payload()));
     }
 
+    // 필드별 검증은 SQL 전에 지금처럼 한다 — 무효한 필드만 무시(null)하고 나머지는 반영한다 (스펙 §2.7)
     @MessageMapping("/room/{roomId}/state")
     public void handleState(
             @DestinationVariable Long roomId,
@@ -103,45 +87,39 @@ public class RoomStompHandler {
         if (principal == null || payload == null) return;
 
         Long userId = Long.valueOf(principal.getName());
-        log.debug(
-                "state 요청: roomId={}, userId={}, cameraOn={}, focusState={}, studySeconds={}",
-                roomId,
-                userId,
-                payload.cameraOn(),
-                payload.focusState(),
-                payload.studySeconds());
-        if (!roomService.isActiveSession(roomId, userId, accessor.getSessionId())) {
-            log.debug("state 인가 실패(비활성 세션): roomId={}, userId={}", roomId, userId);
+        StateChange change = sanitize(payload);
+        // 갱신 1행 = 현재 세션의 확정 멤버 인가 + 저장. 저장이 성공했을 때만 브로드캐스트한다
+        if (!roomStateService.updateState(
+                roomId, userId, accessor.getSessionId(), change.cameraOn(), change.focusState(), change.focusSec())) {
+            log.debug("state 인가 실패 또는 갱신 없음: roomId={}, userId={}", roomId, userId);
             return;
         }
-
-        broadcastCameraChange(roomId, userId, payload.cameraOn());
-        broadcastFocusChange(roomId, userId, payload.focusState());
-        broadcastStudyTime(roomId, userId, payload.studySeconds());
+        broadcastChanges(roomId, userId, change);
     }
 
-    private void broadcastCameraChange(Long roomId, Long userId, Boolean cameraOn) {
-        if (cameraOn == null || !roomService.updateCamera(roomId, userId, cameraOn)) return;
-        messagingTemplate.convertAndSend("/topic/room/" + roomId, (Object)
-                Map.of("type", "CAMERA_CHANGED", "userId", userId, "cameraOn", cameraOn));
+    private record StateChange(Boolean cameraOn, String focusState, Integer focusSec) {}
+
+    private static StateChange sanitize(StateUpdatePayload payload) {
+        String focusState = payload.focusState() != null && FOCUS_STATES.contains(payload.focusState())
+                ? payload.focusState()
+                : null;
+        Integer focusSec = payload.focusSec() != null && payload.focusSec() >= 0 ? payload.focusSec() : null;
+        return new StateChange(payload.cameraOn(), focusState, focusSec);
     }
 
-    private void broadcastFocusChange(Long roomId, Long userId, String focusState) {
-        if (focusState == null
-                || !FOCUS_STATES.contains(focusState)
-                || !roomService.updateFocusState(roomId, userId, focusState)) {
-            return;
+    private void broadcastChanges(Long roomId, Long userId, StateChange change) {
+        String topic = "/topic/room/" + roomId;
+        if (change.cameraOn() != null) {
+            messagingTemplate.convertAndSend(
+                    topic, (Object) Map.of("type", "CAMERA_CHANGED", "userId", userId, "cameraOn", change.cameraOn()));
         }
-        messagingTemplate.convertAndSend("/topic/room/" + roomId, (Object)
-                Map.of("type", "FOCUS_CHANGED", "userId", userId, "focusState", focusState));
-    }
-
-    private void broadcastStudyTime(Long roomId, Long userId, Integer studySeconds) {
-        // camera/focus와 동일하게 저장이 성공했을 때만 브로드캐스트 — 마지막 값은 SNAPSHOT에 실린다
-        if (studySeconds == null || studySeconds < 0 || !roomService.updateStudyTime(roomId, userId, studySeconds)) {
-            return;
+        if (change.focusState() != null) {
+            messagingTemplate.convertAndSend(topic, (Object)
+                    Map.of("type", "FOCUS_CHANGED", "userId", userId, "focusState", change.focusState()));
         }
-        messagingTemplate.convertAndSend("/topic/room/" + roomId, (Object)
-                Map.of("type", "STUDY_TIME", "userId", userId, "studySeconds", studySeconds));
+        if (change.focusSec() != null) {
+            messagingTemplate.convertAndSend(
+                    topic, (Object) Map.of("type", "STUDY_TIME", "userId", userId, "focusSec", change.focusSec()));
+        }
     }
 }

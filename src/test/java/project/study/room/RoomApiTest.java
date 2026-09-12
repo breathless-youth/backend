@@ -10,6 +10,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
@@ -25,6 +26,9 @@ class RoomApiTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private JdbcClient jdbc;
 
     // join이 프로필(닉네임·목표)을 조회해 방 상태에 보관하므로 실제 유저가 필요하다
     private long registerUser() {
@@ -62,10 +66,11 @@ class RoomApiTest {
 
     @Test
     void 방을_만들면_201과_초대코드가_내려온다() {
+        long userId = registerUser();
         assertThat(mvc.post()
                         .uri("/api/rooms")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\": 1}"))
+                        .content("{\"userId\": " + userId + "}"))
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying("$.roomId", v -> assertThat(v).isNotNull())
@@ -74,8 +79,19 @@ class RoomApiTest {
     }
 
     @Test
+    void 등록되지_않은_유저는_방을_만들_수_없다() {
+        assertThat(mvc.post()
+                        .uri("/api/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": 999999999}"))
+                .hasStatus(HttpStatus.NOT_FOUND)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("USER_NOT_FOUND"));
+    }
+
+    @Test
     void 초대코드로_입장하면_200과_응답이_내려온다() {
-        String code = createRoomAndGetCode(1L);
+        String code = createRoomAndGetCode(registerUser());
         long userId = registerUser();
 
         assertThat(joinRequest(userId, code))
@@ -93,19 +109,29 @@ class RoomApiTest {
         assertThat(joinRequest(userId, "12a4")).hasStatus(HttpStatus.BAD_REQUEST);
     }
 
+    // 어느 방도 쓴 적 없는 코드 — 랜덤 발급이라 "없는 코드"를 고정할 수 없어서 조회로 고른다
+    private String unusedCode() {
+        for (int i = 0; i < 1000; i++) {
+            String code = String.format("%04d", new java.security.SecureRandom().nextInt(10000));
+            boolean used = jdbc.sql("select exists (select 1 from rooms where invite_code = :c)")
+                    .param("c", code)
+                    .query(Boolean.class)
+                    .single();
+            if (!used) return code;
+        }
+        throw new IllegalStateException("빈 코드를 못 찾음");
+    }
+
     @Test
     void 없는_초대코드는_404다() {
-        String code = createRoomAndGetCode(1L);
         long userId = registerUser();
-        // 활성 코드와 겹치지 않는 코드를 찾는다
-        String missing = code.equals("0000") ? "0001" : "0000";
 
-        assertThat(joinRequest(userId, missing)).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(joinRequest(userId, unusedCode())).hasStatus(HttpStatus.NOT_FOUND);
     }
 
     @Test
     void 등록되지_않은_유저가_입장하면_404다() {
-        String code = createRoomAndGetCode(1L);
+        String code = createRoomAndGetCode(registerUser());
 
         assertThat(joinRequest(999_999_999L, code))
                 .hasStatus(HttpStatus.NOT_FOUND)
@@ -115,7 +141,7 @@ class RoomApiTest {
 
     @Test
     void 정원_6명_초과_시_409를_반환한다() {
-        String code = createRoomAndGetCode(1L);
+        String code = createRoomAndGetCode(registerUser());
         for (int i = 1; i <= 6; i++) {
             assertThat(joinRequest(registerUser(), code)).hasStatusOk();
         }
@@ -125,7 +151,7 @@ class RoomApiTest {
 
     @Test
     void 퇴장하면_204를_반환한다() {
-        String code = createRoomAndGetCode(1L);
+        String code = createRoomAndGetCode(registerUser());
         long userId = registerUser();
         MvcTestResult joined = joinRequest(userId, code).exchange();
         assertThat(joined).hasStatusOk();
@@ -140,7 +166,7 @@ class RoomApiTest {
 
     @Test
     void 마지막_퇴장_후_같은_코드로_입장하면_404다() {
-        String code = createRoomAndGetCode(1L);
+        String code = createRoomAndGetCode(registerUser());
         long userId = registerUser();
         MvcTestResult joined = joinRequest(userId, code).exchange();
         long roomId = objectMapper

@@ -19,12 +19,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import project.study.common.ErrorResponse;
+import project.study.common.exception.ErrorResponse;
 import project.study.room.dto.RoomCreateRequest;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinRequest;
 import project.study.room.dto.RoomJoinResponse;
+import project.study.room.service.AutoLeave;
 import project.study.room.service.RoomService;
+import project.study.room.service.RoomService.JoinResult;
+import project.study.room.service.RoomService.LeaveResult;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.service.UserService;
 
@@ -43,9 +46,21 @@ public class RoomController {
                     **생성만으로는 입장 상태가 아니다** — 생성자도 join으로만 입장한다. \
                     생성 후 10분 내 아무도 입장하지 않으면 방과 코드가 자동 소멸한다.""")
     @ApiResponse(responseCode = "201", description = "생성 성공 — 방 ID와 초대코드")
+    @ApiResponse(
+            responseCode = "404",
+            description = "존재하지 않는 사용자",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples =
+                                    @ExampleObject(
+                                            value = "{\"code\": \"USER_NOT_FOUND\", \"message\": \"존재하지 않는 사용자입니다\"}")))
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoomCreateResponse create(@Valid @RequestBody RoomCreateRequest request) {
+        // rooms.created_by FK — 없는 유저는 join과 같은 404(USER_NOT_FOUND)로 답한다
+        userService.getProfile(request.userId());
         return roomService.create(request.userId());
     }
 
@@ -100,13 +115,12 @@ public class RoomController {
     @PostMapping("/join")
     public RoomJoinResponse join(@Valid @RequestBody RoomJoinRequest request) {
         // 프로필(닉네임·목표)은 방 상태에 보관돼 SNAPSHOT/MEMBER_JOINED에 실린다.
-        // RoomService는 글로벌 락이라 조회는 락 밖(여기)에서 한다. 없는 유저면 404
         ProfileResponse profile = userService.getProfile(request.userId());
-        RoomService.JoinResult result = roomService.join(
+        JoinResult result = roomService.join(
                 request.userId(), request.inviteCode(), profile.nickname(), profile.goal(), profile.category());
 
         if (result.autoLeave() != null) {
-            RoomService.AutoLeave al = result.autoLeave();
+            AutoLeave al = result.autoLeave();
             messagingTemplate.convertAndSend(
                     "/topic/room/" + al.roomId(), (Object) Map.of("type", "MEMBER_LEFT", "userId", al.userId()));
         }
@@ -121,8 +135,8 @@ public class RoomController {
     @PostMapping("/{roomId}/leave")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void leave(@PathVariable Long roomId, @RequestParam Long userId) {
-        boolean removed = roomService.leave(roomId, userId);
-        if (removed && roomService.roomExists(roomId)) {
+        LeaveResult result = roomService.leave(roomId, userId);
+        if (result.removed() && result.roomStillOpen()) {
             messagingTemplate.convertAndSend(
                     "/topic/room/" + roomId, (Object) Map.of("type", "MEMBER_LEFT", "userId", userId));
         }

@@ -27,9 +27,9 @@ bin/
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
+# 실제 시크릿은 로컬 전용 application-local.yaml에만 둔다. dev/prod yaml은 시크릿을 환경변수로
+# 주입받으므로(기본값 없음, 누락 시 기동 실패) 추적 대상이다 (BY-642)
 src/main/resources/application-local.yaml
-src/main/resources/application-dev.yaml
-# application-prod.yaml은 시크릿을 환경변수로 주입받으므로 추적 대상이다
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/

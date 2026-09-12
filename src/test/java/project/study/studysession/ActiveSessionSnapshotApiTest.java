@@ -17,11 +17,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
+import project.study.studysession.buffer.ActiveSnapshotBuffer;
 
 /** BY-447 진행 스냅샷 보고 API — 30초마다 오는 누적 스냅샷의 UPSERT·역순 무시·검증을 다룬다. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
+// 스냅샷은 항상 코얼레싱 버퍼를 거쳐 저장된다(BY-470, 즉시 UPSERT 경로 없음). 이 테스트는 보고 직후
+// buffer.flush()를 직접 호출해 DB 반영을 결정적으로 만든다. 버퍼링(코얼레싱·역순 무시)은 ActiveSnapshotBufferTest에서 따로 검증한다.
 class ActiveSessionSnapshotApiTest {
 
     @Autowired
@@ -29,6 +32,9 @@ class ActiveSessionSnapshotApiTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private ActiveSnapshotBuffer buffer;
 
     private Long userId;
 
@@ -59,11 +65,13 @@ class ActiveSessionSnapshotApiTest {
             Long uid, Instant started, Instant reported, int studySec, int focusSec, String eventsJson) {
         String body = """
 				{"userId": %d, "startedAt": "%s", "reportedAt": "%s", "studySec": %d, "focusSec": %d, "events": %s}""".formatted(uid, started, reported, studySec, focusSec, eventsJson);
-        return mvc.put()
+        MvcTestResult result = mvc.put()
                 .uri("/api/study-sessions/active")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
                 .exchange();
+        buffer.flush(); // 버퍼에 들어간 스냅샷을 지금 DB에 반영한다 — 검증 실패(400)면 버퍼가 비어 있어 no-op
+        return result;
     }
 
     private Integer draftRows(Long uid) {
@@ -130,10 +138,13 @@ class ActiveSessionSnapshotApiTest {
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
 
+    // 없는 user_id의 판정은 버퍼 flush(비동기)로 옮겨졌다 — 요청은 받아들이고(하트비트라 실질 영향 없음),
+    // flush의 행별 폴백이 FK 위반 행만 건너뛰어 draft가 남지 않는다 (ActiveStudySessionService.reportSnapshot 참고)
     @Test
-    void 존재하지_않는_유저는_404다() {
+    void 존재하지_않는_유저의_스냅샷은_요청은_받되_flush에서_버려진다() {
         assertThat(report(999_999L, startedAt, startedAt.plusSeconds(30), 30, 30))
-                .hasStatus(HttpStatus.NOT_FOUND);
+                .hasStatus(HttpStatus.NO_CONTENT);
+        assertThat(draftRows(999_999L)).isEqualTo(0);
     }
 
     @Test

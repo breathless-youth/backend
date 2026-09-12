@@ -9,7 +9,7 @@ Vision AI 기술을 활용해 사용자의 실제 공부 상태를 감지하고,
 
 ## 자주 쓰는 명령어
 ```bash
-cp src/main/resources/application-local.yaml{.example,}     # 최초 세팅: 로컬 설정 생성 (gitignore 대상)
+cp src/main/resources/application-local.yaml{.example,}     # 최초 세팅: 로컬 설정 생성 (gitignore 대상, 실제 시크릿은 여기에만)
 docker compose up -d                                        # PostgreSQL 기동
 ./gradlew check                                             # 전체 검증 (테스트+포맷+린트+아키텍처)
 ./gradlew test --tests "project.study.<도메인>.*"           # 특정 패키지 테스트만
@@ -23,6 +23,9 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
 - 각 도메인 안: `XxxController`, `XxxService`, `XxxRepository`, 엔티티, DTO(record)
 - 도메인 간 직접 참조 최소화. 공통은 `common/`, 보안 설정은 `config/`
 - 규칙은 ArchUnit 테스트(`ArchitectureTest`)로 강제됨 — 어기면 check 실패
+- 코드에서 프로필 이름을 묻지 않는다(`@Profile`, `matchesProfiles` 금지 — ArchUnit이 `@Profile`을 막는다). 프로필은
+  환경별 yaml 선택 전용이고, 기능 토글은 `@ConditionalOnProperty` + `app.<기능>.enabled` 프로퍼티로 한다.
+  운영에 켜지면 위험한 편의 기능(시딩·API 문서)은 값이 없을 때 꺼지는 것이 기본 (BY-640)
 
 ## 기술 스택 주의사항 (중요)
 - **Spring Boot 4.x다.** 학습 데이터의 3.x 지식과 다른 부분:
@@ -49,6 +52,10 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
 0. **지라 티켓 게이트**: 새로운 작업을 시작하기 전에 해당하는 지라 티켓이 있는지 사용자에게
    확인한다. 없으면 티켓을 먼저 만들고(Atlassian MCP 사용, 티켓 ID 형식 `BY-XXX`) 작업을
    시작한다 — 브랜치명·PR 제목이 티켓 ID를 참조하므로 티켓 없이 작업하지 않는다
+   - 티켓 본문은 기존 템플릿 구조(🎯 목표 / ✅ 완료 조건 / 🚫 범위 밖 / 🔀 브랜치 / 🔗 연관)를
+     유지하며 핵심만 간결하게 채운다. 상세 설계는 ADR·docs로 보내고 티켓에는 이름/링크만,
+     프론트 전달사항은 본문 대신 담당자 멘션 댓글로 남긴다
+   - PR 머지 후에는 티켓 상태를 완료로 전환한다 — 여기까지가 작업 종료다
 1. 기능 구현 시 테스트를 함께 작성 (서비스 로직은 단위테스트, API는 통합테스트)
 2. 작업 완료 선언 전 반드시 `./gradlew check` 실행하고 통과 확인
 3. 실패한 테스트를 지우거나 @Disabled 처리로 회피 금지

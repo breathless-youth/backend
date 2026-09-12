@@ -17,7 +17,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // @Modifying 쿼리의 반환 타입은 void/int/long만 허용된다 — 삽입된 행 수(0 또는 1)를 반환
     // 프로필(자동 닉네임·이니셜·색상)은 등록 시점에 함께 발급한다. 재등록(멱등)이면 기존 값 보존
     // on conflict에 타겟이 없어 닉네임 유니크 충돌도 예외 없이 0행으로 떨어진다
-    // (트랜잭션 안에서 제약 위반 예외가 나면 PostgreSQL이 트랜잭션을 abort해 재시도가 불가능하다)
+    // (트랜잭션 안에서 제약 위반 예외가 나면 PostgreSQL이 트랜잭션을 abort하고 Hibernate도 세션을 rollback-only로
+    // 마킹하므로, 예외를 catch해도 같은 트랜잭션에서 재시도가 불가능하다)
     @Modifying
     @Query(value = """
         insert into users (provider, provider_user_id, nickname, initial, color_index, created_at, updated_at)

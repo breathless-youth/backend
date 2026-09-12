@@ -571,7 +571,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import project.study.common.NotFoundException;
+import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.entity.StatusEvent;
@@ -652,7 +652,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import project.study.common.ErrorResponse;
+import project.study.common.exception.ErrorResponse;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.service.ActiveStudySessionService;
 

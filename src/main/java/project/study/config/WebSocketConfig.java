@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
@@ -23,8 +24,13 @@ import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 import org.springframework.web.socket.server.HandshakeInterceptor;
-import project.study.room.service.RoomService;
+import project.study.common.logging.StompMdcChannelInterceptor;
+import project.study.room.service.RoomStateService;
+import project.study.room.websocket.RoomMessenger;
+import project.study.room.websocket.SessionRegistry;
+import project.study.room.websocket.SessionTrackingDecorator;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -34,7 +40,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private static final String USER_ID_ATTR = "userId";
     private static final long HEARTBEAT_INTERVAL_MS = 10_000L;
 
-    private final RoomService roomService;
+    private final RoomStateService roomStateService;
+    private final SessionRegistry sessionRegistry;
+    // SimpMessagingTemplate(을 필요로 하는 RoomMessenger)을 configurer에 직접 주입하면 브로커 구성과
+    // 순환 참조가 나므로 ObjectProvider로 지연 해석한다
+    private final ObjectProvider<RoomMessenger> roomMessenger;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
@@ -44,13 +54,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // 하트비트가 없으면 클라이언트가 종료 신호 없이 사라졌을 때(전파 이탈, 배터리
-        // 방전 등) 서버가 끊김을 인지하지 못해 유예(grace period)가 시작되지 않고
-        // 유령 멤버가 방에 영원히 남는다. heartbeat 값 설정에는 TaskScheduler가 필수다.
+        // /topic, /queue는 메세지 브로커가 관리
         registry.enableSimpleBroker("/topic", "/queue")
+                // [0]은 서버가 클라이언트에게 보내는 주기, [1]은 클라이언트가 서버에게 보내는 주기 - 클라이언트도 CONNECT시에 보내는데 더 큰 값으로 합의
+                // 클라이언트가 0으로 보내면 HeartBeat는 비활성화
                 .setHeartbeatValue(new long[] {HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS})
                 .setTaskScheduler(heartbeatTaskScheduler());
+        // /app은 브로커가 아니라 controller로 보내는 기능
         registry.setApplicationDestinationPrefixes("/app");
+        // /user는 특정 사용자에게멘 보내는 기능
         registry.setUserDestinationPrefix("/user");
     }
 
@@ -58,13 +70,32 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(1);
         scheduler.setThreadNamePrefix("stomp-heartbeat-");
+        // 빈으로 등록하지 않으면 스스로 초기화해줘야한다
         scheduler.initialize();
         return scheduler;
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(new UserIdChannelInterceptor(roomService));
+        // 인바운드 핸들러가 이제 JDBC로 블로킹된다 — 기본(코어×2, 0.5vCPU에서 2개)은 부족하다 (BY-626, 스펙 §7)
+        registration.taskExecutor().corePoolSize(8).maxPoolSize(8);
+        // 인가 인터셉터가 CONNECT에서 프린시펄을 세팅하므로 MDC 인터셉터는 그 뒤에 둔다
+        registration.interceptors(
+                new UserIdChannelInterceptor(roomStateService, roomMessenger), new StompMdcChannelInterceptor());
+    }
+
+    // WS 전송 한도 (BY-491). 기본값(메시지 64KB, 세션당 송신버퍼 512KB)은 우리 메시지
+    // 실측(state ~200B, 시그널 ~300B, SNAPSHOT ~2KB) 대비 수십~수백 배 과하다.
+    // 송신버퍼는 CPU 포화로 브로드캐스트 flush가 밀릴 때 세션마다 쌓이는 곳이라,
+    // 한도 초과한 느린/죽은 클라이언트는 세션이 종료된다(좀비 커넥션 정리 효과).
+    @Override
+    public void configureWebSocketTransport(WebSocketTransportRegistration registry) {
+        registry.setMessageSizeLimit(16 * 1024); // 최대 메시지(SNAPSHOT ~2KB)의 8배 여유
+        registry.setSendBufferSizeLimit(64 * 1024); // 세션당 송신 대기 상한 512KB → 64KB
+        registry.setSendTimeLimit(5_000); // 5초 내 못 보내는 세션은 정리
+
+        // 소켓 핸들을 레지스트리에 등록한다 — confirm 사전/사후 검사와 펜싱(전체 닫기)에 쓴다 (BY-626)
+        registry.addDecoratorFactory(handler -> new SessionTrackingDecorator(handler, sessionRegistry));
     }
 
     record StompPrincipal(String userId) implements Principal {
@@ -84,6 +115,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             if (request instanceof ServletServerHttpRequest servletRequest) {
                 String userId = servletRequest.getServletRequest().getParameter(USER_ID_ATTR);
                 if (userId != null) {
+                    // 핸드셰이크 이후에는 HTTP가 끝나므로 세션 저장소에 userId 저장
                     attributes.put(USER_ID_ATTR, userId);
                 }
             }
@@ -98,15 +130,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 Exception exception) {}
     }
 
+    // STOMP 보안
     @RequiredArgsConstructor
     static class UserIdChannelInterceptor implements ChannelInterceptor {
 
+        // 정규식을 미리 컴파일해서 static으로 보관
         private static final Pattern ROOM_TOPIC_PATTERN = Pattern.compile("^/topic/room/(\\d+)$");
 
-        private final RoomService roomService;
+        private final RoomStateService roomStateService;
+        private final ObjectProvider<RoomMessenger> messenger;
 
         @Override
         public Message<?> preSend(Message<?> message, MessageChannel channel) {
+            // Message는 Spring 메시징의 범용 타입이라, STOMP 메세지 안전하게 꺼내기
             StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
             if (accessor == null) return message;
 
@@ -114,8 +150,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             if (command == null) return message; // heartbeat 등 커맨드 없는 프레임
 
             return switch (command) {
-                // STOMP 1.2는 CONNECT 대신 STOMP 커맨드도 유효한 연결 프레임이다
+                // CONNECT 대신 STOMP 커맨드도 유효한 연결 프레임
                 case CONNECT, STOMP -> {
+                    // Principal 세팅
                     setPrincipalFromSession(accessor);
                     yield message;
                 }
@@ -140,7 +177,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         }
 
         // 클라이언트 SEND는 /app/** 만 허용 — 브로커 목적지(/topic, /queue)로의 직접 발행을 차단해
-        // 핸들러의 인가·검증(isActiveSession, 화이트리스트)을 우회한 위조 이벤트 주입을 막는다
+        // 핸들러의 인가·검증을 우회한 위조 이벤트 주입을 막는다
         private static boolean allowSend(StompHeaderAccessor accessor) {
             String destination = accessor.getDestination();
             return destination != null && destination.startsWith("/app/");
@@ -148,8 +185,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
         // SUBSCRIBE 인가 — deny-by-default. simple broker는 Ant 패턴 구독(/topic/room/** 등)을
         // 지원하므로 정확히 일치하는 두 목적지만 허용한다. false = 메시지 드랍 → 구독 미생성.
-        // 알려진 한계(초안): leave 후에도 기존 구독은 살아 있다 — simple broker에 구독 강제 해제
-        // API가 없어 세션 종료 장치가 필요하다. 후속 작업으로 남긴다
         private boolean allowSubscribe(StompHeaderAccessor accessor) {
             String destination = accessor.getDestination();
             if (destination == null) return false;
@@ -163,7 +198,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
             Long roomId = Long.valueOf(matcher.group(1));
             Long userId = Long.valueOf(principal.getName());
-            return roomService.hasParticipant(roomId, userId);
+            boolean allowed = roomStateService.hasParticipant(roomId, userId);
+            // 프레임은 버리되 요청 세션에만 알린다 — 지금까지는 조용히 버려져 FE가 거부를 알 길이 없었다.
+            // sessionId가 없으면 보내지 않는다 — 세션 없는 발송은 유저 스코프가 되어 그 유저의 다른 세션까지 팬아웃한다
+            if (!allowed && accessor.getSessionId() != null) {
+                messenger.getObject().roomUnavailable(principal.getName(), accessor.getSessionId(), roomId);
+            }
+            return allowed;
         }
     }
 }

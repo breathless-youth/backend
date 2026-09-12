@@ -3,13 +3,19 @@ package project.study.metrics.scheduler;
 import io.sentry.Sentry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import project.study.metrics.service.DailyReportService;
 
+/**
+ * {@code app.report.enabled=true}(prod yaml)일 때만 뜬다. 예전에는 메서드에 {@code @Profile("prod")}를 달았지만 @Profile은
+ * 클래스와 @Bean 메서드에서만 평가되어 @Scheduled 메서드에서는 효력이 없었다 — dev에서도 매일 발화했고 실제로는
+ * SlackNotifier의 webhook 부재가 발송을 막고 있었다. 이제 스위치가 빈 자체를 결정한다 (BY-640).
+ */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "app.report.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class DailyReportScheduler {
 
@@ -29,7 +35,6 @@ public class DailyReportScheduler {
      * 생기더라도 매일 아침 Slack에 바로 드러나므로 조용히 잘못될 위험은 없다. desired_count를
      * 늘릴 계획이 생기면 그때 분산 락이나 외부 스케줄러(EventBridge)로 옮겨야 한다.
      */
-    @Profile("prod")
     @Scheduled(cron = "0 0 10 * * *", zone = "Asia/Seoul")
     public void sendDailyReport() {
         try {

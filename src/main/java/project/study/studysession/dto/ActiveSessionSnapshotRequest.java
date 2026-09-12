@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
+import project.study.common.logging.UserScopedRequest;
 
 /** 진행중 세션의 누적 스냅샷 — 30초마다 통째로 보내 서버 draft를 덮어쓴다 (BY-447). */
 public record ActiveSessionSnapshotRequest(
@@ -33,4 +34,5 @@ public record ActiveSessionSnapshotRequest(
         Integer focusSec,
 
         @Schema(description = "지금까지의 비공부 이벤트 전체 — 진행 중인 이벤트는 reportedAt에서 닫아서 보낸다. 없으면 []") @NotNull @Valid
-        List<StatusEventRequest> events) {}
+        List<StatusEventRequest> events)
+        implements UserScopedRequest {}

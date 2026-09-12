@@ -171,44 +171,57 @@ Table report {
 }
 
 // ---------------------------------------------------------
-// 문의/건의
-// ---------------------------------------------------------
-
-Table inquiry  {
-  id bigint [primary key, increment]
-  user_id bigint [ref: > users.id, not null]
-  content varchar
-  created_at timestamptz
-
-  indexes {
-    (created_at)
-  }
-}
-
-// ---------------------------------------------------------
 // 방(룸) / 방 참여자
 // ---------------------------------------------------------
 
 Table rooms {
   id bigint [primary key, increment]
-  room_uid uuid [not null, unique, note: '인메모리 방과의 연결고리 — 재시작 간 유일']
+  invite_code varchar(4) [not null]
   created_by bigint [ref: > users.id, not null]
   created_at timestamptz [not null]
-  closed_at timestamptz [note: 'NULL = 운영 중이거나 서버 재시작으로 유실']
+  closed_at timestamptz [note: 'NULL = 열린 방. 닫힌 방은 영구 보존(이력)']
   close_reason varchar(20) [note: 'LAST_LEFT | EMPTY_EXPIRED']
+
+  indexes {
+    (invite_code) [unique, name: 'rooms_open_code_uidx', note: 'WHERE closed_at IS NULL']
+    (invite_code, created_at) [name: 'rooms_code_latest_idx', note: 'created_at DESC']
+    (created_at) [name: 'rooms_open_created_idx', note: 'WHERE closed_at IS NULL']
+  }
 }
 
 Table room_participations {
   id bigint [primary key, increment]
-  room_uid uuid [ref: > rooms.room_uid, not null]
+  room_id bigint [ref: > rooms.id, not null]
   user_id bigint [ref: > users.id, not null]
-  joined_at timestamptz [not null, note: 'STOMP 확정 시각 (자리 예약 아님)']
-  left_at timestamptz
+  nickname varchar
+  goal varchar
+  category varchar
+  camera_on boolean [not null, default: false]
+  focus_state varchar(20) [not null, default: 'FOCUS']
+  focus_sec integer [not null, default: 0]
+  reserved_at timestamptz [not null]
+  stomp_confirmed boolean [not null, default: false]
+  stomp_session_id varchar
+  session_opened_at timestamptz [note: '마지막으로 확정된 세션의 소켓 오픈 시각']
+  task_id varchar
+  disconnected_at timestamptz
+  joined_at timestamptz [note: '최초 STOMP 확정 시각. NULL = 확정된 적 없는 예약']
+  left_at timestamptz [note: 'NULL = 지금 자리를 가진 참가자']
   leave_reason varchar(20) [note: 'EXPLICIT | DISCONNECT_TIMEOUT | SWITCHED_ROOM']
-  focus_sec integer [note: '퇴장 시점에 서버가 마지막으로 본 순공 타이머(초) — 클라이언트 주기 보고 값이라 뒤처질 수 있는 운영/백업 값. study_session과 무관. NULL = 도입 전 기록']
 
   indexes {
-    (user_id, joined_at)
-    (room_uid)
+    (user_id) [unique, name: 'rp_live_user_uidx', note: 'WHERE left_at IS NULL']
+    (room_id, user_id) [unique, name: 'rp_live_room_user_uidx', note: 'WHERE left_at IS NULL']
+    (stomp_session_id) [name: 'rp_session_idx', note: 'WHERE stomp_session_id IS NOT NULL']
+    (reserved_at) [name: 'rp_reserved_idx', note: 'WHERE left_at IS NULL AND NOT stomp_confirmed']
+    (disconnected_at) [name: 'rp_disconnected_idx', note: 'WHERE left_at IS NULL AND disconnected_at IS NOT NULL']
+    (task_id) [name: 'rp_task_idx', note: 'WHERE task_id IS NOT NULL']
+    (user_id, joined_at) [name: 'rp_user_joined_idx']
   }
+}
+
+Table live_task {
+  task_id varchar [primary key, note: 'ECS 태스크 ID(로그 스트림과 일치), 없으면 UUID']
+  heartbeat_at timestamptz [not null]
+  reclaimed_at timestamptz [note: 'NOT NULL = 다른 태스크가 죽었다고 보고 참가자를 회수함(펜싱 신호)']
 }

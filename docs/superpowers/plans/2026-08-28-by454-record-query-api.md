@@ -602,7 +602,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import project.study.common.NotFoundException;
+import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;

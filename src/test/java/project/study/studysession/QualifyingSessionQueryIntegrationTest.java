@@ -55,18 +55,24 @@ class QualifyingSessionQueryIntegrationTest {
                 focusSec);
     }
 
-    private UUID insertRoom(long createdBy) {
-        UUID roomUid = UUID.randomUUID();
-        jdbcTemplate.update(
-                "insert into rooms (room_uid, created_by, created_at) values (?, ?, now())", roomUid, createdBy);
-        return roomUid;
+    // 이미 닫힌 방으로 넣는다 — rooms_open_code_uidx는 열린 방 전체에 걸린 부분 유니크 인덱스라,
+    // 고정 코드 '0000'을 열린 채로 두면 랜덤 코드로 방을 커밋하는 다른 테스트와 충돌할 수 있다.
+    // 소셜 판정은 방의 열림 여부가 아니라 참여 구간만 보므로 닫힌 방이어도 검증에는 영향이 없다.
+    private long insertRoom(long createdBy) {
+        return jdbcTemplate.queryForObject(
+                "insert into rooms (invite_code, created_by, created_at, closed_at, close_reason) "
+                        + "values ('0000', ?, now(), now(), 'LAST_LEFT') returning id",
+                Long.class,
+                createdBy);
     }
 
-    private void insertParticipation(UUID roomUid, long userId, Instant joinedAt, Instant leftAt) {
+    private void insertParticipation(long roomId, long userId, Instant joinedAt, Instant leftAt) {
         jdbcTemplate.update(
-                "insert into room_participations (room_uid, user_id, joined_at, left_at) values (?, ?, ?, ?)",
-                roomUid,
+                "insert into room_participations (room_id, user_id, reserved_at, stomp_confirmed, joined_at, left_at) "
+                        + "values (?, ?, ?, true, ?, ?)",
+                roomId,
                 userId,
+                Timestamp.from(joinedAt),
                 Timestamp.from(joinedAt),
                 leftAt == null ? null : Timestamp.from(leftAt));
     }
@@ -87,7 +93,7 @@ class QualifyingSessionQueryIntegrationTest {
     void 룸_참여구간_안의_세션은_소셜이다() {
         long userId = insertUser();
         insertSession(userId, at(1), at(3), QUALIFYING);
-        UUID room = insertRoom(userId);
+        long room = insertRoom(userId);
         insertParticipation(room, userId, at(0), at(4));
 
         assertThat(socialOf(userId)).isTrue();
@@ -105,22 +111,32 @@ class QualifyingSessionQueryIntegrationTest {
     void 부분만_겹쳐도_소셜이다() {
         long userId = insertUser();
         insertSession(userId, at(1), at(3), QUALIFYING);
-        UUID room = insertRoom(userId);
+        long room = insertRoom(userId);
         insertParticipation(room, userId, at(2), at(5)); // 세션 뒷부분만 겹침
 
         assertThat(socialOf(userId)).isTrue();
     }
 
     @Test
-    void 종료시각이_없는_stale_참여는_소셜로_치지_않는다() {
-        // 서버가 룸 도중 재시작하면 left_at이 NULL로 남는다 — BY-415 설계문서는 이를
-        // "비정상 종료 구간"으로 규정하고 분석에서 제외하라고 명시한다. 리포트는 어제 세션을
-        // 다음날 오전 10시에 집계하므로, 그 시점에 아직 열린(NULL) 참여는 사실상 전부 이 잔재다.
-        // 제외하지 않으면 그 유저의 이후 모든 세션이 매일 소셜로 오분류된다.
+    void 아직_진행_중인_참여도_소셜이다() {
+        // BY-626 이후 left_at NULL은 "지금 방에 있음"이다(죽은 태스크의 잔재는 리스 스윕이 30초+30초 안에 닫는다).
+        // 어제 저녁부터 밤새 방에 있던 유저가 아침 집계 때 아직 방에 있어도 어제 세션은 소셜이어야 한다.
         long userId = insertUser();
         insertSession(userId, at(1), at(3), QUALIFYING);
-        UUID room = insertRoom(userId);
-        insertParticipation(room, userId, at(2), null); // left_at 없음 = 재시작 잔재
+        long room = insertRoom(userId);
+        insertParticipation(room, userId, at(2), null);
+
+        assertThat(socialOf(userId)).isTrue();
+    }
+
+    @Test
+    void 세션_종료_후_시작된_진행_중_참여는_소셜이_아니다() {
+        // left_at NULL을 "지금까지 계속"으로 읽으면 세션이 끝난 뒤 시작한 참여까지 겹침이 된다 —
+        // 겹침은 어디까지나 [joined_at, left_at) 구간과 세션 구간의 교집합으로만 판정해야 한다
+        long userId = insertUser();
+        insertSession(userId, at(1), at(3), QUALIFYING);
+        long room = insertRoom(userId);
+        insertParticipation(room, userId, at(5), null);
 
         assertThat(socialOf(userId)).isFalse();
     }
@@ -129,7 +145,7 @@ class QualifyingSessionQueryIntegrationTest {
     void 겹치지_않는_참여는_싱글이다() {
         long userId = insertUser();
         insertSession(userId, at(1), at(3), QUALIFYING);
-        UUID room = insertRoom(userId);
+        long room = insertRoom(userId);
         insertParticipation(room, userId, at(5), at(6)); // 세션 이후
 
         assertThat(socialOf(userId)).isFalse();
@@ -140,7 +156,7 @@ class QualifyingSessionQueryIntegrationTest {
         long owner = insertUser();
         long other = insertUser();
         insertSession(owner, at(1), at(3), QUALIFYING);
-        UUID room = insertRoom(other);
+        long room = insertRoom(other);
         insertParticipation(room, other, at(0), at(4));
 
         assertThat(socialOf(owner)).isFalse();

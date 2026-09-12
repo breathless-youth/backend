@@ -3,11 +3,10 @@ package project.study.studysession.service;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import project.study.common.NotFoundException;
+import project.study.common.exception.NotFoundException;
+import project.study.studysession.buffer.ActiveSnapshotBuffer;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.dto.ActiveSessionSnapshotResponse;
 import project.study.studysession.dto.StatusEventRequest;
@@ -20,7 +19,6 @@ import tools.jackson.databind.ObjectMapper;
 
 /** 진행중 세션 스냅샷(draft) 관리 — 하트비트 UPSERT와 무응답 draft 자동 확정 (BY-447). */
 @Service
-@RequiredArgsConstructor
 public class ActiveStudySessionService {
 
     // V12가 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
@@ -30,16 +28,31 @@ public class ActiveStudySessionService {
     private final StudySessionService studySessionService;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final ActiveSnapshotBuffer buffer;
+
+    public ActiveStudySessionService(
+            ActiveStudySessionRepository activeStudySessionRepository,
+            StudySessionService studySessionService,
+            ObjectMapper objectMapper,
+            Clock clock,
+            ActiveSnapshotBuffer buffer) {
+        this.activeStudySessionRepository = activeStudySessionRepository;
+        this.studySessionService = studySessionService;
+        this.objectMapper = objectMapper;
+        this.clock = clock;
+        this.buffer = buffer;
+    }
 
     /**
-     * 누적 스냅샷을 draft에 UPSERT한다. 검증은 확정 시 실행될 createSessions를 그대로 호출하고
+     * 누적 스냅샷을 draft에 UPSERT한다. 검증은 확정 시 실행될 validateAndBuildSessions를 그대로 호출하고
      * 결과를 버리는 방식으로 재사용한다 — draft가 항상 확정 가능한 상태임을 같은 코드 경로로 보장한다.
      * 동시 INSERT 레이스와 역순 도착은 네이티브 UPSERT가 원자적으로 걸러 조용히 무시된다(0행 갱신).
      */
     public void reportSnapshot(ActiveSessionSnapshotRequest request) {
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
-        studySessionService.createSessions(
+        // 요청 검증에 활용
+        studySessionService.validateAndBuildSessions(
                 request.userId(),
                 request.startedAt(),
                 request.reportedAt(),
@@ -47,23 +60,10 @@ public class ActiveStudySessionService {
                 request.focusSec(),
                 events);
 
-        String eventsJson = objectMapper.writeValueAsString(request.events());
-        try {
-            activeStudySessionRepository.upsertSnapshot(
-                    request.userId(),
-                    request.startedAt(),
-                    request.reportedAt(),
-                    clock.instant(),
-                    request.studySec(),
-                    request.focusSec(),
-                    eventsJson);
-        } catch (DataIntegrityViolationException e) {
-            String constraint = StudySessionService.violatedConstraint(e);
-            if (USER_FK_CONSTRAINT.equalsIgnoreCase(constraint)) {
-                throw new NotFoundException("존재하지 않는 사용자입니다: " + request.userId());
-            }
-            throw e;
-        }
+        // 코얼레싱 버퍼에 넣고 즉시 반환 — 주기적 벌크 flush로 DB·CPU 부하를 낮춘다 (BY-470).
+        // events JSON 직렬화·DB 쓰기는 flush 시점에 세션당 1번만 일어난다.
+        // 트레이드오프: 없는 user_id의 404가 flush(비동기)로 이동한다 — 하트비트라 실질 영향 없음.
+        buffer.offer(request);
     }
 
     /**

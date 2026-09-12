@@ -18,8 +18,8 @@ class ArchitectureTest {
             .haveSimpleNameEndingWith("Controller")
             .should()
             .dependOnClassesThat()
-            .haveSimpleNameEndingWith("Repository")
-            .because("컨트롤러는 서비스를 거쳐야 한다")
+            .resideInAPackage("..repository..")
+            .because("컨트롤러는 서비스를 거쳐야 한다 (이름이 아니라 repository 패키지 기준)")
             .allowEmptyShould(true);
 
     @ArchTest
@@ -28,6 +28,13 @@ class ArchitectureTest {
             .dependOnClassesThat()
             .haveFullyQualifiedName("org.springframework.beans.factory.annotation.Autowired")
             .because("생성자 주입만 사용한다");
+
+    @ArchTest
+    static final ArchRule noProfileBranching = noClasses()
+            .should()
+            .dependOnClassesThat()
+            .haveFullyQualifiedName("org.springframework.context.annotation.Profile")
+            .because("프로필은 환경별 yaml 선택 전용이다 — 기능은 @ConditionalOnProperty + 프로퍼티로 켜고 끈다 (BY-640)");
 
     @ArchTest
     static final ArchRule servicesShouldBeInDomainPackages = classes()

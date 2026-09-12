@@ -54,7 +54,7 @@ class ActiveStudySessionRepositoryTest {
 
         assertThat(affected).isEqualTo(1);
         ActiveStudySession found =
-                repository.findByUserIdAndStartedAt(userId, startedAt).orElseThrow();
+                repository.findFirstByUserIdOrderByLastSeenAtDesc(userId).orElseThrow();
         assertThat(found.getReportedAt()).isEqualTo(startedAt.plusSeconds(600));
         assertThat(found.getStudySec()).isEqualTo(600);
         assertThat(found.getFocusSec()).isEqualTo(480);
@@ -68,7 +68,7 @@ class ActiveStudySessionRepositoryTest {
 
         assertThat(affected).isEqualTo(1);
         ActiveStudySession updated =
-                repository.findByUserIdAndStartedAt(userId, startedAt).orElseThrow();
+                repository.findFirstByUserIdOrderByLastSeenAtDesc(userId).orElseThrow();
         assertThat(updated.getStudySec()).isEqualTo(60);
         assertThat(repository.findByLastSeenAtBefore(Instant.parse("2026-08-27T02:00:00Z")))
                 .hasSize(1);
@@ -81,7 +81,7 @@ class ActiveStudySessionRepositoryTest {
 
         assertThat(affected).isEqualTo(0);
         ActiveStudySession kept =
-                repository.findByUserIdAndStartedAt(userId, startedAt).orElseThrow();
+                repository.findFirstByUserIdOrderByLastSeenAtDesc(userId).orElseThrow();
         assertThat(kept.getStudySec()).isEqualTo(60);
     }
 

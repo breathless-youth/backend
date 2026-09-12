@@ -19,7 +19,7 @@ package project.study.user.controller;
 // import org.springframework.web.bind.annotation.RequestMapping;
 // import org.springframework.web.bind.annotation.ResponseStatus;
 // import org.springframework.web.bind.annotation.RestController;
-// import project.study.common.ErrorResponse;
+// import project.study.common.exception.ErrorResponse;
 // import project.study.user.dto.LinkSocialRequest;
 // import project.study.user.dto.LoginRequest;
 // import project.study.user.dto.LoginResponse;

@@ -2,19 +2,17 @@ package project.study.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
 
 @Configuration
-@RequiredArgsConstructor
 public class OpenApiConfig {
 
     // DevDataSeeder가 시딩하는 내용과 함께 유지한다
     private static final String DEV_MOCK_DATA_GUIDE = """
 
-            **목데이터 안내 (dev 전용)** — 서버 시작 시 데모 데이터가 자동 시딩된다. 아래 "서버 시작일" 기준 상대 날짜는
+            **목데이터 안내 (시딩이 켜진 환경 전용)** — 서버 시작 시 데모 데이터가 자동 시딩된다. 아래 "서버 시작일" 기준 상대 날짜는
             실제 오늘 날짜가 아니라 서버가 마지막으로 기동된 시점의 날짜다 — 서버를 자정 넘어서까지 계속 띄워두면
             실제 오늘 날짜와 어긋날 수 있으니 재시작 시각을 기준으로 읽는다 (재시작하면 그 시점 기준으로 다시 생성됨).
             - 데모 유저: `POST /api/users` 에 deviceId `%s` 로 등록하면 userId를 얻는다 (멱등)
@@ -27,7 +25,15 @@ public class OpenApiConfig {
               (07~21시, 세션당 이벤트 0~2개 — 고정 시드라 재시작해도 같은 패턴)
             """.formatted(DevDataSeeder.DEMO_DEVICE_ID);
 
-    private final Environment environment;
+    // 시딩 스위치와 같은 값을 본다 — 안내는 시딩이 실제로 켜진 환경에서만 붙어야 한다 (BY-640).
+    // boolean으로 받지 않는다: Spring의 문자열→boolean 변환은 "on"/"1"도 true로 보지만 시더의
+    // @ConditionalOnProperty(havingValue = "true")는 "true"(대소문자 무시)만 인정해, 같은 값을 두 곳이
+    // 다르게 해석하면 시딩 없이 안내만 붙는다. 시더와 같은 판정을 그대로 쓴다
+    private final boolean seedEnabled;
+
+    public OpenApiConfig(@Value("${app.seed.enabled:false}") String seedEnabled) {
+        this.seedEnabled = "true".equalsIgnoreCase(seedEnabled);
+    }
 
     @Bean
     public OpenAPI openApi() {
@@ -37,7 +43,7 @@ public class OpenApiConfig {
                 **인증** — 현재 인증 없이 운영(ADR-0004). `POST /api/users`로 기기를 등록해 userId를 발급받고, \
                 이후 API 호출에 userId를 쿼리 파라미터 또는 요청 본문으로 전달한다.
                 """;
-        if (environment.matchesProfiles("dev")) {
+        if (seedEnabled) {
             description += DEV_MOCK_DATA_GUIDE;
         }
         return new OpenAPI().info(new Info().title("Study API").version("v1").description(description));

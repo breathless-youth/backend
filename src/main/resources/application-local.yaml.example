@@ -1,3 +1,6 @@
+# 로컬 개발 설정 템플릿 — 이 파일은 git에 추적되므로 실제 값을 넣지 않는다.
+# `cp application-local.yaml{.example,}`로 복사해 만든 application-local.yaml(gitignore)에만 실제 시크릿
+# (카카오 앱 키, TURN 시크릿, JWT)을 둔다. dev/prod yaml은 같은 값을 환경변수로 받는다 (BY-642).
 # 로컬 개발용 설정 템플릿 — application-local.yaml은 gitignore 대상이므로
 # 이 파일을 복사해서 사용한다:
 #   cp src/main/resources/application-local.yaml.example src/main/resources/application-local.yaml
@@ -31,6 +34,9 @@ logging:
 # 로컬에서 프론트를 띄워 API를 호출할 때 필요하다.
 # 포트는 번들러마다 달라(Vite 5173, Next 3000 등) 열어둔다 — :[*]가 Spring의 포트 와일드카드 문법이다.
 app:
+  # 데모 유저·세션 목데이터 시딩. 값이 없으면 꺼짐 — 로컬에서 Swagger 안내와 함께 보고 싶을 때만 true (BY-640)
+  # seed:
+  #   enabled: true
   cors:
     allowed-origins:
       - http://localhost:[*]

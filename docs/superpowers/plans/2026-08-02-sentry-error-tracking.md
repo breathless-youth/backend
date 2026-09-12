@@ -133,7 +133,7 @@ git commit -m "chore: Sentry SDK 의존성과 prod 설정 추가"
 `org.springframework.web.ErrorResponse`는 이런 표준 예외들이 구현하는 인터페이스이고
 `getStatusCode()`를 제공한다 (Spring 7.0.3에서 확인함). `instanceof`로 걸러 원래 상태코드를 유지한다.
 
-이 인터페이스는 이 프로젝트의 `project.study.common.ErrorResponse` record와 이름이 겹치므로
+이 인터페이스는 이 프로젝트의 `project.study.common.exception.ErrorResponse` record와 이름이 겹치므로
 **import하지 말고 FQCN으로 쓴다.**
 
 - [ ] **Step 1: 실패하는 테스트 작성**

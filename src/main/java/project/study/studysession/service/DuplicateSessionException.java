@@ -1,6 +1,6 @@
 package project.study.studysession.service;
 
-import project.study.common.ConflictException;
+import project.study.common.exception.ConflictException;
 
 public class DuplicateSessionException extends ConflictException {
 

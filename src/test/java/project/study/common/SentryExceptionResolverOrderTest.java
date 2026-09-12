@@ -21,6 +21,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.handler.HandlerExceptionResolverComposite;
+import project.study.common.exception.GlobalExceptionHandler;
 
 /**
  * prod의 {@code sentry.exception-resolver-order}가 실제로 "Sentry가 먼저 캡처한다"를 만들어내는지 검증한다.

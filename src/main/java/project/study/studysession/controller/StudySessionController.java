@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import project.study.common.ErrorResponse;
+import project.study.common.exception.ErrorResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.service.DuplicateSessionException;
@@ -47,13 +47,6 @@ public class StudySessionController {
                     세션(방 입장~퇴장) 안에 총 공부시간 타이머가 있고, 그 안에 다시 순공시간 타이머가 있는 구조다 — \
                     `PAUSE`(일시정지, 앱에서 직접 멈추는 상태)는 총공부·순공 타이머를 모두 멈추고, \
                     나머지(PHONE/DEVICE/AWAY)는 순공 타이머만 멈춘다.
-
-                    서버가 하는 일은 세 가지다.
-                    1. **검증** — 아래 규칙을 하나라도 어기면 `400`으로 거절한다.
-                    2. **계산** — 통계 귀속 날짜(`statDate`, 한국 시간 기준 시작 날짜)만 서버가 계산한다. \
-                    총 공부 시간(`studySec`)과 순공 시간(`focusSec`)은 앱이 제출한 값을 그대로 저장한다 — \
-                    자정 분할 시에는 조각 길이에 비례해 배분한다(합계 보존).
-                    3. **저장** — 세션과 이벤트를 저장하고 결과를 돌려준다.
 
                     **검증 규칙**
                     - 종료 시각은 시작 시각 이후여야 한다 (세션·이벤트 모두)
@@ -129,19 +122,21 @@ public class StudySessionController {
     @ResponseStatus(HttpStatus.CREATED)
     public List<StudySessionResponse> create(@Valid @RequestBody StudySessionCreateRequest request) {
         try {
-            return studySessionService.create(request.userId(), request);
+            return studySessionService.create(request.userId(), request, false);
         } catch (DuplicateSessionException | ObjectOptimisticLockingFailureException e) {
             // 자동 확정 스케줄러와의 유니크 레이스에서 진 경우 — 방금 확정된 auto_finalized(잠정) 행을
             // 그대로 돌려주면 최종 제출이 영구 유실되므로, create를 1회 재시도해 대체 로직을 태운다
             // (기존 클라본이면 멱등 반환, 전부 auto_finalized면 대체, 재충돌이면 아래 폴백) (ADR-0014).
             try {
-                return studySessionService.create(request.userId(), request);
+                return studySessionService.create(request.userId(), request, false);
             } catch (DuplicateSessionException retryEx) {
+                // 또 다른 요청과 레이스에서 진 경우 현재 확정되어 있는 세션을 조회해서 반환
                 List<StudySessionResponse> concurrent =
                         studySessionService.findExistingSubmission(request.userId(), request.startedAt());
                 if (!concurrent.isEmpty()) {
                     return concurrent;
                 }
+                // 없는 경우 500
                 throw retryEx;
             }
         }

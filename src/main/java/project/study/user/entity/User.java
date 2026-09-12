@@ -6,6 +6,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import project.study.common.BaseTimeEntity;
+import project.study.common.exception.ConflictException;
 
 @Table(
         name = "users",
@@ -60,7 +61,7 @@ public class User extends BaseTimeEntity {
 
     public void linkSocialAccount(Provider provider, String providerUserId, String email) {
         if (this.provider != Provider.DEVICE) {
-            throw new project.study.common.ConflictException("이미 소셜 계정이 연동된 사용자입니다");
+            throw new ConflictException("이미 소셜 계정이 연동된 사용자입니다");
         }
         this.provider = provider;
         this.providerUserId = providerUserId;

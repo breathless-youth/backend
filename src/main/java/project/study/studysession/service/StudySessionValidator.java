@@ -2,6 +2,8 @@ package project.study.studysession.service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import project.study.studysession.entity.StatusEvent;
 
@@ -12,6 +14,39 @@ final class StudySessionValidator {
     private static final Duration CLOCK_SKEW_TOLERANCE = Duration.ofMinutes(5);
 
     private StudySessionValidator() {}
+
+    /**
+     * 기간 조회의 from/to 짝·순서를 검증한다 — periodStats(메인·비교)와 streak 공용.
+     * <ul>
+     *   <li>둘 다 null: 기간 미지정으로 통과(기간이 선택인 streak·비교 구간용)</li>
+     *   <li>한쪽만 null: 짝이 안 맞아 거절</li>
+     *   <li>둘 다 지정: from&le;to</li>
+     * </ul>
+     * 범위 상한은 여기서 보지 않는다 — streak은 전체 이력을 훑어 3년 연속 공부처럼 넓은 범위가 정상이고,
+     * 실제 공부한 날만 쿼리로 돌려줘 자원 부담이 없다. 넓은 범위가 문제되는 순회형 조회(periodStats)만
+     * {@link #validateMaxRangeDays}를 따로 건다. 메인 period의 from/to 필수는 @RequestParam이 먼저 보장한다.
+     */
+    static void validateDateRange(LocalDate from, LocalDate to) {
+        if (from == null || to == null) {
+            if ((from == null) != (to == null)) {
+                throw new InvalidSessionException("from과 to는 함께 지정해야 합니다");
+            }
+            return;
+        }
+        if (from.isAfter(to)) {
+            throw new InvalidSessionException("from은 to보다 이후일 수 없습니다");
+        }
+    }
+
+    /**
+     * 순회형 기간 조회(periodStats)의 범위 상한 방어 — [from, to]를 하루도 빠짐없이 배열로 채우므로,
+     * 넓은 범위 요청이 서버 자원을 무한정 쓰지 못하게 maxDays로 막는다. from/to는 둘 다 지정된 상태를 전제한다.
+     */
+    static void validateMaxRangeDays(LocalDate from, LocalDate to, int maxDays) {
+        if (ChronoUnit.DAYS.between(from, to) > maxDays) {
+            throw new InvalidSessionException("조회 범위가 너무 넓습니다 (최대 " + maxDays + "일)");
+        }
+    }
 
     static void validatePeriod(Instant startedAt, Instant endedAt, Instant now) {
         if (!endedAt.isAfter(startedAt)) {

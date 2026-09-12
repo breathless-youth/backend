@@ -127,6 +127,49 @@ class UserApiIntegrationTest {
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
 
+    private MockMvcTester.MockMvcRequestBuilder patchProfile(long userId, String json) {
+        return mvc.patch()
+                .uri("/api/users/{userId}/profile", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json);
+    }
+
+    @Test
+    void 프로필_부분_수정은_보낸_필드만_바꾸고_나머지는_유지한다() {
+        long userId = readBody(registerRequest(UUID.randomUUID().toString()).exchange())
+                .userId();
+
+        assertThat(patchProfile(userId, "{\"goal\":\"올해 안에 이직 성공\"}"))
+                .hasStatus(HttpStatus.OK)
+                .bodyJson()
+                .hasPathSatisfying("$.goal", goal -> assertThat(goal).isEqualTo("올해 안에 이직 성공"))
+                .hasPathSatisfying(
+                        "$.nickname",
+                        nickname -> assertThat(nickname).asString().matches("포메\\d{5}"));
+    }
+
+    @Test
+    void 닉네임_형식이_틀리면_400이다() {
+        assertThat(patchProfile(1L, "{\"nickname\":\"한\"}")).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(patchProfile(1L, "{\"nickname\":\"특수문자!!\"}")).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(patchProfile(1L, "{\"nickname\":\"열세글자가넘는닉네임이다열세\"}")).hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void 목표가_20자를_넘으면_400이다() {
+        assertThat(patchProfile(1L, "{\"goal\":\"스물한 글자가 넘는 아주 길고 긴 목표 문구\"}"))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .extractingPath("$.message")
+                .asString()
+                .startsWith("goal: ");
+    }
+
+    @Test
+    void 정의되지_않은_카테고리는_400이다() {
+        assertThat(patchProfile(1L, "{\"category\":\"UNKNOWN\"}")).hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
     // getContentAsString과 달리 getContentAsByteArray는 checked 예외가 없어 테스트에 throws가 안 번진다
     private UserRegisterResponse readBody(MvcTestResult result) {
         return objectMapper.readValue(result.getResponse().getContentAsByteArray(), UserRegisterResponse.class);

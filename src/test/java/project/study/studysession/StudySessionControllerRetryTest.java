@@ -44,14 +44,14 @@ class StudySessionControllerRetryTest {
     @Test
     void 첫_create가_레이스로_지면_재시도해서_성공하면_그_결과를_반환하고_재조회는_안한다() {
         List<StudySessionResponse> retryResult = List.of();
-        when(studySessionService.create(USER_ID, request))
+        when(studySessionService.create(USER_ID, request, false))
                 .thenThrow(new DuplicateSessionException("레이스 패배"))
                 .thenReturn(retryResult);
 
         List<StudySessionResponse> response = controller.create(request);
 
         assertThat(response).isSameAs(retryResult);
-        verify(studySessionService, times(2)).create(USER_ID, request);
+        verify(studySessionService, times(2)).create(USER_ID, request, false);
         verify(studySessionService, never()).findExistingSubmission(USER_ID, STARTED_AT);
     }
 
@@ -67,7 +67,7 @@ class StudySessionControllerRetryTest {
                 3400,
                 94.4,
                 List.of()));
-        when(studySessionService.create(USER_ID, request))
+        when(studySessionService.create(USER_ID, request, false))
                 .thenThrow(new DuplicateSessionException("첫 실패"))
                 .thenThrow(new DuplicateSessionException("재시도도 실패"));
         when(studySessionService.findExistingSubmission(USER_ID, STARTED_AT)).thenReturn(existing);
@@ -75,12 +75,12 @@ class StudySessionControllerRetryTest {
         List<StudySessionResponse> response = controller.create(request);
 
         assertThat(response).isSameAs(existing);
-        verify(studySessionService, times(2)).create(USER_ID, request);
+        verify(studySessionService, times(2)).create(USER_ID, request, false);
     }
 
     @Test
     void findExistingSubmission도_비어있으면_예외가_전파된다() {
-        when(studySessionService.create(USER_ID, request))
+        when(studySessionService.create(USER_ID, request, false))
                 .thenThrow(new DuplicateSessionException("첫 실패"))
                 .thenThrow(new DuplicateSessionException("재시도도 실패"));
         when(studySessionService.findExistingSubmission(USER_ID, STARTED_AT)).thenReturn(List.of());
@@ -91,14 +91,14 @@ class StudySessionControllerRetryTest {
     @Test
     void ObjectOptimisticLockingFailureException도_같은_재시도_흐름을_탄다() {
         List<StudySessionResponse> retryResult = List.of();
-        when(studySessionService.create(USER_ID, request))
+        when(studySessionService.create(USER_ID, request, false))
                 .thenThrow(new ObjectOptimisticLockingFailureException(StudySessionCreateRequest.class, USER_ID))
                 .thenReturn(retryResult);
 
         List<StudySessionResponse> response = controller.create(request);
 
         assertThat(response).isSameAs(retryResult);
-        verify(studySessionService, times(2)).create(USER_ID, request);
+        verify(studySessionService, times(2)).create(USER_ID, request, false);
         verify(studySessionService, never()).findExistingSubmission(USER_ID, STARTED_AT);
     }
 }
