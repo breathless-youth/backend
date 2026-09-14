@@ -22,6 +22,7 @@ import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
 import project.study.user.entity.Provider;
 import project.study.user.entity.User;
+import project.study.user.nickname.Nicknames;
 import project.study.user.repository.UserRepository;
 
 @Service
@@ -79,7 +80,8 @@ public class UserService {
     public ProfileResponse updateProfile(Long userId, ProfileUpdateRequest request) {
         User user = findUser(userId);
 
-        user.updateProfile(request.nickname(), request.goal(), request.category());
+        // 검증기와 같은 정규화(NFC + 앞뒤 공백 제거)를 저장 직전에 적용한다 (BY-647)
+        user.updateProfile(Nicknames.normalize(request.nickname()), request.goal(), request.category());
         try {
             // 닉네임 유니크 제약이 최종 판정이다 — 커밋 시점의 위반이 500으로 새지 않도록 여기서 flush해 409로 변환한다
             userRepository.flush();

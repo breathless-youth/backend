@@ -85,11 +85,12 @@ public class UserController {
 
     @Operation(summary = "프로필 수정", description = """
                     프로필의 일부 필드만 수정한다 — 요청에 담긴 필드만 반영되고 생략한 필드는 유지된다. \
-                    닉네임을 바꾸면 아바타 이니셜(`initial`)도 첫 글자로 갱신된다. `colorIndex`는 불변.""")
+                    닉네임은 앞뒤 공백을 잘라낸 뒤 저장되며(중간 띄어쓰기는 유지), \
+                    바꾸면 아바타 이니셜(`initial`)도 첫 글자(이모지면 이모지 한 글자)로 갱신된다. `colorIndex`는 불변.""")
     @ApiResponse(responseCode = "200", description = "수정 성공 — 수정된 전체 프로필 반환")
     @ApiResponse(
             responseCode = "400",
-            description = "검증 실패 — 닉네임 형식(2~12자 한글·영문·숫자), 목표 길이(20자), 카테고리 값",
+            description = "검증 실패 — 닉네임 형식(한글·영문·숫자·이모지·띄어쓰기, 앞뒤 공백 제외 2~12자), 목표 길이(20자), 카테고리 값",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -97,7 +98,8 @@ public class UserController {
                             examples = {
                                 @ExampleObject(
                                         name = "닉네임 형식",
-                                        value = "{\"message\": \"nickname: 닉네임은 2~12자의 한글·영문·숫자만 사용할 수 있습니다\"}"),
+                                        value =
+                                                "{\"message\": \"nickname: 닉네임은 한글·영문·숫자·이모지·띄어쓰기만 쓸 수 있고, 앞뒤 공백을 제외하고 2~12자여야 합니다\"}"),
                                 @ExampleObject(
                                         name = "목표 길이",
                                         value = "{\"message\": \"goal: 목표는 공백 포함 20자 이하여야 합니다\"}"),
