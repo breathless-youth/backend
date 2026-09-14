@@ -41,6 +41,15 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             order by s.statDate desc""")
     List<LocalDate> findDistinctStatDates(@Param("userId") Long userId, @Param("minFocusSec") int minFocusSec);
 
+    // 누적 공부일 — 세션 하나라도 focusSec이 minFocusSec 이상인 날짜 수(today까지). 자정을 걸친 세션은
+    // 분할 저장되어 stat_date가 둘이므로 distinct가 그대로 이틀로 센다 (BY-645)
+    @Query("""
+            select count(distinct s.statDate)
+            from StudySession s
+            where s.userId = :userId and s.focusSec >= :minFocusSec and s.statDate <= :today""")
+    long countDistinctStatDates(
+            @Param("userId") Long userId, @Param("minFocusSec") int minFocusSec, @Param("today") LocalDate today);
+
     // 특정 기간 동안 세션 하나라도 focusSec이 minFocusSec 이상인 날짜 목록 (중복 없음, 오름차순).
     // 일간 조회의 달력 표시(1분 기준)와 스트릭 기간 조회(10분 기준) 양쪽에서 임계값만 다르게 재사용한다
     @Query("""
