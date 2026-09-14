@@ -42,7 +42,7 @@ oauth:
     # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
     client-id: ${OAUTH_GOOGLE_CLIENT_ID:320200622450-5bqjf3j6lu8akp20p4oikiio7t8brjtd.apps.googleusercontent.com}
   kakao:
-    app-key: ${OAUTH_KAKAO_APP_KEY}
+    app-key: ${OAUTH_KAKAO_APP_KEY:4c3e41ef0da3566b0ca844c6546457ba}
   apple:
     client-id: ${OAUTH_APPLE_CLIENT_ID:com.breathlessyouth.mobile}
 
