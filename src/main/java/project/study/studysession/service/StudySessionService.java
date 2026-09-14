@@ -19,6 +19,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.NotFoundException;
+import project.study.studysession.dto.StudyDaysResponse;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionListResponse;
@@ -210,6 +211,16 @@ public class StudySessionService {
                 : studySessionRepository.findDistinctStatDatesBetween(userId, from, to, MIN_STREAK_FOCUS_SEC);
         return new StudySessionStreakResponse(
                 currentStreak(statDates, today), maxStreak(statDates), studiedDatesInRange);
+    }
+
+    /**
+     * 누적 공부일 — 가입 이후 순공시간 1분 이상 세션이 하루라도 있었던 날의 수. 목록 조회와 같은 기준(ADR-0009)이라
+     * "목록에 세션이 보이는 날"과 일치한다. 스트릭과 같은 이유로 오늘(KST)까지만 센다.
+     */
+    @Transactional(readOnly = true)
+    public StudyDaysResponse studyDays(Long userId) {
+        LocalDate today = clock.instant().atZone(KST).toLocalDate();
+        return new StudyDaysResponse(studySessionRepository.countDistinctStatDates(userId, MIN_LIST_FOCUS_SEC, today));
     }
 
     /** 오늘(기록이 아직 없으면 어제)부터 거꾸로 이어진 연속 공부일. 오늘이 지나기 전엔 스트릭이 끊긴 게 아니다. */

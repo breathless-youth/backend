@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import project.study.studysession.dto.StudyDaysResponse;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionStreakResponse;
@@ -84,6 +85,20 @@ public class StudySessionStatsController {
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate to) {
         return studySessionService.streak(userId, from, to);
+    }
+
+    @Operation(summary = "누적 공부일 조회", description = """
+                    가입 이후 공부한 날이 총 며칠인지 반환한다. 그날(KST) 순공시간(focusSec)이 1분 이상인 세션이 \
+                    하나라도 있으면 공부한 날로 센다 — 일별 목록 조회에 세션이 보이는 날과 같은 기준이며, \
+                    스트릭 기준(10분)과는 다르다. 자정을 걸친 세션은 날짜별 조각으로 나뉘어 저장되며 각 조각의 순공시간이 \
+                    1분 이상일 때 그 날짜가 각각 인정된다. 오늘(KST)까지만 센다.
+
+                    기록이 없거나 존재하지 않는 userId면 totalDays는 0이다 (다른 통계 조회와 같은 계약).""")
+    @ApiResponse(responseCode = "200", description = "조회 성공 — 누적 공부일 수")
+    @GetMapping("/study-days")
+    public StudyDaysResponse studyDays(
+            @Parameter(description = "조회할 유저 ID (POST /api/users 로 발급받은 값)", example = "1") @RequestParam Long userId) {
+        return studySessionService.studyDays(userId);
     }
 
     @Operation(summary = "기간 집계 조회", description = """
