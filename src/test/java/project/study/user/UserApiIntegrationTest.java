@@ -152,6 +152,7 @@ class UserApiIntegrationTest {
     void 닉네임_형식이_틀리면_400이다() {
         assertThat(patchProfile(1L, "{\"nickname\":\"한\"}")).hasStatus(HttpStatus.BAD_REQUEST);
         assertThat(patchProfile(1L, "{\"nickname\":\"특수문자!!\"}")).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(patchProfile(1L, "{\"nickname\":\"   \"}")).hasStatus(HttpStatus.BAD_REQUEST); // 공백뿐
         assertThat(patchProfile(1L, "{\"nickname\":\"열세글자가넘는닉네임이다열세\"}")).hasStatus(HttpStatus.BAD_REQUEST);
     }
 

@@ -103,14 +103,60 @@ class ProfileApiTest {
     }
 
     @Test
-    void 닉네임_형식이_틀리면_400이다() {
+    void 허용되지_않는_글자_공백뿐_길이_초과는_400이다() {
+        long userId = registerUser();
+
+        for (String bad : new String[] {"느낌표금지!", "홍길\u200B동", "日本語", "   ", "a", "가나다라마바사아자차카타파"}) {
+            assertThat(mvc.patch()
+                            .uri("/api/users/" + userId + "/profile")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"nickname\": \"" + bad + "\"}"))
+                    .as("nickname=%s", bad)
+                    .hasStatus(HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @Test
+    void 띄어쓰기와_이모지_닉네임이_저장되고_이니셜은_첫_글자_단위다() {
         long userId = registerUser();
 
         assertThat(mvc.patch()
                         .uri("/api/users/" + userId + "/profile")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nickname\": \"느낌표금지!\"}"))
-                .hasStatus(HttpStatus.BAD_REQUEST);
+                        .content("{\"nickname\": \"  🧑\u200D💻 숨 벅찬  \"}"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.nickname", v -> assertThat(v).isEqualTo("🧑\u200D💻 숨 벅찬"))
+                .hasPathSatisfying("$.initial", v -> assertThat(v).isEqualTo("🧑\u200D💻"));
+    }
+
+    @Test
+    void 앞뒤_공백을_잘라내면_같아지는_닉네임은_409이고_본인_재설정은_200이다() {
+        long first = registerUser();
+        long second = registerUser();
+        assertThat(mvc.patch()
+                        .uri("/api/users/" + first + "/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nickname\": \"정리충돌\"}"))
+                .hasStatusOk();
+
+        assertThat(mvc.patch()
+                        .uri("/api/users/" + second + "/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nickname\": \"  정리충돌  \"}"))
+                .hasStatus(HttpStatus.CONFLICT);
+        assertThat(mvc.get().uri("/api/users/" + second + "/profile"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"));
+
+        assertThat(mvc.patch()
+                        .uri("/api/users/" + first + "/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nickname\": \"  정리충돌  \"}"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.nickname", v -> assertThat(v).isEqualTo("정리충돌"));
     }
 
     @Test

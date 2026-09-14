@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import project.study.common.BaseTimeEntity;
 import project.study.common.exception.ConflictException;
+import project.study.user.nickname.Nicknames;
 
 @Table(
         name = "users",
@@ -72,7 +73,7 @@ public class User extends BaseTimeEntity {
     public void updateProfile(String nickname, String goal, String category) {
         if (nickname != null) {
             this.nickname = nickname;
-            this.initial = nickname.substring(0, 1);
+            this.initial = Nicknames.initialOf(nickname); // 첫 글자 단위 — 이모지가 앞에 와도 안 깨진다
         }
         if (goal != null) {
             this.goal = goal;
