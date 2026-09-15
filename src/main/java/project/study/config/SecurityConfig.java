@@ -1,7 +1,5 @@
 package project.study.config;
 
-// AUTH-DISABLED: 소셜 로그인은 후순위로 미뤄짐 (ADR-0004) — 재도입 시 feature/BY-383-auth-contract 브랜치 참고
-
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -12,9 +10,12 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import project.study.user.jwt.JwtFilter;
+import project.study.user.jwt.JwtUtil;
 
 @EnableWebSecurity
 @Configuration
@@ -25,6 +26,7 @@ public class SecurityConfig {
     private static final long PREFLIGHT_CACHE_SECONDS = 3600;
 
     private final CorsProperties corsProperties;
+    private final JwtUtil jwtUtil;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
@@ -35,6 +37,8 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(request -> request.anyRequest().permitAll())
+                // Bearer가 있으면 principal(Long userId)을 세운다. 인가 규칙 전환은 별도 커밋에서
+                .addFilterBefore(new JwtFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 
@@ -53,9 +57,4 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/api/**", config);
         return source;
     }
-
-    // AUTH-DISABLED: 인증 재도입 시 아래 항목 복원
-    // - JwtFilter를 UsernamePasswordAuthenticationFilter 앞에 추가
-    // - /api/auth/login, /api/auth/refresh를 permitAll, 나머지를 authenticated()
-    // - unauthorizedEntryPoint (401 JSON 응답)
 }

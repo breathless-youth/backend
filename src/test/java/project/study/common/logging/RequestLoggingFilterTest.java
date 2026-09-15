@@ -87,21 +87,12 @@ class RequestLoggingFilterTest {
     }
 
     @Test
-    void 쿼리_파라미터_userId가_있으면_MDC에_싣는다() throws ServletException, IOException {
+    void userId_키는_이_필터가_만들지_않는다_JwtFilter_담당() throws ServletException, IOException {
         CapturingChain chain = new CapturingChain();
         MockHttpServletRequest request = get("/api/stats/streak");
-        request.setParameter("userId", "42");
+        request.setParameter("userId", "42"); // 쿼리 파라미터는 더 이상 신원이 아니다
 
         filter.doFilter(request, new MockHttpServletResponse(), chain);
-
-        assertThat(chain.mdcInsideChain).containsEntry(LogContext.USER_ID, "42");
-    }
-
-    @Test
-    void 쿼리_파라미터_userId가_없으면_MDC에_userId_키를_만들지_않는다() throws ServletException, IOException {
-        CapturingChain chain = new CapturingChain();
-
-        filter.doFilter(get("/api/rooms"), new MockHttpServletResponse(), chain);
 
         assertThat(chain.mdcInsideChain).doesNotContainKey(LogContext.USER_ID);
     }
@@ -125,10 +116,7 @@ class RequestLoggingFilterTest {
 
     @Test
     void 처리가_끝나면_MDC를_비운다() throws ServletException, IOException {
-        MockHttpServletRequest request = get("/api/rooms");
-        request.setParameter("userId", "42");
-
-        filter.doFilter(request, new MockHttpServletResponse(), new CapturingChain());
+        filter.doFilter(get("/api/rooms"), new MockHttpServletResponse(), new CapturingChain());
 
         assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
     }

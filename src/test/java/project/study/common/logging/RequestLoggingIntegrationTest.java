@@ -1,6 +1,7 @@
 package project.study.common.logging;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -13,14 +14,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
 
 /**
- * 필터·BodyAdvice·컨트롤러가 실제로 엮였을 때 액세스 로그 이벤트의 MDC에 userId·requestId가
- * 실리는지 검증한다. 단위테스트로는 "필터가 응답 뒤에 로그를 찍는 시점에 BodyAdvice가 넣은 값이
+ * 필터·시큐리티 체인·컨트롤러가 실제로 엮였을 때 액세스 로그 이벤트의 MDC에 userId·requestId가
+ * 실리는지 검증한다. 단위테스트로는 "필터가 응답 뒤에 로그를 찍는 시점에 JwtFilter가 넣은 값이
  * 살아 있는가"를 증명할 수 없어서 컨텍스트를 띄운다.
  */
 @SpringBootTest
@@ -51,12 +51,8 @@ class RequestLoggingIntegrationTest {
     }
 
     @Test
-    void POST_body의_userId가_액세스_로그_MDC에_실린다() {
-        mvc.post()
-                .uri("/api/rooms")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"userId\": 99}")
-                .exchange();
+    void 인증된_요청의_principal이_액세스_로그_MDC에_실린다() {
+        mvc.get().uri("/api/stats/streak").with(asUser(99)).exchange();
 
         assertThat(accessLog().getMDCPropertyMap())
                 .containsEntry(LogContext.USER_ID, "99")
@@ -64,23 +60,18 @@ class RequestLoggingIntegrationTest {
     }
 
     @Test
-    void GET_쿼리의_userId가_액세스_로그_MDC에_실린다() {
-        mvc.get().uri("/api/stats/streak").param("userId", "5").exchange();
+    void 인증되지_않은_요청에는_userId_키가_없다() {
+        mvc.get().uri("/api/stats/streak").exchange();
 
-        assertThat(accessLog().getMDCPropertyMap()).containsEntry(LogContext.USER_ID, "5");
-    }
-
-    @Test
-    void 경로_변수의_userId가_액세스_로그_MDC에_실린다() {
-        mvc.get().uri("/api/users/13/profile").exchange();
-
-        assertThat(accessLog().getMDCPropertyMap()).containsEntry(LogContext.USER_ID, "13");
+        assertThat(accessLog().getMDCPropertyMap())
+                .doesNotContainKey(LogContext.USER_ID)
+                .containsKey(LogContext.REQUEST_ID);
     }
 
     @Test
     void 응답에_X_Request_Id가_돌아온다() {
         MvcTestResult result =
-                mvc.get().uri("/api/stats/streak").param("userId", "5").exchange();
+                mvc.get().uri("/api/stats/streak").with(asUser(5)).exchange();
 
         assertThat(result.getResponse().getHeader("X-Request-Id")).isNotBlank();
     }
