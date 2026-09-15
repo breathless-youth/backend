@@ -1,22 +1,34 @@
 package project.study.config;
 
+import jakarta.servlet.DispatcherType;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import project.study.common.exception.ErrorCode;
+import project.study.common.exception.ErrorResponse;
 import project.study.user.jwt.JwtFilter;
 import project.study.user.jwt.JwtUtil;
+import tools.jackson.databind.ObjectMapper;
 
+/**
+ * 비회원(DEVICE) 토큰 인증 (ADR-0019). 보호 API는 {@code Authorization: Bearer <access>}가 필수이고,
+ * 없거나 무효면 401 JSON({@code code: UNAUTHORIZED})으로 답한다. 소셜 로그인은 파킹 상태다.
+ */
 @EnableWebSecurity
 @Configuration
 @EnableConfigurationProperties(CorsProperties.class)
@@ -27,6 +39,7 @@ public class SecurityConfig {
 
     private final CorsProperties corsProperties;
     private final JwtUtil jwtUtil;
+    private final ObjectMapper objectMapper;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
@@ -36,8 +49,28 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(request -> request.anyRequest().permitAll())
-                // Bearer가 있으면 principal(Long userId)을 세운다. 인가 규칙 전환은 별도 커밋에서
+                .authorizeHttpRequests(request -> request
+                        // 에러 디스패치(/error)까지 인가하면 미인증 요청의 404·500이 401로 뒤집힌다
+                        .dispatcherTypeMatchers(DispatcherType.ERROR)
+                        .permitAll()
+                        // 토큰이 시작되는 두 경로. 메서드를 한정한다 — /api/users/** 를 열면 /me/profile이 뚫린다
+                        .requestMatchers(HttpMethod.POST, "/api/users")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/refresh")
+                        .permitAll()
+                        // WebSocket 핸드셰이크 — 인증은 CONNECT 프레임에서 한다 (WebSocketConfig)
+                        .requestMatchers("/ws")
+                        .permitAll()
+                        // ALB 헬스체크. metrics·wsstats 등 나머지 actuator는 토큰이 있어야 본다
+                        .requestMatchers("/actuator/health", "/actuator/health/**")
+                        .permitAll()
+                        // API 문서 — prod는 springdoc 자체가 꺼져 있어 404
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
+                        .permitAll()
+                        .anyRequest()
+                        .authenticated())
+                .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedEntryPoint()))
+                // Bearer가 있으면 principal(Long userId)을 세운다
                 .addFilterBefore(new JwtFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -56,5 +89,15 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
         return source;
+    }
+
+    // 다른 에러와 같은 {code, message} 모양으로 — 클라이언트는 code로 refresh 재시도 여부를 가른다
+    private AuthenticationEntryPoint unauthorizedEntryPoint() {
+        return (request, response, authException) -> {
+            response.setStatus(HttpStatus.UNAUTHORIZED.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.setCharacterEncoding("UTF-8");
+            objectMapper.writeValue(response.getWriter(), new ErrorResponse(ErrorCode.UNAUTHORIZED, "인증이 필요합니다"));
+        };
     }
 }

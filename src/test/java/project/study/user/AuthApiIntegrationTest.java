@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
@@ -39,6 +40,50 @@ class AuthApiIntegrationTest {
 
         assertThat(jwtUtil.getUserId(device.accessToken())).isEqualTo(String.valueOf(device.userId()));
         assertThat(device.refreshToken()).hasSize(36); // opaque UUID
+    }
+
+    @Test
+    void access_토큰으로_보호된_API에_접근할_수_있다() {
+        UserRegisterResponse device = registerDevice(UUID.randomUUID().toString());
+
+        assertThat(mvc.get()
+                        .uri("/api/users/me/profile")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + device.accessToken()))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"));
+    }
+
+    @Test
+    void 토큰_없이_보호된_API에_접근하면_401_UNAUTHORIZED_JSON이다() {
+        assertThat(mvc.get().uri("/api/users/me/profile"))
+                .hasStatus(HttpStatus.UNAUTHORIZED)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("UNAUTHORIZED"))
+                .hasPathSatisfying("$.message", v -> assertThat(v).asString().isNotBlank());
+    }
+
+    @Test
+    void 위조된_access_토큰이나_refresh_토큰으로는_보호된_API에_접근할_수_없다() {
+        UserRegisterResponse device = registerDevice(UUID.randomUUID().toString());
+
+        // refresh(opaque UUID)는 JWT 파싱 자체가 실패한다 — API 접근 수단이 아니다
+        assertThat(mvc.get()
+                        .uri("/api/users/me/profile")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + device.refreshToken()))
+                .hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(mvc.get().uri("/api/users/me/profile").header(HttpHeaders.AUTHORIZATION, "Bearer not-a-jwt"))
+                .hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(mvc.get().uri("/api/users/me/profile").header(HttpHeaders.AUTHORIZATION, "Basic abc"))
+                .hasStatus(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void 인증_없이_열린_경로는_등록_refresh_헬스체크뿐이다() {
+        assertThat(mvc.get().uri("/actuator/health")).hasStatusOk();
+        // GET /api/users 같은 다른 메서드·경로는 열려 있지 않다
+        assertThat(mvc.get().uri("/api/users")).hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(mvc.get().uri("/api/stats/streak")).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test

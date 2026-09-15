@@ -1,7 +1,10 @@
 package project.study.config;
 
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,6 +32,8 @@ public class OpenApiConfig {
     // boolean으로 받지 않는다: Spring의 문자열→boolean 변환은 "on"/"1"도 true로 보지만 시더의
     // @ConditionalOnProperty(havingValue = "true")는 "true"(대소문자 무시)만 인정해, 같은 값을 두 곳이
     // 다르게 해석하면 시딩 없이 안내만 붙는다. 시더와 같은 판정을 그대로 쓴다
+    private static final String BEARER_AUTH = "bearerAuth";
+
     private final boolean seedEnabled;
 
     public OpenApiConfig(@Value("${app.seed.enabled:false}") String seedEnabled) {
@@ -40,12 +45,25 @@ public class OpenApiConfig {
         String description = """
                 공부 기록 앱 백엔드 API 문서.
 
-                **인증** — 현재 인증 없이 운영(ADR-0004). `POST /api/users`로 기기를 등록해 userId를 발급받고, \
-                이후 API 호출에 userId를 쿼리 파라미터 또는 요청 본문으로 전달한다.
+                **인증** — `POST /api/users`로 기기(UUID)를 등록해 access·refresh 토큰 쌍을 받고, \
+                이후 모든 API 호출에 `Authorization: Bearer <accessToken>` 헤더를 붙인다 (ADR-0019). \
+                요청에 userId를 실을 필요는 없다 — 서버가 토큰에서 신원을 읽는다. \
+                access가 만료되면(401 `UNAUTHORIZED`) `POST /api/auth/refresh`로 재발급받는다. \
+                아래 자물쇠 버튼에 access 토큰을 넣으면 Swagger UI에서도 인증된 요청을 보낼 수 있다.
                 """;
         if (seedEnabled) {
             description += DEV_MOCK_DATA_GUIDE;
         }
-        return new OpenAPI().info(new Info().title("Study API").version("v1").description(description));
+        return new OpenAPI()
+                .info(new Info().title("Study API").version("v1").description(description))
+                .components(new Components()
+                        .addSecuritySchemes(
+                                BEARER_AUTH,
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")))
+                // 전역 요구 — 인증 없이 부르는 등록·refresh는 @SecurityRequirements로 개별 해제한다
+                .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
     }
 }
