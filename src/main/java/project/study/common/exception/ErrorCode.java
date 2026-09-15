@@ -15,6 +15,12 @@ public enum ErrorCode {
     /** 요청 본문 검증 실패 (@Valid) */
     VALIDATION_FAILED,
 
+    /** access 토큰 누락·위조·만료 (401) — 클라이언트는 refresh 후 1회 재시도한다 */
+    UNAUTHORIZED,
+
+    /** refresh 토큰 재사용·만료·미존재 (401) — 클라이언트는 저장 토큰을 지우고 기기 재등록으로 복구한다 */
+    INVALID_REFRESH_TOKEN,
+
     /** 특정 코드를 부여하지 않은 404 */
     NOT_FOUND,
 
