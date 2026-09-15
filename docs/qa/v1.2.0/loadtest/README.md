@@ -27,7 +27,9 @@ brew install k6        # macOS
 | `s3-combined.js` | **시나리오 C — 결합(현실). 핵심.** |
 
 각 스크립트의 `setup()`이 부하 전에 유저(`POST /api/users`)와 방(`POST /api/rooms`)을
-미리 만든다. 인증이 비활성(permitAll)이라 토큰 없이 `userId`만으로 호출한다.
+미리 만든다. 이 스크립트들은 인증이 비활성(permitAll)이던 v1.2.0 기준이라 토큰 없이 `userId`만으로 호출한다 —
+**BY-526(ADR-0019) 이후 서버는 Bearer 토큰이 필수라 그대로 돌리면 401이다.** 등록 응답의 `accessToken`을
+헤더·STOMP CONNECT에 싣도록 고치는 것은 후속 티켓.
 `s2/s3`는 VU를 6명씩 같은 방에 몰아넣어 방 내부 부하를 만든다(방 수 = PEAK/6).
 
 ## 실행

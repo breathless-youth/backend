@@ -3,7 +3,7 @@
 # .env(compose env_file)에만 있고, 로컬 개발은 gitignore 대상인 application-local.yaml에 둔다.
 # 누락 시 동작: @Value로 읽는 값(카카오 앱 키, TURN 시크릿)은 'Could not resolve placeholder'로 즉시 기동 실패.
 # datasource는 @ConfigurationProperties 바인딩이라 미해결 placeholder 문자열이 그대로 비밀번호로 쓰여
-# DB 인증 실패로 기동이 멈춘다(조용히 뜨지는 않음). JWT_SECRET은 인증 파킹 중이라 지금은 읽는 코드가 없다.
+# DB 인증 실패로 기동이 멈춘다(조용히 뜨지는 않음). JWT_SECRET도 JwtUtil이 @Value로 읽어 누락 시 기동 실패다 (BY-526).
 spring:
   application:
     name: study
@@ -50,7 +50,7 @@ springdoc:
   override-with-generic-response: false
 
 jwt:
-  secret: ${JWT_SECRET} # 32자 이상 랜덤 문자열. 인증 재도입(JwtUtil 복구) 시 @Value가 읽으며 그때부터 누락 = 기동 실패
+  secret: ${JWT_SECRET} # 32자 이상 랜덤 문자열. JwtUtil이 @Value로 읽는다 — 누락 = 기동 실패 (ADR-0019)
   access-expiration: 1800000 # 30분
 
 refresh-token:
