@@ -1,17 +1,16 @@
 package project.study.config;
 
+import io.jsonwebtoken.JwtException;
 import java.security.Principal;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.server.ServerHttpRequest;
-import org.springframework.http.server.ServerHttpResponse;
-import org.springframework.http.server.ServletServerHttpRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -20,24 +19,22 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
-import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
-import org.springframework.web.socket.server.HandshakeInterceptor;
 import project.study.common.logging.StompMdcChannelInterceptor;
 import project.study.room.service.RoomStateService;
 import project.study.room.websocket.RoomMessenger;
 import project.study.room.websocket.SessionRegistry;
 import project.study.room.websocket.SessionTrackingDecorator;
+import project.study.user.jwt.JwtUtil;
 
 @Configuration
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private static final String USER_ID_ATTR = "userId";
     private static final long HEARTBEAT_INTERVAL_MS = 10_000L;
 
     private final RoomStateService roomStateService;
@@ -45,11 +42,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     // SimpMessagingTemplate(을 필요로 하는 RoomMessenger)을 configurer에 직접 주입하면 브로커 구성과
     // 순환 참조가 나므로 ObjectProvider로 지연 해석한다
     private final ObjectProvider<RoomMessenger> roomMessenger;
+    private final JwtUtil jwtUtil;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // SockJS 미사용 — FE가 @stomp/stompjs로 순수 WebSocket에 직접 접속한다
-        registry.addEndpoint("/ws").setAllowedOriginPatterns("*").addInterceptors(new UserIdHandshakeInterceptor());
+        // SockJS 미사용 — FE가 @stomp/stompjs로 순수 WebSocket에 직접 접속한다.
+        // 핸드셰이크에서는 아무것도 식별하지 않는다 — 인증은 CONNECT 프레임의 Authorization 헤더(아래 인터셉터)
+        registry.addEndpoint("/ws").setAllowedOriginPatterns("*");
     }
 
     @Override
@@ -81,7 +80,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registration.taskExecutor().corePoolSize(8).maxPoolSize(8);
         // 인가 인터셉터가 CONNECT에서 프린시펄을 세팅하므로 MDC 인터셉터는 그 뒤에 둔다
         registration.interceptors(
-                new UserIdChannelInterceptor(roomStateService, roomMessenger), new StompMdcChannelInterceptor());
+                new UserIdChannelInterceptor(roomStateService, roomMessenger, jwtUtil),
+                new StompMdcChannelInterceptor());
     }
 
     // WS 전송 한도 (BY-491). 기본값(메시지 64KB, 세션당 송신버퍼 512KB)은 우리 메시지
@@ -105,40 +105,17 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         }
     }
 
-    static class UserIdHandshakeInterceptor implements HandshakeInterceptor {
-        @Override
-        public boolean beforeHandshake(
-                ServerHttpRequest request,
-                ServerHttpResponse response,
-                WebSocketHandler wsHandler,
-                Map<String, Object> attributes) {
-            if (request instanceof ServletServerHttpRequest servletRequest) {
-                String userId = servletRequest.getServletRequest().getParameter(USER_ID_ATTR);
-                if (userId != null) {
-                    // 핸드셰이크 이후에는 HTTP가 끝나므로 세션 저장소에 userId 저장
-                    attributes.put(USER_ID_ATTR, userId);
-                }
-            }
-            return true;
-        }
-
-        @Override
-        public void afterHandshake(
-                ServerHttpRequest request,
-                ServerHttpResponse response,
-                WebSocketHandler wsHandler,
-                Exception exception) {}
-    }
-
     // STOMP 보안
     @RequiredArgsConstructor
     static class UserIdChannelInterceptor implements ChannelInterceptor {
 
         // 정규식을 미리 컴파일해서 static으로 보관
         private static final Pattern ROOM_TOPIC_PATTERN = Pattern.compile("^/topic/room/(\\d+)$");
+        private static final String BEARER_PREFIX = "Bearer ";
 
         private final RoomStateService roomStateService;
         private final ObjectProvider<RoomMessenger> messenger;
+        private final JwtUtil jwtUtil;
 
         @Override
         public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -152,8 +129,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             return switch (command) {
                 // CONNECT 대신 STOMP 커맨드도 유효한 연결 프레임
                 case CONNECT, STOMP -> {
-                    // Principal 세팅
-                    setPrincipalFromSession(accessor);
+                    // 실패는 예외로 거부한다 — null 반환은 아무 프레임도 안 나가 클라이언트가 CONNECTED를 무한 대기한다
+                    accessor.setUser(authenticate(message, accessor));
                     yield message;
                 }
                 case SEND -> allowSend(accessor) ? message : null;
@@ -166,21 +143,32 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             };
         }
 
-        private static void setPrincipalFromSession(StompHeaderAccessor accessor) {
-            Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
-            if (sessionAttributes != null) {
-                String userId = (String) sessionAttributes.get(USER_ID_ATTR);
-                if (userId != null) {
-                    accessor.setUser(new StompPrincipal(userId));
-                }
+        /**
+         * CONNECT 프레임의 {@code Authorization: Bearer <access>}로 principal을 만든다. 핸드셰이크 URL 쿼리는
+         * 쓰지 않는다 — 토큰이 ALB 액세스 로그에 남기 때문이다. 검증은 CONNECT 시점 한 번이고, 접속 중 access가
+         * 만료돼도 세션은 유지된다(재접속 전에 갱신해서 붙이는 것은 클라이언트 몫).
+         *
+         * <p>실패는 {@link MessageDeliveryException}(MessagingException 계열)로 던져야 StompSubProtocolHandler가
+         * ERROR 프레임을 보내고 소켓을 닫는다 — 다른 예외는 채널이 감싸 버려 이 메시지가 사라진다.
+         */
+        private Principal authenticate(Message<?> message, StompHeaderAccessor accessor) {
+            String header = accessor.getFirstNativeHeader(HttpHeaders.AUTHORIZATION);
+            if (header == null || !header.startsWith(BEARER_PREFIX)) {
+                throw new MessageDeliveryException(message, "인증이 필요합니다");
+            }
+            try {
+                // refresh 토큰(opaque UUID)은 JWT 파싱 자체가 실패한다. 예외 메시지에 토큰을 싣지 않는다
+                return new StompPrincipal(jwtUtil.getUserId(header.substring(BEARER_PREFIX.length())));
+            } catch (JwtException | IllegalArgumentException e) {
+                throw new MessageDeliveryException(message, "유효하지 않은 토큰입니다");
             }
         }
 
         // 클라이언트 SEND는 /app/** 만 허용 — 브로커 목적지(/topic, /queue)로의 직접 발행을 차단해
-        // 핸들러의 인가·검증을 우회한 위조 이벤트 주입을 막는다
+        // 핸들러의 인가·검증을 우회한 위조 이벤트 주입을 막는다. principal 없는 세션의 SEND도 버린다
         private static boolean allowSend(StompHeaderAccessor accessor) {
             String destination = accessor.getDestination();
-            return destination != null && destination.startsWith("/app/");
+            return accessor.getUser() != null && destination != null && destination.startsWith("/app/");
         }
 
         // SUBSCRIBE 인가 — deny-by-default. simple broker는 Ant 패턴 구독(/topic/room/** 등)을
