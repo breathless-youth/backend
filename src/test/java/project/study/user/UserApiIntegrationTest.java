@@ -55,6 +55,10 @@ class UserApiIntegrationTest {
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying("$.userId", id -> assertThat(id).isNotNull())
+                .hasPathSatisfying(
+                        "$.accessToken", token -> assertThat(token).asString().isNotBlank())
+                .hasPathSatisfying(
+                        "$.refreshToken", token -> assertThat(token).asString().isNotBlank())
                 .extractingPath("$.isNew")
                 .isEqualTo(true);
     }
@@ -90,16 +94,16 @@ class UserApiIntegrationTest {
         try {
             // 두 요청이 실제 DB의 유니크 제약 충돌 경로를 타도록 동시에 출발시킨다
             CountDownLatch start = new CountDownLatch(1);
-            Callable<UserRegisterResponse> task = () -> {
+            Callable<UserService.RegisterResult> task = () -> {
                 start.await();
                 return userService.register(new UserRegisterRequest(deviceId));
             };
-            Future<UserRegisterResponse> first = executor.submit(task);
-            Future<UserRegisterResponse> second = executor.submit(task);
+            Future<UserService.RegisterResult> first = executor.submit(task);
+            Future<UserService.RegisterResult> second = executor.submit(task);
             start.countDown();
 
-            UserRegisterResponse r1 = first.get();
-            UserRegisterResponse r2 = second.get();
+            UserService.RegisterResult r1 = first.get();
+            UserService.RegisterResult r2 = second.get();
 
             assertThat(r1.userId()).isEqualTo(r2.userId());
             assertThat(r1.isNew() ^ r2.isNew()).as("정확히 한쪽만 신규여야 한다").isTrue();
