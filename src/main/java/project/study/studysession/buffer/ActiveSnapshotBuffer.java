@@ -40,15 +40,15 @@ public class ActiveSnapshotBuffer {
 
     private record Key(Long userId, Instant startedAt) {}
 
-    private record Pending(ActiveSessionSnapshotRequest request, Instant lastSeenAt) {}
+    private record Pending(Long userId, ActiveSessionSnapshotRequest request, Instant lastSeenAt) {}
 
     /**
      * 스냅샷을 버퍼에 넣는다. 같은 세션의 이전 스냅샷은 덮어써지고(코얼레싱), reportedAt이 더
      * 이른(역순 도착) 스냅샷은 무시된다. 검증은 호출 측(서비스)에서 이미 끝난 상태다.
      */
-    public void offer(ActiveSessionSnapshotRequest request) {
-        Key key = new Key(request.userId(), request.startedAt());
-        Pending incoming = new Pending(request, clock.instant());
+    public void offer(Long userId, ActiveSessionSnapshotRequest request) {
+        Key key = new Key(userId, request.startedAt());
+        Pending incoming = new Pending(userId, request, clock.instant());
         // 더 미래의 스냅샷을 저장
         pending.merge(
                 key,
@@ -80,7 +80,7 @@ public class ActiveSnapshotBuffer {
             ActiveSessionSnapshotRequest r = p.request();
             String eventsJson = objectMapper.writeValueAsString(r.events());
             rows.add(new SnapshotRow(
-                    r.userId(), r.startedAt(), r.reportedAt(), p.lastSeenAt(), r.studySec(), r.focusSec(), eventsJson));
+                    p.userId(), r.startedAt(), r.reportedAt(), p.lastSeenAt(), r.studySec(), r.focusSec(), eventsJson));
         }
         if (rows.isEmpty()) {
             return;

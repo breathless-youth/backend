@@ -31,7 +31,6 @@ class EcsStructuredLogFormatTest {
     void 액세스_로그_JSON에_userId와_requestId가_최상위_필드로_실린다(CapturedOutput output) {
         String requestId = mvc.get()
                 .uri("/api/stats/streak")
-                .param("userId", "77")
                 .with(AuthTestSupport.asUser(77))
                 .exchange()
                 .getResponse()

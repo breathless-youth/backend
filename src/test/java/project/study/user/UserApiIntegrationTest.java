@@ -1,6 +1,7 @@
 package project.study.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import java.util.Locale;
 import java.util.UUID;
@@ -133,7 +134,8 @@ class UserApiIntegrationTest {
 
     private MockMvcTester.MockMvcRequestBuilder patchProfile(long userId, String json) {
         return mvc.patch()
-                .uri("/api/users/{userId}/profile", userId)
+                .uri("/api/users/me/profile")
+                .with(asUser(userId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json);
     }

@@ -16,7 +16,6 @@ import jakarta.validation.constraints.Size;
 public record RtcStatRequest(
         @NotBlank @Size(max = 64) String connectionId,
         @NotNull @Positive Long roomId,
-        @NotNull @Positive Long userId,
         @Positive Long peerUserId,
 
         @NotBlank

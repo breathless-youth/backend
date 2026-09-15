@@ -1,6 +1,7 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -82,11 +83,12 @@ class AutoFinalizedReplaceApiTest {
 
     private MvcTestResult submit(Instant started, Instant ended, int studySec, int focusSec) {
         String body = """
-                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(userId, started, ended, studySec, focusSec);
+                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(started, ended, studySec, focusSec);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
+                .with(asUser(userId))
                 .exchange();
     }
 

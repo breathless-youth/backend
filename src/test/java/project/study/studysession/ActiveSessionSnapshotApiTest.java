@@ -1,6 +1,7 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -64,11 +65,12 @@ class ActiveSessionSnapshotApiTest {
     private MvcTestResult report(
             Long uid, Instant started, Instant reported, int studySec, int focusSec, String eventsJson) {
         String body = """
-				{"userId": %d, "startedAt": "%s", "reportedAt": "%s", "studySec": %d, "focusSec": %d, "events": %s}""".formatted(uid, started, reported, studySec, focusSec, eventsJson);
+				{"startedAt": "%s", "reportedAt": "%s", "studySec": %d, "focusSec": %d, "events": %s}""".formatted(started, reported, studySec, focusSec, eventsJson);
         MvcTestResult result = mvc.put()
                 .uri("/api/study-sessions/active")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
+                .with(asUser(uid))
                 .exchange();
         buffer.flush(); // 버퍼에 들어간 스냅샷을 지금 DB에 반영한다 — 검증 실패(400)면 버퍼가 비어 있어 no-op
         return result;
@@ -150,11 +152,12 @@ class ActiveSessionSnapshotApiTest {
     @Test
     void 필수값_누락은_400이다() {
         String body = """
-				{"userId": %d, "startedAt": "%s"}""".formatted(userId, startedAt);
+				{"startedAt": "%s"}""".formatted(startedAt);
         assertThat(mvc.put()
                         .uri("/api/study-sessions/active")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body)
+                        .with(asUser(userId))
                         .exchange())
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
@@ -162,7 +165,7 @@ class ActiveSessionSnapshotApiTest {
     // ── 복구 조회 (BY-448) ──────────────────────────────────────────
 
     private MvcTestResult restore(Long uid) {
-        return mvc.get().uri("/api/study-sessions/active?userId=" + uid).exchange();
+        return mvc.get().uri("/api/study-sessions/active").with(asUser(uid)).exchange();
     }
 
     @Test

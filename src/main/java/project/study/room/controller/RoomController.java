@@ -12,15 +12,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
-import project.study.room.dto.RoomCreateRequest;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinRequest;
 import project.study.room.dto.RoomJoinResponse;
@@ -42,7 +41,7 @@ public class RoomController {
     private final SimpMessagingTemplate messagingTemplate;
 
     @Operation(summary = "방 생성", description = """
-                    일회성 공부방을 만들고 초대코드(숫자 4자리)를 발급받는다. \
+                    일회성 공부방을 만들고 초대코드(숫자 4자리)를 발급받는다. 요청 본문은 없다 — 만드는 사람은 토큰으로 식별한다. \
                     **생성만으로는 입장 상태가 아니다** — 생성자도 join으로만 입장한다. \
                     생성 후 10분 내 아무도 입장하지 않으면 방과 코드가 자동 소멸한다.""")
     @ApiResponse(responseCode = "201", description = "생성 성공 — 방 ID와 초대코드")
@@ -58,10 +57,10 @@ public class RoomController {
                                             value = "{\"code\": \"USER_NOT_FOUND\", \"message\": \"존재하지 않는 사용자입니다\"}")))
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public RoomCreateResponse create(@Valid @RequestBody RoomCreateRequest request) {
-        // rooms.created_by FK — 없는 유저는 join과 같은 404(USER_NOT_FOUND)로 답한다
-        userService.getProfile(request.userId());
-        return roomService.create(request.userId());
+    public RoomCreateResponse create(@AuthenticationPrincipal Long userId) {
+        // rooms.created_by FK — 토큰은 유효한데 유저 행이 없는 경우를 join과 같은 404(USER_NOT_FOUND)로 답한다
+        userService.getProfile(userId);
+        return roomService.create(userId);
     }
 
     @Operation(summary = "초대코드 입장", description = """
@@ -113,11 +112,11 @@ public class RoomController {
                             schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = "{\"code\": \"CONFLICT\", \"message\": \"방이 가득 찼어요\"}")))
     @PostMapping("/join")
-    public RoomJoinResponse join(@Valid @RequestBody RoomJoinRequest request) {
+    public RoomJoinResponse join(@AuthenticationPrincipal Long userId, @Valid @RequestBody RoomJoinRequest request) {
         // 프로필(닉네임·목표)은 방 상태에 보관돼 SNAPSHOT/MEMBER_JOINED에 실린다.
-        ProfileResponse profile = userService.getProfile(request.userId());
-        JoinResult result = roomService.join(
-                request.userId(), request.inviteCode(), profile.nickname(), profile.goal(), profile.category());
+        ProfileResponse profile = userService.getProfile(userId);
+        JoinResult result =
+                roomService.join(userId, request.inviteCode(), profile.nickname(), profile.goal(), profile.category());
 
         if (result.autoLeave() != null) {
             AutoLeave al = result.autoLeave();
@@ -134,7 +133,7 @@ public class RoomController {
     @ApiResponse(responseCode = "204", description = "퇴장 완료")
     @PostMapping("/{roomId}/leave")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void leave(@PathVariable Long roomId, @RequestParam Long userId) {
+    public void leave(@AuthenticationPrincipal Long userId, @PathVariable Long roomId) {
         LeaveResult result = roomService.leave(roomId, userId);
         if (result.removed() && result.roomStillOpen()) {
             messagingTemplate.convertAndSend(

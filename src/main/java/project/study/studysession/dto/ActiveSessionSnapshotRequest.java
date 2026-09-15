@@ -8,12 +8,9 @@ import java.util.List;
 
 /** 진행중 세션의 누적 스냅샷 — 30초마다 통째로 보내 서버 draft를 덮어쓴다 (BY-447). */
 public record ActiveSessionSnapshotRequest(
-        @Schema(description = "세션 주인의 유저 ID", example = "1") @NotNull
-        Long userId,
-
         @Schema(
                 description =
-                        "세션 시작 시각 (UTC, ISO-8601) — 최종 제출의 startedAt과 같은 값이어야 한다. " + "userId와 함께 draft의 멱등 키로 쓰인다",
+                        "세션 시작 시각 (UTC, ISO-8601) — 최종 제출의 startedAt과 같은 값이어야 한다. " + "토큰의 userId와 함께 draft의 멱등 키로 쓰인다",
                 example = "2026-08-27T01:00:00Z")
         @NotNull
         Instant startedAt,

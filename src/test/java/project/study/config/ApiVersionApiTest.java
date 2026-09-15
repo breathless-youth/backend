@@ -1,6 +1,7 @@
 package project.study.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,20 +23,23 @@ import project.study.TestcontainersConfiguration;
 @Import(TestcontainersConfiguration.class)
 class ApiVersionApiTest {
 
-    private static final String NO_SUCH_USER_PROFILE = "/api/users/999999999/profile";
+    private static final String PROFILE = "/api/users/me/profile";
+    // 등록 없이 발급된 principal — 라우팅만 보면 되므로 유저 없음(404)이 기대 응답이다
+    private static final long NO_SUCH_USER = 999_999_999L;
 
     @Autowired
     private MockMvcTester mvc;
 
     @Test
     void 버전_헤더가_없으면_기본버전_1로_해석되어_기존_엔드포인트에_라우팅된다() {
-        assertThat(mvc.get().uri(NO_SUCH_USER_PROFILE).exchange()).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(mvc.get().uri(PROFILE).with(asUser(NO_SUCH_USER)).exchange()).hasStatus(HttpStatus.NOT_FOUND);
     }
 
     @Test
     void 버전_1을_명시해도_헤더_없는_요청과_동일하게_라우팅된다() {
         assertThat(mvc.get()
-                        .uri(NO_SUCH_USER_PROFILE)
+                        .uri(PROFILE)
+                        .with(asUser(NO_SUCH_USER))
                         .header("API-Version", "1")
                         .exchange())
                 .hasStatus(HttpStatus.NOT_FOUND);
@@ -44,7 +48,8 @@ class ApiVersionApiTest {
     @Test
     void 지원하지_않는_버전이면_400이다() {
         assertThat(mvc.get()
-                        .uri(NO_SUCH_USER_PROFILE)
+                        .uri(PROFILE)
+                        .with(asUser(NO_SUCH_USER))
                         .header("API-Version", "99")
                         .exchange())
                 .hasStatus(HttpStatus.BAD_REQUEST);
@@ -53,7 +58,8 @@ class ApiVersionApiTest {
     @Test
     void 파싱할_수_없는_버전이면_400이다() {
         assertThat(mvc.get()
-                        .uri(NO_SUCH_USER_PROFILE)
+                        .uri(PROFILE)
+                        .with(asUser(NO_SUCH_USER))
                         .header("API-Version", "abc")
                         .exchange())
                 .hasStatus(HttpStatus.BAD_REQUEST);

@@ -12,9 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -81,8 +81,8 @@ public class UserController {
         return ResponseEntity.status(status).body(response);
     }
 
-    @Operation(summary = "프로필 조회", description = """
-                    유저의 프로필(닉네임·한줄 목표·카테고리·아바타 정보)을 조회한다. \
+    @Operation(summary = "내 프로필 조회", description = """
+                    토큰의 유저 프로필(닉네임·한줄 목표·카테고리·아바타 정보)을 조회한다. \
                     최초 프로필은 유저 등록(POST /api/users) 시점에 자동 발급된다 — \
                     닉네임 `포메{랜덤5자리}`, goal·category는 null.""")
     @ApiResponse(responseCode = "200", description = "조회 성공")
@@ -93,12 +93,12 @@ public class UserController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
-    @GetMapping("/{userId}/profile")
-    public ProfileResponse getProfile(@PathVariable Long userId) {
+    @GetMapping("/me/profile")
+    public ProfileResponse getProfile(@AuthenticationPrincipal Long userId) {
         return userService.getProfile(userId);
     }
 
-    @Operation(summary = "프로필 수정", description = """
+    @Operation(summary = "내 프로필 수정", description = """
                     프로필의 일부 필드만 수정한다 — 요청에 담긴 필드만 반영되고 생략한 필드는 유지된다. \
                     닉네임은 앞뒤 공백을 잘라낸 뒤 저장되며(중간 띄어쓰기는 유지), \
                     바꾸면 아바타 이니셜(`initial`)도 첫 글자(이모지면 이모지 한 글자)로 갱신된다. `colorIndex`는 불변.""")
@@ -127,8 +127,9 @@ public class UserController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
-    @PatchMapping("/{userId}/profile")
-    public ProfileResponse updateProfile(@PathVariable Long userId, @Valid @RequestBody ProfileUpdateRequest request) {
+    @PatchMapping("/me/profile")
+    public ProfileResponse updateProfile(
+            @AuthenticationPrincipal Long userId, @Valid @RequestBody ProfileUpdateRequest request) {
         return userService.updateProfile(userId, request);
     }
 }
