@@ -110,3 +110,8 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
 - `<설명>`: 무엇을 제공/변경하는지 간결하게
 
 예: `[feat] BY-257 설정 화면 문서·문의를 앱 내에서 제공`
+
+## 릴리즈
+릴리즈 PR(dev → main) 머지 후 그 머지 커밋에 annotated 태그 `vX.Y.Z`를 푸시하면 GitHub Release가
+자동 생성된다(태그 메시지 = 사람이 쓰는 요약, 아래에 자동 PR 목록). 절차·요약 작성 규칙은
+`docs/runbooks/release.md`.

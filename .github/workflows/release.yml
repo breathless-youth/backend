@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    # 런북(docs/runbooks/release.md)의 semver 태그만 매칭 — 실험용 태그로 릴리스가 생기지 않도록
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # deploy.yml과 같은 이유로 액션을 커밋 SHA로 고정한다
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      # 런북 규칙 강제: main에 없는 커밋으로는 릴리스를 만들지 않는다.
+      # annotated 태그에서는 GITHUB_SHA가 태그 객체를 가리킬 수 있어 태그 이름을 커밋으로 풀어 검사한다.
+      - name: Verify tag commit is on main
+        run: |
+          git fetch origin main --quiet
+          commit="$(git rev-parse "${GITHUB_REF_NAME}^{commit}")"
+          if ! git merge-base --is-ancestor "$commit" origin/main; then
+            echo "::error::태그 커밋($commit)이 main에 없습니다. docs/runbooks/release.md대로 main에서 태그하세요."
+            exit 1
+          fi
+
+      # 사람이 쓴 태그 메시지(요약)를 릴리스 본문 맨 위에 넣고, 그 아래에 GitHub 자동 PR 목록을 붙인다.
+      # lightweight 태그면 메시지가 비어 자동 목록만 들어간다.
+      # 재실행 멱등성: 이미 릴리스가 있으면 성공으로 종료 (워크플로 재시도/중복 이벤트 대비)
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "릴리스 $GITHUB_REF_NAME 이(가) 이미 있어 건너뜁니다"
+            exit 0
+          fi
+          summary="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --generate-notes --notes "${summary}"$'\n'   # 요약과 자동 목록 사이 빈 줄
