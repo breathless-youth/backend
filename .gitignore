@@ -30,6 +30,8 @@ out/
 # 실제 시크릿은 로컬 전용 application-local.yaml에만 둔다. dev/prod yaml은 시크릿을 환경변수로
 # 주입받으므로(기본값 없음, 누락 시 기동 실패) 추적 대상이다 (BY-642)
 src/main/resources/application-local.yaml
+# dev 서버 compose가 env_file로 읽는 실제 시크릿 (BY-642). 키 목록은 docs/runbooks/dev-deploy.md "서버 전제"
+.env
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/

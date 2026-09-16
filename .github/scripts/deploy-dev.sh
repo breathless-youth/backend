@@ -27,7 +27,7 @@ fi
 cd "$APP_DIR"
 
 # 추적 파일의 로컬 수정(스테이징 포함)이 있으면 그 수정본이 빌드되면서 origin SHA로 보고된다 — 거부한다.
-# 추적 대상이 아닌 .env·compose override 파일은 영향 없다
+# 추적 대상이 아닌 .env는 영향 없다
 if ! sudo -u ubuntu -H git diff --quiet HEAD; then
   echo "server has uncommitted changes to tracked files — refusing to deploy"
   exit 1
@@ -45,14 +45,14 @@ if [ "$(sudo -u ubuntu -H git rev-parse HEAD)" != "$(sudo -u ubuntu -H git rev-p
   exit 1
 fi
 
-# 리포의 docker-compose.yml에는 postgres만 있다. app 서비스는 서버의 override 파일이 정의하므로,
-# 그 파일이 없으면 compose up이 "빌드할 것 없음"으로 조용히 성공해 옛 코드가 초록으로 보고된다 — 미리 막는다
+# 리포의 docker-compose.yml에는 postgres만 있다. app 서비스는 docker-compose.dev.yml에 있고, 서버 .env의
+# COMPOSE_FILE이 두 파일을 합친다. 그 설정이 빠지면 compose up이 "빌드할 것 없음"으로 조용히 성공해 옛 코드가 초록으로 보고된다 — 미리 막는다
 if ! services=$(docker compose config --services); then
-  echo "docker compose config failed — the server's compose files (override included) are invalid"
+  echo "docker compose config failed — the server's compose files are invalid"
   exit 1
 fi
 if ! printf '%s\n' "$services" | grep -qv '^postgres$'; then
-  echo "compose project defines no app service (only postgres) — check the server's compose override file"
+  echo "compose project defines no app service (only postgres) — check COMPOSE_FILE in the server's .env"
   exit 1
 fi
 
