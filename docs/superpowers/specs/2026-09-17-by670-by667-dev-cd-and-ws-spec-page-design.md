@@ -95,7 +95,7 @@ fi
 cd "$APP_DIR"
 
 # 추적 파일의 로컬 수정(스테이징 포함)이 있으면 그 수정본이 빌드되면서 origin SHA로 보고된다 — 거부한다.
-# 추적 대상이 아닌 .env·compose override 파일은 영향 없다
+# 추적 대상이 아닌 .env는 영향 없다
 if ! sudo -u ubuntu -H git diff --quiet HEAD; then
   echo "server has uncommitted changes to tracked files — refusing to deploy"
   exit 1
@@ -113,14 +113,14 @@ if [ "$(sudo -u ubuntu -H git rev-parse HEAD)" != "$(sudo -u ubuntu -H git rev-p
   exit 1
 fi
 
-# 리포의 docker-compose.yml에는 postgres만 있다. app 서비스는 서버의 override 파일이 정의하므로,
-# 그 파일이 없으면 compose up이 "빌드할 것 없음"으로 조용히 성공해 옛 코드가 초록으로 보고된다 — 미리 막는다
+# 리포의 docker-compose.yml에는 postgres만 있다. app 서비스는 docker-compose.dev.yml에 있고, 서버 .env의
+# COMPOSE_FILE이 두 파일을 합친다. 그 설정이 빠지면 compose up이 "빌드할 것 없음"으로 조용히 성공해 옛 코드가 초록으로 보고된다 — 미리 막는다
 if ! services=$(docker compose config --services); then
-  echo "docker compose config failed — the server's compose files (override included) are invalid"
+  echo "docker compose config failed — the server's compose files are invalid"
   exit 1
 fi
 if ! printf '%s\n' "$services" | grep -qv '^postgres$'; then
-  echo "compose project defines no app service (only postgres) — check the server's compose override file"
+  echo "compose project defines no app service (only postgres) — check COMPOSE_FILE in the server's .env"
   exit 1
 fi
 
@@ -164,7 +164,7 @@ exit 1
 - `curl --max-time 2`: 연결 대기 시간 한계 설정(반복 간격 정확성)
 - 서버 잠금(`flock`)으로 배포 직렬화 — 폴링 종료 후에도 원격 실행이 남는 경우 대비
 - fetch 후 HEAD == origin/dev 확인 — `--ff-only`는 서버가 앞서 있는 경우를 막지 못한다
-- compose 프로젝트에 postgres 외 서비스가 있는지 확인 — 리포 compose는 postgres뿐이라 override 부재 시 "배포 안 하고 초록" 방지
+- compose 프로젝트에 postgres 외 서비스가 있는지 확인 — 리포 compose는 postgres뿐이라 서버 .env의 COMPOSE_FILE 누락 시 "배포 안 하고 초록" 방지
 - prune은 health 성공 뒤, 실패해도 배포 실패로 치지 않는다
 - `GIT_TERMINAL_PROMPT=0` — 자격 증명 없으면 멈추지 않고 실패
 
@@ -204,9 +204,9 @@ IAM `--description`은 ASCII/Latin-1만 허용한다 — 한글 설명은 Create
 | SSM에 등록된 적 없음 | send-command가 `InvalidInstanceId` | 런북 "계정 준비" 1 |
 | 에이전트 오프라인(등록 후) | `Pending`/`Delayed` → 600초 뒤 `TimedOut` | 런북 AWS 표 |
 | 서버 dev가 origin보다 앞섬 | `server dev is ahead of origin/dev`, 배포 안 함 | PR로 올리거나 reset |
-| 서버 override 파일 없음 | `compose project defines no app service`, 배포 안 함 | 런북 "서버 전제" |
+| 서버 .env에 COMPOSE_FILE 없음 | `compose project defines no app service`, 배포 안 함 | 런북 "서버 전제" |
 | 앞 배포가 아직 실행 중 | `another deploy is still running` | 끝난 뒤 재실행 |
-| 서버 추적 파일에 로컬 수정 | `server has uncommitted changes to tracked files`, 배포 안 함 | stash/버림 또는 override로 이동 |
+| 서버 추적 파일에 로컬 수정 | `server has uncommitted changes to tracked files`, 배포 안 함 | stash/버림 |
 | 서버 compose 파일 문법 오류 | `docker compose config failed`, 배포 안 함 | `docker compose config`로 확인 |
 | health 실패 | 새(깨진) 코드로 떠 있음, 직전 이미지 보존 | 이미지 되돌리기 또는 수정 후 재배포 |
 

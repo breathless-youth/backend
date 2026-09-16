@@ -23,10 +23,10 @@
 | 로그 | 원인 | 대응 |
 |---|---|---|
 | `fatal: Not possible to fast-forward` | 서버 `dev`가 origin과 갈라졌다(로컬 커밋 + 원격 진행) | SSH로 들어가 `git log --oneline -3`, 정리 후 재실행. 기존 컨테이너는 살아 있다 |
-| `server has uncommitted changes to tracked files` | 서버에 추적 파일의 로컬 수정이 있다(스테이징 포함) | `git status --short`로 확인. compose 설정은 override 파일(아래 "서버 전제")로 빼고, 나머지는 stash/버림. 배포는 하지 않았다 |
+| `server has uncommitted changes to tracked files` | 서버에 추적 파일의 로컬 수정이 있다(스테이징 포함) | `git status --short`로 확인. 필요한 변경이면 PR로 올리고, 아니면 stash/버림. 배포는 하지 않았다 |
 | `server dev is ahead of origin/dev` | 서버에서 직접 커밋했다 | 그 커밋을 PR로 올리거나 `git reset --hard origin/dev`. 배포는 하지 않았다 |
-| `docker compose config failed` | 서버 compose 파일(override 포함)의 문법 오류 | 서버에서 `docker compose config`로 오류 위치 확인. 배포는 하지 않았다 |
-| `compose project defines no app service` | 서버 override 파일이 없거나 이름이 바뀌었다 | 아래 "서버 전제" 확인. 배포는 하지 않았다 |
+| `docker compose config failed` | compose 파일(`docker-compose.yml`·`docker-compose.dev.yml`)의 문법 오류 | 서버에서 `docker compose config`로 오류 위치 확인. 배포는 하지 않았다 |
+| `compose project defines no app service` | 서버 `.env`에 `COMPOSE_FILE` 줄이 없다 | 아래 "서버 전제" 확인. 배포는 하지 않았다 |
 | `another deploy is still running` | 앞 배포가 아직 서버에서 실행 중 | 앞 실행이 끝난 뒤 Run workflow |
 | `Permission denied (publickey)` 또는 `could not read Username for 'https://github.com'` | `ubuntu`에 비대화형 git 자격 증명이 없다 | 아래 "서버 전제" 3번 |
 | `docker compose up --build failed` + 로그 끝 120줄 | 코드 빌드 실패 | 로그 끝에 원인이 없으면 서버 `deploy-dev.log`를 본다. 코드 수정 후 재푸시. 기존 컨테이너는 살아 있다 |
@@ -47,10 +47,10 @@
 
 스크립트는 서버의 다음 상태를 전제한다. 첫 배포 전에 SSH로 들어가 한 번 확인한다.
 
-1. **app 서비스는 리포 밖 override 파일이 정의한다.** 리포의 `docker-compose.yml`에는 postgres만 있다.
-   `/home/ubuntu/app-dev`에서 `docker compose config --services`에 postgres 외 서비스가 보여야 하고, 그 서비스가 호스트
-   8080을 publish해야 한다(`HEALTH_URL`). `git status --short docker-compose.yml`이 비어 있어야 한다 — 추적 파일을 고쳐 쓰고
-   있다면 `docker-compose.override.yml`(untracked)로 옮긴다.
+1. **app 서비스는 `docker-compose.dev.yml`(추적)이 정의하고, 서버 `.env`의 `COMPOSE_FILE`이 두 파일을 합친다.**
+   리포의 `docker-compose.yml`에는 postgres만 있다. `.env`에 `COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml`
+   한 줄이 있어야 `/home/ubuntu/app-dev`에서 `docker compose config --services`에 `app`이 보이고 호스트 8080이 publish된다
+   (`HEALTH_URL`). 로컬 개발자는 이 값이 없으므로 postgres만 뜬다. `git status --short`에 추적 파일 수정이 없어야 한다
 2. **`.env`** — `/home/ubuntu/app-dev/.env` (compose `env_file`). 시크릿 목록은 BY-642.
 3. **비대화형 git 자격 증명** — SSM 실행에는 SSH agent forwarding이 없다. root 셸에서
    `sudo -u ubuntu -H git -C /home/ubuntu/app-dev ls-remote origin dev` 가 프롬프트 없이 성공해야 한다.
@@ -150,4 +150,3 @@ aws ssm send-command --profile focusdev --region ap-northeast-2 --instance-ids i
 - 이미지 기반 배포(ECR)로 전환 — 서버 빌드 부하가 문제될 때
 - 보안그룹 22번 전체 개방 정리 — SSM이 붙은 뒤에는 SSH 없이 배포되므로 닫아도 된다
 - 루트 액세스 키 → IAM 사용자 또는 Identity Center로 전환하고 루트 키 삭제
-- 서버 compose override 파일을 리포로 가져오기(`docker-compose.dev.yml`) — 지금은 서버 상태에 의존한다
