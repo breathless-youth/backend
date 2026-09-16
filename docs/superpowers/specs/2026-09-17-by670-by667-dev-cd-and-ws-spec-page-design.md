@@ -58,8 +58,9 @@ dev push ─▶ deploy-dev.yml ─▶ OIDC로 github-deploy-dev assume
 - 스텝
   1. checkout (스크립트 파일을 리포에서 읽기 위해)
   2. configure-aws-credentials (OIDC)
-  3. `aws ssm send-command` — `--document-name AWS-RunShellScript`, `--instance-ids $DEV_INSTANCE_ID`, `--parameters` `commands`=아래 A5 스크립트, `executionTimeout=1800`; `--comment "deploy-dev <sha>"`; 출력에서 `CommandId` 추출
-  4. 폴링: `aws ssm get-command-invocation`을 10초 간격으로, `Status`가 `Pending|InProgress|Delayed`가 아닐 때까지 (상한 30분). 종료 시 `StandardOutputContent`·`StandardErrorContent`를 로그에 출력하고 `Status != Success`면 `exit 1`
+  3. `aws ssm send-command` — `--document-name AWS-RunShellScript`, `--instance-ids $DEV_INSTANCE_ID`, `--parameters` `commands`=아래 A5 스크립트, `executionTimeout=1800`, `--timeout-seconds 600`; `--comment "deploy-dev <sha>"`; 출력에서 `CommandId` 추출
+  4. 폴링: `aws ssm get-command-invocation`을 10초 간격으로, 처음 6회만 조회 오류를 Pending으로 간주, 상한 2,500초(배달 600 + 실행 1,800보다 길게). 종료 시 `StandardOutputContent`·`StandardErrorContent`를 로그에 출력하고 `Status != Success`면 `exit 1`
+  - 잡 `timeout-minutes: 45`, `INSTANCE_ID`는 잡 레벨 env, 비어 있으면 즉시 실패
 - CI 게이트: PR은 이미 CI를 통과해야 dev에 머지되므로 운영과 같이 push 즉시 배포한다
 
 ### A5. 서버 스크립트 (`.github/scripts/deploy-dev.sh`, 워크플로가 읽어 SSM 파라미터로 전달)
