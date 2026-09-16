@@ -139,4 +139,15 @@ class RequestLoggingFilterTest {
 
         assertThat(appender.list).isEmpty();
     }
+
+    @Test
+    void actuator_경로도_처리_뒤_MDC를_비운다() throws ServletException, IOException {
+        // 인증된 /actuator/wsstats에서 JwtFilter가 넣은 userId가 스레드에 남으면 다음 요청 로그에 묻어간다
+        FilterChain chainLikeJwtFilter = (request, response) -> MDC.put(LogContext.USER_ID, "7");
+
+        filter.doFilter(get("/actuator/wsstats"), new MockHttpServletResponse(), chainLikeJwtFilter);
+
+        assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
+        assertThat(appender.list).isEmpty();
+    }
 }

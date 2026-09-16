@@ -37,9 +37,10 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
 
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        // 헬스체크(ALB, 1초 간격)까지 찍으면 액세스 로그가 그것으로 도배된다
+    // 헬스체크(ALB, 1초 간격)까지 찍으면 액세스 로그가 그것으로 도배된다. 로그만 건너뛰고 필터는 통과시킨다 —
+    // 필터 자체를 건너뛰면 finally의 MDC 정리도 빠져, 인증된 /actuator/wsstats가 넣은 userId가
+    // 재사용되는 톰캣 스레드에 남아 다음 요청 로그에 묻어간다 (Codex P2)
+    private static boolean isActuator(HttpServletRequest request) {
         return request.getRequestURI().startsWith(ACTUATOR_PREFIX);
     }
 
@@ -56,19 +57,20 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
-            log.atInfo()
-                    .addKeyValue("method", request.getMethod())
-                    .addKeyValue("path", request.getRequestURI())
-                    .addKeyValue("status", response.getStatus())
-                    .addKeyValue("durationMs", durationMs)
-                    .log(
-                            "{} {} {} {}ms",
-                            request.getMethod(),
-                            request.getRequestURI(),
-                            response.getStatus(),
-                            durationMs);
+            if (!isActuator(request)) {
+                logAccess(request, response, durationMs);
+            }
             // 톰캣 스레드는 재사용된다 — 비우지 않으면 다음 요청에 이전 유저의 ID가 묻어간다
             MDC.clear();
         }
+    }
+
+    private static void logAccess(HttpServletRequest request, HttpServletResponse response, long durationMs) {
+        log.atInfo()
+                .addKeyValue("method", request.getMethod())
+                .addKeyValue("path", request.getRequestURI())
+                .addKeyValue("status", response.getStatus())
+                .addKeyValue("durationMs", durationMs)
+                .log("{} {} {} {}ms", request.getMethod(), request.getRequestURI(), response.getStatus(), durationMs);
     }
 }
