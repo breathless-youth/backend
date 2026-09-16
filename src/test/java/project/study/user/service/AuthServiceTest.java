@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,6 +49,20 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         authService = new AuthService(userRepository, refreshTokenRepository, jwtUtil, REFRESH_EXPIRATION_MS);
+        // 유저 행 잠금은 모든 발급·회전 경로가 거친다 — 기본은 "유저 존재"
+        User user = new User(Provider.DEVICE, "device-uuid");
+        ReflectionTestUtils.setField(user, "id", 1L);
+        lenient().when(userRepository.findByIdForUpdate(anyLong())).thenReturn(Optional.of(user));
+    }
+
+    @Test
+    void 재발급과_폐기는_유저_행_잠금을_먼저_잡는다() {
+        authService.issueTokensRevokingExisting(5L);
+
+        InOrder inOrder = inOrder(userRepository, refreshTokenRepository);
+        inOrder.verify(userRepository).findByIdForUpdate(5L);
+        inOrder.verify(refreshTokenRepository).deleteByUserId(5L);
+        inOrder.verify(refreshTokenRepository).save(any(RefreshToken.class));
     }
 
     @Test
@@ -78,9 +93,6 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(saved, "id", 10L);
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(saved));
         when(refreshTokenRepository.markUsedIfUnused(eq(10L), any())).thenReturn(1);
-        User user = new User(Provider.DEVICE, "device-uuid");
-        ReflectionTestUtils.setField(user, "id", 1L);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         TokenResponse response = authService.refresh(new RefreshRequest("refresh-uuid"));
 
@@ -148,11 +160,11 @@ class AuthServiceTest {
         RefreshToken saved = new RefreshToken(1L, "hash", Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(saved, "id", 10L);
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(saved));
-        when(refreshTokenRepository.markUsedIfUnused(eq(10L), any())).thenReturn(1);
-        when(userRepository.findById(1L)).thenReturn(Optional.empty());
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.refresh(new RefreshRequest("refresh-uuid")))
                 .isInstanceOf(InvalidRefreshTokenException.class);
+        verify(refreshTokenRepository, never()).markUsedIfUnused(anyLong(), any());
         verify(refreshTokenRepository, never()).save(any());
     }
 }

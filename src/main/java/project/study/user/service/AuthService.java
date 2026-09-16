@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
 import project.study.user.entity.RefreshToken;
+import project.study.user.entity.User;
 import project.study.user.jwt.JwtUtil;
 import project.study.user.repository.RefreshTokenRepository;
 import project.study.user.repository.UserRepository;
@@ -21,6 +23,9 @@ import project.study.user.repository.UserRepository;
  *
  * <p>refresh는 opaque UUID를 SHA-256 해시로만 저장하고, 회전 시 삭제 대신 {@code usedAt}을 마킹한다.
  * 사용된 토큰이 다시 오면 탈취 의심으로 그 유저의 refresh를 전량 폐기한다 (ADR-0002).
+ *
+ * <p>발급·회전·전량 폐기는 모두 유저 행 잠금({@code SELECT ... FOR UPDATE}) 아래에서 실행한다. 잠금이 없으면
+ * 재사용 감지의 전량 폐기가 동시에 커밋 중인 회전의 새 토큰을 삭제 대상 조회에서 놓쳐 살려 둔다.
  */
 @Service
 public class AuthService {
@@ -50,6 +55,7 @@ public class AuthService {
      */
     @Transactional
     public TokenPair issueTokensRevokingExisting(Long userId) {
+        lockUser(userId).orElseThrow(() -> new IllegalStateException("등록된 유저를 찾을 수 없습니다: " + userId));
         refreshTokenRepository.deleteByUserId(userId);
         return issueTokens(userId);
     }
@@ -60,6 +66,10 @@ public class AuthService {
         RefreshToken saved = refreshTokenRepository
                 .findByTokenHash(sha256(request.refreshToken()))
                 .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
+        // 유저 행 잠금 = 이 유저의 발급·회전·폐기 뮤텍스. 유저가 없으면(삭제) refresh가 살아 있어도 거부한다.
+        // 위 saved는 잠금 이전 스냅샷이지만, 결정은 조건부 UPDATE(markUsedIfUnused)와 잠금 뒤의
+        // deleteByUserId가 내리므로 오래된 usedAt을 봐도 결과는 같다(둘 다 전량 폐기로 수렴)
+        lockUser(saved.getUserId()).orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
 
         // 재사용 검사가 만료 검사보다 먼저다: 만료를 먼저 보면 탈취자가 회전시킨 토큰이 만료된 뒤
         // 피해자가 재시도할 때 행만 삭제되고 끝나 전량 폐기가 안 일어난다(재사용 감지 우회)
@@ -79,13 +89,12 @@ public class AuthService {
             throw new InvalidRefreshTokenException("이미 사용된 refresh 토큰입니다");
         }
 
-        // 유저가 존재하는지만 확인 — refresh 토큰이 살아있어도 유저가 삭제됐을 수 있다
-        userRepository
-                .findById(saved.getUserId())
-                .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
-
         TokenPair tokens = issueTokens(saved.getUserId());
         return new TokenResponse(tokens.accessToken(), tokens.refreshToken());
+    }
+
+    private Optional<User> lockUser(Long userId) {
+        return userRepository.findByIdForUpdate(userId);
     }
 
     TokenPair issueTokens(Long userId) {
