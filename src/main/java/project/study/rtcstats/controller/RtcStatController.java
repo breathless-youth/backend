@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,7 +30,7 @@ public class RtcStatController {
     @ApiResponse(responseCode = "400", description = "필수값 누락 또는 candidateType 허용값 위반")
     @PostMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void report(@Valid @RequestBody RtcStatRequest request) {
-        rtcStatService.record(request);
+    public void report(@AuthenticationPrincipal Long userId, @Valid @RequestBody RtcStatRequest request) {
+        rtcStatService.record(userId, request);
     }
 }

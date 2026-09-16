@@ -5,15 +5,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
-import project.study.common.logging.UserScopedRequest;
 import project.study.studysession.entity.StatusEvent;
 
 public record StudySessionCreateRequest(
-        @Schema(description = "세션 주인의 유저 ID (POST /api/users 로 발급받은 값)", example = "1") @NotNull
-        Long userId,
-
         @Schema(
-                description = "세션 시작 시각 — 방 입장 시각 (UTC, ISO-8601). userId와 함께 멱등 키로 쓰인다 — "
+                description = "세션 시작 시각 — 방 입장 시각 (UTC, ISO-8601). 토큰의 userId와 함께 멱등 키로 쓰인다 — "
                         + "같은 유저가 같은 startedAt으로 다시 제출하면(강제종료 후 재전송 등) 중복 저장 없이 "
                         + "이미 저장된 결과를 그대로 돌려받는다",
                 example = "2026-07-24T01:00:00Z")
@@ -50,8 +46,7 @@ public record StudySessionCreateRequest(
                         + "순서는 뒤섞여 와도 된다(서버가 시작 시각 기준으로 정렬한다)")
         @NotNull
         @Valid
-        List<StatusEventRequest> events)
-        implements UserScopedRequest {
+        List<StatusEventRequest> events) {
     public List<StatusEvent> getStatusEventList() {
         return this.events().stream().map(StatusEventRequest::toEntity).toList();
     }

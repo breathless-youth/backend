@@ -1,6 +1,7 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -63,11 +64,12 @@ class StudyDaysApiTest {
     private MockMvcTester.MockMvcRequestBuilder submitRequest(
             Long user, Instant startedAt, int studySec, int focusSec) {
         String body = """
-                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(user, startedAt, startedAt.plusSeconds(studySec), studySec, focusSec);
+                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(startedAt, startedAt.plusSeconds(studySec), studySec, focusSec);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body);
+                .content(body)
+                .with(asUser(user));
     }
 
     private void submit(Long user, Instant startedAt, int durationSec) {
@@ -75,7 +77,7 @@ class StudyDaysApiTest {
     }
 
     private MockMvcTester.MockMvcRequestBuilder studyDays(Long user) {
-        return mvc.get().uri("/api/stats/study-days").param("userId", user.toString());
+        return mvc.get().uri("/api/stats/study-days").with(asUser(user));
     }
 
     @Test

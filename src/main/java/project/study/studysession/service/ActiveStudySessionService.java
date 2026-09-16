@@ -48,22 +48,17 @@ public class ActiveStudySessionService {
      * 결과를 버리는 방식으로 재사용한다 — draft가 항상 확정 가능한 상태임을 같은 코드 경로로 보장한다.
      * 동시 INSERT 레이스와 역순 도착은 네이티브 UPSERT가 원자적으로 걸러 조용히 무시된다(0행 갱신).
      */
-    public void reportSnapshot(ActiveSessionSnapshotRequest request) {
+    public void reportSnapshot(Long userId, ActiveSessionSnapshotRequest request) {
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
         // 요청 검증에 활용
         studySessionService.validateAndBuildSessions(
-                request.userId(),
-                request.startedAt(),
-                request.reportedAt(),
-                request.studySec(),
-                request.focusSec(),
-                events);
+                userId, request.startedAt(), request.reportedAt(), request.studySec(), request.focusSec(), events);
 
         // 코얼레싱 버퍼에 넣고 즉시 반환 — 주기적 벌크 flush로 DB·CPU 부하를 낮춘다 (BY-470).
         // events JSON 직렬화·DB 쓰기는 flush 시점에 세션당 1번만 일어난다.
         // 트레이드오프: 없는 user_id의 404가 flush(비동기)로 이동한다 — 하트비트라 실질 영향 없음.
-        buffer.offer(request);
+        buffer.offer(userId, request);
     }
 
     /**
@@ -110,12 +105,7 @@ public class ActiveStudySessionService {
         List<StatusEventRequest> events =
                 objectMapper.readValue(draft.getEvents(), new TypeReference<List<StatusEventRequest>>() {});
         StudySessionCreateRequest request = new StudySessionCreateRequest(
-                draft.getUserId(),
-                draft.getStartedAt(),
-                draft.getReportedAt(),
-                draft.getStudySec(),
-                draft.getFocusSec(),
-                events);
+                draft.getStartedAt(), draft.getReportedAt(), draft.getStudySec(), draft.getFocusSec(), events);
         try {
             studySessionService.create(draft.getUserId(), request, true);
         } catch (DuplicateSessionException e) {

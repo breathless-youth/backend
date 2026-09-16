@@ -1,6 +1,7 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -53,11 +54,12 @@ class StudySessionMinDurationApiTest {
 
     private MockMvcTester.MockMvcRequestBuilder submitRequest(Instant startedAt, int durationSec) {
         String body = """
-                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(userId, startedAt, startedAt.plusSeconds(durationSec), durationSec, durationSec);
+                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(startedAt, startedAt.plusSeconds(durationSec), durationSec, durationSec);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body);
+                .content(body)
+                .with(asUser(userId));
     }
 
     private int sessionRowCount() {
@@ -77,10 +79,7 @@ class StudySessionMinDurationApiTest {
         assertThat(submitRequest(sessionStart, 59)).hasStatus(HttpStatus.CREATED);
         assertThat(sessionRowCount()).isEqualTo(1);
 
-        assertThat(mvc.get()
-                        .uri("/api/stats")
-                        .param("userId", userId.toString())
-                        .param("date", yesterday.toString()))
+        assertThat(mvc.get().uri("/api/stats").with(asUser(userId)).param("date", yesterday.toString()))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(0));
@@ -90,15 +89,12 @@ class StudySessionMinDurationApiTest {
     void 순공시간_1분_이상_10분_미만_세션은_목록엔_잡히지만_스트릭엔_반영되지_않는다() {
         assertThat(submitRequest(sessionStart, 599)).hasStatus(HttpStatus.CREATED);
 
-        assertThat(mvc.get()
-                        .uri("/api/stats")
-                        .param("userId", userId.toString())
-                        .param("date", yesterday.toString()))
+        assertThat(mvc.get().uri("/api/stats").with(asUser(userId)).param("date", yesterday.toString()))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(1));
 
-        assertThat(mvc.get().uri("/api/stats/streak").param("userId", userId.toString()))
+        assertThat(mvc.get().uri("/api/stats/streak").with(asUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.streak", v -> assertThat(v).isEqualTo(0));
@@ -109,7 +105,7 @@ class StudySessionMinDurationApiTest {
         assertThat(submitRequest(sessionStart, 599)).hasStatus(HttpStatus.CREATED);
         assertThat(submitRequest(sessionStart.plusSeconds(3600), 600)).hasStatus(HttpStatus.CREATED);
 
-        assertThat(mvc.get().uri("/api/stats/streak").param("userId", userId.toString()))
+        assertThat(mvc.get().uri("/api/stats/streak").with(asUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.streak", v -> assertThat(v).isEqualTo(1));
@@ -121,7 +117,7 @@ class StudySessionMinDurationApiTest {
 
         assertThat(mvc.get()
                         .uri("/api/stats/streak")
-                        .param("userId", userId.toString())
+                        .with(asUser(userId))
                         .param("from", yesterday.minusDays(5).toString())
                         .param("to", yesterday.toString()))
                 .hasStatusOk()
@@ -135,7 +131,7 @@ class StudySessionMinDurationApiTest {
 
     @Test
     void from_to를_주지_않으면_studiedDatesInRange는_빈_배열이다() {
-        assertThat(mvc.get().uri("/api/stats/streak").param("userId", userId.toString()))
+        assertThat(mvc.get().uri("/api/stats/streak").with(asUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying(
@@ -147,10 +143,7 @@ class StudySessionMinDurationApiTest {
 
     @Test
     void from만_주고_to를_주지_않으면_400이다() {
-        assertThat(mvc.get()
-                        .uri("/api/stats/streak")
-                        .param("userId", userId.toString())
-                        .param("from", yesterday.toString()))
+        assertThat(mvc.get().uri("/api/stats/streak").with(asUser(userId)).param("from", yesterday.toString()))
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
 
@@ -158,7 +151,7 @@ class StudySessionMinDurationApiTest {
     void from이_to보다_이후이면_400이다() {
         assertThat(mvc.get()
                         .uri("/api/stats/streak")
-                        .param("userId", userId.toString())
+                        .with(asUser(userId))
                         .param("from", yesterday.toString())
                         .param("to", yesterday.minusDays(1).toString()))
                 .hasStatus(HttpStatus.BAD_REQUEST);

@@ -5,16 +5,12 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
-import project.study.common.logging.UserScopedRequest;
 
 /** 진행중 세션의 누적 스냅샷 — 30초마다 통째로 보내 서버 draft를 덮어쓴다 (BY-447). */
 public record ActiveSessionSnapshotRequest(
-        @Schema(description = "세션 주인의 유저 ID", example = "1") @NotNull
-        Long userId,
-
         @Schema(
                 description =
-                        "세션 시작 시각 (UTC, ISO-8601) — 최종 제출의 startedAt과 같은 값이어야 한다. " + "userId와 함께 draft의 멱등 키로 쓰인다",
+                        "세션 시작 시각 (UTC, ISO-8601) — 최종 제출의 startedAt과 같은 값이어야 한다. " + "토큰의 userId와 함께 draft의 멱등 키로 쓰인다",
                 example = "2026-08-27T01:00:00Z")
         @NotNull
         Instant startedAt,
@@ -34,5 +30,4 @@ public record ActiveSessionSnapshotRequest(
         Integer focusSec,
 
         @Schema(description = "지금까지의 비공부 이벤트 전체 — 진행 중인 이벤트는 reportedAt에서 닫아서 보낸다. 없으면 []") @NotNull @Valid
-        List<StatusEventRequest> events)
-        implements UserScopedRequest {}
+        List<StatusEventRequest> events) {}

@@ -6,7 +6,6 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
-import project.study.common.logging.UserScopedRequest;
 
 /**
  * 프론트 getStats() 샘플 1건 (BY-490).
@@ -17,7 +16,6 @@ import project.study.common.logging.UserScopedRequest;
 public record RtcStatRequest(
         @NotBlank @Size(max = 64) String connectionId,
         @NotNull @Positive Long roomId,
-        @NotNull @Positive Long userId,
         @Positive Long peerUserId,
 
         @NotBlank
@@ -31,5 +29,4 @@ public record RtcStatRequest(
         @PositiveOrZero Long bytesSent,
         @PositiveOrZero Integer rttMs,
         @NotNull Boolean isFinal,
-        Long at)
-        implements UserScopedRequest {}
+        Long at) {}

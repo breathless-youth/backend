@@ -20,13 +20,14 @@ userId가 GET은 쿼리 파라미터, POST는 body, STOMP는 핸드셰이크 파
    이 이름이 곧 CloudWatch Logs Insights 필드명이다. 로그 패턴·logback.xml은 건드리지 않는다.
 2. **`RequestLoggingFilter`(체인 맨 앞)가 requestId를 만들고 응답 헤더 `X-Request-Id`로 돌려준다.**
    요청 ID는 항상 서버가 생성한다 — 클라이언트가 보내는 `X-Request-Id`는 읽지 않는다(앱이 보내지 않고,
-   외부 입력을 로그 키로 쓰지 않는다). 쿼리 파라미터 `userId`는 여기서 읽는다.
+   외부 입력을 로그 키로 쓰지 않는다). ~~쿼리 파라미터 `userId`는 여기서 읽는다.~~ (ADR-0019: userId는
+   시큐리티 체인 안의 `JwtFilter`가 SecurityContext에서 싣는다)
    응답 뒤 액세스 로그 한 줄(method, path, status, 소요 ms)을 INFO로 남기고 finally에서 MDC를 비운다.
    `/actuator/**`는 제외한다.
-3. **POST body의 userId는 `RequestBodyAdvice`가 역직렬화 직후 MDC에 넣는다.** 대상은 `UserScopedRequest`
+3. ~~**POST body의 userId는 `RequestBodyAdvice`가 역직렬화 직후 MDC에 넣는다.**~~ (ADR-0019에서 폐기 — 요청에 userId가 없다) 대상은 `UserScopedRequest`
    마커를 구현한 요청 DTO다. 리플렉션 대신 마커를 택한 이유는 "이 DTO의 userId가 로그에 실린다"를 코드에서
    명시하기 위해서다. **userId를 받는 요청 DTO를 새로 만들면 이 마커를 붙여야 한다.**
-4. **경로 변수 `{userId}`는 `HandlerInterceptor`가 넣는다.** 경로 변수는 핸들러 매핑이 URL 패턴과 매칭한 뒤에야
+4. ~~**경로 변수 `{userId}`는 `HandlerInterceptor`가 넣는다.**~~ (ADR-0019에서 폐기 — `/me/profile`로 바뀌었다) 경로 변수는 핸들러 매핑이 URL 패턴과 매칭한 뒤에야
    생기므로 필터 시점에는 없다. 매핑 직후 `preHandle`에서 요청 속성의 경로 변수 맵을 읽는다
    (`/api/users/{userId}/profile`이 대상. Codex 리뷰가 잡은 빈틈).
 5. **STOMP는 `ExecutorChannelInterceptor`로 핸들러 전후에 넣고 지운다.** `preSend`는 수신 스레드에서
@@ -41,6 +42,6 @@ userId가 GET은 쿼리 파라미터, POST는 body, STOMP는 핸드셰이크 파
 - Insights에서 `filter userId = 42 | sort @timestamp desc`로 한 유저의 요청 흐름·에러를 본다.
   프론트가 문의 시 응답의 `X-Request-Id`를 건네면 `filter requestId = ...`로 바로 찾는다.
 - 로그 볼륨은 요청당 약 300바이트 늘어난다. 현재 트래픽에서는 무시할 수준이다.
-- JWT를 다시 켤 때는 필터의 쿼리 파라미터 읽기를 SecurityContext 읽기로 바꾸면 되고, BodyAdvice와
-  마커는 그대로 두거나 body에서 userId가 사라지는 시점에 함께 제거한다.
+- (2026-09-16, ADR-0019) 토큰 인증을 켜면서 `JwtFilter`가 principal을 MDC에 싣고, BodyAdvice·마커·경로변수
+  인터셉터는 제거했다. 401 응답에는 userId가 없는 것이 정상이다.
 - 로그 기반 알람(메트릭 필터)은 만들지 않는다. 에러 추적은 Sentry(ADR-0010), 흐름 추적은 CloudWatch다.

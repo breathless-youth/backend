@@ -1,6 +1,7 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -72,7 +73,7 @@ class SessionRecoveryApiTest {
 
         MvcTestResult result = mvc.post()
                 .uri("/api/study-sessions/recovery")
-                .param("userId", String.valueOf(userId))
+                .with(asUser(userId))
                 .exchange();
 
         assertThat(result).hasStatusOk();
@@ -91,7 +92,7 @@ class SessionRecoveryApiTest {
     void 복구할_세션이_없으면_404() {
         assertThat(mvc.post()
                         .uri("/api/study-sessions/recovery")
-                        .param("userId", String.valueOf(userId))
+                        .with(asUser(userId))
                         .exchange())
                 .hasStatus(HttpStatus.NOT_FOUND);
     }
@@ -112,7 +113,7 @@ class SessionRecoveryApiTest {
 
         MvcTestResult result = mvc.post()
                 .uri("/api/study-sessions/recovery")
-                .param("userId", String.valueOf(userId))
+                .with(asUser(userId))
                 .exchange();
 
         assertThat(result).hasStatusOk();

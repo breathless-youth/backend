@@ -39,7 +39,7 @@ class StudySessionControllerRetryTest {
     private StudySessionController controller;
 
     private final StudySessionCreateRequest request =
-            new StudySessionCreateRequest(USER_ID, STARTED_AT, STARTED_AT.plusSeconds(3600), 3600, 3400, List.of());
+            new StudySessionCreateRequest(STARTED_AT, STARTED_AT.plusSeconds(3600), 3600, 3400, List.of());
 
     @Test
     void 첫_create가_레이스로_지면_재시도해서_성공하면_그_결과를_반환하고_재조회는_안한다() {
@@ -48,7 +48,7 @@ class StudySessionControllerRetryTest {
                 .thenThrow(new DuplicateSessionException("레이스 패배"))
                 .thenReturn(retryResult);
 
-        List<StudySessionResponse> response = controller.create(request);
+        List<StudySessionResponse> response = controller.create(USER_ID, request);
 
         assertThat(response).isSameAs(retryResult);
         verify(studySessionService, times(2)).create(USER_ID, request, false);
@@ -72,7 +72,7 @@ class StudySessionControllerRetryTest {
                 .thenThrow(new DuplicateSessionException("재시도도 실패"));
         when(studySessionService.findExistingSubmission(USER_ID, STARTED_AT)).thenReturn(existing);
 
-        List<StudySessionResponse> response = controller.create(request);
+        List<StudySessionResponse> response = controller.create(USER_ID, request);
 
         assertThat(response).isSameAs(existing);
         verify(studySessionService, times(2)).create(USER_ID, request, false);
@@ -85,7 +85,7 @@ class StudySessionControllerRetryTest {
                 .thenThrow(new DuplicateSessionException("재시도도 실패"));
         when(studySessionService.findExistingSubmission(USER_ID, STARTED_AT)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> controller.create(request)).isInstanceOf(DuplicateSessionException.class);
+        assertThatThrownBy(() -> controller.create(USER_ID, request)).isInstanceOf(DuplicateSessionException.class);
     }
 
     @Test
@@ -95,7 +95,7 @@ class StudySessionControllerRetryTest {
                 .thenThrow(new ObjectOptimisticLockingFailureException(StudySessionCreateRequest.class, USER_ID))
                 .thenReturn(retryResult);
 
-        List<StudySessionResponse> response = controller.create(request);
+        List<StudySessionResponse> response = controller.create(USER_ID, request);
 
         assertThat(response).isSameAs(retryResult);
         verify(studySessionService, times(2)).create(USER_ID, request, false);

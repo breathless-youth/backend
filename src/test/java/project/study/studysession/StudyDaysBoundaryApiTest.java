@@ -1,6 +1,7 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -63,16 +64,17 @@ class StudyDaysBoundaryApiTest {
 
     private void submit(Instant startedAt, int durationSec) {
         String body = """
-                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(userId, startedAt, startedAt.plusSeconds(durationSec), durationSec, durationSec);
+                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(startedAt, startedAt.plusSeconds(durationSec), durationSec, durationSec);
         assertThat(mvc.post()
                         .uri("/api/study-sessions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+                        .content(body)
+                        .with(asUser(userId)))
                 .hasStatus(HttpStatus.CREATED);
     }
 
     private void assertTotalDays(int expected) {
-        assertThat(mvc.get().uri("/api/stats/study-days").param("userId", userId.toString()))
+        assertThat(mvc.get().uri("/api/stats/study-days").with(asUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.totalDays", v -> assertThat(v).isEqualTo(expected));

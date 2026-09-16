@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -50,7 +51,7 @@ public class StudySessionStatsController {
     @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 목록 + 세션 개수 + 그날 합계·집중률·상태별 이벤트 건수")
     @GetMapping
     public StudySessionListResponse list(
-            @Parameter(description = "조회할 유저 ID (POST /api/users 로 발급받은 값)", example = "1") @RequestParam Long userId,
+            @AuthenticationPrincipal Long userId,
             @Parameter(description = "조회할 날짜 (ISO-8601, 예: 2026-07-24) — statDate 기준", example = "2026-07-24")
                     @RequestParam
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -75,7 +76,7 @@ public class StudySessionStatsController {
     @ApiResponse(responseCode = "200", description = "조회 성공 — 현재 스트릭, 역대 최장 스트릭, (선택) 기간 내 공부일 목록")
     @GetMapping("/streak")
     public StudySessionStreakResponse streak(
-            @Parameter(description = "조회할 유저 ID (POST /api/users 로 발급받은 값)", example = "1") @RequestParam Long userId,
+            @AuthenticationPrincipal Long userId,
             @Parameter(description = "기간 조회 시작일 (ISO-8601) — to와 함께 지정해야 한다", example = "2026-07-01")
                     @RequestParam(required = false)
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -96,8 +97,7 @@ public class StudySessionStatsController {
                     기록이 없거나 존재하지 않는 userId면 totalDays는 0이다 (다른 통계 조회와 같은 계약).""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 누적 공부일 수")
     @GetMapping("/study-days")
-    public StudyDaysResponse studyDays(
-            @Parameter(description = "조회할 유저 ID (POST /api/users 로 발급받은 값)", example = "1") @RequestParam Long userId) {
+    public StudyDaysResponse studyDays(@AuthenticationPrincipal Long userId) {
         return studySessionService.studyDays(userId);
     }
 
@@ -110,7 +110,7 @@ public class StudySessionStatsController {
     @ApiResponse(responseCode = "200", description = "조회 성공 — from~to 일별 배열 + (선택) compare 구간 일별 배열")
     @GetMapping("/period")
     public StudyPeriodStatsResponse period(
-            @Parameter(description = "조회할 유저 ID", example = "1") @RequestParam Long userId,
+            @AuthenticationPrincipal Long userId,
             @Parameter(description = "구간 시작일(ISO-8601, 포함)", example = "2026-08-24")
                     @RequestParam
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
