@@ -23,8 +23,9 @@
 | 로그 | 원인 | 대응 |
 |---|---|---|
 | `fatal: Not possible to fast-forward` | 서버 `dev`가 origin과 갈라졌다(로컬 커밋 + 원격 진행) | SSH로 들어가 `git log --oneline -3`, 정리 후 재실행. 기존 컨테이너는 살아 있다 |
-| `error: Your local changes to the following files would be overwritten by merge` | 서버에 추적 파일의 로컬 수정이 있다 | `git status --short`로 확인. compose 설정은 override 파일(아래 "서버 전제")로 빼고, 나머지는 stash/버림 |
+| `server has uncommitted changes to tracked files` | 서버에 추적 파일의 로컬 수정이 있다(스테이징 포함) | `git status --short`로 확인. compose 설정은 override 파일(아래 "서버 전제")로 빼고, 나머지는 stash/버림. 배포는 하지 않았다 |
 | `server dev is ahead of origin/dev` | 서버에서 직접 커밋했다 | 그 커밋을 PR로 올리거나 `git reset --hard origin/dev`. 배포는 하지 않았다 |
+| `docker compose config failed` | 서버 compose 파일(override 포함)의 문법 오류 | 서버에서 `docker compose config`로 오류 위치 확인. 배포는 하지 않았다 |
 | `compose project defines no app service` | 서버 override 파일이 없거나 이름이 바뀌었다 | 아래 "서버 전제" 확인. 배포는 하지 않았다 |
 | `another deploy is still running` | 앞 배포가 아직 서버에서 실행 중 | 앞 실행이 끝난 뒤 Run workflow |
 | `Permission denied (publickey)` 또는 `could not read Username for 'https://github.com'` | `ubuntu`에 비대화형 git 자격 증명이 없다 | 아래 "서버 전제" 3번 |

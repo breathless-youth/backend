@@ -69,7 +69,7 @@ dev push ─▶ deploy-dev.yml ─▶ OIDC로 github-deploy-dev assume
 #!/bin/sh
 # dev 서버 배포 절차 — SSM AWS-RunShellScript가 root·/bin/sh로 실행한다 (BY-670).
 # 손으로 하던 "git pull → docker compose up --build"를 그대로 옮기고, 기동 확인을 더했다.
-# bash 전용 문법은 쓰지 않는다 (dash 호환). 파이프는 진단 출력에만 있어 pipefail이 필요 없다.
+# bash 전용 문법은 쓰지 않는다 (dash 호환). 파이프는 진단 출력과 if 조건에만 있어 pipefail이 필요 없다(조건은 마지막 명령의 상태만 본다).
 set -eu
 
 APP_DIR=/home/ubuntu/app-dev
@@ -94,6 +94,13 @@ fi
 
 cd "$APP_DIR"
 
+# 추적 파일의 로컬 수정(스테이징 포함)이 있으면 그 수정본이 빌드되면서 origin SHA로 보고된다 — 거부한다.
+# 추적 대상이 아닌 .env·compose override 파일은 영향 없다
+if ! sudo -u ubuntu -H git diff --quiet HEAD; then
+  echo "server has uncommitted changes to tracked files — refusing to deploy"
+  exit 1
+fi
+
 # git은 디렉터리 소유자(ubuntu)로 — root로 실행하면 .git 안 파일 소유권이 root로 바뀌거나
 # git이 "dubious ownership"으로 거부한다
 sudo -u ubuntu -H git fetch origin dev
@@ -108,7 +115,11 @@ fi
 
 # 리포의 docker-compose.yml에는 postgres만 있다. app 서비스는 서버의 override 파일이 정의하므로,
 # 그 파일이 없으면 compose up이 "빌드할 것 없음"으로 조용히 성공해 옛 코드가 초록으로 보고된다 — 미리 막는다
-if ! docker compose config --services | grep -qv '^postgres$'; then
+if ! services=$(docker compose config --services); then
+  echo "docker compose config failed — the server's compose files (override included) are invalid"
+  exit 1
+fi
+if ! printf '%s\n' "$services" | grep -qv '^postgres$'; then
   echo "compose project defines no app service (only postgres) — check the server's compose override file"
   exit 1
 fi
@@ -145,6 +156,8 @@ exit 1
 - `--ff-only`: 서버에 로컬 커밋이 있으면 병합하지 않고 실패한다. `.env`는 추적 대상이 아니라 영향 없다
 - `compose up --build`는 빌드가 끝나야 컨테이너를 교체한다. 빌드 실패 시 기존 컨테이너는 유지된다
 - 빌드 출력은 서버 `/home/ubuntu/deploy-dev.log`(리포 밖)로, 실패 시 끝 120줄만 stdout으로 — SSM 인라인 출력 한도(stdout 24,000자·stderr 8,000자) 때문에 실패 원인이 잘리지 않게 한다
+- 추적 파일의 로컬 수정이 있으면 배포 거부(`git diff --quiet HEAD`) — 수정본이 origin SHA로 보고되는 것을 막는다
+- compose 설정 자체의 오류와 "app 서비스 없음"을 구분해 보고한다
 - health 60초 대기: `.env` 시크릿 누락 등 기동 실패가 워크플로 실패로 드러난다. 앱이 호스트 8080에 노출된다고 가정하며, 다르면 런북에서 포트만 바꾼다
 - `docker image prune -f`: 서버 빌드로 쌓이는 dangling 이미지 정리(디스크 고갈 예방)
 - git 커맨드는 `sudo -u ubuntu -H`로 — root 실행 시 `.git` 소유권 문제 또는 "dubious ownership" 오류 방지
@@ -193,6 +206,8 @@ IAM `--description`은 ASCII/Latin-1만 허용한다 — 한글 설명은 Create
 | 서버 dev가 origin보다 앞섬 | `server dev is ahead of origin/dev`, 배포 안 함 | PR로 올리거나 reset |
 | 서버 override 파일 없음 | `compose project defines no app service`, 배포 안 함 | 런북 "서버 전제" |
 | 앞 배포가 아직 실행 중 | `another deploy is still running` | 끝난 뒤 재실행 |
+| 서버 추적 파일에 로컬 수정 | `server has uncommitted changes to tracked files`, 배포 안 함 | stash/버림 또는 override로 이동 |
+| 서버 compose 파일 문법 오류 | `docker compose config failed`, 배포 안 함 | `docker compose config`로 확인 |
 | health 실패 | 새(깨진) 코드로 떠 있음, 직전 이미지 보존 | 이미지 되돌리기 또는 수정 후 재배포 |
 
 ---
