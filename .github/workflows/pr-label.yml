@@ -1,0 +1,49 @@
+name: PR Auto Label
+
+# 릴리스 노트 분류(.github/release.yml)는 PR 라벨로만 동작하는데 이 저장소는 제목 접두어
+# 관례(`[feat] BY-N ...`)를 쓴다. 그 접두어를 읽어 대응 라벨을 자동으로 붙여 둘을 잇는다.
+#
+# 포크에서 열린 PR에는 라벨이 붙지 않는다. 그 경우 GitHub이 토큰을 read-only로 발급해
+# 아래 permissions와 무관하게 라벨 부여가 403으로 실패한다. pull_request_target으로 바꾸면
+# 우회되지만 포크 코드를 base 권한으로 실행하게 되어 쓰지 않는다.
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 제목 접두어로 라벨 부여
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # "[feat] BY-1 제목" → "feat". 대괄호를 벗겨 타입만 추출한다.
+          type="${TITLE#\[}"
+          type="${type%%\]*}"
+          case "$type" in
+            feat) label=feature ;;
+            fix) label=fix ;;
+            docs) label=docs ;;
+            style | refactor | test | chore) label=chore ;;
+            *) label=""; echo "매칭되는 접두어 없음: '$type' — 라벨을 붙이지 않는다" ;;
+          esac
+          # 제목이 [feat]→[fix]처럼 바뀌면(edited) 이전 타입 라벨이 남아 릴리스 노트가 잘못 분류된다.
+          # 이 워크플로가 관리하는 타입 라벨 중 현재 타입이 아닌 것만 떼고, 그 외 라벨은 건드리지 않는다.
+          current="$(gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name')"
+          for old in feature fix docs chore; do
+            if [ "$old" != "$label" ] && printf '%s\n' "$current" | grep -qx "$old"; then
+              gh pr edit "$PR" --repo "$REPO" --remove-label "$old"
+            fi
+          done
+          [ -z "$label" ] && exit 0
+          # 라벨이 없으면 --add-label이 실패하므로 먼저 보장한다(--force는 있으면 갱신, 없으면 생성).
+          gh label create "$label" --repo "$REPO" --force >/dev/null 2>&1 || true
+          gh pr edit "$PR" --repo "$REPO" --add-label "$label"
