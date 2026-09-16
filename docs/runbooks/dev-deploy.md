@@ -37,7 +37,7 @@
 | 메시지 | 원인 | 대응 |
 |---|---|---|
 | `DEV_INSTANCE_ID 저장소 변수가 비어 있다` | GitHub 변수 미설정 | 계정 준비 4번 |
-| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | 롤 신뢰 조건 불일치(브랜치가 `dev`가 아니거나 OIDC 공급자 없음) | 계정 준비 2·3번 확인 |
+| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | 롤 신뢰 조건 불일치 — 브랜치가 `dev`가 아니거나, `sub`가 immutable subject 형식(`repo:breathless-youth@288530482/backend@1301479775:…`)이 아니거나, OIDC 공급자 없음 | 계정 준비 2·3번. `gh api repos/breathless-youth/backend/actions/oidc/customization/sub`로 실제 prefix 확인 |
 | `InvalidInstanceId` | 인스턴스가 SSM에 **한 번도** 등록된 적 없다 | 계정 준비 1번. 서버에서 `sudo snap restart amazon-ssm-agent` |
 | `Pending`/`Delayed`에 오래 머물다 `TimedOut` (약 10분) | 등록은 됐지만 에이전트가 오프라인(중지·인스턴스 정지) | `aws ssm describe-instance-information --profile focusdev`의 `PingStatus` 확인, 에이전트 재시작 |
 | 폴링 중 `AccessDenied`·`Throttling` 즉시 실패 | 롤 정책 누락 또는 API 한도 | 계정 준비 3번 정책 확인 후 재실행 |
@@ -74,8 +74,10 @@ T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 cat > "$T/ec2-trust.json" <<'EOF'
 {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}
 EOF
+# sub는 immutable subject 형식이다 — 이 리포는 GitHub OIDC 설정이 use_immutable_subject=true 라 토큰의 sub에 조직·리포 ID가 붙는다.
+# 값 확인: gh api repos/breathless-youth/backend/actions/oidc/customization/sub  (운영 Terraform의 github_org/github_backend_repo와 같다)
 cat > "$T/gh-trust.json" <<EOF
-{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::$ACCT:oidc-provider/token.actions.githubusercontent.com"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"token.actions.githubusercontent.com:aud":"sts.amazonaws.com","token.actions.githubusercontent.com:sub":"repo:breathless-youth/backend:ref:refs/heads/dev"}}}]}
+{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::$ACCT:oidc-provider/token.actions.githubusercontent.com"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"token.actions.githubusercontent.com:aud":"sts.amazonaws.com","token.actions.githubusercontent.com:sub":"repo:breathless-youth@288530482/backend@1301479775:ref:refs/heads/dev"}}}]}
 EOF
 cat > "$T/gh-policy.json" <<EOF
 {"Version":"2012-10-17","Statement":[
@@ -124,6 +126,8 @@ aws iam get-role --role-name github-deploy-dev >/dev/null 2>&1 \
   || aws iam create-role --role-name github-deploy-dev \
        --description "GitHub Actions dev-branch deploy via SSM (BY-670)" \
        --assume-role-policy-document "file://$T/gh-trust.json" --query 'Role.Arn' --output text
+# 신뢰 정책은 롤이 이미 있어도 매번 갱신한다 — sub 형식 변경이 반영되게
+aws iam update-assume-role-policy --role-name github-deploy-dev --assume-role-policy-document "file://$T/gh-trust.json"
 aws iam put-role-policy --role-name github-deploy-dev --policy-name ssm-run-dev-deploy \
   --policy-document "file://$T/gh-policy.json"
 
