@@ -3,7 +3,7 @@
 `dev` 브랜치에 push되면 `.github/workflows/deploy-dev.yml`이 dev EC2에 자동 배포한다(BY-670).
 서버 절차는 손으로 하던 것과 같다: `/home/ubuntu/app-dev`에서 `git pull` → `docker compose up -d --build`.
 다른 점은 GitHub Actions가 SSM Run Command로 그 절차를 실행하고, `/actuator/health`가 60초 안에
-응답하지 않으면 실패로 표시한다는 것뿐이다. SSH 키·22번 포트는 쓰지 않는다.
+응답하지 않으면 실패로 표시한다는 것뿐이다. 배포에 SSH는 필요 없다. 워크플로에 보이는 서버 출력은 실패 시 빌드 로그의 마지막 120줄뿐이므로(SSM 인라인 출력 한도 stdout 24,000자·stderr 8,000자), 그 앞부분이 필요할 때만 서버의 `/home/ubuntu/app-dev/deploy.log`를 SSH로 본다.
 
 운영(`main` → ECS)과는 계정도 워크플로도 다르다. 운영은 `deploy.yml`, 릴리스 기록은 `release.md`.
 
@@ -16,11 +16,12 @@
 ## 실패했을 때
 
 워크플로 로그의 "server stdout / server stderr" 그룹을 먼저 본다. 세 갈래다.
+빌드 출력 전체는 서버 `/home/ubuntu/app-dev/deploy.log`(마지막 실행분만)에 있고, 워크플로에는 실패했을 때 그 끝 120줄이 stdout으로 실린다.
 
 | 로그 | 원인 | 대응 |
 |---|---|---|
 | `fatal: Not possible to fast-forward` | 서버에 로컬 커밋·변경이 있다 | SSH로 들어가 `git status`, 정리 후 재실행. 기존 컨테이너는 살아 있다 |
-| Gradle/`docker build` 오류 | 코드 빌드 실패 | 코드 수정 후 재푸시. 기존 컨테이너는 살아 있다 |
+| `docker compose up --build failed` + 로그 끝 120줄 | 코드 빌드 실패 | 로그 끝에 원인이 없으면 서버 `deploy.log`를 본다. 코드 수정 후 재푸시. 기존 컨테이너는 살아 있다 |
 | `health check failed after 60s` + compose 로그 | 새 컨테이너가 기동 실패(대개 `.env` 시크릿 누락, BY-642) | `.env` 반영 후 Run workflow |
 
 워크플로가 서버 로그 없이 실패하면 AWS 쪽 문제다.
@@ -34,12 +35,12 @@
 ## 계정 준비 (1회)
 
 dev는 운영과 다른 AWS 계정(`325574368445`)이다. 로컬 프로파일 `focusdev`(루트 액세스 키)를 쓴다.
-아래 스크립트는 멱등이라 다시 돌려도 안전하다. 2026-09-17에 처음 실행했다.
+BY-670 머지 전에 한 번 실행한다. 멱등이라 다시 돌려도 안전하다.
 
 ```bash
 #!/usr/bin/env bash
 # 1. EC2 SSM 롤 + 인스턴스 프로파일 → 인스턴스 연결  2. GitHub OIDC 공급자  3. github-deploy-dev 롤  4. GitHub 시크릿·변수
-set -uo pipefail
+set -euo pipefail
 export AWS_PROFILE=focusdev AWS_PAGER=""
 R=ap-northeast-2; ACCT=325574368445; INST=i-09590430695b1e5bd
 T=$(mktemp -d)
