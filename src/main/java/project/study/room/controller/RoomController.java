@@ -27,6 +27,7 @@ import project.study.room.service.AutoLeave;
 import project.study.room.service.RoomService;
 import project.study.room.service.RoomService.JoinResult;
 import project.study.room.service.RoomService.LeaveResult;
+import project.study.room.websocket.RoomMessageType;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.service.UserService;
 
@@ -120,8 +121,8 @@ public class RoomController {
 
         if (result.autoLeave() != null) {
             AutoLeave al = result.autoLeave();
-            messagingTemplate.convertAndSend(
-                    "/topic/room/" + al.roomId(), (Object) Map.of("type", "MEMBER_LEFT", "userId", al.userId()));
+            messagingTemplate.convertAndSend("/topic/room/" + al.roomId(), (Object)
+                    Map.of("type", RoomMessageType.MEMBER_LEFT.name(), "userId", al.userId()));
         }
 
         return result.response();
@@ -136,8 +137,8 @@ public class RoomController {
     public void leave(@AuthenticationPrincipal Long userId, @PathVariable Long roomId) {
         LeaveResult result = roomService.leave(roomId, userId);
         if (result.removed() && result.roomStillOpen()) {
-            messagingTemplate.convertAndSend(
-                    "/topic/room/" + roomId, (Object) Map.of("type", "MEMBER_LEFT", "userId", userId));
+            messagingTemplate.convertAndSend("/topic/room/" + roomId, (Object)
+                    Map.of("type", RoomMessageType.MEMBER_LEFT.name(), "userId", userId));
         }
     }
 }
