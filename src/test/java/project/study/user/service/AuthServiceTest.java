@@ -53,6 +53,25 @@ class AuthServiceTest {
         User user = new User(Provider.DEVICE, "device-uuid");
         ReflectionTestUtils.setField(user, "id", 1L);
         lenient().when(userRepository.findByIdForUpdate(anyLong())).thenReturn(Optional.of(user));
+        lenient()
+                .when(refreshTokenRepository.findUserIdByTokenHash(anyString()))
+                .thenReturn(Optional.of(1L));
+    }
+
+    @Test
+    void refresh는_유저_행_잠금을_잡은_뒤에_토큰_행을_읽는다() {
+        // 잠금 대기 중 다른 요청이 회전시킨 usedAt을 봐야 하므로 순서가 결과를 가른다
+        RefreshToken saved = new RefreshToken(1L, "hash", Instant.now().plusSeconds(3600));
+        ReflectionTestUtils.setField(saved, "id", 10L);
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(saved));
+        when(refreshTokenRepository.markUsedIfUnused(eq(10L), any())).thenReturn(1);
+
+        authService.refresh(new RefreshRequest("refresh-uuid"));
+
+        InOrder inOrder = inOrder(userRepository, refreshTokenRepository);
+        inOrder.verify(refreshTokenRepository).findUserIdByTokenHash(anyString());
+        inOrder.verify(userRepository).findByIdForUpdate(1L);
+        inOrder.verify(refreshTokenRepository).findByTokenHash(anyString());
     }
 
     @Test
@@ -119,7 +138,7 @@ class AuthServiceTest {
 
     @Test
     void 알_수_없는_refresh_토큰은_거부하되_폐기는_하지_않는다() {
-        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
+        when(refreshTokenRepository.findUserIdByTokenHash(anyString())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.refresh(new RefreshRequest("unknown-token")))
                 .isInstanceOf(InvalidRefreshTokenException.class);
@@ -157,9 +176,6 @@ class AuthServiceTest {
 
     @Test
     void 유저가_삭제된_뒤_남은_refresh_토큰으로는_재발급할_수_없다() {
-        RefreshToken saved = new RefreshToken(1L, "hash", Instant.now().plusSeconds(3600));
-        ReflectionTestUtils.setField(saved, "id", 10L);
-        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(saved));
         when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.refresh(new RefreshRequest("refresh-uuid")))

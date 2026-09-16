@@ -12,6 +12,11 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     Optional<RefreshToken> findByTokenHash(String tokenHash);
 
+    // 잠금 순서용 — 엔티티를 싣지 않고 userId만 본다. 엔티티는 유저 행 잠금을 잡은 뒤 findByTokenHash로
+    // 다시 읽어야 잠금 대기 중 바뀐 usedAt·만료 상태를 본다 (영속성 컨텍스트 스냅샷 회피)
+    @Query("select t.userId from RefreshToken t where t.tokenHash = :tokenHash")
+    Optional<Long> findUserIdByTokenHash(@Param("tokenHash") String tokenHash);
+
     // 재사용 감지 시 전량 폐기, 재등록 시 이전 쌍 무효화에 쓴다 (사용 마킹된 tombstone도 함께 지운다)
     void deleteByUserId(Long userId);
 

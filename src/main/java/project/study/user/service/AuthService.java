@@ -63,13 +63,17 @@ public class AuthService {
     // noRollbackFor: 재사용 감지 시 예외를 던져도 "전체 폐기"는 커밋되어야 한다
     @Transactional(noRollbackFor = InvalidRefreshTokenException.class)
     public TokenResponse refresh(RefreshRequest request) {
-        RefreshToken saved = refreshTokenRepository
-                .findByTokenHash(sha256(request.refreshToken()))
+        String tokenHash = sha256(request.refreshToken());
+        Long userId = refreshTokenRepository
+                .findUserIdByTokenHash(tokenHash)
                 .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
-        // 유저 행 잠금 = 이 유저의 발급·회전·폐기 뮤텍스. 유저가 없으면(삭제) refresh가 살아 있어도 거부한다.
-        // 위 saved는 잠금 이전 스냅샷이지만, 결정은 조건부 UPDATE(markUsedIfUnused)와 잠금 뒤의
-        // deleteByUserId가 내리므로 오래된 usedAt을 봐도 결과는 같다(둘 다 전량 폐기로 수렴)
-        lockUser(saved.getUserId()).orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
+        // 유저 행 잠금 = 이 유저의 발급·회전·폐기 뮤텍스. 유저가 없으면(삭제) refresh가 살아 있어도 거부한다
+        lockUser(userId).orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
+        // 토큰 행은 잠금을 잡은 뒤에 읽는다 — 잠금을 기다리는 사이 다른 요청이 회전시켰다면(usedAt 마킹)
+        // 그 상태를 봐야 아래 재사용 검사가 tombstone 삭제가 아니라 전량 폐기로 간다 (Codex 2차 P2)
+        RefreshToken saved = refreshTokenRepository
+                .findByTokenHash(tokenHash)
+                .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
 
         // 재사용 검사가 만료 검사보다 먼저다: 만료를 먼저 보면 탈취자가 회전시킨 토큰이 만료된 뒤
         // 피해자가 재시도할 때 행만 삭제되고 끝나 전량 폐기가 안 일어난다(재사용 감지 우회)
