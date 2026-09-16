@@ -1,0 +1,73 @@
+name: Deploy dev
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch: # 재배포·검증용 수동 실행
+
+env:
+  AWS_REGION: ap-northeast-2
+
+# OIDC로 AWS 자격 증명을 받기 위해 필요하다 (액세스 키를 저장하지 않는다)
+permissions:
+  id-token: write
+  contents: read
+
+# dev에 연속으로 push되면 늦게 시작한 배포가 먼저 끝나 이전 코드로 덮어쓸 수 있다.
+# 새 실행은 큐에 세워 순서대로만 배포한다 (진행 중 취소는 compose 교체 도중 끊길 수 있어 쓰지 않는다)
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # 빌드는 서버에서 하므로 러너 아키텍처는 무관하다
+    runs-on: ubuntu-latest
+    steps:
+      # 액션은 id-token: write로 AWS 자격을 얻는 워크플로라 커밋 SHA로 고정한다 (운영 deploy.yml과 같은 SHA)
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Send deploy command (SSM)
+        id: send
+        env:
+          INSTANCE_ID: ${{ vars.DEV_INSTANCE_ID }}
+        run: |
+          # 스크립트 파일 전체를 commands 배열의 한 원소로 넘긴다 — jq가 줄바꿈·따옴표를 이스케이프한다
+          PARAMS=$(jq -n --rawfile script .github/scripts/deploy-dev.sh \
+            '{commands: [$script], executionTimeout: ["1800"]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy-dev ${GITHUB_SHA::7}" \
+            --parameters "$PARAMS" \
+            --query 'Command.CommandId' --output text)
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for completion
+        env:
+          INSTANCE_ID: ${{ vars.DEV_INSTANCE_ID }}
+          COMMAND_ID: ${{ steps.send.outputs.command_id }}
+        run: |
+          # 전송 직후 몇 초는 InvocationDoesNotExist가 나므로 실패를 Pending으로 본다. 10초 × 180 = 30분 상한
+          for _ in $(seq 1 180); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in
+              Pending|InProgress|Delayed) sleep 10 ;;
+              *) break ;;
+            esac
+          done
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query '{Status: Status, Out: StandardOutputContent, Err: StandardErrorContent}' \
+            --output json > result.json
+          echo "::group::server stdout"; jq -r '.Out' result.json; echo "::endgroup::"
+          echo "::group::server stderr"; jq -r '.Err' result.json; echo "::endgroup::"
+          FINAL=$(jq -r '.Status' result.json)
+          echo "SSM status: $FINAL"
+          [ "$FINAL" = "Success" ] || exit 1
