@@ -161,10 +161,11 @@ exit 1
 |---|---|---|
 | IAM 롤 + 인스턴스 프로파일 | `focus-dev-ec2-ssm` | 신뢰 `ec2.amazonaws.com`, 정책 `AmazonSSMManagedInstanceCore`. 인스턴스에 연결(재부팅 없음) |
 | OIDC 공급자 | `token.actions.githubusercontent.com` | audience `sts.amazonaws.com` |
-| IAM 롤 | `github-deploy-dev` | 신뢰 조건 `sub = repo:breathless-youth/backend:ref:refs/heads/dev`, `aud = sts.amazonaws.com`. 인라인 정책: `ssm:SendCommand`는 인스턴스 1대 + 문서 `AWS-RunShellScript`에만, `ssm:GetCommandInvocation`·`ListCommandInvocations`는 `*` |
+| IAM 롤 | `github-deploy-dev` | 신뢰 조건 `sub = repo:breathless-youth/backend:ref:refs/heads/dev`, `aud = sts.amazonaws.com`. 인라인 정책: `ssm:SendCommand`는 인스턴스 1대 + 문서 `AWS-RunShellScript`에만, `ssm:GetCommandInvocation`는 `*` |
 | GitHub | 시크릿 `AWS_DEV_DEPLOY_ROLE_ARN`, 변수 `DEV_INSTANCE_ID` | `arn:aws:iam::325574368445:role/github-deploy-dev`, `i-09590430695b1e5bd` |
 
 SSM 에이전트는 Ubuntu AMI에 내장. 프로파일 연결 후 수 분 내 `aws ssm describe-instance-information`에 `Online`으로 보인다. 안 보이면 서버에서 `sudo snap restart amazon-ssm-agent`.
+IAM `--description`은 ASCII/Latin-1만 허용한다 — 한글 설명은 CreateRole이 거부한다.
 
 ### A7. 런북 `docs/runbooks/dev-deploy.md`
 
