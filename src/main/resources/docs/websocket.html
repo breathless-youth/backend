@@ -88,7 +88,7 @@ sequenceDiagram
   SNAPSHOT과 ROOM_UNAVAILABLE은 큐로 오는데, 큐 구독 전에 발사되면 사라진다.
 </div>
 <ul>
-  <li><code>graceRejoin: true</code>는 같은 방에 내 자리가 아직 살아 있어(끊김 유예 중 등) 재입장한 경우다. 이때 <code>cameraOn</code>은 이전 값이다. 새 입장이면 <code>false</code>·<code>null</code>.</li>
+  <li><code>graceRejoin: true</code>는 같은 방에 내 자리가 아직 살아 있어(끊김 유예 중 등) 재입장한 경우다. 이때 <code>cameraOn</code>은 이전 값이다. 새 입장이거나, 예약만 있고 아직 확정 전인 자리에 join을 다시 부른 경우면 <code>false</code>·<code>null</code>.</li>
   <li>이미 다른 방에 있으면 그 방에서 자동 퇴장된다(그 방 토픽에 MEMBER_LEFT). 동시 1룸.</li>
   <li>join 실패는 REST 응답으로 온다: 400(코드 형식), 404(<code>INVITE_CODE_NOT_FOUND</code> / <code>ROOM_CLOSED</code> / <code>USER_NOT_FOUND</code> — 본문 <code>code</code>로 구분), 409(정원 6명 초과).</li>
   <li>방 생성은 <code>POST /api/rooms</code> → 201 <code>{roomId, inviteCode, emptyTtlSeconds}</code>. 생성자도 join으로만 입장한다.</li>
@@ -98,7 +98,7 @@ sequenceDiagram
 <p>구독과 발행 모두 <strong>허용 목록만</strong> 통과한다. 목록 밖 프레임은 조용히 버려진다(ERROR 프레임 없음).</p>
 <table>
   <tr><th>방향</th><th>목적지</th><th>조건</th></tr>
-  <tr><td>구독</td><td><code>/user/queue/room</code></td><td>누구나. 내 세션에만 오는 메시지(SNAPSHOT, SIGNAL, ROOM_UNAVAILABLE)</td></tr>
+  <tr><td>구독</td><td><code>/user/queue/room</code></td><td>누구나. SNAPSHOT·ROOM_UNAVAILABLE은 요청한 세션에만, SIGNAL은 그 유저의 모든 세션에 온다(§6)</td></tr>
   <tr><td>구독</td><td><code>/topic/room/{roomId}</code></td><td>그 방에 자리(예약 또는 확정)가 있는 유저만. 아니면 프레임을 버리고 요청 세션에 ROOM_UNAVAILABLE을 보낸다. 정확히 일치해야 하며 와일드카드 구독은 거부</td></tr>
   <tr><td>발행</td><td><code>/app/room/{roomId}/state</code></td><td rowspan="3">인증된 세션만. <code>/topic</code>·<code>/queue</code>로 직접 SEND하면 버려진다(브로커에 위조 이벤트를 싣는 우회 차단)</td></tr>
   <tr><td>발행</td><td><code>/app/room/{roomId}/signal</code></td></tr>
@@ -289,7 +289,8 @@ sequenceDiagram
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
   const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "default" });
+  // deterministicIds: 기본 id는 Date.now() 기반이라 같은 밀리초에 렌더된 다이어그램끼리 충돌해 한 상자에 겹쳐 그려진다
+  mermaid.initialize({ startOnLoad: true, deterministicIds: true, theme: dark ? "dark" : "default" });
 </script>
 </body>
 </html>
