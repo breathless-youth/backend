@@ -74,6 +74,9 @@ app:
   # 데모 데이터 시딩 + Swagger 목데이터 안내 (BY-640: 프로필 대신 스위치). dev 서버 전용 편의 기능
   seed:
     enabled: true
+  # FE용 계약 문서(/docs/websocket.html) 서빙. 값이 없으면 꺼짐 — prod에는 넣지 않는다 (BY-667)
+  docs:
+    enabled: true
   ws:
     stats-logging-period-ms: 30000   # 30초
   cors:

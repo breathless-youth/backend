@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>룸 WebSocket 명세</title>
+<style>
+  :root { --bg:#ffffff; --fg:#1b1f24; --muted:#57606a; --line:#d0d7de; --code:#f6f8fa; --accent:#0969da; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --fg:#e6edf3; --muted:#8b949e; --line:#30363d; --code:#161b22; --accent:#58a6ff; }
+  }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+  main { max-width:960px; margin:0 auto; padding:24px 16px 96px; }
+  h1 { font-size:1.8rem; margin-bottom:.2em; }
+  h2 { border-bottom:1px solid var(--line); padding-bottom:.3em; margin-top:2.4em; }
+  h3 { margin-top:1.6em; }
+  .meta { color:var(--muted); margin-top:0; }
+  nav ol { columns:2; padding-left:1.4em; } @media (max-width:640px) { nav ol { columns:1; } }
+  table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.95rem; }
+  th, td { border:1px solid var(--line); padding:6px 10px; vertical-align:top; text-align:left; }
+  th { background:var(--code); }
+  code { background:var(--code); padding:.1em .35em; border-radius:4px; font-size:.92em; }
+  pre { background:var(--code); padding:12px 14px; border-radius:6px; overflow-x:auto; line-height:1.45; }
+  pre code { background:none; padding:0; }
+  .note { border-left:4px solid var(--accent); padding:8px 14px; background:var(--code); margin:1em 0; }
+  .mermaid { background:var(--code); border-radius:6px; padding:8px; margin:1em 0; overflow-x:auto; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>룸 WebSocket 명세</h1>
+<p class="meta">실시간 공부방(룸)의 STOMP 계약. 기준: 2026-09-17 (BY-667). REST API는 <a href="/swagger-ui.html">Swagger</a>, 이 문서는 소켓 계약만 다룬다.
+서버 코드가 곧 진실이며, 메시지 type·목적지가 이 문서에서 빠지면 서버 빌드가 실패한다.</p>
+
+<nav><ol>
+  <li><a href="#connect">연결과 인증</a></li>
+  <li><a href="#join">입장 흐름</a></li>
+  <li><a href="#destinations">목적지</a></li>
+  <li><a href="#inbound">클라이언트 → 서버</a></li>
+  <li><a href="#outbound">서버 → 클라이언트</a></li>
+  <li><a href="#signaling">WebRTC 시그널링</a></li>
+  <li><a href="#reconnect">끊김·재접속·유예</a></li>
+  <li><a href="#leave">퇴장과 방 소멸</a></li>
+  <li><a href="#fe">FE가 처리해야 할 것</a></li>
+  <li><a href="#limits">수치 한눈에</a></li>
+  <li><a href="#changelog">변경 이력</a></li>
+</ol></nav>
+
+<h2 id="connect">1. 연결과 인증</h2>
+<table>
+  <tr><th>항목</th><th>값</th></tr>
+  <tr><td>엔드포인트</td><td><code>wss://&lt;API 호스트&gt;/ws</code> — 순수 WebSocket. SockJS는 쓰지 않는다 (<code>@stomp/stompjs</code>의 <code>brokerURL</code>)</td></tr>
+  <tr><td>인증</td><td>CONNECT 프레임 헤더 <code>Authorization: Bearer &lt;access 토큰&gt;</code>. 핸드셰이크 URL 쿼리에는 토큰을 싣지 않는다(ALB 액세스 로그에 남는다)</td></tr>
+  <tr><td>인증 실패</td><td>헤더가 없거나 토큰이 무효하면 서버가 ERROR 프레임(<code>인증이 필요합니다</code> / <code>유효하지 않은 토큰입니다</code>)을 보내고 소켓을 닫는다. 사유는 ERROR 프레임의 <code>message</code> 헤더에 담기고 본문은 없다</td></tr>
+  <tr><td>토큰 만료</td><td>검증은 CONNECT 시점 한 번. 접속 중 access가 만료돼도 세션은 유지된다. 재접속 전에 갱신해서 붙이는 것은 클라이언트 몫</td></tr>
+  <tr><td>heartbeat</td><td>서버 제안 <code>10000,10000</code>(ms). 클라이언트도 <code>heartbeatIncoming: 10000, heartbeatOutgoing: 10000</code>으로 맞춘다. 0이면 비활성</td></tr>
+</table>
+<pre><code>const client = new Client({
+  brokerURL: "wss://&lt;API 호스트&gt;/ws",
+  connectHeaders: { Authorization: `Bearer ${accessToken}` },
+  heartbeatIncoming: 10000,
+  heartbeatOutgoing: 10000,
+});</code></pre>
+
+<h2 id="join">2. 입장 흐름</h2>
+<p>입장은 REST와 STOMP 두 단계다. <code>POST /api/rooms/join</code>은 <strong>자리 예약(30초)</strong>이고, <code>/topic/room/{roomId}</code> 구독이 <strong>입장 확정</strong>이다. 30초 안에 구독하지 않으면 예약은 소멸한다.</p>
+<p class="meta">다이어그램은 CDN(jsdelivr)에서 Mermaid를 받아 그린다 — 회색 상자만 보이면 네트워크 차단이다.</p>
+<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant FE
+    participant API as REST
+    participant WS as STOMP
+    participant Room as 방 토픽
+    FE->>API: POST /api/rooms/join {inviteCode}
+    API-->>FE: 200 {roomId, graceRejoin, cameraOn, iceServers, iceTtlSeconds} (자리 예약 30초)
+    FE->>WS: CONNECT (Authorization: Bearer)
+    WS-->>FE: CONNECTED
+    FE->>WS: SUBSCRIBE /user/queue/room
+    FE->>WS: SUBSCRIBE /topic/room/{roomId}  (= 입장 확정)
+    WS-->>FE: /user/queue/room ← SNAPSHOT {members[]}
+    WS-->>Room: /topic/room/{roomId} ← MEMBER_JOINED {member}
+</div>
+<div class="note">
+  <strong>순서가 중요하다.</strong> <code>/user/queue/room</code>을 <code>/topic/room/{roomId}</code>보다 <em>먼저</em> 구독한다.
+  SNAPSHOT과 ROOM_UNAVAILABLE은 큐로 오는데, 큐 구독 전에 발사되면 사라진다.
+</div>
+<ul>
+  <li><code>graceRejoin: true</code>는 같은 방에 내 자리가 아직 살아 있어(끊김 유예 중 등) 재입장한 경우다. 이때 <code>cameraOn</code>은 이전 값이다. 새 입장, 예약만 있고 아직 확정 전인 자리의 재요청, 이미 확정된 멤버가 join을 다시 부른 경우(ICE 자격 갱신 등)는 모두 <code>false</code>·<code>null</code>이다 — <code>false</code>가 자리를 잃었다는 뜻은 아니다.</li>
+  <li>이미 다른 방에 있으면 그 방에서 자동 퇴장된다(그 방 토픽에 MEMBER_LEFT). 동시 1룸.</li>
+  <li>join 실패는 REST 응답으로 온다: 400(코드 형식), 404(<code>INVITE_CODE_NOT_FOUND</code> / <code>ROOM_CLOSED</code> / <code>USER_NOT_FOUND</code> — 본문 <code>code</code>로 구분), 409(정원 6명 초과).</li>
+  <li>방 생성은 <code>POST /api/rooms</code> → 201 <code>{roomId, inviteCode, emptyTtlSeconds}</code>. 생성자도 join으로만 입장한다.</li>
+</ul>
+
+<h2 id="destinations">3. 목적지</h2>
+<p>구독과 발행 모두 <strong>허용 목록만</strong> 통과한다. 목록 밖 프레임은 조용히 버려진다(ERROR 프레임 없음).</p>
+<table>
+  <tr><th>방향</th><th>목적지</th><th>조건</th></tr>
+  <tr><td>구독</td><td><code>/user/queue/room</code></td><td>누구나. SNAPSHOT·ROOM_UNAVAILABLE은 요청한 세션에만, SIGNAL은 그 유저의 모든 세션에 온다(§6)</td></tr>
+  <tr><td>구독</td><td><code>/topic/room/{roomId}</code></td><td>그 방에 자리(예약 또는 확정)가 있는 유저만. 아니면 프레임을 버리고 요청 세션에 ROOM_UNAVAILABLE을 보낸다. 정확히 일치해야 하며 와일드카드 구독은 거부</td></tr>
+  <tr><td>발행</td><td><code>/app/room/{roomId}/state</code></td><td rowspan="3">인증된 세션만. <code>/topic</code>·<code>/queue</code>로 직접 SEND하면 버려진다(브로커에 위조 이벤트를 싣는 우회 차단)</td></tr>
+  <tr><td>발행</td><td><code>/app/room/{roomId}/signal</code></td></tr>
+  <tr><td>발행</td><td><code>/app/room/{roomId}/snapshot</code></td></tr>
+</table>
+
+<h2 id="inbound">4. 클라이언트 → 서버</h2>
+<p>세 메시지 모두 <strong>발신자가 그 방의 확정 멤버이고, 지금 세션이 그 유저의 최신 세션</strong>일 때만 처리된다. 아니면 응답 없이 무시된다(옛 탭·옛 기기의 세션은 자동으로 무력화).</p>
+
+<h3>4.1 <code>/app/room/{roomId}/state</code> — 내 상태 보고</h3>
+<pre><code>{ "cameraOn": true, "focusState": "FOCUS", "focusSec": 1520 }</code></pre>
+<table>
+  <tr><th>필드</th><th>타입</th><th>의미</th></tr>
+  <tr><td><code>cameraOn</code></td><td>boolean, 선택</td><td>카메라 켜짐 → 방에 CAMERA_CHANGED</td></tr>
+  <tr><td><code>focusState</code></td><td><code>"FOCUS"</code> | <code>"DISTRACTED"</code>, 선택</td><td>Vision AI 판정 → 방에 FOCUS_CHANGED</td></tr>
+  <tr><td><code>focusSec</code></td><td>int ≥ 0, 선택</td><td>순공 타이머 누적 초(주기 보고) → 방에 STUDY_TIME</td></tr>
+</table>
+<ul>
+  <li>필드는 모두 선택이다. 보낸 필드만 반영되고, <strong>반영된 필드마다 이벤트가 하나씩</strong> 나간다(셋 다 보내면 이벤트 3개).</li>
+  <li>무효한 값(모르는 <code>focusState</code>, 음수 <code>focusSec</code>)은 그 필드만 무시하고 나머지는 반영한다.</li>
+  <li>옛 이름 <code>studySeconds</code>는 받지 않는다.</li>
+</ul>
+
+<h3>4.2 <code>/app/room/{roomId}/signal</code> — WebRTC 시그널 중계</h3>
+<pre><code>{ "toUserId": 34, "kind": "OFFER", "payload": { "type": "offer", "sdp": "v=0..." } }</code></pre>
+<table>
+  <tr><th>필드</th><th>타입</th><th>의미</th></tr>
+  <tr><td><code>toUserId</code></td><td>long, 필수</td><td>같은 방의 확정 멤버여야 한다</td></tr>
+  <tr><td><code>kind</code></td><td><code>"OFFER"</code> | <code>"ANSWER"</code> | <code>"CANDIDATE"</code>, 필수</td><td>그 외 값은 무시</td></tr>
+  <tr><td><code>payload</code></td><td>any, 필수</td><td>서버는 해석·저장하지 않고 그대로 전달한다(SDP, ICE candidate 등)</td></tr>
+</table>
+<p>대상 유저의 <code>/user/queue/room</code>으로 SIGNAL이 간다(§5). 자기 자신에게도 보낼 수 있으나 의미는 없다. 프레임 한 개는 16 KB를 넘을 수 없다(§10).</p>
+
+<h3>4.3 <code>/app/room/{roomId}/snapshot</code> — SNAPSHOT 재요청</h3>
+<p>본문 없음(있어도 무시). 요청한 세션에만 SNAPSHOT을 다시 보낸다. 방 상태는 바뀌지 않는다. 확정 멤버가 아니거나 옛 세션이면 아무 응답이 없다 — 재시도가 조용히 소진되게 설계돼 있다.</p>
+
+<h2 id="outbound">5. 서버 → 클라이언트</h2>
+<p>모든 메시지는 JSON이고 <code>type</code>으로 구분한다. "방 토픽"은 <code>/topic/room/{roomId}</code>, "내 큐"는 <code>/user/queue/room</code>.</p>
+<table>
+  <tr><th>type</th><th>어디로</th><th>언제</th><th>필드</th></tr>
+  <tr><td><code>SNAPSHOT</code></td><td>내 큐</td><td>입장 확정 직후, 또는 재요청에 응답</td><td><code>members[]</code> — 나를 포함한 확정 멤버 전체. 예약만 하고 아직 토픽을 구독하지 않은 자리는 보이지 않는다</td></tr>
+  <tr><td><code>MEMBER_JOINED</code></td><td>방 토픽</td><td>누군가 입장 확정(재입장 포함)</td><td><code>member</code></td></tr>
+  <tr><td><code>MEMBER_LEFT</code></td><td>방 토픽</td><td>명시적 퇴장, 유예 만료 자동 퇴장, 다른 방 입장으로 자동 퇴장, 예약(30초) 만료. 확정 전 자리가 만료되면 MEMBER_JOINED를 본 적 없는 <code>userId</code>의 MEMBER_LEFT가 올 수 있다 — 모르는 id는 무시한다</td><td><code>userId</code></td></tr>
+  <tr><td><code>CAMERA_CHANGED</code></td><td>방 토픽</td><td>누군가의 state 보고에 <code>cameraOn</code>이 있을 때</td><td><code>userId</code>, <code>cameraOn</code></td></tr>
+  <tr><td><code>FOCUS_CHANGED</code></td><td>방 토픽</td><td>… <code>focusState</code>가 있을 때</td><td><code>userId</code>, <code>focusState</code></td></tr>
+  <tr><td><code>STUDY_TIME</code></td><td>방 토픽</td><td>… <code>focusSec</code>이 있을 때</td><td><code>userId</code>, <code>focusSec</code></td></tr>
+  <tr><td><code>SIGNAL</code></td><td>내 큐</td><td>누군가 나에게 signal을 보냈을 때</td><td><code>fromUserId</code>, <code>kind</code>, <code>payload</code></td></tr>
+  <tr><td><code>ROOM_UNAVAILABLE</code></td><td>내 큐</td><td>토픽 구독이 거부됐거나 확정에 실패했을 때(자리 회수·옛 세션)</td><td><code>roomId</code></td></tr>
+</table>
+
+<h3>예시</h3>
+<pre><code>{ "type": "SNAPSHOT", "members": [
+  { "userId": 12, "nickname": "상재", "goal": "정보처리기사", "category": "자격증",
+    "cameraOn": true, "focusState": "FOCUS", "focusSec": 1520, "disconnected": false },
+  { "userId": 34, "nickname": "원일", "goal": "졸업 프로젝트", "category": "학업",
+    "cameraOn": false, "focusState": "DISTRACTED", "focusSec": 300, "disconnected": true }
+] }
+{ "type": "MEMBER_JOINED", "member": { "userId": 56, "nickname": "선규", "goal": null, "category": null,
+    "cameraOn": false, "focusState": "FOCUS", "focusSec": 0, "disconnected": false } }
+{ "type": "MEMBER_LEFT", "userId": 34 }
+{ "type": "CAMERA_CHANGED", "userId": 12, "cameraOn": false }
+{ "type": "FOCUS_CHANGED", "userId": 12, "focusState": "DISTRACTED" }
+{ "type": "STUDY_TIME", "userId": 12, "focusSec": 1580 }
+{ "type": "SIGNAL", "fromUserId": 12, "kind": "CANDIDATE", "payload": { "candidate": "candidate:...", "sdpMid": "0" } }
+{ "type": "ROOM_UNAVAILABLE", "roomId": 42 }</code></pre>
+
+<h3>멤버 객체</h3>
+<table>
+  <tr><th>필드</th><th>타입</th><th>의미</th></tr>
+  <tr><td><code>userId</code></td><td>long</td><td></td></tr>
+  <tr><td><code>nickname</code></td><td>string</td><td>입장 시점 프로필. 이후 프로필을 바꿔도 방 안에서는 갱신되지 않는다</td></tr>
+  <tr><td><code>goal</code>, <code>category</code></td><td>string | null</td><td>공부 목표·카테고리</td></tr>
+  <tr><td><code>cameraOn</code></td><td>boolean</td><td>마지막 state 보고 값. 입장 직후 <code>false</code></td></tr>
+  <tr><td><code>focusState</code></td><td><code>"FOCUS"</code> | <code>"DISTRACTED"</code></td><td>입장 직후 <code>"FOCUS"</code></td></tr>
+  <tr><td><code>focusSec</code></td><td>int</td><td>마지막 보고된 순공 초. 입장 직후 0</td></tr>
+  <tr><td><code>disconnected</code></td><td>boolean</td><td>소켓이 끊겨 30초 유예 중. "재접속 중"으로 표시하고 재대조 시점을 잡는 데 쓴다</td></tr>
+</table>
+<div class="note">
+  <strong>MEMBER_JOINED는 재입장에서도 다시 온다.</strong> 이미 목록에 있는 <code>userId</code>면 덮어쓴다(upsert). 끊김 자체는 이벤트로 오지 않는다 — §7.
+</div>
+
+<h2 id="signaling">6. WebRTC 시그널링</h2>
+<p>서버는 시그널을 <strong>중계만</strong> 한다. 누가 OFFER를 내는지(예: userId가 작은 쪽), 재협상 정책은 FE끼리의 약속이다. ICE 서버 목록과 자격은 join 응답의 <code>iceServers</code>·<code>iceTtlSeconds</code>로 받고, TTL이 지나면 join을 다시 호출해 새 자격을 받는다.</p>
+<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant A as FE(A)
+    participant S as 서버
+    participant B as FE(B)
+    Note over A,B: 둘 다 입장 확정(SNAPSHOT/MEMBER_JOINED로 서로를 안다)
+    A->>S: /app/room/{roomId}/signal {toUserId:B, kind:"OFFER", payload:sdp}
+    S-->>B: /user/queue/room ← SIGNAL {fromUserId:A, kind:"OFFER", payload:sdp}
+    B->>S: /app/room/{roomId}/signal {toUserId:A, kind:"ANSWER", payload:sdp}
+    S-->>A: /user/queue/room ← SIGNAL {fromUserId:B, kind:"ANSWER", payload:sdp}
+    par ICE
+        A->>S: signal {toUserId:B, kind:"CANDIDATE", payload:candidate}
+        S-->>B: SIGNAL {fromUserId:A, kind:"CANDIDATE"}
+    and
+        B->>S: signal {toUserId:A, kind:"CANDIDATE", payload:candidate}
+        S-->>A: SIGNAL {fromUserId:B, kind:"CANDIDATE"}
+    end
+</div>
+<ul>
+  <li>수신자가 확정 멤버가 아니거나(예약만 한 상태, 이미 퇴장) 발신 세션이 최신이 아니면 조용히 버려진다. 상대가 응답하지 않으면 SNAPSHOT을 재요청해 멤버 여부를 확인한다(§9).</li>
+  <li>SIGNAL은 대상 <em>유저</em>의 큐로 간다. 같은 유저가 두 세션을 열었다면 둘 다 받을 수 있으나, 최신 세션만 signal을 보낼 수 있다.</li>
+</ul>
+
+<h2 id="reconnect">7. 끊김·재접속·유예</h2>
+<p>소켓이 끊기면(앱 백그라운드, 네트워크, 서버 배포) 자리는 <strong>30초 동안 유지</strong>된다. 이때 방에 이벤트는 나가지 않고, SNAPSHOT의 <code>disconnected: true</code>로만 드러난다. 재입장 join을 부른 뒤 토픽을 다시 구독하기 전까지는 그 멤버가 <code>members[]</code>에서 잠시 빠졌다가, 확정되면 MEMBER_JOINED로 돌아온다. 30초 안에 돌아오면 자리가 그대로이고, 넘기면 자동 퇴장(MEMBER_LEFT)이다.</p>
+<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant FE
+    participant S as 서버
+    participant Room as 방 토픽
+    FE--xS: 소켓 끊김 (앱 백그라운드·네트워크·배포)
+    Note over S: 자리 유지 30초, members[].disconnected = true
+    alt 30초 안에 재접속
+        FE->>S: POST /api/rooms/join {inviteCode}
+        S-->>FE: 200 {graceRejoin: true, cameraOn: 이전 값, iceServers}
+        FE->>S: CONNECT → SUBSCRIBE /user/queue/room → SUBSCRIBE /topic/room/{roomId}
+        S-->>FE: SNAPSHOT
+        S-->>Room: MEMBER_JOINED {member} (다른 멤버는 upsert)
+        Note over FE: WebRTC 피어 연결을 다시 맺는다 (§6)
+    else 30초 초과
+        S-->>Room: MEMBER_LEFT {userId}
+        Note over FE: 이후 join은 새 입장(graceRejoin: false). 방이 이미 닫혔으면 404 ROOM_CLOSED
+    end
+</div>
+<ul>
+  <li>재접속 절차는 최초 입장과 같다: <strong>join → CONNECT → 큐 구독 → 토픽 구독</strong>. join은 유예 중이면 자리를 새로 잡지 않고 <code>graceRejoin: true</code>로 답한다.</li>
+  <li>다른 기기·탭에서 같은 계정으로 들어오면 새 세션이 최신이 되고, 옛 세션의 발행은 모두 무시된다.</li>
+  <li>서버 배포로 소켓이 닫혀도 같은 절차다. 방 상태는 DB에 있어 배포를 넘겨 유지된다.</li>
+  <li>다른 멤버 입장에서는: 상대의 피어 연결이 끊긴 뒤 SNAPSHOT을 재요청하면 <code>disconnected</code>를 볼 수 있고, MEMBER_LEFT가 오면 피어를 정리한다.</li>
+</ul>
+
+<h2 id="leave">8. 퇴장과 방 소멸</h2>
+<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant FE
+    participant API as REST
+    participant Room as 방 토픽
+    FE->>API: POST /api/rooms/{roomId}/leave
+    API-->>FE: 204
+    API-->>Room: MEMBER_LEFT {userId} (남은 멤버가 있을 때만)
+    Note over API: 마지막 1명이 나가면 방·초대코드 소멸. 그 코드로 join하면 10분간 404 ROOM_CLOSED, 이후 INVITE_CODE_NOT_FOUND
+    FE->>FE: 소켓 DISCONNECT
+</div>
+<ul>
+  <li>퇴장 API를 못 부르고 앱이 종료돼도 소켓 끊김 30초 후 자동 퇴장된다.</li>
+  <li>생성 후 10분 안에 아무도 입장하지 않은 방도 소멸한다.</li>
+  <li>퇴장 순서: leave API 먼저, 소켓은 그다음에 끊는다. 소켓을 먼저 끊으면 30초 동안 <code>disconnected</code>로 남는다.</li>
+</ul>
+
+<h2 id="fe">9. FE가 처리해야 할 것</h2>
+<table>
+  <tr><th>상황</th><th>처리</th></tr>
+  <tr><td>토픽 구독 후 SNAPSHOT이 오지 않음</td><td>구독 등록과 SNAPSHOT 발송의 레이스로 드물게 사라진다. 1~2초 뒤 <code>/app/room/{roomId}/snapshot</code>을 재요청하고, 몇 번 재시도해도 안 오면 join부터 다시 한다</td></tr>
+  <tr><td>ROOM_UNAVAILABLE 수신</td><td>자리가 회수됐거나(예약 30초 초과, 유예 만료) 옛 세션이다. join을 다시 호출해 자리를 잡거나, 404면 방 종료를 안내한다. 이 메시지는 배달이 보장되지 않으므로 "SNAPSHOT 미도착"과 같은 처리로 수렴시킨다</td></tr>
+  <tr><td>피어 연결 실패·끊김</td><td>10초 주기로 SNAPSHOT을 재요청해 멤버 목록을 재대조한다(배포 겹침 구간의 유령 멤버 보완). 목록에 없으면 피어를 정리하되, 재입장 직후엔 잠시 빠질 수 있으니 곧 MEMBER_JOINED가 오면 다시 맺는다. <code>disconnected</code>면 대기</td></tr>
+  <tr><td>MEMBER_JOINED</td><td><code>userId</code> 기준 upsert. 이미 있는 멤버면 재입장이므로 피어 연결을 다시 맺는다</td></tr>
+  <tr><td>access 토큰 만료</td><td>세션은 유지된다. 재접속이 필요해질 때 갱신한 토큰으로 CONNECT한다</td></tr>
+  <tr><td>ICE 자격 만료</td><td><code>iceTtlSeconds</code> 경과 전에 join을 다시 호출해 새 <code>iceServers</code>를 받는다(자리는 유지된다. 접속 중인 멤버의 재호출이므로 응답은 <code>graceRejoin: false</code>·<code>cameraOn: null</code>이며, false가 자리를 잃었다는 뜻은 아니다)</td></tr>
+</table>
+
+<h2 id="limits">10. 수치 한눈에</h2>
+<table>
+  <tr><th>항목</th><th>값</th><th>비고</th></tr>
+  <tr><td>heartbeat</td><td>10초 / 10초</td><td>서버 제안. 클라이언트도 같은 값</td></tr>
+  <tr><td>클라이언트 → 서버 프레임 최대 크기</td><td>16 KB</td><td>인바운드 한도. 넘는 프레임(예: 큰 SDP OFFER)은 ERROR 프레임 후 소켓이 닫힌다 — candidate는 트리클 ICE로 쪼개 보낸다. 서버가 보내는 가장 큰 메시지(SNAPSHOT 6명)는 약 2 KB</td></tr>
+  <tr><td>세션당 송신 버퍼 / 송신 제한 시간</td><td>64 KB / 5초</td><td>초과하면 서버가 그 세션을 닫는다(느린·죽은 클라이언트 정리)</td></tr>
+  <tr><td>정원</td><td>6명</td><td>예약 중인 자리도 정원에 포함된다 — SNAPSHOT에 4명이 보여도 예약 2개가 있으면 join은 409. 대기열 없음</td></tr>
+  <tr><td>자리 예약</td><td>30초</td><td>join 후 토픽 구독까지</td></tr>
+  <tr><td>끊김 유예</td><td>30초</td><td>소켓 끊김 후 자동 퇴장까지</td></tr>
+  <tr><td>빈 방 소멸</td><td>600초</td><td>생성 후 무입장</td></tr>
+  <tr><td>소멸한 코드의 ROOM_CLOSED 안내</td><td>600초</td><td>이후 INVITE_CODE_NOT_FOUND</td></tr>
+  <tr><td>ICE 자격 TTL</td><td>join 응답 <code>iceTtlSeconds</code></td><td>환경마다 다르다</td></tr>
+</table>
+
+<h2 id="changelog">11. 변경 이력</h2>
+<table>
+  <tr><th>날짜</th><th>티켓</th><th>내용</th></tr>
+  <tr><td>2026-09-17</td><td>BY-667</td><td>첫 판. BY-626(룸 상태 DB 원본화) 이후 계약 기준: <code>focusSec</code>, <code>members[].disconnected</code>, <code>ROOM_UNAVAILABLE</code>, SNAPSHOT 재요청</td></tr>
+</table>
+
+</main>
+<script type="module">
+  // 버전을 고정한다 — 메이저만 적으면 새 마이너가 렌더링을 바꿀 수 있다. 다이어그램이 안 보이면 CDN(jsdelivr) 차단을 의심한다
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs";
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  // deterministicIds: 기본 id는 Date.now() 기반이라 같은 밀리초에 렌더된 다이어그램끼리 충돌해 한 상자에 겹쳐 그려진다
+  mermaid.initialize({ startOnLoad: true, deterministicIds: true, theme: dark ? "dark" : "default" });
+</script>
+</body>
+</html>

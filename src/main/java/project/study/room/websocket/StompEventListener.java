@@ -90,12 +90,13 @@ public class StompEventListener {
         }
         log.debug("STOMP 확정: roomId={}, userId={}, 확정 인원={}", roomId, userId, members.size());
 
-        messenger.toSession(principal.getName(), sessionId, Map.of("type", "SNAPSHOT", "members", members));
+        messenger.toSession(
+                principal.getName(), sessionId, Map.of("type", RoomMessageType.SNAPSHOT.name(), "members", members));
         RoomMember self = members.stream()
                 .filter(m -> m.userId().equals(userId))
                 .findFirst()
                 .orElse(new RoomMember(userId, null, null, null, false, "FOCUS", 0, false));
-        messenger.broadcast(roomId, Map.of("type", "MEMBER_JOINED", "member", self));
+        messenger.broadcast(roomId, Map.of("type", RoomMessageType.MEMBER_JOINED.name(), "member", self));
     }
 
     @EventListener

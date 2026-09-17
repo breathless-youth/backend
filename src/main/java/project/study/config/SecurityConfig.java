@@ -67,6 +67,9 @@ public class SecurityConfig {
                         // API 문서 — prod는 springdoc 자체가 꺼져 있어 404
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
                         .permitAll()
+                        // FE용 계약 문서(웹소켓 명세) — prod는 app.docs.enabled가 없어 매핑 자체가 없다(404) (BY-667)
+                        .requestMatchers("/docs/**")
+                        .permitAll()
                         .anyRequest()
                         .authenticated())
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedEntryPoint()))
