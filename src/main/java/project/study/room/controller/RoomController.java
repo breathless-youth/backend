@@ -31,7 +31,10 @@ import project.study.room.websocket.RoomMessageType;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.service.UserService;
 
-@Tag(name = "Room", description = "실시간 공부방 API — 초대코드 기반 일회성 방. WebRTC 시그널링은 STOMP WebSocket(/ws)으로 처리한다")
+@Tag(
+        name = "Room",
+        description = "실시간 공부방 API — 초대코드 기반 일회성 방. WebRTC 시그널링은 STOMP WebSocket(/ws)으로 처리한다. "
+                + "소켓 메시지 계약(연결·구독·이벤트·재접속)은 /docs/websocket.html 참고")
 @RestController
 @RequestMapping("/api/rooms")
 @RequiredArgsConstructor
