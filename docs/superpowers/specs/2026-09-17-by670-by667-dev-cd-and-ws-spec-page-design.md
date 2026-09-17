@@ -242,12 +242,12 @@ IAM `--description`은 ASCII/Latin-1만 허용한다 — 한글 설명은 Create
 | 2. 입장 시퀀스 | `POST /api/rooms/join` → 자리 예약 30초 + ICE 서버 → `/user/queue/room` 구독 → `/topic/room/{roomId}` 구독 = 확정 → 요청 세션에 SNAPSHOT, 방에 MEMBER_JOINED. 순서 규칙: 큐 구독을 토픽 구독보다 먼저(ROOM_UNAVAILABLE·SNAPSHOT을 받기 위해). `graceRejoin=true`는 같은 방 자리가 살아 있어 재입장한 경우이며 `cameraOn`은 이전 값 |
 | 3. 목적지 | 구독 허용: `/topic/room/{roomId}`(멤버만), `/user/queue/room`. 그 외 구독은 조용히 거부(멤버 아님이면 ROOM_UNAVAILABLE). 발행 허용: `/app/**`만. 클라가 `/topic`·`/queue`로 직접 SEND하면 드랍 |
 | 4. 클라→서버 | `/app/room/{roomId}/state` `{cameraOn?: boolean, focusState?: "FOCUS"\|"DISTRACTED", focusSec?: int≥0}` — 무효 필드만 무시, 나머지 반영, 반영된 필드만 이벤트 발생. `/app/room/{roomId}/signal` `{toUserId, kind: "OFFER"\|"ANSWER"\|"CANDIDATE", payload}` — 발신자 현재 세션·수신자 확정 멤버 아니면 조용히 무시. `/app/room/{roomId}/snapshot` 본문 없음 — 요청 세션에만 SNAPSHOT 재발송, 비멤버·옛 세션은 무응답 |
-| 5. 서버→클라 | 8종 표: SNAPSHOT(세션 큐, `members[]`), MEMBER_JOINED(토픽, `member`), MEMBER_LEFT(토픽, `userId`), CAMERA_CHANGED(토픽, `userId, cameraOn`), FOCUS_CHANGED(토픽, `userId, focusState`), STUDY_TIME(토픽, `userId, focusSec`), SIGNAL(세션 큐 → 대상 유저, `fromUserId, kind, payload`), ROOM_UNAVAILABLE(세션 큐, `roomId`). 각각 JSON 예시. `RoomMember` 필드 8개(`userId, nickname, goal, category, cameraOn, focusState, focusSec, disconnected`) |
+| 5. 서버→클라 | 8종 표: SNAPSHOT(세션 큐, `members[]` — 확정 멤버만), MEMBER_JOINED(토픽, `member`), MEMBER_LEFT(토픽, `userId`), CAMERA_CHANGED(토픽, `userId, cameraOn`), FOCUS_CHANGED(토픽, `userId, focusState`), STUDY_TIME(토픽, `userId, focusSec`), SIGNAL(세션 큐 → 대상 유저, `fromUserId, kind, payload`), ROOM_UNAVAILABLE(세션 큐, `roomId`). 각각 JSON 예시. `RoomMember` 필드 8개(`userId, nickname, goal, category, cameraOn, focusState, focusSec, disconnected`) |
 | 6. 시그널링 시퀀스 | A→서버 OFFER→B, B→서버 ANSWER→A, 양방향 CANDIDATE. 서버는 payload를 해석·저장하지 않는다. ICE 서버 목록·TTL은 join 응답(`iceServers`, `iceTtlSeconds`) |
 | 7. 끊김·재접속 시퀀스 | 소켓 끊김 → 30초 유예, 다른 멤버는 SNAPSHOT 재요청 시 `disconnected: true`로 봄 → 유예 내 join 재호출 + 재구독이면 자리 유지(`graceRejoin`), 초과면 자동 퇴장 MEMBER_LEFT. 다른 방 join 시 기존 방에서 자동 퇴장(MEMBER_LEFT). 배포 중 소켓이 닫히면 같은 절차 |
 | 8. 퇴장·소멸 | `POST /api/rooms/{roomId}/leave` → 방에 MEMBER_LEFT. 마지막 1명 퇴장 시 방·코드 소멸. 소멸 코드는 10분간 `ROOM_CLOSED`, 이후 `INVITE_CODE_NOT_FOUND`. 생성 후 10분 무입장이면 소멸 |
 | 9. FE가 처리할 것 | 토픽 구독 후 SNAPSHOT이 안 오면 `/app/room/{id}/snapshot` 재요청(재시도 소진 시 join 재호출). 피어 실패 시 10초 주기 SNAPSHOT 재대조. ROOM_UNAVAILABLE 수신 시 join 재호출 또는 종료 안내(배달 보장 없음, 미도착도 같은 처리). BY-668과 동일 |
-| 10. 수치 | heartbeat 10초 / 메시지 16KB / 세션 송신버퍼 64KB·5초(초과 시 세션 종료) / 정원 6 / 예약 30초 / 유예 30초 / 빈 방 600초 / 소멸 코드 600초 |
+| 10. 수치 | heartbeat 10초 / 클라→서버 프레임 16KB / 세션 송신버퍼 64KB·5초(초과 시 세션 종료) / 정원 6 / 예약 30초 / 유예 30초 / 빈 방 600초 / 소멸 코드 600초 |
 | 11. 변경 이력 | 날짜·티켓·요약. 첫 항목은 BY-667 |
 
 ### B4. `RoomMessageType` 상수화 (동작 불변 리팩토링)
