@@ -37,4 +37,10 @@ class DocsPageEnabledApiTest {
     void 없는_문서는_404() {
         assertThat(mvc.get().uri("/docs/nope.html").exchange()).hasStatus(HttpStatus.NOT_FOUND);
     }
+
+    // 경로 순회는 Security 방화벽(StrictHttpFirewall) 또는 리소스 핸들러의 경계 검사가 막는다 — 어느 쪽이든 200이 아니어야 한다
+    @Test
+    void 경로_순회로_클래스패스의_다른_파일을_읽을_수_없다() {
+        assertThat(mvc.get().uri("/docs/../application-prod.yaml").exchange()).hasStatus4xxClientError();
+    }
 }

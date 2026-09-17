@@ -36,6 +36,7 @@ class WebSocketDocsContractTest {
     @Test
     void 서버_메시지_type이_모두_문서에_있다() {
         for (RoomMessageType type : RoomMessageType.values()) {
+            // 공백까지 정확히 대조한다("type": 뒤 공백 하나) — 예시 JSON의 서식을 바꾸면 이 테스트도 같이 바꾼다
             String token = "\"type\": \"" + type.name() + "\"";
             assertThat(html).as(missing(token)).contains(token);
         }
@@ -43,6 +44,10 @@ class WebSocketDocsContractTest {
 
     @Test
     void 클라이언트_발행_목적지가_모두_문서에_있다() {
+        // 클래스 레벨 @MessageMapping 접두어가 생기면 아래 "/app" + 메서드 매핑 조립이 틀려진다 — 그때 이 테스트를 고친다
+        assertThat(RoomStompHandler.class.isAnnotationPresent(MessageMapping.class))
+                .as("클래스 레벨 @MessageMapping 접두어가 생기면 목적지 조립을 고쳐야 한다")
+                .isFalse();
         List<String> mappings = Arrays.stream(RoomStompHandler.class.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(MessageMapping.class))
                 .flatMap(
