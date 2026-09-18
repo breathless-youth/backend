@@ -2,11 +2,14 @@ package project.study.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -18,21 +21,26 @@ import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
+import project.study.common.exception.ErrorCode;
+import project.study.common.exception.NotFoundException;
 import project.study.room.service.RoomStateService;
 import project.study.room.websocket.RoomMessenger;
 import project.study.user.jwt.JwtUtil;
+import project.study.user.service.UserService;
 
 class UserIdChannelInterceptorTest {
 
     private final RoomStateService roomState = mock(RoomStateService.class);
     private final RoomMessenger messenger = mock(RoomMessenger.class);
     private final JwtUtil jwtUtil = new JwtUtil("test-secret-key-that-is-at-least-32-chars-long", 3_600_000L);
+    // 구 앱 폴백의 실존 유저 확인용 — 스텁하지 않은 userId는 존재하는 것으로 본다(null 반환), 없는 유저만 예외를 던지게 한다
+    private final UserService userService = mock(UserService.class);
 
     @SuppressWarnings("unchecked")
     private WebSocketConfig.UserIdChannelInterceptor interceptor() {
         ObjectProvider<RoomMessenger> provider = mock(ObjectProvider.class);
         when(provider.getObject()).thenReturn(messenger);
-        return new WebSocketConfig.UserIdChannelInterceptor(roomState, provider, jwtUtil);
+        return new WebSocketConfig.UserIdChannelInterceptor(roomState, provider, jwtUtil, userService);
     }
 
     private static Message<byte[]> subscribe(String destination, String userId) {
@@ -49,9 +57,17 @@ class UserIdChannelInterceptorTest {
 
     /** 운영에서 CONNECT의 accessor는 가변이다(Spring이 커스텀 인터셉터 뒤에 immutable 처리를 붙인다) — 같은 조건을 만든다. */
     private static Message<byte[]> connect(StompCommand command, String authorization) {
+        return connect(command, authorization, null);
+    }
+
+    /** 구 앱은 핸드셰이크 {@code ?userId=}가 세션 속성에 실려 온다 (ADR-0020). */
+    private static Message<byte[]> connect(StompCommand command, String authorization, String handshakeUserId) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(command);
         accessor.setSessionId("s1");
         if (authorization != null) accessor.addNativeHeader(HttpHeaders.AUTHORIZATION, authorization);
+        if (handshakeUserId != null) {
+            accessor.setSessionAttributes(new HashMap<>(Map.of("userId", handshakeUserId)));
+        }
         accessor.setLeaveMutable(true);
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
     }
@@ -84,6 +100,50 @@ class UserIdChannelInterceptorTest {
 
         assertThat(SimpMessageHeaderAccessor.getUser(result.getHeaders()).getName())
                 .isEqualTo("8");
+    }
+
+    @Test
+    void Authorization_없이_핸드셰이크_userId가_있으면_구_앱으로_보고_그_값이_principal이_된다() {
+        Message<?> result = interceptor().preSend(connect(StompCommand.CONNECT, null, "9"), mock(MessageChannel.class));
+
+        assertThat(SimpMessageHeaderAccessor.getUser(result.getHeaders()).getName())
+                .isEqualTo("9");
+    }
+
+    @Test
+    void Authorization이_있으면_핸드셰이크_userId는_무시된다() {
+        Message<?> result = interceptor()
+                .preSend(
+                        connect(StompCommand.CONNECT, "Bearer " + jwtUtil.createAccessToken(7L), "9"),
+                        mock(MessageChannel.class));
+
+        assertThat(SimpMessageHeaderAccessor.getUser(result.getHeaders()).getName())
+                .isEqualTo("7");
+    }
+
+    @Test
+    void 핸드셰이크_userId가_존재하지_않는_유저면_거부된다() {
+        // 토큰과 달리 아무 숫자나 올 수 있다 — 계정 없는 principal이 구독을 쌓지 못하게 한다 (Codex 보안 챌린지)
+        doThrow(new NotFoundException(ErrorCode.USER_NOT_FOUND, "존재하지 않는 사용자입니다"))
+                .when(userService)
+                .getProfile(404L);
+
+        assertThatThrownBy(() ->
+                        interceptor().preSend(connect(StompCommand.CONNECT, null, "404"), mock(MessageChannel.class)))
+                .isInstanceOf(MessagingException.class)
+                .hasMessageContaining("인증이 필요합니다");
+    }
+
+    @Test
+    void 핸드셰이크_userId가_양의_Long이_아니면_거부된다() {
+        MessageChannel channel = mock(MessageChannel.class);
+        // allowSubscribe가 Long.valueOf로 읽는다 — 문자열·범위 초과·0 이하는 CONNECT에서 끊는다
+        for (String bad : new String[] {"me", "99999999999999999999", "0", "-1"}) {
+            assertThatThrownBy(() -> interceptor().preSend(connect(StompCommand.CONNECT, null, bad), channel))
+                    .as("userId=" + bad)
+                    .isInstanceOf(MessagingException.class)
+                    .hasMessageContaining("인증이 필요합니다");
+        }
     }
 
     @Test

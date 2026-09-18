@@ -2,12 +2,16 @@ package project.study.config;
 
 import io.jsonwebtoken.JwtException;
 import java.security.Principal;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageDeliveryException;
@@ -19,16 +23,20 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
+import org.springframework.web.socket.server.HandshakeInterceptor;
+import project.study.common.exception.NotFoundException;
 import project.study.common.logging.StompMdcChannelInterceptor;
 import project.study.room.service.RoomStateService;
 import project.study.room.websocket.RoomMessenger;
 import project.study.room.websocket.SessionRegistry;
 import project.study.room.websocket.SessionTrackingDecorator;
 import project.study.user.jwt.JwtUtil;
+import project.study.user.service.UserService;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -43,12 +51,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     // 순환 참조가 나므로 ObjectProvider로 지연 해석한다
     private final ObjectProvider<RoomMessenger> roomMessenger;
     private final JwtUtil jwtUtil;
+    // 구 앱 폴백의 실존 유저 확인용 — contract 시 함께 삭제한다 (ADR-0020)
+    private final UserService userService;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // SockJS 미사용 — FE가 @stomp/stompjs로 순수 WebSocket에 직접 접속한다.
-        // 핸드셰이크에서는 아무것도 식별하지 않는다 — 인증은 CONNECT 프레임의 Authorization 헤더(아래 인터셉터)
-        registry.addEndpoint("/ws").setAllowedOriginPatterns("*");
+        // 인증은 CONNECT 프레임의 Authorization 헤더(아래 인터셉터). 핸드셰이크 인터셉터는 구 앱 병행용이다 (ADR-0020)
+        registry.addEndpoint("/ws")
+                .setAllowedOriginPatterns("*")
+                .addInterceptors(new LegacyUserIdHandshakeInterceptor());
     }
 
     @Override
@@ -80,7 +92,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registration.taskExecutor().corePoolSize(8).maxPoolSize(8);
         // 인가 인터셉터가 CONNECT에서 프린시펄을 세팅하므로 MDC 인터셉터는 그 뒤에 둔다
         registration.interceptors(
-                new UserIdChannelInterceptor(roomStateService, roomMessenger, jwtUtil),
+                new UserIdChannelInterceptor(roomStateService, roomMessenger, jwtUtil, userService),
                 new StompMdcChannelInterceptor());
     }
 
@@ -105,6 +117,38 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         }
     }
 
+    /**
+     * 구 앱(v1.2.x) 병행 — 핸드셰이크 URL의 {@code ?userId=}를 세션 속성에 옮긴다 (ADR-0020). 핸드셰이크 이후에는
+     * HTTP가 끝나므로 CONNECT 인터셉터가 읽을 곳은 세션 속성뿐이다. 토큰이 아니라 userId라 ALB 로그에 남아도
+     * v1.2.1과 같은 노출이다. 강제 업데이트(BY-531) 뒤 contract 시 이 클래스와 authenticate의 폴백 분기를 삭제한다.
+     */
+    static class LegacyUserIdHandshakeInterceptor implements HandshakeInterceptor {
+
+        static final String USER_ID_ATTR = "userId";
+
+        @Override
+        public boolean beforeHandshake(
+                ServerHttpRequest request,
+                ServerHttpResponse response,
+                WebSocketHandler wsHandler,
+                Map<String, Object> attributes) {
+            if (request instanceof ServletServerHttpRequest servletRequest) {
+                String userId = servletRequest.getServletRequest().getParameter(USER_ID_ATTR);
+                if (userId != null) {
+                    attributes.put(USER_ID_ATTR, userId);
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public void afterHandshake(
+                ServerHttpRequest request,
+                ServerHttpResponse response,
+                WebSocketHandler wsHandler,
+                Exception exception) {}
+    }
+
     // STOMP 보안
     @RequiredArgsConstructor
     static class UserIdChannelInterceptor implements ChannelInterceptor {
@@ -116,6 +160,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         private final RoomStateService roomStateService;
         private final ObjectProvider<RoomMessenger> messenger;
         private final JwtUtil jwtUtil;
+        private final UserService userService;
 
         @Override
         public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -153,7 +198,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
          */
         private Principal authenticate(Message<?> message, StompHeaderAccessor accessor) {
             String header = accessor.getFirstNativeHeader(HttpHeaders.AUTHORIZATION);
-            if (header == null || !header.startsWith(BEARER_PREFIX)) {
+            if (header == null) {
+                // 구 앱(v1.2.x) 폴백 — Authorization 자체가 없을 때만 핸드셰이크 ?userId=를 믿는다 (ADR-0020).
+                // 헤더가 있는데 Bearer가 아닌 경우는 새 앱의 잘못이므로 폴백하지 않고 거부한다
+                return legacyPrincipal(message, accessor);
+            }
+            if (!header.startsWith(BEARER_PREFIX)) {
                 throw new MessageDeliveryException(message, "인증이 필요합니다");
             }
             try {
@@ -161,6 +211,32 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 return new StompPrincipal(jwtUtil.getUserId(header.substring(BEARER_PREFIX.length())));
             } catch (JwtException | IllegalArgumentException e) {
                 throw new MessageDeliveryException(message, "유효하지 않은 토큰입니다");
+            }
+        }
+
+        // 강제 업데이트(BY-531) 뒤 contract 시 이 메서드와 LegacyUserIdHandshakeInterceptor를 삭제한다
+        private Principal legacyPrincipal(Message<?> message, StompHeaderAccessor accessor) {
+            Map<String, Object> attributes = accessor.getSessionAttributes();
+            Object userId = attributes == null ? null : attributes.get(LegacyUserIdHandshakeInterceptor.USER_ID_ATTR);
+            // allowSubscribe가 Long.valueOf로 읽으므로 양의 Long으로 파싱되지 않으면 여기서 끊는다
+            if (userId instanceof String s) {
+                try {
+                    long id = Long.parseLong(s);
+                    // 토큰과 달리 아무 숫자나 올 수 있다 — 계정 없는 principal이 구독을 쌓지 못하게 실존 유저만 통과시킨다
+                    if (id > 0 && exists(id)) return new StompPrincipal(s);
+                } catch (NumberFormatException ignored) {
+                    // 아래에서 거부
+                }
+            }
+            throw new MessageDeliveryException(message, "인증이 필요합니다");
+        }
+
+        private boolean exists(long userId) {
+            try {
+                userService.getProfile(userId);
+                return true;
+            } catch (NotFoundException e) {
+                return false;
             }
         }
 
