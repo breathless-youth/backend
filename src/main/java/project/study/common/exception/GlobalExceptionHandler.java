@@ -1,5 +1,6 @@
 package project.study.common.exception;
 
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -40,6 +42,15 @@ public class GlobalExceptionHandler {
         }
         return new ErrorResponse(
                 ErrorCode.VALIDATION_FAILED, fieldError.getField() + ": " + fieldError.getDefaultMessage());
+    }
+
+    // 경로변수·쿼리 파라미터의 타입 불일치(Long 자리에 문자열 등)는 클라이언트 잘못이다 — 아래 generic 핸들러가
+    // DefaultHandlerExceptionResolver보다 먼저 잡아 500·Sentry로 새는 것을 막는다
+    @ExceptionHandler(TypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleTypeMismatch(TypeMismatchException e) {
+        String name = e instanceof MethodArgumentTypeMismatchException m ? m.getName() : e.getPropertyName();
+        return new ErrorResponse(ErrorCode.BAD_REQUEST, (name != null ? name + ": " : "") + "값의 형식이 올바르지 않습니다");
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
