@@ -60,6 +60,31 @@ class RequestLoggingIntegrationTest {
     }
 
     @Test
+    void API_Version_헤더가_없으면_유효_버전_1이_액세스_로그_MDC에_실린다() {
+        // 구 앱(v1.2.x) 호출량 집계용 — CloudWatch에서 filter apiVersion = "1" 로 센다 (ADR-0020)
+        mvc.get().uri("/api/stats/streak").exchange();
+
+        assertThat(accessLog().getMDCPropertyMap()).containsEntry(LogContext.API_VERSION, "1");
+    }
+
+    @Test
+    void API_Version_헤더가_있으면_그_값이_액세스_로그_MDC에_실린다() {
+        mvc.get().uri("/api/stats/streak").with(asUser(99)).exchange();
+
+        assertThat(accessLog().getMDCPropertyMap()).containsEntry(LogContext.API_VERSION, "2");
+    }
+
+    @Test
+    void 버전_모양이_아닌_API_Version_값은_로그에_invalid로_뭉개진다() {
+        mvc.get()
+                .uri("/api/stats/streak")
+                .header("API-Version", "<script>x</script>")
+                .exchange();
+
+        assertThat(accessLog().getMDCPropertyMap()).containsEntry(LogContext.API_VERSION, "invalid");
+    }
+
+    @Test
     void 인증되지_않은_요청에는_userId_키가_없다() {
         mvc.get().uri("/api/stats/streak").exchange();
 
