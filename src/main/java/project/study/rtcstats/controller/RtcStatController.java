@@ -17,8 +17,7 @@ import project.study.rtcstats.service.RtcStatService;
 
 @Tag(name = "RTC Stats", description = "WebRTC 연결 통계 수집 — 릴레이 비율·coturn egress 측정용 (BY-490)")
 @RestController
-// 토큰 계약(v2). 구 앱(API-Version 없음/1)은 Legacy 컨트롤러가 받는다 — 강제 업데이트 뒤 contract 시 ADR-0020 참고
-@RequestMapping(value = "/api/rtc-stats", version = "2")
+@RequestMapping("/api/rtc-stats")
 @RequiredArgsConstructor
 public class RtcStatController {
 

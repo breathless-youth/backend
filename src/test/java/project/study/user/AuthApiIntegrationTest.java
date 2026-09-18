@@ -1,7 +1,6 @@
 package project.study.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.TOKEN_API_VERSION;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -15,7 +14,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
-import project.study.config.ApiVersionConfig;
 import project.study.user.dto.TokenResponse;
 import project.study.user.dto.UserRegisterResponse;
 import project.study.user.jwt.JwtUtil;
@@ -50,7 +48,6 @@ class AuthApiIntegrationTest {
 
         assertThat(mvc.get()
                         .uri("/api/users/me/profile")
-                        .header(ApiVersionConfig.HEADER, TOKEN_API_VERSION)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + device.accessToken()))
                 .hasStatusOk()
                 .bodyJson()
@@ -82,13 +79,11 @@ class AuthApiIntegrationTest {
     }
 
     @Test
-    void 토큰_계약에서_인증_없이_열린_경로는_등록_refresh_헬스체크뿐이다() {
+    void 인증_없이_열린_경로는_등록_refresh_헬스체크뿐이다() {
         assertThat(mvc.get().uri("/actuator/health")).hasStatusOk();
         // GET /api/users 같은 다른 메서드·경로는 열려 있지 않다
         assertThat(mvc.get().uri("/api/users")).hasStatus(HttpStatus.UNAUTHORIZED);
-        // 구 앱 경로도 API-Version: 2면 토큰이 필요하다 — 헤더 없는 경우는 LegacyApiSecurityTest (ADR-0020)
-        assertThat(mvc.get().uri("/api/stats/streak").header(ApiVersionConfig.HEADER, TOKEN_API_VERSION))
-                .hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(mvc.get().uri("/api/stats/streak")).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
@@ -139,11 +134,9 @@ class AuthApiIntegrationTest {
         assertThat(refreshRequest(device.accessToken())).hasStatus(HttpStatus.BAD_REQUEST);
     }
 
-    // 토큰 쌍은 토큰 계약(API-Version: 2)의 등록에서만 발급된다 — 헤더 없는 등록은 구 앱 계약 (ADR-0020)
     private UserRegisterResponse registerDevice(String deviceId) {
         MvcTestResult result = mvc.post()
                 .uri("/api/users")
-                .header(ApiVersionConfig.HEADER, TOKEN_API_VERSION)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"deviceId\":\"" + deviceId + "\"}")
                 .exchange();

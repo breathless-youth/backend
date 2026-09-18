@@ -31,8 +31,7 @@ import project.study.studysession.service.StudySessionService;
         name = "StudySession",
         description = "공부 세션 기록 API 모음 — 방 퇴장 시 세션 전체를 한 번에 제출받아 검증·계산·저장한다 (ADR-0003). 통계 조회는 StudySessionStats 참고")
 @RestController
-// 토큰 계약(v2). 구 앱(API-Version 없음/1)은 Legacy 컨트롤러가 받는다 — 강제 업데이트 뒤 contract 시 ADR-0020 참고
-@RequestMapping(value = "/api/study-sessions", version = "2")
+@RequestMapping("/api/study-sessions")
 @RequiredArgsConstructor
 public class StudySessionController {
 

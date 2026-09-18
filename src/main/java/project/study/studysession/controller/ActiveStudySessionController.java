@@ -27,8 +27,7 @@ import project.study.studysession.service.SessionRecoveryService;
 
 @Tag(name = "StudySession", description = "공부 세션 기록 API 모음.  통계 조회는 StudySessionStats 참고")
 @RestController
-// 토큰 계약(v2). 구 앱(API-Version 없음/1)은 Legacy 컨트롤러가 받는다 — 강제 업데이트 뒤 contract 시 ADR-0020 참고
-@RequestMapping(value = "/api/study-sessions", version = "2")
+@RequestMapping("/api/study-sessions")
 @RequiredArgsConstructor
 public class ActiveStudySessionController {
 

@@ -31,7 +31,6 @@ import project.study.user.service.UserService;
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
-// 클래스 레벨에 version을 두지 않는다 — 등록은 구 앱 병행 중 LegacyUserController가 version 1을 따로 받는다 (ADR-0020)
 public class UserController {
 
     private final UserService userService;
@@ -70,7 +69,7 @@ public class UserController {
                                 @ExampleObject(name = "값 누락", value = "{\"message\": \"deviceId: 공백일 수 없습니다\"}")
                             }))
     @SecurityRequirements // 인증 없이 호출하는 유일한 등록 경로 — 여기서 토큰이 시작된다
-    @PostMapping(version = "2")
+    @PostMapping
     public ResponseEntity<UserRegisterResponse> register(@Valid @RequestBody UserRegisterRequest request) {
         UserService.RegisterResult result = userService.register(request);
         // 등록과 발급은 별도 트랜잭션이다 — 발급이 실패해도 유저는 남고, 재호출(멱등)이 토큰을 채운다
@@ -94,7 +93,7 @@ public class UserController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
-    @GetMapping(value = "/me/profile", version = "2")
+    @GetMapping("/me/profile")
     public ProfileResponse getProfile(@AuthenticationPrincipal Long userId) {
         return userService.getProfile(userId);
     }
@@ -128,7 +127,7 @@ public class UserController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
-    @PatchMapping(value = "/me/profile", version = "2")
+    @PatchMapping("/me/profile")
     public ProfileResponse updateProfile(
             @AuthenticationPrincipal Long userId, @Valid @RequestBody ProfileUpdateRequest request) {
         return userService.updateProfile(userId, request);

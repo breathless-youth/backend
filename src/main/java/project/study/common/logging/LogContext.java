@@ -16,12 +16,6 @@ public final class LogContext {
     /** 요청 하나를 식별하는 ID. */
     public static final String REQUEST_ID = "requestId";
 
-    /**
-     * 요청의 유효 API 버전 — 헤더가 없으면 기본버전 {@code 1}. 구 앱(v1.2.x) 병행 중 구 호출량을 세는 근거다:
-     * {@code filter apiVersion = "1" and path like /api/} (ADR-0020, ADR-0015 결정 5).
-     */
-    public static final String API_VERSION = "apiVersion";
-
     private LogContext() {}
 
     /** null이면 키를 만들지 않는다 — 빈 값이 필드로 실려 필터 조회를 오염시키지 않게. */

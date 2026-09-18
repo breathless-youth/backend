@@ -13,7 +13,6 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import project.study.config.ApiVersionConfig;
 
 /**
  * HTTP 요청마다 MDC(requestId·userId)를 채우고, 응답 뒤 액세스 로그 한 줄을 남긴다.
@@ -52,7 +51,6 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
         try {
             String requestId = UUID.randomUUID().toString();
             MDC.put(LogContext.REQUEST_ID, requestId);
-            MDC.put(LogContext.API_VERSION, effectiveApiVersion(request));
             // 클라이언트가 문의할 때 이 ID를 대면 CloudWatch에서 해당 요청 로그를 바로 찾을 수 있다
             response.setHeader(REQUEST_ID_HEADER, requestId);
 
@@ -65,15 +63,6 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             // 톰캣 스레드는 재사용된다 — 비우지 않으면 다음 요청에 이전 유저의 ID가 묻어간다
             MDC.clear();
         }
-    }
-
-    // 헤더가 없으면 기본버전 — ApiVersionConfig와 같은 해석. 값은 클라이언트가 주는 것이라 로그에는 버전 모양
-    // (숫자·점, 16자 이내)만 싣고 나머지는 "invalid"로 뭉갠다 — 매핑 단계에서 400이 나므로 원본을 남길 이유가 없다
-    private static String effectiveApiVersion(HttpServletRequest request) {
-        String version = request.getHeader(ApiVersionConfig.HEADER);
-        if (version == null) return ApiVersionConfig.DEFAULT_VERSION;
-        String trimmed = version.trim();
-        return trimmed.matches("[0-9.]{1,16}") ? trimmed : "invalid";
     }
 
     private static void logAccess(HttpServletRequest request, HttpServletResponse response, long durationMs) {

@@ -5,7 +5,6 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
-import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,9 +13,6 @@ import org.springframework.context.annotation.Configuration;
 public class OpenApiConfig {
 
     // DevDataSeeder가 시딩하는 내용과 함께 유지한다
-    /** 문서가 싣는 계약의 버전 — 구 앱(v1)은 문서에 없다 (ADR-0020). */
-    private static final String TOKEN_API_VERSION = "2";
-
     private static final String DEV_MOCK_DATA_GUIDE = """
 
             **목데이터 안내 (시딩이 켜진 환경 전용)** — 서버 시작 시 데모 데이터가 자동 시딩된다. 아래 "서버 시작일" 기준 상대 날짜는
@@ -44,30 +40,6 @@ public class OpenApiConfig {
         this.seedEnabled = "true".equalsIgnoreCase(seedEnabled);
     }
 
-    /**
-     * springdoc이 버전 있는 오퍼레이션마다 자동으로 싣는 {@code API-Version} 헤더 파라미터를 다듬는다 — 기본값이 Spring
-     * 기본버전(1 → "1.0.0")이라 Swagger UI에서 그대로 보내면 구 앱 핸들러로 가서 400이 난다. 문서는 토큰 계약(v2)만
-     * 싣으므로 기본값 2·필수로 바꾼다 (ADR-0020). 전체 문서가 만들어진 뒤 도는 customizer라 파라미터 추가 시점과 무관하다.
-     */
-    @Bean
-    public OpenApiCustomizer apiVersionHeaderParameterCustomizer() {
-        return openApi -> {
-            if (openApi.getPaths() == null) return;
-            openApi.getPaths().values().stream()
-                    .flatMap(path -> path.readOperations().stream())
-                    .filter(operation -> operation.getParameters() != null)
-                    .flatMap(operation -> operation.getParameters().stream())
-                    .filter(parameter -> ApiVersionConfig.HEADER.equals(parameter.getName()))
-                    .forEach(parameter -> {
-                        parameter.setRequired(true);
-                        parameter.setDescription("토큰 계약 버전 — 새 앱은 항상 `2`. 없거나 `1`이면 구 앱(v1.2.x) 계약으로 해석된다");
-                        if (parameter.getSchema() != null) {
-                            parameter.getSchema().setDefault(TOKEN_API_VERSION);
-                        }
-                    });
-        };
-    }
-
     @Bean
     public OpenAPI openApi() {
         String description = """
@@ -78,12 +50,6 @@ public class OpenApiConfig {
                 요청에 userId를 실을 필요는 없다 — 서버가 토큰에서 신원을 읽는다. \
                 access가 만료되면(401 `UNAUTHORIZED`) `POST /api/auth/refresh`로 재발급받는다. \
                 아래 자물쇠 버튼에 access 토큰을 넣으면 Swagger UI에서도 인증된 요청을 보낼 수 있다.
-
-                **API-Version 헤더** — 새 앱은 **모든 HTTP 요청에 `API-Version: 2`** 를 붙인다 (ADR-0015·0020). \
-                헤더가 없거나 `1`이면 스토어의 구 앱(v1.2.x) 계약(토큰 대신 요청의 userId)으로 해석된다 — \
-                토큰만 있고 헤더가 빠지면 구 앱 핸들러로 가서 400이다. `2`인데 토큰이 없거나 만료면 401. \
-                미지원·파싱 불가 값은 400. 이 문서는 토큰 계약(v2)만 싣는다 — 구 앱 계약은 v1.2.1과 같고 ADR-0020에 표로 있으며 \
-                강제 업데이트 뒤 삭제된다. 아래 각 오퍼레이션의 `API-Version` 헤더 파라미터에는 `2`를 넣는다.
                 """;
         if (seedEnabled) {
             description += DEV_MOCK_DATA_GUIDE;

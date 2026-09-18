@@ -70,10 +70,6 @@ public class SecurityConfig {
                         // FE용 계약 문서(웹소켓 명세) — prod는 app.docs.enabled가 없어 매핑 자체가 없다(404) (BY-667)
                         .requestMatchers("/docs/**")
                         .permitAll()
-                        // 구 앱(v1.2.x) 병행 — 구 앱이 쓰는 경로만, API-Version 헤더가 없거나 1일 때만 연다.
-                        // 강제 업데이트 뒤 contract 시 이 줄과 LegacyApiRequestMatcher를 삭제한다 (ADR-0020)
-                        .requestMatchers(new LegacyApiRequestMatcher())
-                        .permitAll()
                         .anyRequest()
                         .authenticated())
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedEntryPoint()))

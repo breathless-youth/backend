@@ -1,7 +1,6 @@
 package project.study.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.TOKEN_API_VERSION;
 import static project.study.support.AuthTestSupport.asUser;
 
 import java.util.Locale;
@@ -22,7 +21,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
-import project.study.config.ApiVersionConfig;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
 import project.study.user.service.UserService;
@@ -45,11 +43,9 @@ class UserApiIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    // 토큰 계약(API-Version: 2)의 등록 — 헤더 없는 구 앱 등록은 LegacyUserApiTest (ADR-0020)
     private MockMvcTester.MockMvcRequestBuilder registerRequest(String deviceId) {
         return mvc.post()
                 .uri("/api/users")
-                .header(ApiVersionConfig.HEADER, TOKEN_API_VERSION)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"deviceId\":\"" + deviceId + "\"}");
     }

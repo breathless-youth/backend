@@ -55,7 +55,6 @@
   <tr><td>엔드포인트</td><td><code>wss://&lt;API 호스트&gt;/ws</code> — 순수 WebSocket. SockJS는 쓰지 않는다 (<code>@stomp/stompjs</code>의 <code>brokerURL</code>)</td></tr>
   <tr><td>인증</td><td>CONNECT 프레임 헤더 <code>Authorization: Bearer &lt;access 토큰&gt;</code>. 핸드셰이크 URL 쿼리에는 토큰을 싣지 않는다(ALB 액세스 로그에 남는다)</td></tr>
   <tr><td>인증 실패</td><td>헤더가 없거나 토큰이 무효하면 서버가 ERROR 프레임(<code>인증이 필요합니다</code> / <code>유효하지 않은 토큰입니다</code>)을 보내고 소켓을 닫는다. 사유는 ERROR 프레임의 <code>message</code> 헤더에 담기고 본문은 없다</td></tr>
-  <tr><td>구 앱 호환 (임시)</td><td>CONNECT에 <code>Authorization</code> 헤더가 아예 없으면 핸드셰이크 URL의 <code>?userId=</code>(숫자)로 식별한다 — 스토어의 구 앱(v1.2.x)만을 위한 폴백이고 새 앱은 쓰지 않는다. 강제 업데이트 뒤 제거된다 (ADR-0020). HTTP API의 구분은 <code>API-Version</code> 헤더지만 WebSocket에는 헤더가 없다</td></tr>
   <tr><td>토큰 만료</td><td>검증은 CONNECT 시점 한 번. 접속 중 access가 만료돼도 세션은 유지된다. 재접속 전에 갱신해서 붙이는 것은 클라이언트 몫</td></tr>
   <tr><td>heartbeat</td><td>서버 제안 <code>10000,10000</code>(ms). 클라이언트도 <code>heartbeatIncoming: 10000, heartbeatOutgoing: 10000</code>으로 맞춘다. 0이면 비활성</td></tr>
 </table>
@@ -285,7 +284,6 @@ sequenceDiagram
 <table>
   <tr><th>날짜</th><th>티켓</th><th>내용</th></tr>
   <tr><td>2026-09-17</td><td>BY-667</td><td>첫 판. BY-626(룸 상태 DB 원본화) 이후 계약 기준: <code>focusSec</code>, <code>members[].disconnected</code>, <code>ROOM_UNAVAILABLE</code>, SNAPSHOT 재요청</td></tr>
-  <tr><td>2026-09-18</td><td>BY-676</td><td>구 앱(v1.2.x) 병행: CONNECT에 <code>Authorization</code>이 없을 때만 핸드셰이크 <code>?userId=</code> 폴백(§1). 새 앱 계약은 변화 없음. 강제 업데이트 뒤 제거 예정</td></tr>
 </table>
 
 </main>

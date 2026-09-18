@@ -23,10 +23,8 @@ ADR-0013으로 소셜 로그인과 JWT를 재도입했다가 2026-09-06 사업 �
    한다 — `UserService.register`는 토큰을 모르므로 시더 같은 내부 호출이 refresh 행을 만들지 않는다.
 3. **신원은 오직 principal.** 모든 컨트롤러가 `@AuthenticationPrincipal Long userId`로 받고 요청의
    userId 채널은 전부 제거했다. `GET/PATCH /api/users/{userId}/profile`은 `/api/users/me/profile`,
-   `POST /api/rooms`는 본문 없음. ~~**병행 기간을 두지 않는다(빅뱅)** — 구버전 앱은 강제
-   업데이트(BY-531)로 막고, prod 배포를 앱 출시와 같은 시점에 맞춘다.~~
-   → 2026-09-18 ADR-0020으로 대체: 스토어의 구 앱이 강제 업데이트 전까지 동작해야 해서
-   `API-Version` 헤더로 신·구 계약을 병행한다. 빅뱅 결정만 바뀌고 나머지는 유효하다.
+   `POST /api/rooms`는 본문 없음. **병행 기간을 두지 않는다(빅뱅)** — 구버전 앱은 강제
+   업데이트(BY-531)로 막고, prod 배포를 앱 출시와 같은 시점에 맞춘다.
 4. **인증 없이 열린 경로**는 `POST /api/users`, `POST /api/auth/refresh`, `GET /ws`(핸드셰이크),
    `/actuator/health`, Swagger(dev만), ERROR 디스패치뿐이다. `/api/users`는 메서드를 한정한다 —
    경로 전체를 열면 `/me/profile`이 뚫린다. `metrics`·`wsstats` 등 나머지 actuator도 토큰이 필요하다.

@@ -20,8 +20,7 @@ import project.study.studysession.service.StudySessionService;
 
 @Tag(name = "StudySessionStats", description = "공부 세션 통계 조회 API 모음 — 하루 목록·합계, 연속 공부일(스트릭), 기간 집계를 조회한다")
 @RestController
-// 토큰 계약(v2). 구 앱(API-Version 없음/1)은 Legacy 컨트롤러가 받는다 — 강제 업데이트 뒤 contract 시 ADR-0020 참고
-@RequestMapping(value = "/api/stats", version = "2")
+@RequestMapping("/api/stats")
 @RequiredArgsConstructor
 public class StudySessionStatsController {
 
