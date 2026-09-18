@@ -13,9 +13,15 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class ApiVersionConfig implements WebMvcConfigurer {
 
+    /** 버전 요청 헤더 이름 — 시큐리티 매처·로그 컨텍스트도 이 상수를 본다. */
+    public static final String HEADER = "API-Version";
+
+    /** 헤더가 없을 때의 버전 — 병행 기간에는 구 앱(v1.2.x) 계약이다 (ADR-0020). */
+    public static final String DEFAULT_VERSION = "1";
+
     @Override
     public void configureApiVersioning(ApiVersionConfigurer configurer) {
         // 이후 버전(2, 3…)은 매핑의 version 속성에서 자동 감지된다 (ApiVersionApiTest로 검증)
-        configurer.useRequestHeader("API-Version").setDefaultVersion("1");
+        configurer.useRequestHeader(HEADER).setDefaultVersion(DEFAULT_VERSION);
     }
 }
