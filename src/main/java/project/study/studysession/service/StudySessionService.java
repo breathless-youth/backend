@@ -167,7 +167,7 @@ public class StudySessionService {
     /**
      * 세션을 KST 자정 경계로 분할해 생성한다 — 안 넘으면 1개, 걸친 이벤트는 시각 기준으로 각 세션에 귀속.
      * studySec/focusSec은 제출값을 조각 길이 비례로 배분한다. PAUSE는 총공부·순공 타이머를 모두 멈추므로
-     * 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY)는 순공 타이머만 멈추므로 focusSec 배분에서만 빠진다.
+     * 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY/SLEEP)는 순공 타이머만 멈추므로 focusSec 배분에서만 빠진다.
      */
     List<StudySession> validateAndBuildSessions(
             Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {

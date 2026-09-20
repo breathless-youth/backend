@@ -87,7 +87,8 @@ public class DevDataSeeder implements ApplicationRunner {
                 now.minus(Duration.ofHours(1)),
                 List.of(
                         event(EventStatus.PHONE, s1.plus(Duration.ofMinutes(30)), s1.plus(Duration.ofMinutes(40))),
-                        event(EventStatus.AWAY, s1.plus(Duration.ofMinutes(70)), s1.plus(Duration.ofMinutes(80)))));
+                        event(EventStatus.AWAY, s1.plus(Duration.ofMinutes(70)), s1.plus(Duration.ofMinutes(80))),
+                        event(EventStatus.SLEEP, s1.plus(Duration.ofMinutes(100)), s1.plus(Duration.ofMinutes(110)))));
 
         // 2) 어제 14~17시: DEVICE 20분 + PAUSE 10분
         Instant s2 = kst(today.minusDays(1), 14);

@@ -9,8 +9,8 @@ import project.study.studysession.entity.StatusEvent;
 /** 이벤트 1건은 status/startedAt/endedAt 3개 필드만 보내면 된다 — 길이(duration)는 서버가 계산하므로 별도로 보내지 않는다. */
 public record StatusEventRequest(
         @Schema(
-                description = "비공부 상태 종류. PHONE=휴대폰 사용, DEVICE=다른 기기 사용, AWAY=자리 비움, PAUSE=일시정지(앱에서 직접 멈춤). "
-                        + "PAUSE만 총 공부 타이머(studySec)도 함께 멈추고, 나머지 셋은 순공 타이머(focusSec)만 멈춘다. "
+                description = "비공부 상태 종류. PHONE=휴대폰 사용, DEVICE=다른 기기 사용, AWAY=자리 비움, SLEEP=졸음, PAUSE=일시정지(앱에서 직접 멈춤). "
+                        + "PAUSE만 총 공부 타이머(studySec)도 함께 멈추고, 나머지 넷은 순공 타이머(focusSec)만 멈춘다. "
                         + "상태별 발생 건수는 응답의 eventCounts에 집계되어 내려온다",
                 example = "PHONE")
         @NotNull

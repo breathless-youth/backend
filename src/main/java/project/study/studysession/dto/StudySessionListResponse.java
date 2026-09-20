@@ -21,7 +21,7 @@ public record StudySessionListResponse(
 
         @Schema(
                 description =
-                        "조회 범위 내 최장집중시간(초) — 세션 하나 안에서 이벤트(PHONE/DEVICE/AWAY/PAUSE)로 끊기지 않고 이어진 가장 긴 구간을 세션마다 구해, 그중 최댓값. 세션이 없으면 0",
+                        "조회 범위 내 최장집중시간(초) — 세션 하나 안에서 이벤트(PHONE/DEVICE/AWAY/SLEEP/PAUSE)로 끊기지 않고 이어진 가장 긴 구간을 세션마다 구해, 그중 최댓값. 세션이 없으면 0",
                 example = "3000")
         Long longestFocusSec,
 
@@ -30,7 +30,7 @@ public record StudySessionListResponse(
 
         @Schema(
                 description = "조회 범위 전체 상태별 이벤트 발생 건수 합계 — sessions[].eventCounts를 모두 더한 값, 없는 상태는 0으로 내려간다",
-                example = "{\"PHONE\": 3, \"DEVICE\": 0, \"AWAY\": 1, \"PAUSE\": 1}")
+                example = "{\"PHONE\": 3, \"DEVICE\": 0, \"AWAY\": 1, \"SLEEP\": 2, \"PAUSE\": 1}")
         Map<EventStatus, Long> totalEventCounts,
 
         @Schema(description = "date가 속한 달 동안 공부 기록이 있는 날짜 목록 — 캘린더 표시용 (중복 없음, 오름차순, 없으면 빈 배열)")

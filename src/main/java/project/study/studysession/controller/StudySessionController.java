@@ -42,12 +42,12 @@ public class StudySessionController {
                     공부를 마칠 때(방 퇴장 시) 세션 전체를 한 번에 제출한다. \
                     서버는 세션을 실시간으로 추적하지 않는다 — 앱에서 제출한 \
                     시작/종료 시각, 앱이 잰 총 공부 시간(`studySec`)과 순공 시간(`focusSec`), \
-                    온디바이스에서 제공한 **비공부 상태 이벤트**(PHONE·DEVICE·AWAY·PAUSE) 목록이 데이터의 전부다. \
+                    온디바이스에서 제공한 **비공부 상태 이벤트**(PHONE·DEVICE·AWAY·SLEEP·PAUSE) 목록이 데이터의 전부다. \
                     이벤트 1건은 `status`/`startedAt`/`endedAt` 3개 필드만 있으면 된다.
 
                     세션(방 입장~퇴장) 안에 총 공부시간 타이머가 있고, 그 안에 다시 순공시간 타이머가 있는 구조다 — \
                     `PAUSE`(일시정지, 앱에서 직접 멈추는 상태)는 총공부·순공 타이머를 모두 멈추고, \
-                    나머지(PHONE/DEVICE/AWAY)는 순공 타이머만 멈춘다.
+                    나머지(PHONE/DEVICE/AWAY/SLEEP)는 순공 타이머만 멈춘다.
 
                     **검증 규칙**
                     - 종료 시각은 시작 시각 이후여야 한다 (세션·이벤트 모두)
