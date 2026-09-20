@@ -29,6 +29,7 @@ import project.study.studysession.dto.StudySessionSummaryResponse;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.entity.StudySessionSubjectTime;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
@@ -68,7 +69,13 @@ public class StudySessionService {
         List<StatusEvent> events = request.getStatusEventList();
 
         List<StudySession> sessions = validateAndBuildSessions(
-                userId, request.startedAt(), request.endedAt(), request.studySec(), request.focusSec(), events);
+                userId,
+                request.startedAt(),
+                request.endedAt(),
+                request.studySec(),
+                request.focusSec(),
+                events,
+                request.getSubjectTimeList());
         if (autoFinalized) {
             sessions.forEach(StudySession::markAutoFinalized);
         }
@@ -171,6 +178,18 @@ public class StudySessionService {
      */
     List<StudySession> validateAndBuildSessions(
             Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
+        return validateAndBuildSessions(userId, startedAt, endedAt, studySec, focusSec, events, List.of());
+    }
+
+    /** 과목·할 일별 시간(subjectTimes)도 함께 검증하고 조각마다 세션과 같은 가중치로 배분한다 (ADR-0021). */
+    List<StudySession> validateAndBuildSessions(
+            Long userId,
+            Instant startedAt,
+            Instant endedAt,
+            int studySec,
+            int focusSec,
+            List<StatusEvent> events,
+            List<StudySessionSubjectTime> subjectTimes) {
         // 분할 후 조각은 항상 24시간 이내가 되므로, 24시간 한도 등은 반드시 분할 전 원본 기준으로 먼저 검증한다
         validatePeriod(startedAt, endedAt, clock.instant());
 
@@ -185,8 +204,9 @@ public class StudySessionService {
         // 조각 이후에 검증
         validateStudySec(studySec, weights.totalStudyActiveSec());
         validateFocusSec(focusSec, studySec);
+        validateSubjectTimes(subjectTimes, studySec);
 
-        return buildSessions(userId, cuts, weights, studySec, focusSec);
+        return buildSessions(userId, cuts, weights, studySec, focusSec, subjectTimes);
     }
 
     /**

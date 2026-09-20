@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
 import project.study.studysession.entity.StatusEvent;
+import project.study.studysession.entity.StudySessionSubjectTime;
 
 public record StudySessionCreateRequest(
         @Schema(
@@ -46,8 +47,25 @@ public record StudySessionCreateRequest(
                         + "순서는 뒤섞여 와도 된다(서버가 시작 시각 기준으로 정렬한다)")
         @NotNull
         @Valid
-        List<StatusEventRequest> events) {
+        List<StatusEventRequest> events,
+
+        @Schema(
+                description = "과목·할 일별 시간 목록 — 세션 중 항목을 선택한 채 잰 총 공부·순공 시간 (ADR-0021). 선택 필드라 "
+                        + "없거나 []이면 기존과 동일하게 저장된다. 항목 studySec 합은 studySec 이하, 항목 focusSec은 항목 studySec "
+                        + "이하여야 하고 subjectId/taskId는 토큰 유저의 것이어야 한다(위반 400). 자정을 넘는 세션은 조각 길이에 "
+                        + "비례해 배분된다")
+        @Valid
+        List<SubjectTimeRequest> subjectTimes) {
     public List<StatusEvent> getStatusEventList() {
         return this.events().stream().map(StatusEventRequest::toEntity).toList();
+    }
+
+    /** 선택 필드라 null이면 빈 목록으로 다룬다. */
+    public List<SubjectTimeRequest> subjectTimesOrEmpty() {
+        return subjectTimes == null ? List.of() : subjectTimes;
+    }
+
+    public List<StudySessionSubjectTime> getSubjectTimeList() {
+        return subjectTimesOrEmpty().stream().map(SubjectTimeRequest::toEntity).toList();
     }
 }

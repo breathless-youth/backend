@@ -21,6 +21,7 @@ public record LegacyStudySessionCreateRequest(
         @NotNull @Valid List<StatusEventRequest> events) {
 
     public StudySessionCreateRequest toRequest() {
-        return new StudySessionCreateRequest(startedAt, endedAt, studySec, focusSec, events);
+        // 구 앱은 과목 시트가 없다 — 항목별 시간은 항상 비어 있다
+        return new StudySessionCreateRequest(startedAt, endedAt, studySec, focusSec, events, null);
     }
 }

@@ -11,6 +11,7 @@ import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.dto.ActiveSessionSnapshotResponse;
 import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.dto.StudySessionCreateRequest;
+import project.study.studysession.dto.SubjectTimeRequest;
 import project.study.studysession.entity.ActiveStudySession;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.repository.ActiveStudySessionRepository;
@@ -53,7 +54,13 @@ public class ActiveStudySessionService {
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
         // 요청 검증에 활용
         studySessionService.validateAndBuildSessions(
-                userId, request.startedAt(), request.reportedAt(), request.studySec(), request.focusSec(), events);
+                userId,
+                request.startedAt(),
+                request.reportedAt(),
+                request.studySec(),
+                request.focusSec(),
+                events,
+                request.getSubjectTimeList());
 
         // 코얼레싱 버퍼에 넣고 즉시 반환 — 주기적 벌크 flush로 DB·CPU 부하를 낮춘다 (BY-470).
         // events JSON 직렬화·DB 쓰기는 flush 시점에 세션당 1번만 일어난다.
@@ -74,7 +81,12 @@ public class ActiveStudySessionService {
         List<StatusEventRequest> events =
                 objectMapper.readValue(draft.getEvents(), new TypeReference<List<StatusEventRequest>>() {});
         return new ActiveSessionSnapshotResponse(
-                draft.getStartedAt(), draft.getReportedAt(), draft.getStudySec(), draft.getFocusSec(), events);
+                draft.getStartedAt(),
+                draft.getReportedAt(),
+                draft.getStudySec(),
+                draft.getFocusSec(),
+                events,
+                parseSubjectTimes(draft));
     }
 
     /** 이 시간 넘게 하트비트가 없으면 죽었다고 본다 — 30초 주기 기준 10회 연속 유실. 판정은 서버 시계(lastSeenAt). */
@@ -105,7 +117,12 @@ public class ActiveStudySessionService {
         List<StatusEventRequest> events =
                 objectMapper.readValue(draft.getEvents(), new TypeReference<List<StatusEventRequest>>() {});
         StudySessionCreateRequest request = new StudySessionCreateRequest(
-                draft.getStartedAt(), draft.getReportedAt(), draft.getStudySec(), draft.getFocusSec(), events);
+                draft.getStartedAt(),
+                draft.getReportedAt(),
+                draft.getStudySec(),
+                draft.getFocusSec(),
+                events,
+                parseSubjectTimes(draft));
         try {
             studySessionService.create(draft.getUserId(), request, true);
         } catch (DuplicateSessionException e) {
@@ -114,6 +131,11 @@ public class ActiveStudySessionService {
         // create 성공 경로는 이미 트랜잭션 안에서 draft를 지웠으므로 no-op이고,
         // 멱등 반환(클라 제출본 존재)·중복 충돌 경로에서만 실제로 지운다 (deleteById는 없으면 무시)
         activeStudySessionRepository.deleteById(draftId);
+    }
+
+    /** V16 이전에 만들어진 draft도 컬럼 기본값 '[]'라 항상 파싱된다. */
+    private List<SubjectTimeRequest> parseSubjectTimes(ActiveStudySession draft) {
+        return objectMapper.readValue(draft.getSubjectTimes(), new TypeReference<List<SubjectTimeRequest>>() {});
     }
 
     /**

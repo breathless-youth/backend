@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
+import project.study.studysession.entity.StudySessionSubjectTime;
 
 /** 진행중 세션의 누적 스냅샷 — 30초마다 통째로 보내 서버 draft를 덮어쓴다 (BY-447). */
 public record ActiveSessionSnapshotRequest(
@@ -30,4 +31,20 @@ public record ActiveSessionSnapshotRequest(
         Integer focusSec,
 
         @Schema(description = "지금까지의 비공부 이벤트 전체 — 진행 중인 이벤트는 reportedAt에서 닫아서 보낸다. 없으면 []") @NotNull @Valid
-        List<StatusEventRequest> events) {}
+        List<StatusEventRequest> events,
+
+        @Schema(
+                description = "지금까지의 과목·할 일별 시간 전체 — 최종 제출의 subjectTimes와 같은 규칙. 진행 중인 항목은 "
+                        + "reportedAt 기준 누적값으로 보낸다. 선택 필드라 없거나 []이면 기존과 동일")
+        @Valid
+        List<SubjectTimeRequest> subjectTimes) {
+
+    /** 선택 필드라 null이면 빈 목록으로 다룬다. */
+    public List<SubjectTimeRequest> subjectTimesOrEmpty() {
+        return subjectTimes == null ? List.of() : subjectTimes;
+    }
+
+    public List<StudySessionSubjectTime> getSubjectTimeList() {
+        return subjectTimesOrEmpty().stream().map(SubjectTimeRequest::toEntity).toList();
+    }
+}

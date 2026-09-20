@@ -24,6 +24,7 @@ import project.study.studysession.dto.ActiveSessionSnapshotResponse;
 import project.study.studysession.dto.SessionRecoveryResponse;
 import project.study.studysession.service.ActiveStudySessionService;
 import project.study.studysession.service.SessionRecoveryService;
+import project.study.subject.service.StudySubjectService;
 
 @Tag(name = "StudySession", description = "공부 세션 기록 API 모음.  통계 조회는 StudySessionStats 참고")
 @RestController
@@ -34,6 +35,7 @@ public class ActiveStudySessionController {
 
     private final ActiveStudySessionService activeStudySessionService;
     private final SessionRecoveryService sessionRecoveryService;
+    private final StudySubjectService subjectService;
 
     @Operation(summary = "진행중 세션 스냅샷 보고", description = """
 				공부 중 1초마다 진행중 세션의 누적 스냅샷을 보고한다. \
@@ -54,6 +56,7 @@ public class ActiveStudySessionController {
     @PutMapping("/active")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void report(@AuthenticationPrincipal Long userId, @Valid @RequestBody ActiveSessionSnapshotRequest request) {
+        subjectService.assertOwned(userId, request.subjectTimesOrEmpty());
         activeStudySessionService.reportSnapshot(userId, request);
     }
 

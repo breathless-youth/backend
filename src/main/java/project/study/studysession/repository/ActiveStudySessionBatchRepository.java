@@ -22,14 +22,15 @@ public class ActiveStudySessionBatchRepository {
 
     private static final String UPSERT_SQL = """
             INSERT INTO active_study_session
-                (user_id, started_at, reported_at, last_seen_at, study_sec, focus_sec, events)
-            VALUES (?, ?, ?, ?, ?, ?, cast(? as jsonb))
+                (user_id, started_at, reported_at, last_seen_at, study_sec, focus_sec, events, subject_times)
+            VALUES (?, ?, ?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb))
             ON CONFLICT (user_id, started_at) DO UPDATE
             SET reported_at = excluded.reported_at,
                 last_seen_at = excluded.last_seen_at,
                 study_sec = excluded.study_sec,
                 focus_sec = excluded.focus_sec,
-                events = excluded.events
+                events = excluded.events,
+                subject_times = excluded.subject_times
             WHERE active_study_session.reported_at < excluded.reported_at""";
 
     private final JdbcTemplate jdbcTemplate;
@@ -56,6 +57,7 @@ public class ActiveStudySessionBatchRepository {
                 ps.setInt(5, r.studySec());
                 ps.setInt(6, r.focusSec());
                 ps.setString(7, r.eventsJson());
+                ps.setString(8, r.subjectTimesJson());
             }
 
             @Override
@@ -65,7 +67,7 @@ public class ActiveStudySessionBatchRepository {
         });
     }
 
-    /** 벌크 UPSERT 한 행. events는 이미 JSON 문자열로 직렬화된 상태다. */
+    /** 벌크 UPSERT 한 행. events·subjectTimes는 이미 JSON 문자열로 직렬화된 상태다. */
     public record SnapshotRow(
             Long userId,
             Instant startedAt,
@@ -73,5 +75,6 @@ public class ActiveStudySessionBatchRepository {
             Instant lastSeenAt,
             int studySec,
             int focusSec,
-            String eventsJson) {}
+            String eventsJson,
+            String subjectTimesJson) {}
 }

@@ -52,4 +52,9 @@ public class ActiveStudySession {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "events", nullable = false)
     private String events;
+
+    // 항목별 시간 스냅샷(SubjectTimeRequest 배열의 JSON) — 확정 시 study_session_subject_time 행이 된다 (ADR-0021)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "subject_times", nullable = false)
+    private String subjectTimes;
 }

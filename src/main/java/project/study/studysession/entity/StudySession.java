@@ -57,6 +57,11 @@ public class StudySession {
     @OrderBy("startedAt ASC")
     private List<StatusEvent> events = new ArrayList<>();
 
+    // 과목·할 일별 시간 (ADR-0021) — 이벤트와 같은 자식 컬렉션. 자정 분할 조각마다 비례 배분된 행이 생긴다
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "session_id", nullable = false)
+    private List<StudySessionSubjectTime> subjectTimes = new ArrayList<>();
+
     // BY-447: 자동 확정본 표시 — true인 세션은 잠정 기록이라 늦은 최종 제출·재확정이 대체할 수 있다
     @Column(name = "auto_finalized", nullable = false)
     private boolean autoFinalized;
@@ -87,6 +92,11 @@ public class StudySession {
     /** 자정 분할 조각을 루트 제출에 귀속시킨다 — 분할 직후 서비스만 호출한다 (기본값은 자신의 시작 시각 = 단독 세션). */
     public void attachToSubmission(Instant submissionStartedAt) {
         this.submissionStartedAt = submissionStartedAt;
+    }
+
+    /** 조각별로 배분된 과목·할 일 시간을 붙인다 — 분할 직후 서비스만 호출한다. */
+    public void attachSubjectTimes(List<StudySessionSubjectTime> subjectTimes) {
+        this.subjectTimes = new ArrayList<>(subjectTimes);
     }
 
     /** 확정 스케줄러가 만든 세션임을 표시한다 — 저장 직전 서비스만 호출한다. */
