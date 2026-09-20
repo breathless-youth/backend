@@ -69,6 +69,52 @@ Table status_event {
 }
 
 // ---------------------------------------------------------
+// 과목 > 할 일 / 세션 과목 시간 (ADR-0021, BY-698)
+// ---------------------------------------------------------
+
+Table study_subject {
+  id bigint [primary key, increment]
+  user_id bigint [ref: > users.id, not null]
+  name varchar(50) [not null]
+  deleted_at timestamptz         // soft delete — 지워도 세션 시간 기록은 남는다
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (user_id) [name: 'idx_study_subject_user_live', note: 'WHERE deleted_at IS NULL']
+  }
+}
+
+Table study_task {
+  id bigint [primary key, increment]
+  subject_id bigint [ref: > study_subject.id, not null]
+  name varchar(100) [not null]
+  done_at timestamptz            // 완료 시각. 마감일 없음 — 완료한 날(KST)까지 목록에 보이고 다음 날부터 숨는다
+  deleted_at timestamptz
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (subject_id) [name: 'idx_study_task_subject_live', note: 'WHERE deleted_at IS NULL']
+  }
+}
+
+Table study_session_subject_time {
+  id bigint [primary key, increment]
+  session_id bigint [ref: > study_session.id, not null]   // ON DELETE CASCADE — 세션과 함께 사라진다
+  subject_id bigint [ref: > study_subject.id, not null]
+  task_id bigint [ref: > study_task.id]                   // NULL = 과목만 선택해 잰 시간
+  study_sec integer [not null]   // 자정 분할 시 조각 몫. 항목 합 <= 세션 study_sec
+  focus_sec integer [not null]   // 항목 study_sec 이하
+
+  indexes {
+    (session_id)
+    (subject_id)   // 과목 누적 = 합
+    (task_id) [note: 'WHERE task_id IS NOT NULL']   // 할 일 누적 = 합
+  }
+}
+
+// ---------------------------------------------------------
 // 통계 (일/주/월 집계 upsert)
 // ---------------------------------------------------------
 

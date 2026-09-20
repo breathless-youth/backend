@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import project.study.studysession.entity.StatusEvent;
+import project.study.studysession.entity.StudySessionSubjectTime;
 
 /** 세션 제출 검증 규칙 모음 — 규칙 위반은 InvalidSessionException(400). 검증은 자정 분할 전의 원본 제출 기준이다. */
 final class StudySessionValidator {
@@ -71,6 +72,24 @@ final class StudySessionValidator {
     static void validateFocusSec(int focusSec, int studySec) {
         if (focusSec < 0 || focusSec > studySec) {
             throw new InvalidSessionException("순공 시간은 0 이상, 총 공부 시간 이하여야 합니다");
+        }
+    }
+
+    /**
+     * 항목별 시간(ADR-0021) — 항목 studySec 합은 세션 studySec 이하, 항목 focusSec은 항목 studySec 이하.
+     * 항목 focusSec 합을 세션 focusSec로 다시 묶지 않는다(앱이 파생한 값을 역산하지 않는 ADR-0006과 같은 이유).
+     * 소유 검증은 세션 도메인 밖(StudySubjectService.assertOwned)에서 한다.
+     */
+    static void validateSubjectTimes(List<StudySessionSubjectTime> subjectTimes, int studySec) {
+        long total = 0;
+        for (StudySessionSubjectTime time : subjectTimes) {
+            if (time.getStudySec() < 0 || time.getFocusSec() < 0 || time.getFocusSec() > time.getStudySec()) {
+                throw new InvalidSessionException("항목별 순공 시간은 0 이상, 항목의 총 공부 시간 이하여야 합니다");
+            }
+            total += time.getStudySec();
+        }
+        if (total > studySec) {
+            throw new InvalidSessionException("항목별 총 공부 시간의 합은 세션 총 공부 시간을 넘을 수 없습니다");
         }
     }
 

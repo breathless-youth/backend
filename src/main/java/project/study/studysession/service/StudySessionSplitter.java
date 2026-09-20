@@ -9,6 +9,7 @@ import java.util.List;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.entity.StudySessionSubjectTime;
 
 /**
  * 세션을 KST 자정 경계로 분할하고, studySec/focusSec을 조각별로 배분하는 순수 로직 (BY-447, BY-471).
@@ -108,42 +109,84 @@ final class StudySessionSplitter {
         return base;
     }
 
-    /** 조각별 가중치대로 studySec/focusSec을 비례 배분해 세션들을 만든다 — 마지막 조각이 나머지를 가져가 합이 항상 요청값과 같다. */
+    /**
+     * 조각별 가중치대로 studySec/focusSec(과목·할 일별 시간 포함)을 비례 배분해 세션들을 만든다 — 마지막 조각이
+     * 나머지를 가져가 합이 항상 요청값과 같다.
+     */
     static List<StudySession> buildSessions(
-            Long userId, List<Instant> cuts, SegmentWeights weights, int studySec, int focusSec) {
+            Long userId,
+            List<Instant> cuts,
+            SegmentWeights weights,
+            int studySec,
+            int focusSec,
+            List<StudySessionSubjectTime> subjectTimes) {
         int segmentCount = cuts.size() - 1;
+        List<List<StudySessionSubjectTime>> subjectTimesBySegment =
+                splitSubjectTimes(subjectTimes, weights, segmentCount);
         List<StudySession> sessions = new ArrayList<>();
         long allocatedStudySec = 0;
         long allocatedFocusSec = 0;
         for (int i = 0; i < segmentCount; i++) {
-            long segmentStudySec;
-            long segmentFocusSec;
-            if (i == segmentCount - 1) {
-                segmentStudySec = studySec - allocatedStudySec;
-                segmentFocusSec = focusSec - allocatedFocusSec;
-            } else {
-                segmentStudySec =
-                        studySec == 0 ? 0 : studySec * weights.studyActiveSecs()[i] / weights.totalStudyActiveSec();
-                // focusActiveSec 합이 0(전 구간이 이벤트로 덮인 경우)이면 studyActiveSec 비율로 대체 배분
-                boolean noFocusActiveTime = weights.totalFocusActiveSec() == 0;
-                long focusWeight = noFocusActiveTime ? weights.studyActiveSecs()[i] : weights.focusActiveSecs()[i];
-                long focusWeightTotal =
-                        noFocusActiveTime ? weights.totalStudyActiveSec() : weights.totalFocusActiveSec();
-                segmentFocusSec = focusSec == 0 ? 0 : focusSec * focusWeight / focusWeightTotal;
-            }
-            sessions.add(buildSession(
+            boolean last = i == segmentCount - 1;
+            long segmentStudySec = last ? studySec - allocatedStudySec : studyShare(weights, i, studySec);
+            long segmentFocusSec = last ? focusSec - allocatedFocusSec : focusShare(weights, i, focusSec);
+            StudySession session = buildSession(
                     userId,
                     cuts.get(i),
                     cuts.get(i + 1),
                     (int) segmentStudySec,
                     (int) segmentFocusSec,
-                    weights.segmentEvents().get(i)));
+                    weights.segmentEvents().get(i));
+            session.attachSubjectTimes(subjectTimesBySegment.get(i));
+            sessions.add(session);
             allocatedStudySec += segmentStudySec;
             allocatedFocusSec += segmentFocusSec;
         }
         // 조각들이 원본 제출의 시작 시각을 루트로 공유해야 재제출 판별·응답 조회가 조각 단위로 어긋나지 않는다
         sessions.forEach(session -> session.attachToSubmission(cuts.get(0)));
         return sessions;
+    }
+
+    /**
+     * 항목별 시간을 조각마다 세션과 같은 가중치로 배분한다 (ADR-0021) — 항목마다 마지막 조각이 나머지를 가져가
+     * 합이 보존되고, 두 값이 모두 0인 조각은 행을 만들지 않는다.
+     */
+    static List<List<StudySessionSubjectTime>> splitSubjectTimes(
+            List<StudySessionSubjectTime> times, SegmentWeights weights, int segmentCount) {
+        List<List<StudySessionSubjectTime>> result = new ArrayList<>(segmentCount);
+        for (int i = 0; i < segmentCount; i++) {
+            result.add(new ArrayList<>());
+        }
+        for (StudySessionSubjectTime time : times) {
+            long allocatedStudy = 0;
+            long allocatedFocus = 0;
+            for (int i = 0; i < segmentCount; i++) {
+                boolean last = i == segmentCount - 1;
+                long study = last ? time.getStudySec() - allocatedStudy : studyShare(weights, i, time.getStudySec());
+                long focus = last ? time.getFocusSec() - allocatedFocus : focusShare(weights, i, time.getFocusSec());
+                allocatedStudy += study;
+                allocatedFocus += focus;
+                if (study > 0 || focus > 0) {
+                    result.get(i)
+                            .add(new StudySessionSubjectTime(
+                                    time.getSubjectId(), time.getTaskId(), (int) study, (int) focus));
+                }
+            }
+        }
+        return result;
+    }
+
+    /** studySec 계열의 조각 몫 — PAUSE를 제외한 조각 길이 비율. */
+    private static long studyShare(SegmentWeights weights, int segment, long value) {
+        return value == 0 ? 0 : value * weights.studyActiveSecs()[segment] / weights.totalStudyActiveSec();
+    }
+
+    /** focusSec 계열의 조각 몫 — 이벤트를 제외한 조각 길이 비율. 그 합이 0(전 구간이 이벤트)이면 studySec 비율로 대체한다. */
+    private static long focusShare(SegmentWeights weights, int segment, long value) {
+        boolean noFocusActiveTime = weights.totalFocusActiveSec() == 0;
+        long weight = noFocusActiveTime ? weights.studyActiveSecs()[segment] : weights.focusActiveSecs()[segment];
+        long total = noFocusActiveTime ? weights.totalStudyActiveSec() : weights.totalFocusActiveSec();
+        return value == 0 ? 0 : value * weight / total;
     }
 
     private static StudySession buildSession(

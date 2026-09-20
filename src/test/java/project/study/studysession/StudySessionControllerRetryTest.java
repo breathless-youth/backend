@@ -20,6 +20,7 @@ import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.service.DuplicateSessionException;
 import project.study.studysession.service.StudySessionService;
+import project.study.subject.service.StudySubjectService;
 
 /**
  * BY-447 최종 리뷰 Fix 1 — 자동 확정 스케줄러와의 유니크 레이스에서 진 최종 제출이 findExistingSubmission으로
@@ -35,11 +36,15 @@ class StudySessionControllerRetryTest {
     @Mock
     private StudySessionService studySessionService;
 
+    // 소유 검증은 컨트롤러가 먼저 부른다(ADR-0021) — 빈 subjectTimes라 아무것도 하지 않는 mock으로 충분하다
+    @Mock
+    private StudySubjectService subjectService;
+
     @InjectMocks
     private StudySessionController controller;
 
     private final StudySessionCreateRequest request =
-            new StudySessionCreateRequest(STARTED_AT, STARTED_AT.plusSeconds(3600), 3600, 3400, List.of());
+            new StudySessionCreateRequest(STARTED_AT, STARTED_AT.plusSeconds(3600), 3600, 3400, List.of(), null);
 
     @Test
     void 첫_create가_레이스로_지면_재시도해서_성공하면_그_결과를_반환하고_재조회는_안한다() {
@@ -66,6 +71,7 @@ class StudySessionControllerRetryTest {
                 3600,
                 3400,
                 94.4,
+                List.of(),
                 List.of()));
         when(studySessionService.create(USER_ID, request, false))
                 .thenThrow(new DuplicateSessionException("첫 실패"))

@@ -26,6 +26,7 @@ import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.service.DuplicateSessionException;
 import project.study.studysession.service.StudySessionService;
+import project.study.subject.service.StudySubjectService;
 
 @Tag(
         name = "StudySession",
@@ -37,6 +38,7 @@ import project.study.studysession.service.StudySessionService;
 public class StudySessionController {
 
     private final StudySessionService studySessionService;
+    private final StudySubjectService subjectService;
 
     @Operation(summary = "공부 세션 제출", description = """
                     공부를 마칠 때(방 퇴장 시) 세션 전체를 한 번에 제출한다. \
@@ -123,6 +125,8 @@ public class StudySessionController {
     @ResponseStatus(HttpStatus.CREATED)
     public List<StudySessionResponse> create(
             @AuthenticationPrincipal Long userId, @Valid @RequestBody StudySessionCreateRequest request) {
+        // 과목·할 일 소유 검증은 세션 도메인 밖에서 먼저 한다 (ADR-0021) — 재시도·멱등 경로와 무관한 순수 400 검증
+        subjectService.assertOwned(userId, request.subjectTimesOrEmpty());
         try {
             return studySessionService.create(userId, request, false);
         } catch (DuplicateSessionException | ObjectOptimisticLockingFailureException e) {

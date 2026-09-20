@@ -79,8 +79,16 @@ public class ActiveSnapshotBuffer {
             }
             ActiveSessionSnapshotRequest r = p.request();
             String eventsJson = objectMapper.writeValueAsString(r.events());
+            String subjectTimesJson = objectMapper.writeValueAsString(r.subjectTimesOrEmpty());
             rows.add(new SnapshotRow(
-                    p.userId(), r.startedAt(), r.reportedAt(), p.lastSeenAt(), r.studySec(), r.focusSec(), eventsJson));
+                    p.userId(),
+                    r.startedAt(),
+                    r.reportedAt(),
+                    p.lastSeenAt(),
+                    r.studySec(),
+                    r.focusSec(),
+                    eventsJson,
+                    subjectTimesJson));
         }
         if (rows.isEmpty()) {
             return;
