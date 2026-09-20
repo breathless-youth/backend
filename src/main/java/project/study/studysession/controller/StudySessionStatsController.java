@@ -39,7 +39,7 @@ public class StudySessionStatsController {
                     각 세션 항목 안에 그 세션의 상태별 이벤트 건수(`sessions[].eventCounts`)만 담긴다
                     - `sessionCount` — 조회된 세션 개수 (자정 분할 세션은 각각 1개로 센다)
                     - `totalStudySec` / `totalFocusSec` — 그날 총 공부 시간·순공 시간 합계(초) — sessions[].studySec/focusSec의 합
-                    - `longestFocusSec` — 그날 최장집중시간(초). 세션 하나 안에서 이벤트(PHONE/DEVICE/AWAY/PAUSE)로 끊기지 \
+                    - `longestFocusSec` — 그날 최장집중시간(초). 세션 하나 안에서 이벤트(PHONE/DEVICE/AWAY/SLEEP/PAUSE)로 끊기지 \
                     않고 이어진 가장 긴 구간을 세션마다 구해, 그중 최댓값을 취한다
                     - `focusRate` — 그날 전체 집중률(%). 세션별 집중률의 평균이 아니라 합계(totalFocusSec ÷ totalStudySec) 기준으로 계산한다
                     - `totalEventCounts` — 그날 전체 상태별 이벤트 발생 건수 합계 — sessions[].eventCounts를 모두 더한 값. 없는 상태도 0으로 내려간다

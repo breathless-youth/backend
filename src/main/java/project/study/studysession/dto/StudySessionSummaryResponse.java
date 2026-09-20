@@ -32,7 +32,7 @@ public record StudySessionSummaryResponse(
 
         @Schema(
                 description = "이 세션에서 발생한 상태별 이벤트 건수 — 이벤트가 없던 상태는 0으로 내려간다(키 누락 없음)",
-                example = "{\"PHONE\": 2, \"DEVICE\": 0, \"AWAY\": 1, \"PAUSE\": 0}")
+                example = "{\"PHONE\": 2, \"DEVICE\": 0, \"AWAY\": 1, \"SLEEP\": 1, \"PAUSE\": 0}")
         Map<EventStatus, Long> eventCounts) {
 
     // focusRate/eventCounts 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다

@@ -135,6 +135,20 @@ class StudySessionMidnightSplitTest {
     }
 
     @Test
+    void 자정_분할_시_SLEEP은_PAUSE가_아니라_PHONE과_같은_가중치로_배분된다() {
+        // 졸음은 순공 타이머만 멈춘다 — 총공부시간 배분엔 영향이 없어야 한다 (BY-706)
+        List<StatusEvent> events = List.of(event(EventStatus.SLEEP, "2026-07-23T14:00:00Z", "2026-07-23T14:10:00Z"));
+
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 7200, 6600, events);
+
+        assertThat(sessions.get(0).getStudySec()).isEqualTo(3600);
+        assertThat(sessions.get(1).getStudySec()).isEqualTo(3600);
+        // focusActiveSec: 조각1=3000, 조각2=3600 — PHONE 케이스와 같은 값이어야 한다
+        assertThat(sessions.get(0).getFocusSec()).isEqualTo(3000);
+        assertThat(sessions.get(1).getFocusSec()).isEqualTo(3600);
+    }
+
+    @Test
     void 순공시간_배분_가중치가_전부_0이면_총공부시간_비율로_대체_배분한다() {
         // PHONE이 전체 구간을 덮어 focusActiveSec 합계가 0이 되는 예외 케이스
         List<StatusEvent> events = List.of(event(EventStatus.PHONE, "2026-07-23T14:00:00Z", "2026-07-23T16:00:00Z"));

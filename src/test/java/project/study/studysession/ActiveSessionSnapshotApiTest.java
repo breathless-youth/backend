@@ -122,6 +122,21 @@ class ActiveSessionSnapshotApiTest {
     }
 
     @Test
+    void SLEEP_이벤트가_실린_스냅샷도_저장되고_재접속_조회에_그대로_내려온다() {
+        // DB(마이크로초)·JSON 직렬화 왕복에서 표기가 어긋나지 않도록 초 단위로 자른 시각을 쓴다
+        Instant started = startedAt.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        String events = """
+				[{"status":"SLEEP","startedAt":"%s","endedAt":"%s"}]""".formatted(started.plusSeconds(10), started.plusSeconds(20));
+        assertThat(report(userId, started, started.plusSeconds(30), 20, 10, events))
+                .hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(restore(userId))
+                .hasStatus(HttpStatus.OK)
+                .bodyJson()
+                .hasPathSatisfying("$.events[0].status", v -> assertThat(v).isEqualTo("SLEEP"));
+    }
+
+    @Test
     void reportedAt이_startedAt_이전이면_400이다() {
         assertThat(report(userId, startedAt, startedAt, 0, 0)).hasStatus(HttpStatus.BAD_REQUEST);
         assertThat(draftRows(userId)).isEqualTo(0);

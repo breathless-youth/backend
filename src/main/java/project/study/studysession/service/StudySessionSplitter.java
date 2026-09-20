@@ -14,7 +14,7 @@ import project.study.studysession.entity.StudySession;
  * 세션을 KST 자정 경계로 분할하고, studySec/focusSec을 조각별로 배분하는 순수 로직 (BY-447, BY-471).
  *
  * <p>안 넘으면 조각 1개, 걸친 이벤트는 시각 기준으로 각 조각에 귀속된다. PAUSE는 총공부·순공 타이머를
- * 모두 멈추므로 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY)는 순공 타이머만 멈추므로
+ * 모두 멈추므로 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY/SLEEP)는 순공 타이머만 멈추므로
  * focusSec 배분에서만 빠진다.
  */
 final class StudySessionSplitter {
