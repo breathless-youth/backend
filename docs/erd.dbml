@@ -76,6 +76,8 @@ Table study_subject {
   id bigint [primary key, increment]
   user_id bigint [ref: > users.id, not null]
   name varchar(50) [not null]
+  sort_order integer [not null, default: 0]   // 목록 정렬 — PUT /api/subjects/order가 0..n-1로 다시 매기고 새 과목은 살아있는 max+1 (ADR-0022)
+  color_index integer [not null, default: 0]  // 0..19, 생성 시 그 사용자의 살아있는 과목이 가장 적게 쓴 인덱스를 배정, 이후 불변
   deleted_at timestamptz         // soft delete — 지워도 세션 시간 기록은 남는다
   created_at timestamptz [not null]
   updated_at timestamptz [not null]
@@ -109,6 +111,17 @@ Table study_session_subject_time {
   indexes {
     (session_id)
     (subject_id)   // 과목 누적 = 합
+  }
+}
+
+Table study_session_task_done {
+  session_id bigint [ref: > study_session.id, not null]   // ON DELETE CASCADE — 세션과 함께 사라진다
+  task_id bigint [ref: > study_task.id, not null]         // 지운 할 일의 기록도 남는다(CASCADE 없음)
+  Note: '세션 제출 시 완료한 할 일 (ADR-0022). 자정 분할이면 done_at이 속한 조각 하나에만 붙고, 없거나 범위 밖이면 마지막 조각'
+
+  indexes {
+    (session_id, task_id) [pk]
+    (task_id) [name: 'idx_study_session_task_done_task']
   }
 }
 
