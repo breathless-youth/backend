@@ -1,4 +1,4 @@
-package project.study.user.service;
+package project.study.dday.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -18,14 +18,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.common.exception.BadRequestException;
-import project.study.user.dto.DdayRequest;
-import project.study.user.dto.DdayResponse;
-import project.study.user.entity.UserDday;
-import project.study.user.repository.UserDdayRepository;
+import project.study.dday.dto.DdayRequest;
+import project.study.dday.dto.DdayResponse;
+import project.study.dday.entity.Dday;
+import project.study.dday.repository.DdayRepository;
 
-/** 오늘 경계(Asia/Seoul)와 upsert 분기의 순수 규칙 — 저장 경로는 UserDdayApiTest가 검증한다. */
+/** 오늘 경계(Asia/Seoul)와 upsert 분기의 순수 규칙 — 저장 경로는 DdayApiTest가 검증한다. */
 @ExtendWith(MockitoExtension.class)
-class UserDdayServiceTest {
+class DdayServiceTest {
 
     // 고정 현재 시각: UTC로는 아직 09-22이지만 KST로는 09-23 01:00 — 경계는 KST 날짜를 따라야 한다
     private static final Instant NOW = Instant.parse("2026-09-22T16:00:00Z");
@@ -33,13 +33,13 @@ class UserDdayServiceTest {
     private static final LocalDate TODAY_KST = LocalDate.of(2026, 9, 23);
 
     @Mock
-    private UserDdayRepository ddayRepository;
+    private DdayRepository ddayRepository;
 
-    private UserDdayService service;
+    private DdayService service;
 
     @BeforeEach
     void setUp() {
-        service = new UserDdayService(ddayRepository, CLOCK);
+        service = new DdayService(ddayRepository, CLOCK);
     }
 
     @Test
@@ -66,7 +66,7 @@ class UserDdayServiceTest {
 
     @Test
     void 이미_있으면_새로_만들지_않고_덮어쓴다() {
-        UserDday existing = new UserDday(1L, "수능", TODAY_KST.plusDays(10));
+        Dday existing = new Dday(1L, "수능", TODAY_KST.plusDays(10));
         when(ddayRepository.findByUserId(1L)).thenReturn(Optional.of(existing));
 
         DdayResponse saved = service.save(1L, new DdayRequest("토익", TODAY_KST.plusDays(30)));

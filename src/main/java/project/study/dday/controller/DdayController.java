@@ -1,4 +1,4 @@
-package project.study.user.controller;
+package project.study.dday.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -20,21 +20,21 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
-import project.study.user.dto.DdayRequest;
-import project.study.user.dto.DdayResponse;
-import project.study.user.service.UserDdayService;
+import project.study.dday.dto.DdayRequest;
+import project.study.dday.dto.DdayResponse;
+import project.study.dday.service.DdayService;
 
-@Tag(name = "UserDday", description = """
+@Tag(name = "Dday", description = """
                 홈 좌상단 D-Day API. 유저당 1개(제목 + 목표 날짜)라 목록 없이 단일 자원으로 다룬다. \
                 남은 일수(D-N)는 서버가 내려주지 않고 클라이언트가 기기 날짜로 계산한다.
 
                 구 앱 대응이 없는 새 경로라 `API-Version: 1`(기본버전)이고, 인증은 그대로 토큰이 필요하다 (ADR-0015).""")
 @RestController
-@RequestMapping(value = "/api/users/me/dday", version = "1")
+@RequestMapping(value = "/api/dday", version = "1")
 @RequiredArgsConstructor
-public class UserDdayController {
+public class DdayController {
 
-    private final UserDdayService ddayService;
+    private final DdayService ddayService;
 
     @Operation(summary = "내 D-Day 조회", description = "설정한 D-Day가 없으면 본문 없이 204.")
     @ApiResponse(responseCode = "200", description = "제목·목표 날짜")

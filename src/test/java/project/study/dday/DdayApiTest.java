@@ -1,4 +1,4 @@
-package project.study.user;
+package project.study.dday;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.support.AuthTestSupport.asUser;
@@ -18,13 +18,13 @@ import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
 
-/** 홈 D-Day API — upsert·조회·멱등 삭제·검증·유저 격리. 오늘 경계는 UserDdayServiceTest가 고정 시계로 검증한다. */
+/** 홈 D-Day API — upsert·조회·멱등 삭제·검증·유저 격리. 오늘 경계는 DdayServiceTest가 고정 시계로 검증한다. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-class UserDdayApiTest {
+class DdayApiTest {
 
-    private static final String URI = "/api/users/me/dday";
+    private static final String URI = "/api/dday";
 
     /** 구 앱 대응이 없는 새 경로라 기본버전(1)에 매핑돼 있다 — asUser가 붙이는 2를 덮어써야 라우팅된다. */
     private static final String DDAY_API_VERSION = "1";

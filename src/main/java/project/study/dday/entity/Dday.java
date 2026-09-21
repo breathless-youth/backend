@@ -1,4 +1,4 @@
-package project.study.user.entity;
+package project.study.dday.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,7 +17,7 @@ import project.study.common.BaseTimeEntity;
 @Table(name = "user_dday")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class UserDday extends BaseTimeEntity {
+public class Dday extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -33,7 +33,7 @@ public class UserDday extends BaseTimeEntity {
     @Column(name = "target_date", nullable = false)
     private LocalDate targetDate;
 
-    public UserDday(Long userId, String title, LocalDate targetDate) {
+    public Dday(Long userId, String title, LocalDate targetDate) {
         this.userId = userId;
         this.title = title;
         this.targetDate = targetDate;

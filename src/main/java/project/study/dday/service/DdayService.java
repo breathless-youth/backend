@@ -1,4 +1,4 @@
-package project.study.user.service;
+package project.study.dday.service;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -8,24 +8,24 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
-import project.study.user.dto.DdayRequest;
-import project.study.user.dto.DdayResponse;
-import project.study.user.entity.UserDday;
-import project.study.user.repository.UserDdayRepository;
+import project.study.dday.dto.DdayRequest;
+import project.study.dday.dto.DdayResponse;
+import project.study.dday.entity.Dday;
+import project.study.dday.repository.DdayRepository;
 
 /** 홈 D-Day 조회·upsert·삭제. 유저당 1개라 목록·소유 검증이 없고 userId 하나로 끝난다. */
 @Service
 @RequiredArgsConstructor
-public class UserDdayService {
+public class DdayService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-    private final UserDdayRepository ddayRepository;
+    private final DdayRepository ddayRepository;
     private final Clock clock;
 
     @Transactional(readOnly = true)
     public Optional<DdayResponse> find(Long userId) {
-        return ddayRepository.findByUserId(userId).map(UserDdayService::toResponse);
+        return ddayRepository.findByUserId(userId).map(DdayService::toResponse);
     }
 
     /** 있으면 덮어쓰고 없으면 만든다 — 유저당 1개라 upsert 하나면 충분하다. */
@@ -36,13 +36,13 @@ public class UserDdayService {
             throw new BadRequestException("목표 날짜는 오늘 이후여야 합니다");
         }
         String title = request.title().strip();
-        UserDday dday = ddayRepository
+        Dday dday = ddayRepository
                 .findByUserId(userId)
                 .map(existing -> {
                     existing.update(title, request.targetDate());
                     return existing;
                 })
-                .orElseGet(() -> ddayRepository.save(new UserDday(userId, title, request.targetDate())));
+                .orElseGet(() -> ddayRepository.save(new Dday(userId, title, request.targetDate())));
         return toResponse(dday);
     }
 
@@ -52,7 +52,7 @@ public class UserDdayService {
         ddayRepository.deleteByUserId(userId);
     }
 
-    private static DdayResponse toResponse(UserDday dday) {
+    private static DdayResponse toResponse(Dday dday) {
         return new DdayResponse(dday.getTitle(), dday.getTargetDate());
     }
 }
