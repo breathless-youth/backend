@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
+import project.study.user.jwt.JwtUtil;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -37,7 +38,10 @@ class ApiVersionApiTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    /** 토큰 계약(API-Version: 2)으로 등록해 userId와 access 토큰을 얻는다. */
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    /** 토큰 계약(API-Version: 2)으로 등록해 응답 JSON(isNew·토큰 쌍)을 얻는다. */
     private JsonNode registerV2() {
         MvcTestResult result = mvc.post()
                 .uri("/api/users")
@@ -49,16 +53,21 @@ class ApiVersionApiTest {
         return objectMapper.readTree(result.getResponse().getContentAsByteArray());
     }
 
+    // v2 응답에는 userId가 없다 — FE처럼 access 토큰의 sub에서 읽는다 (BY-715)
+    private long registerV2UserId() {
+        return Long.parseLong(jwtUtil.getUserId(registerV2().get("accessToken").asString()));
+    }
+
     @Test
     void 버전_헤더가_없으면_기본버전_1로_해석되어_구_앱_핸들러에_라우팅된다() {
-        long userId = registerV2().get("userId").asLong();
+        long userId = registerV2UserId();
 
         assertThat(mvc.get().uri("/api/users/" + userId + "/profile")).hasStatusOk();
     }
 
     @Test
     void 버전_1을_명시해도_헤더_없는_요청과_동일하게_라우팅된다() {
-        long userId = registerV2().get("userId").asLong();
+        long userId = registerV2UserId();
 
         assertThat(mvc.get().uri("/api/users/" + userId + "/profile").header(API_VERSION, "1"))
                 .hasStatusOk();
@@ -66,7 +75,7 @@ class ApiVersionApiTest {
 
     @Test
     void 버전_2는_토큰_계약_핸들러에_라우팅된다() {
-        long userId = registerV2().get("userId").asLong();
+        long userId = registerV2UserId();
 
         assertThat(mvc.get().uri("/api/users/me/profile").with(asUser(userId))).hasStatusOk();
     }
@@ -82,7 +91,7 @@ class ApiVersionApiTest {
 
     @Test
     void 지원하지_않는_버전이면_400이다() {
-        long userId = registerV2().get("userId").asLong();
+        long userId = registerV2UserId();
 
         assertThat(mvc.get()
                         .uri("/api/users/me/profile")
@@ -93,7 +102,7 @@ class ApiVersionApiTest {
 
     @Test
     void 파싱할_수_없는_버전이면_400이다() {
-        long userId = registerV2().get("userId").asLong();
+        long userId = registerV2UserId();
 
         assertThat(mvc.get()
                         .uri("/api/users/me/profile")

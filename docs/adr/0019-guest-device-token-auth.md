@@ -16,7 +16,8 @@ ADR-0013으로 소셜 로그인과 JWT를 재도입했다가 2026-09-06 사업 �
    refresh는 opaque UUID(30일, SHA-256 해시만 저장, 1회용 회전, 사용된 토큰이 다시 오면 탈취
    의심으로 그 유저의 refresh 전량 폐기). 코드는 파킹돼 있던 것을 되살렸다(refresh 회전은
    `feature/BY-383-auth-contract`의 하드닝 버전).
-2. **발급 진입점은 `POST /api/users` 하나.** 응답이 `{userId, isNew, accessToken, refreshToken}`.
+2. **발급 진입점은 `POST /api/users` 하나.** 응답이 `{isNew, accessToken, refreshToken}`
+   (BY-715, 2026-09-21: 처음엔 `userId`도 실었으나 FE가 access 토큰 `sub`에서 읽기로 해 제거했다).
    별도 login API는 없다. 같은 deviceId 재등록은 그 유저의 refresh를 **전량 폐기하고 새 쌍**을
    준다 — DEVICE 유저는 기기 하나라는 전제라 재등록이 곧 다른 곳의 토큰 무효화다. 회전(refresh)은
    재사용 감지용 tombstone을 남겨야 하므로 이 폐기 경로를 쓰지 않는다. 토큰 발급 합성은 컨트롤러가
