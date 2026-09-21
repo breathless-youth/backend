@@ -48,23 +48,22 @@ class SubjectTimeSplitTest {
         service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
     }
 
-    private static StudySessionSubjectTime time(long subjectId, Long taskId, int studySec, int focusSec) {
-        return new StudySessionSubjectTime(subjectId, taskId, studySec, focusSec);
+    private static StudySessionSubjectTime time(long subjectId, int studySec, int focusSec) {
+        return new StudySessionSubjectTime(subjectId, studySec, focusSec);
     }
 
     @Test
     void 자정을_넘지_않으면_항목_시간이_그대로_한_조각에_담긴다() {
         List<StudySession> sessions = service.validateAndBuildSessions(
-                1L, START, END, 7200, 6000, List.of(), List.of(time(1, 5L, 4000, 3500), time(2, null, 2000, 1800)));
+                1L, START, END, 7200, 6000, List.of(), List.of(time(1, 4000, 3500), time(2, 2000, 1800)));
 
         assertThat(sessions).hasSize(1);
         assertThat(sessions.get(0).getSubjectTimes())
                 .extracting(
                         StudySessionSubjectTime::getSubjectId,
-                        StudySessionSubjectTime::getTaskId,
                         StudySessionSubjectTime::getStudySec,
                         StudySessionSubjectTime::getFocusSec)
-                .containsExactly(tuple(1L, 5L, 4000, 3500), tuple(2L, null, 2000, 1800));
+                .containsExactly(tuple(1L, 4000, 3500), tuple(2L, 2000, 1800));
     }
 
     @Test
@@ -77,13 +76,7 @@ class SubjectTimeSplitTest {
     @Test
     void 자정을_넘으면_항목_시간도_조각_길이에_비례해_나뉘고_합이_보존된다() {
         List<StudySession> sessions = service.validateAndBuildSessions(
-                1L,
-                CROSS_START,
-                CROSS_END,
-                7200,
-                6000,
-                List.of(),
-                List.of(time(1, null, 6000, 5000), time(2, 7L, 1200, 600)));
+                1L, CROSS_START, CROSS_END, 7200, 6000, List.of(), List.of(time(1, 6000, 5000), time(2, 1200, 600)));
 
         assertThat(sessions).hasSize(2);
         assertThat(sessions.get(0).getSubjectTimes())
@@ -92,10 +85,9 @@ class SubjectTimeSplitTest {
         assertThat(sessions.get(1).getSubjectTimes())
                 .extracting(
                         StudySessionSubjectTime::getSubjectId,
-                        StudySessionSubjectTime::getTaskId,
                         StudySessionSubjectTime::getStudySec,
                         StudySessionSubjectTime::getFocusSec)
-                .containsExactly(tuple(1L, null, 3000, 2500), tuple(2L, 7L, 600, 300));
+                .containsExactly(tuple(1L, 3000, 2500), tuple(2L, 600, 300));
     }
 
     @Test
@@ -105,7 +97,7 @@ class SubjectTimeSplitTest {
                 EventStatus.PAUSE, Instant.parse("2026-07-23T14:30:00Z"), Instant.parse("2026-07-23T15:00:00Z"));
 
         List<StudySession> sessions = service.validateAndBuildSessions(
-                1L, CROSS_START, CROSS_END, 5400, 5400, List.of(pause), List.of(time(1, null, 5400, 5400)));
+                1L, CROSS_START, CROSS_END, 5400, 5400, List.of(pause), List.of(time(1, 5400, 5400)));
 
         assertThat(sessions.get(0).getStudySec()).isEqualTo(1800);
         assertThat(sessions.get(0).getSubjectTimes().get(0).getStudySec()).isEqualTo(1800);
@@ -117,7 +109,7 @@ class SubjectTimeSplitTest {
     @Test
     void 조각_몫이_0인_항목은_행을_만들지_않는다() {
         List<StudySession> sessions = service.validateAndBuildSessions(
-                1L, CROSS_START, CROSS_END, 7200, 6000, List.of(), List.of(time(1, null, 1, 1)));
+                1L, CROSS_START, CROSS_END, 7200, 6000, List.of(), List.of(time(1, 1, 1)));
 
         assertThat(sessions.get(0).getSubjectTimes()).isEmpty();
         assertThat(sessions.get(1).getSubjectTimes())
@@ -127,7 +119,7 @@ class SubjectTimeSplitTest {
 
     @Test
     void 항목_총공부_합이_세션_총공부를_넘으면_거절한다() {
-        List<StudySessionSubjectTime> over = List.of(time(1, null, 5000, 4000), time(2, null, 3000, 2000));
+        List<StudySessionSubjectTime> over = List.of(time(1, 5000, 4000), time(2, 3000, 2000));
 
         assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, END, 7200, 6000, List.of(), over))
                 .isInstanceOf(InvalidSessionException.class)
@@ -136,7 +128,7 @@ class SubjectTimeSplitTest {
 
     @Test
     void 항목_순공이_항목_총공부를_넘으면_거절한다() {
-        List<StudySessionSubjectTime> bad = List.of(time(1, null, 1000, 1001));
+        List<StudySessionSubjectTime> bad = List.of(time(1, 1000, 1001));
 
         assertThatThrownBy(() -> service.validateAndBuildSessions(1L, START, END, 7200, 6000, List.of(), bad))
                 .isInstanceOf(InvalidSessionException.class)

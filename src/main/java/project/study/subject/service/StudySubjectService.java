@@ -9,7 +9,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
@@ -82,7 +81,7 @@ public class StudySubjectService {
             throw new BadRequestException("할 일은 과목당 최대 " + MAX_TASKS_PER_SUBJECT + "개까지 만들 수 있습니다");
         }
         StudyTask task = taskRepository.save(new StudyTask(subjectId, name.strip()));
-        return new TaskResponse(task.getId(), task.getName(), task.getDoneAt(), 0, 0);
+        return new TaskResponse(task.getId(), task.getName(), task.getDoneAt());
     }
 
     @Transactional
@@ -103,7 +102,7 @@ public class StudySubjectService {
         } else if (Boolean.FALSE.equals(request.done())) {
             task.clearDone();
         }
-        return toTaskResponse(task, sumsByTask(List.of(taskId)));
+        return toTaskResponse(task);
     }
 
     @Transactional
@@ -128,21 +127,6 @@ public class StudySubjectService {
         if (!owned.containsAll(subjectIds)) {
             throw new BadRequestException("사용자의 과목이 아닙니다");
         }
-        Set<Long> taskIds = times.stream()
-                .map(SubjectTimeRequest::taskId)
-                .filter(Objects::nonNull)
-                .collect(toSet());
-        if (taskIds.isEmpty()) {
-            return;
-        }
-        Map<Long, Long> subjectOfTask =
-                taskRepository.findByIdIn(taskIds).stream().collect(toMap(StudyTask::getId, StudyTask::getSubjectId));
-        boolean allMatch = times.stream()
-                .filter(t -> t.taskId() != null)
-                .allMatch(t -> t.subjectId().equals(subjectOfTask.get(t.taskId())));
-        if (!allMatch) {
-            throw new BadRequestException("할 일이 그 과목의 것이 아닙니다");
-        }
     }
 
     private StudySubject ownedSubject(Long userId, Long subjectId) {
@@ -157,7 +141,7 @@ public class StudySubjectService {
                 .orElseThrow(() -> new NotFoundException("할 일을 찾을 수 없습니다"));
     }
 
-    /** 과목별 응답 조립 — 오늘(KST) 기준으로 보이는 할 일과 누적 시간을 붙인다. */
+    /** 과목별 응답 조립 — 오늘(KST) 기준으로 보이는 할 일과 과목 누적 시간을 붙인다. */
     private List<SubjectResponse> toResponses(List<StudySubject> subjects) {
         if (subjects.isEmpty()) {
             return List.of();
@@ -168,16 +152,12 @@ public class StudySubjectService {
         Map<Long, List<StudyTask>> tasksBySubject = taskRepository.findVisible(subjectIds, todayStart).stream()
                 .collect(groupingBy(StudyTask::getSubjectId));
         Map<Long, SubjectTimeSum> subjectSums = index(subjectTimeRepository.sumBySubjectIds(subjectIds));
-        Map<Long, SubjectTimeSum> taskSums = sumsByTask(tasksBySubject.values().stream()
-                .flatMap(List::stream)
-                .map(StudyTask::getId)
-                .toList());
 
         return subjects.stream()
                 .map(subject -> {
                     SubjectTimeSum sum = subjectSums.getOrDefault(subject.getId(), SubjectTimeSum.ZERO);
                     List<TaskResponse> tasks = tasksBySubject.getOrDefault(subject.getId(), List.of()).stream()
-                            .map(task -> toTaskResponse(task, taskSums))
+                            .map(StudySubjectService::toTaskResponse)
                             .toList();
                     return new SubjectResponse(
                             subject.getId(), subject.getName(), sum.studySec(), sum.focusSec(), tasks);
@@ -185,16 +165,11 @@ public class StudySubjectService {
                 .toList();
     }
 
-    private Map<Long, SubjectTimeSum> sumsByTask(List<Long> taskIds) {
-        return taskIds.isEmpty() ? Map.of() : index(subjectTimeRepository.sumByTaskIds(taskIds));
-    }
-
     private static Map<Long, SubjectTimeSum> index(List<SubjectTimeSum> sums) {
         return sums.stream().collect(toMap(SubjectTimeSum::id, Function.identity()));
     }
 
-    private static TaskResponse toTaskResponse(StudyTask task, Map<Long, SubjectTimeSum> sums) {
-        SubjectTimeSum sum = sums.getOrDefault(task.getId(), SubjectTimeSum.ZERO);
-        return new TaskResponse(task.getId(), task.getName(), task.getDoneAt(), sum.studySec(), sum.focusSec());
+    private static TaskResponse toTaskResponse(StudyTask task) {
+        return new TaskResponse(task.getId(), task.getName(), task.getDoneAt());
     }
 }

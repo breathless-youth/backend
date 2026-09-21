@@ -167,9 +167,7 @@ final class StudySessionSplitter {
                 allocatedStudy += study;
                 allocatedFocus += focus;
                 if (study > 0 || focus > 0) {
-                    result.get(i)
-                            .add(new StudySessionSubjectTime(
-                                    time.getSubjectId(), time.getTaskId(), (int) study, (int) focus));
+                    result.get(i).add(new StudySessionSubjectTime(time.getSubjectId(), (int) study, (int) focus));
                 }
             }
         }

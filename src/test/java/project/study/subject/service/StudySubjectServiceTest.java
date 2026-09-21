@@ -1,10 +1,8 @@
 package project.study.subject.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -78,37 +76,8 @@ class StudySubjectServiceTest {
     void 다른_사용자의_과목이_섞이면_소유_검증이_거절한다() {
         when(subjectRepository.findByIdInAndUserId(Set.of(5L), 1L)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.assertOwned(1L, List.of(new SubjectTimeRequest(5L, null, 100, 90))))
+        assertThatThrownBy(() -> service.assertOwned(1L, List.of(new SubjectTimeRequest(5L, 100, 90))))
                 .isInstanceOf(BadRequestException.class);
-    }
-
-    @Test
-    void 할_일이_다른_과목_소속이면_거절한다() {
-        StudySubject owned = mock(StudySubject.class);
-        when(owned.getId()).thenReturn(5L);
-        when(subjectRepository.findByIdInAndUserId(Set.of(5L), 1L)).thenReturn(List.of(owned));
-        StudyTask task = mock(StudyTask.class);
-        when(task.getId()).thenReturn(9L);
-        when(task.getSubjectId()).thenReturn(6L);
-        when(taskRepository.findByIdIn(Set.of(9L))).thenReturn(List.of(task));
-
-        assertThatThrownBy(() -> service.assertOwned(1L, List.of(new SubjectTimeRequest(5L, 9L, 100, 90))))
-                .isInstanceOf(BadRequestException.class);
-    }
-
-    @Test
-    void 과목과_할_일이_모두_사용자의_것이면_통과한다() {
-        StudySubject owned = mock(StudySubject.class);
-        when(owned.getId()).thenReturn(5L);
-        when(subjectRepository.findByIdInAndUserId(Set.of(5L), 1L)).thenReturn(List.of(owned));
-        StudyTask task = mock(StudyTask.class);
-        when(task.getId()).thenReturn(9L);
-        when(task.getSubjectId()).thenReturn(5L);
-        when(taskRepository.findByIdIn(Set.of(9L))).thenReturn(List.of(task));
-
-        assertThatCode(() -> service.assertOwned(
-                        1L, List.of(new SubjectTimeRequest(5L, 9L, 100, 90), new SubjectTimeRequest(5L, null, 50, 40))))
-                .doesNotThrowAnyException();
     }
 
     @Test
@@ -117,7 +86,6 @@ class StudySubjectServiceTest {
                 .thenReturn(Optional.of(new StudySubject(1L, "수학")));
         StudyTask task = new StudyTask(5L, "3단원");
         when(taskRepository.findByIdAndSubjectIdAndDeletedAtIsNull(9L, 5L)).thenReturn(Optional.of(task));
-        when(subjectTimeRepository.sumByTaskIds(List.of(9L))).thenReturn(List.of());
 
         service.updateTask(1L, 5L, 9L, new TaskUpdateRequest(null, true));
         assertThat(task.getDoneAt()).isEqualTo(NOW);

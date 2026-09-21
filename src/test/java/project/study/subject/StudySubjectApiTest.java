@@ -107,7 +107,7 @@ class StudySubjectApiTest {
                 .hasPathSatisfying("$.length()", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying("$[0].tasks.length()", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying("$[0].tasks[0].name", v -> assertThat(v).isEqualTo("3단원 문제풀기"))
-                .hasPathSatisfying("$[0].tasks[0].studySec", v -> assertThat(v).isEqualTo(0));
+                .hasPathSatisfying("$[0].tasks[0].name", v -> assertThat(v).isEqualTo("3단원 문제풀기"));
     }
 
     @Test
