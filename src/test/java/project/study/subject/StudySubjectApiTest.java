@@ -5,7 +5,13 @@ import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,9 +25,11 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
+import project.study.subject.dto.SubjectResponse;
+import project.study.subject.service.StudySubjectService;
 import tools.jackson.databind.ObjectMapper;
 
-/** BY-698 과목 > 할 일 API — 생성·완료 노출 규칙·soft delete·소유·상한. 누적 합산은 StudySessionSubjectTimeApiTest. */
+/** BY-698 과목 > 할 일 API — 생성·완료 노출 규칙·soft delete·소유·상한, BY-724 순서 저장·색 배정. 누적 합산은 StudySessionSubjectTimeApiTest. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
@@ -35,6 +43,9 @@ class StudySubjectApiTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private StudySubjectService subjectService;
 
     /** 과목 API는 기본버전(1)에 매핑돼 있다 — asUser가 붙이는 2를 덮어써야 라우팅된다. */
     private static final String SUBJECT_API_VERSION = "1";
@@ -79,6 +90,16 @@ class StudySubjectApiTest {
                 .exchange();
     }
 
+    private MvcTestResult putJson(String uri, String body) {
+        return mvc.put()
+                .uri(uri)
+                .header(ApiVersionConfig.HEADER, SUBJECT_API_VERSION)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(asUser(userId))
+                .exchange();
+    }
+
     private MvcTestResult list() {
         return mvc.get()
                 .uri("/api/subjects")
@@ -92,6 +113,22 @@ class StudySubjectApiTest {
                 .readTree(result.getResponse().getContentAsByteArray())
                 .get("id")
                 .asLong();
+    }
+
+    private List<Long> idsOf(MvcTestResult result) {
+        List<Long> ids = new ArrayList<>();
+        objectMapper
+                .readTree(result.getResponse().getContentAsByteArray())
+                .forEach(node -> ids.add(node.get("id").asLong()));
+        return ids;
+    }
+
+    private MvcTestResult deleteSubject(long subjectId) {
+        return mvc.delete()
+                .uri("/api/subjects/" + subjectId)
+                .header(ApiVersionConfig.HEADER, SUBJECT_API_VERSION)
+                .with(asUser(userId))
+                .exchange();
     }
 
     @Test
@@ -190,5 +227,99 @@ class StudySubjectApiTest {
     @Test
     void 이름이_공백이면_400이다() {
         assertThat(postJson("/api/subjects", "{\"name\": \"   \"}")).hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void 순서를_저장하면_목록이_그_순서로_내려오고_새_과목은_맨_뒤에_붙는다() {
+        long a = idOf(postJson("/api/subjects", "{\"name\": \"국어\"}"));
+        long b = idOf(postJson("/api/subjects", "{\"name\": \"수학\"}"));
+        long c = idOf(postJson("/api/subjects", "{\"name\": \"영어\"}"));
+
+        MvcTestResult reordered = putJson("/api/subjects/order", "{\"subjectIds\": [%d, %d, %d]}".formatted(c, a, b));
+        assertThat(reordered).hasStatusOk();
+        assertThat(idsOf(reordered)).containsExactly(c, a, b);
+        assertThat(idsOf(list())).containsExactly(c, a, b);
+
+        long d = idOf(postJson("/api/subjects", "{\"name\": \"탐구\"}"));
+        assertThat(idsOf(list())).containsExactly(c, a, b, d);
+    }
+
+    @Test
+    void 순서에서_빠진_과목은_기존_순서대로_뒤에_붙는다() {
+        long a = idOf(postJson("/api/subjects", "{\"name\": \"국어\"}"));
+        long b = idOf(postJson("/api/subjects", "{\"name\": \"수학\"}"));
+        long c = idOf(postJson("/api/subjects", "{\"name\": \"영어\"}"));
+
+        assertThat(putJson("/api/subjects/order", "{\"subjectIds\": [%d]}".formatted(c)))
+                .hasStatusOk();
+
+        assertThat(idsOf(list())).containsExactly(c, a, b);
+    }
+
+    @Test
+    void 순서에_남의_과목이나_중복이_섞이면_400이고_순서는_바뀌지_않는다() {
+        long a = idOf(postJson("/api/subjects", "{\"name\": \"국어\"}"));
+        long b = idOf(postJson("/api/subjects", "{\"name\": \"수학\"}"));
+        Long other = insertSubject(insertUser(), "남의 과목");
+
+        assertThat(putJson("/api/subjects/order", "{\"subjectIds\": [%d, %d]}".formatted(other, b)))
+                .hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(putJson("/api/subjects/order", "{\"subjectIds\": [%d, %d]}".formatted(b, b)))
+                .hasStatus(HttpStatus.BAD_REQUEST);
+
+        assertThat(idsOf(list())).containsExactly(a, b);
+    }
+
+    @Test
+    void 같은_사용자가_동시에_만들어도_색과_순서가_겹치지_않는다() throws Exception {
+        // 사용자 락이 없으면 두 트랜잭션이 같은 빈 목록을 읽어 둘 다 색 0·순서 0을 받는다
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch go = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<SubjectResponse>> results = new ArrayList<>();
+            for (String name : List.of("국어", "수학")) {
+                results.add(pool.submit(() -> {
+                    ready.countDown();
+                    go.await();
+                    return subjectService.create(userId, name);
+                }));
+            }
+            ready.await();
+            go.countDown();
+            List<Integer> colors = new ArrayList<>();
+            for (Future<SubjectResponse> result : results) {
+                colors.add(result.get().colorIndex());
+            }
+            assertThat(colors).containsExactlyInAnyOrder(0, 1);
+        } finally {
+            pool.shutdownNow();
+        }
+        List<Integer> sortOrders = jdbcTemplate.queryForList(
+                "SELECT sort_order FROM study_subject WHERE user_id = ? ORDER BY sort_order", Integer.class, userId);
+        assertThat(sortOrders).containsExactly(0, 1);
+    }
+
+    @Test
+    void 과목_색은_덜_쓴_인덱스를_받고_지운_과목의_색은_다시_쓰인다() {
+        MvcTestResult first = postJson("/api/subjects", "{\"name\": \"국어\"}");
+        long b = idOf(postJson("/api/subjects", "{\"name\": \"수학\"}"));
+        MvcTestResult third = postJson("/api/subjects", "{\"name\": \"영어\"}");
+        assertThat(first)
+                .bodyJson()
+                .hasPathSatisfying("$.colorIndex", v -> assertThat(v).isEqualTo(0));
+        assertThat(third)
+                .bodyJson()
+                .hasPathSatisfying("$.colorIndex", v -> assertThat(v).isEqualTo(2));
+
+        assertThat(deleteSubject(b)).hasStatus(HttpStatus.NO_CONTENT);
+
+        // 색 1이 풀렸으니 다음 과목은 1 — 목록 색도 그대로 내려온다
+        assertThat(postJson("/api/subjects", "{\"name\": \"탐구\"}"))
+                .bodyJson()
+                .hasPathSatisfying("$.colorIndex", v -> assertThat(v).isEqualTo(1));
+        assertThat(list())
+                .bodyJson()
+                .hasPathSatisfying("$[2].colorIndex", v -> assertThat(v).isEqualTo(1));
     }
 }
