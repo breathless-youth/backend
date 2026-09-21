@@ -49,14 +49,27 @@ class ApiVersionSwaggerDocsTest {
     }
 
     @Test
-    void 오퍼레이션의_API_Version_헤더_파라미터는_기본값이_2다() {
-        // springdoc은 Spring 기본버전(1 → "1.0.0")을 기본값으로 싣는다 — Swagger UI에서 그대로 보내면 구 앱 핸들러로 가서 400이다
+    void 오퍼레이션의_API_Version_헤더_파라미터_기본값은_그_엔드포인트의_매핑_버전이다() {
+        // springdoc은 Spring 기본버전(1 → "1.0.0")을 일괄 기본값으로 싣는다 — 구 앱 대응 경로는 2, 새 경로는 1로 갈라야
+        // Swagger UI에서 그대로 보내도 맞는 핸들러로 간다 (ADR-0015 갱신). 값은 실제 매핑에서 읽으므로 하드코딩 목록이 없다
         assertThat(mvc.get().uri(API_DOCS))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying(
                         "$.paths['/api/rooms'].post.parameters[?(@.name=='API-Version')].schema.default",
                         v -> assertThat(v).asList().containsExactly("2"))
+                .hasPathSatisfying(
+                        "$.paths['/api/stats/streak'].get.parameters[?(@.name=='API-Version')].schema.default",
+                        v -> assertThat(v).asList().containsExactly("2"))
+                .hasPathSatisfying(
+                        "$.paths['/api/stats/study-days'].get.parameters[?(@.name=='API-Version')].schema.default",
+                        v -> assertThat(v).asList().containsExactly("1"))
+                .hasPathSatisfying(
+                        "$.paths['/api/subjects'].get.parameters[?(@.name=='API-Version')].schema.default",
+                        v -> assertThat(v).asList().containsExactly("1"))
+                .hasPathSatisfying(
+                        "$.paths['/api/auth/refresh'].post.parameters[?(@.name=='API-Version')].schema.default",
+                        v -> assertThat(v).asList().containsExactly("1"))
                 .hasPathSatisfying(
                         "$.paths['/api/users/me/profile'].get.parameters[?(@.name=='API-Version')].required",
                         v -> assertThat(v).asList().containsExactly(true));
@@ -68,6 +81,6 @@ class ApiVersionSwaggerDocsTest {
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying(
-                        "$.info.description", v -> assertThat(v).asString().contains("API-Version: 2"));
+                        "$.info.description", v -> assertThat(v).asString().contains("엔드포인트 단위"));
     }
 }

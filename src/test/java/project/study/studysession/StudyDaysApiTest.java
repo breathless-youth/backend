@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import project.study.TestcontainersConfiguration;
+import project.study.config.ApiVersionConfig;
 
 /**
  * 누적 공부일(GET /api/stats/study-days) — 가입 이후 순공시간 1분 이상 세션이 하루라도 있었던 날의 수 (BY-645).
@@ -76,8 +77,12 @@ class StudyDaysApiTest {
         assertThat(submitRequest(user, startedAt, durationSec)).hasStatus(HttpStatus.CREATED);
     }
 
+    // 구 앱 대응이 없는 새 경로라 기본버전 1이다 — asUser의 기본 헤더(2)를 덮는다 (ADR-0015 갱신)
     private MockMvcTester.MockMvcRequestBuilder studyDays(Long user) {
-        return mvc.get().uri("/api/stats/study-days").with(asUser(user));
+        return mvc.get()
+                .uri("/api/stats/study-days")
+                .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
+                .with(asUser(user));
     }
 
     @Test

@@ -54,7 +54,8 @@ public class AuthController {
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
     @SecurityRequirements // access가 만료된 상태에서 부르므로 인증 없이 열려 있다
-    @PostMapping("/refresh")
+    // 구 앱(v1.2.x)에 없던 새 경로라 기본버전 1이다 — 깨지는 변경이 생기면 그때 2를 병행한다 (ADR-0015 갱신 2026-09-22)
+    @PostMapping(value = "/refresh", version = "1")
     public TokenResponse refresh(@Valid @RequestBody RefreshRequest request) {
         return authService.refresh(request);
     }

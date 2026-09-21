@@ -38,3 +38,29 @@
   자동 감지되므로 `addSupportedVersions` 명시가 필요 없다
 - 미지원 버전(`API-Version: 99`)·파싱 불가 버전은 매핑 단계에서 거부되어 400
 - 검증: `ApiVersionApiTest`
+
+## 갱신 (2026-09-22) — 새 엔드포인트의 버전 규칙 (BY-721)
+
+병행 기간(ADR-0020)에 새 엔드포인트의 버전이 갈렸다. `GET /api/stats/study-days`는 클래스 레벨
+`version = "2"`를 물려받아 2였고, 과목 API(`/api/subjects`)는 1이었다(ADR-0021). 규칙이 없으니 FE가
+"모든 요청에 2"로 세팅했다가 과목 API에서 400을 맞았다. 규칙을 하나로 정한다.
+
+1. **구 앱(v1.2.x)이 부르던 경로만 `2`다.** 토큰 도입으로 계약이 바뀌어 신·구를 갈라야 하는
+   경로(ADR-0020 표의 등록 + 14개)이고, 헤더 없음/1은 구 앱 어댑터가 받는다.
+2. **구 앱 대응이 없는 새 경로는 기본버전 `1`이다** — `/api/subjects`, `/api/stats/study-days`,
+   `/api/auth/refresh`, 그리고 앞으로 추가되는 모든 엔드포인트. 깨지는 변경이 생기면 그때 그 엔드포인트만 결정 2대로 +1 한다.
+   - 버전 속성을 아예 빼는 대안(모든 버전에 매칭)은 기각 — FE가 아무 값을 보내도 붙지만 Swagger에
+     헤더 파라미터가 실리지 않아 "이 엔드포인트의 버전"이 드러나지 않고, 엔드포인트마다 버전이 있다는
+     모델이 흐려진다.
+   - `POST /api/auth/refresh`도 예외 없이 1이다. ADR-0020 결정 2는 버전 없이(모든 버전 매칭) 뒀지만,
+     "버전 무관"은 두 번째 규칙이 되고 나중에 계약이 바뀔 때 버전 없는 매핑과 2의 공존 규칙을 따로
+     알아야 한다. 1로 두면 다른 API와 같은 expand → 강제 업데이트 → contract 순서를 그대로 탄다.
+3. **버전은 라우팅만 가른다.** 인가는 `SecurityConfig`가 정하므로 버전 1 경로도 구 앱 예외 목록
+   (`LegacyApiRequestMatcher`)에 없으면 토큰이 필요하다.
+4. **FE는 헤더를 전역 인터셉터에 고정하지 않고 API 정의마다 버전을 둔다.** 원본은 Swagger의 각
+   오퍼레이션 `API-Version` 파라미터 기본값이다 — `OpenApiConfig`가 실제 매핑
+   (`RequestMappingHandlerMapping`의 `version` 조건)에서 읽어 넣으므로 손으로 고칠 목록이 없다.
+
+`study-days`를 1로 옮겼다(`StudySessionStatsController`는 메서드 레벨 버전). ADR-0020 결정 1의
+"모든 HTTP 요청에 2"는 "구 앱 대응이 있는 경로에 2"로 읽는다. 검증: `ApiVersionApiTest`(새 경로에 2를
+보내면 400 — study-days·refresh), `ApiVersionSwaggerDocsTest`(문서 기본값이 매핑 버전).
