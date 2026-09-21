@@ -55,7 +55,14 @@ public record StudySessionCreateRequest(
                         + "이하여야 하고 subjectId는 토큰 유저의 과목이어야 한다(위반 400). 자정을 넘는 세션은 조각 길이에 "
                         + "비례해 배분된다")
         @Valid
-        List<SubjectTimeRequest> subjectTimes) {
+        List<SubjectTimeRequest> subjectTimes,
+
+        @Schema(
+                description = "세션 중 완료한 할 일 ID 목록 (ADR-0022). 선택 필드라 없거나 []이면 없음. 토큰 유저의 할 일이어야 하고"
+                        + "(위반 400) 세션 중 지운 할 일은 허용된다. 중복은 한 번으로 본다. 자정을 넘는 세션은 각 할 일이 "
+                        + "완료 시각(doneAt)이 속한 조각 하나에만 붙고, 완료 시각이 없거나 세션 밖이면 마지막 조각에 붙는다",
+                example = "[12, 15]")
+        List<@NotNull Long> completedTaskIds) {
     public List<StatusEvent> getStatusEventList() {
         return this.events().stream().map(StatusEventRequest::toEntity).toList();
     }
@@ -67,5 +74,12 @@ public record StudySessionCreateRequest(
 
     public List<StudySessionSubjectTime> getSubjectTimeList() {
         return subjectTimesOrEmpty().stream().map(SubjectTimeRequest::toEntity).toList();
+    }
+
+    /** 선택 필드라 null이면 빈 목록, 중복은 한 번으로 본다. */
+    public List<Long> completedTaskIdsOrEmpty() {
+        return completedTaskIds == null
+                ? List.of()
+                : completedTaskIds.stream().distinct().toList();
     }
 }

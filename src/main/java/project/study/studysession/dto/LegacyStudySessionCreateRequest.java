@@ -22,6 +22,6 @@ public record LegacyStudySessionCreateRequest(
 
     public StudySessionCreateRequest toRequest() {
         // 구 앱은 과목 시트가 없다 — 항목별 시간은 항상 비어 있다
-        return new StudySessionCreateRequest(startedAt, endedAt, studySec, focusSec, events, null);
+        return new StudySessionCreateRequest(startedAt, endedAt, studySec, focusSec, events, null, null);
     }
 }

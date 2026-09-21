@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.NotFoundException;
+import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.SubjectTimeRequest;
 import project.study.studysession.dto.SubjectTimeSum;
 import project.study.studysession.repository.StudySessionSubjectTimeRepository;
@@ -164,6 +165,25 @@ public class StudySubjectService {
         if (!owned.containsAll(subjectIds)) {
             throw new BadRequestException("사용자의 과목이 아닙니다");
         }
+    }
+
+    /**
+     * 세션 제출의 완료 할 일이 토큰 유저의 것인지 확인하고, 자정 분할 귀속에 쓸 완료 시각을 붙여 돌려준다 (ADR-0022).
+     * 과목(assertOwned)과 같은 이유로 삭제 여부는 보지 않는다. 위반은 400.
+     */
+    @Transactional(readOnly = true)
+    public List<CompletedTask> assertTasksOwned(Long userId, List<Long> taskIds) {
+        if (taskIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> ids = Set.copyOf(taskIds);
+        List<StudyTask> owned = taskRepository.findByIdInAndOwner(ids, userId);
+        if (owned.size() != ids.size()) {
+            throw new BadRequestException("사용자의 할 일이 아닙니다");
+        }
+        return owned.stream()
+                .map(task -> new CompletedTask(task.getId(), task.getDoneAt()))
+                .toList();
     }
 
     private List<StudySubject> liveSubjects(Long userId) {

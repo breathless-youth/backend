@@ -122,7 +122,8 @@ public class ActiveStudySessionService {
                 draft.getStudySec(),
                 draft.getFocusSec(),
                 events,
-                parseSubjectTimes(draft));
+                parseSubjectTimes(draft),
+                null); // 자동 확정본에는 완료 할 일이 없다 — 앱이 최종 제출에만 싣는다 (ADR-0022)
         try {
             studySessionService.create(draft.getUserId(), request, true);
         } catch (DuplicateSessionException e) {

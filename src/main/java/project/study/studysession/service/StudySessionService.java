@@ -19,6 +19,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.NotFoundException;
+import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.StudyDaysResponse;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
@@ -52,9 +53,19 @@ public class StudySessionService {
     private final ActiveStudySessionRepository activeStudySessionRepository;
     private final Clock clock;
 
-    /** autoFinalized=true는 확정 스케줄러 전용 — 저장되는 세션에 자동 확정 표시를 남긴다. */
+    /** autoFinalized=true는 확정 스케줄러 전용 — 저장되는 세션에 자동 확정 표시를 남긴다. 완료 할 일은 없다 (ADR-0022). */
     @Transactional
     public List<StudySessionResponse> create(Long userId, StudySessionCreateRequest request, boolean autoFinalized) {
+        return create(userId, request, List.of(), autoFinalized);
+    }
+
+    /**
+     * completedTasks는 컨트롤러가 StudySubjectService.assertTasksOwned로 검증해 넘긴 값이다 — 서비스는
+     * request.completedTaskIds()를 직접 읽지 않는다(과목 소유 검증과 같은 배치, ADR-0021 §6).
+     */
+    @Transactional
+    public List<StudySessionResponse> create(
+            Long userId, StudySessionCreateRequest request, List<CompletedTask> completedTasks, boolean autoFinalized) {
         List<StudySession> existing = studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
                 userId, request.startedAt());
         if (!existing.isEmpty()) {
@@ -75,7 +86,7 @@ public class StudySessionService {
                 request.studySec(),
                 request.focusSec(),
                 events,
-                request.getSubjectTimeList());
+                new SessionAttachments(request.getSubjectTimeList(), completedTasks));
         if (autoFinalized) {
             sessions.forEach(StudySession::markAutoFinalized);
         }
@@ -178,7 +189,8 @@ public class StudySessionService {
      */
     List<StudySession> validateAndBuildSessions(
             Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
-        return validateAndBuildSessions(userId, startedAt, endedAt, studySec, focusSec, events, List.of());
+        return validateAndBuildSessions(
+                userId, startedAt, endedAt, studySec, focusSec, events, SessionAttachments.NONE);
     }
 
     /** 과목·할 일별 시간(subjectTimes)도 함께 검증하고 조각마다 세션과 같은 가중치로 배분한다 (ADR-0021). */
@@ -190,6 +202,25 @@ public class StudySessionService {
             int focusSec,
             List<StatusEvent> events,
             List<StudySessionSubjectTime> subjectTimes) {
+        return validateAndBuildSessions(
+                userId,
+                startedAt,
+                endedAt,
+                studySec,
+                focusSec,
+                events,
+                new SessionAttachments(subjectTimes, List.of()));
+    }
+
+    /** 완료 할 일(attachments.completedTasks)은 배분하지 않고 완료 시각이 속한 조각에 붙인다 (ADR-0022). */
+    List<StudySession> validateAndBuildSessions(
+            Long userId,
+            Instant startedAt,
+            Instant endedAt,
+            int studySec,
+            int focusSec,
+            List<StatusEvent> events,
+            SessionAttachments attachments) {
         // 분할 후 조각은 항상 24시간 이내가 되므로, 24시간 한도 등은 반드시 분할 전 원본 기준으로 먼저 검증한다
         validatePeriod(startedAt, endedAt, clock.instant());
 
@@ -204,9 +235,10 @@ public class StudySessionService {
         // 조각 이후에 검증
         validateStudySec(studySec, weights.totalStudyActiveSec());
         validateFocusSec(focusSec, studySec);
-        validateSubjectTimes(subjectTimes, studySec);
+        validateSubjectTimes(attachments.subjectTimes(), studySec);
 
-        return buildSessions(userId, cuts, weights, studySec, focusSec, subjectTimes);
+        return buildSessions(
+                userId, cuts, weights, studySec, focusSec, attachments.subjectTimes(), attachments.completedTasks());
     }
 
     /**

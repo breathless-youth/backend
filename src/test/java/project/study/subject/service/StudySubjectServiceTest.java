@@ -22,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import project.study.common.exception.BadRequestException;
+import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.SubjectTimeRequest;
 import project.study.studysession.repository.StudySessionSubjectTimeRepository;
 import project.study.subject.dto.SubjectResponse;
@@ -65,6 +66,12 @@ class StudySubjectServiceTest {
         StudySubject subject = new StudySubject(1L, "과목" + id, sortOrder, colorIndex);
         ReflectionTestUtils.setField(subject, "id", id);
         return subject;
+    }
+
+    private static StudyTask task(long id, long subjectId) {
+        StudyTask task = new StudyTask(subjectId, "할 일" + id);
+        ReflectionTestUtils.setField(task, "id", id);
+        return task;
     }
 
     private void givenLive(List<StudySubject> live) {
@@ -159,6 +166,30 @@ class StudySubjectServiceTest {
 
         assertThatThrownBy(() -> service.assertOwned(1L, List.of(new SubjectTimeRequest(5L, 100, 90))))
                 .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void 다른_사용자의_할_일이_섞이면_완료_할_일_소유_검증이_거절한다() {
+        StudyTask mine = task(9L, 5L);
+        when(taskRepository.findByIdInAndOwner(Set.of(9L, 77L), 1L)).thenReturn(List.of(mine));
+
+        assertThatThrownBy(() -> service.assertTasksOwned(1L, List.of(9L, 77L)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("할 일");
+    }
+
+    @Test
+    void 완료_할_일_소유_검증은_자정_귀속용_완료_시각을_붙여_돌려주고_빈_목록은_조회하지_않는다() {
+        StudyTask done = task(9L, 5L);
+        done.markDone(NOW);
+        StudyTask undone = task(10L, 5L);
+        when(taskRepository.findByIdInAndOwner(Set.of(9L, 10L), 1L)).thenReturn(List.of(done, undone));
+
+        assertThat(service.assertTasksOwned(1L, List.of(9L, 10L)))
+                .containsExactly(new CompletedTask(9L, NOW), new CompletedTask(10L, null));
+
+        assertThat(service.assertTasksOwned(1L, List.of())).isEmpty();
+        verify(taskRepository, never()).findByIdInAndOwner(Set.of(), 1L);
     }
 
     @Test
