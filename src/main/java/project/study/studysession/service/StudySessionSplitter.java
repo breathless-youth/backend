@@ -5,7 +5,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
@@ -111,7 +114,7 @@ final class StudySessionSplitter {
 
     /**
      * 조각별 가중치대로 studySec/focusSec(과목·할 일별 시간 포함)을 비례 배분해 세션들을 만든다 — 마지막 조각이
-     * 나머지를 가져가 합이 항상 요청값과 같다.
+     * 나머지를 가져가 합이 항상 요청값과 같다. 완료 할 일은 배분하지 않고 완료 시각이 속한 조각에 붙인다.
      */
     static List<StudySession> buildSessions(
             Long userId,
@@ -119,10 +122,12 @@ final class StudySessionSplitter {
             SegmentWeights weights,
             int studySec,
             int focusSec,
-            List<StudySessionSubjectTime> subjectTimes) {
+            List<StudySessionSubjectTime> subjectTimes,
+            List<CompletedTask> completedTasks) {
         int segmentCount = cuts.size() - 1;
         List<List<StudySessionSubjectTime>> subjectTimesBySegment =
                 splitSubjectTimes(subjectTimes, weights, segmentCount);
+        List<Set<Long>> completedBySegment = splitCompletedTasks(completedTasks, cuts);
         List<StudySession> sessions = new ArrayList<>();
         long allocatedStudySec = 0;
         long allocatedFocusSec = 0;
@@ -138,6 +143,7 @@ final class StudySessionSplitter {
                     (int) segmentFocusSec,
                     weights.segmentEvents().get(i));
             session.attachSubjectTimes(subjectTimesBySegment.get(i));
+            session.attachCompletedTasks(completedBySegment.get(i));
             sessions.add(session);
             allocatedStudySec += segmentStudySec;
             allocatedFocusSec += segmentFocusSec;
@@ -172,6 +178,36 @@ final class StudySessionSplitter {
             }
         }
         return result;
+    }
+
+    /**
+     * 완료한 할 일을 완료 시각이 속한 [start, end) 조각 하나에 붙인다 — 완료 시각이 없거나 어느 조각에도 없으면
+     * 마지막 조각 (ADR-0022). 시간처럼 비례 배분하지 않는다: 체크는 양이 아니라 사건이다.
+     */
+    static List<Set<Long>> splitCompletedTasks(List<CompletedTask> tasks, List<Instant> cuts) {
+        int segmentCount = cuts.size() - 1;
+        List<Set<Long>> result = new ArrayList<>(segmentCount);
+        for (int i = 0; i < segmentCount; i++) {
+            result.add(new LinkedHashSet<>());
+        }
+        for (CompletedTask task : tasks) {
+            result.get(segmentOf(task.doneAt(), cuts)).add(task.taskId());
+        }
+        return result;
+    }
+
+    /** 반개구간이라 정확히 자정에 완료하면 다음 조각, 종료 시각과 같으면 범위 밖이라 마지막 조각이다. */
+    private static int segmentOf(Instant doneAt, List<Instant> cuts) {
+        int last = cuts.size() - 2;
+        if (doneAt == null) {
+            return last;
+        }
+        for (int i = 0; i <= last; i++) {
+            if (!doneAt.isBefore(cuts.get(i)) && doneAt.isBefore(cuts.get(i + 1))) {
+                return i;
+            }
+        }
+        return last;
     }
 
     /** studySec 계열의 조각 몫 — PAUSE를 제외한 조각 길이 비율. */

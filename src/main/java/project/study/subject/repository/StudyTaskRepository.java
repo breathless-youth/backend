@@ -26,8 +26,13 @@ public interface StudyTaskRepository extends JpaRepository<StudyTask, Long> {
 
     long countBySubjectIdAndDeletedAtIsNull(Long subjectId);
 
-    // 세션 제출의 소유 검증용 — 삭제 여부를 보지 않는다(과목과 같은 이유)
-    List<StudyTask> findByIdIn(Collection<Long> ids);
+    // 세션 제출의 소유 검증용 — 할 일은 과목을 거쳐 유저에 닿는다. 삭제 여부는 보지 않는다(과목과 같은 이유, ADR-0021)
+    @Query("""
+            select t
+            from StudyTask t
+            where t.id in :ids
+              and t.subjectId in (select s.id from StudySubject s where s.userId = :userId)""")
+    List<StudyTask> findByIdInAndOwner(@Param("ids") Collection<Long> ids, @Param("userId") Long userId);
 
     // 과목 삭제 시 하위 할 일도 함께 soft delete
     @Modifying

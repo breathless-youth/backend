@@ -18,12 +18,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
 import project.study.subject.dto.SubjectCreateRequest;
+import project.study.subject.dto.SubjectOrderRequest;
 import project.study.subject.dto.SubjectResponse;
 import project.study.subject.dto.SubjectUpdateRequest;
 import project.study.subject.dto.TaskCreateRequest;
@@ -47,8 +49,10 @@ public class StudySubjectController {
     private final StudySubjectService subjectService;
 
     @Operation(summary = "내 과목 목록", description = """
-            살아있는 과목을 id 오름차순으로, 각 과목의 보이는 할 일과 누적 시간을 붙여 내려준다.
+            살아있는 과목을 저장된 순서(`PUT /order`, 같으면 id 오름차순)로, 각 과목의 보이는 할 일과 누적 시간을 붙여 내려준다. \
+            새로 만든 과목은 맨 뒤다. 응답에 순서 번호는 없다 — 배열 순서가 곧 순서다.
 
+            - **색** = `colorIndex`(0..19). 만들 때 서버가 덜 쓴 색을 배정하고 이후 바뀌지 않는다 — 앱은 팔레트에 매핑만 한다.
             - **보이는 할 일** = 미완료 전부 + 완료 시각이 오늘(KST)인 것. 어제 완료한 할 일은 숨지만 삭제되지 않는다.
             - **누적 시간** = 저장된 모든 세션의 `subjectTimes` 합. 과목 시간은 할 일을 골랐든 과목만 골랐든 그 과목 전부의 합이다.
             - 과목이 하나도 없으면 빈 배열 — 앱은 이때 추천 칩을 보여준다.""")
@@ -58,7 +62,9 @@ public class StudySubjectController {
         return subjectService.list(userId);
     }
 
-    @Operation(summary = "과목 추가", description = "이름만 받는다. 살아있는 과목이 20개면 400.")
+    @Operation(
+            summary = "과목 추가",
+            description = "이름만 받는다. 순서는 맨 뒤, 색은 살아있는 과목이 가장 적게 쓴 인덱스를 서버가 정한다. 살아있는 과목이 20개면 400.")
     @ApiResponse(responseCode = "201", description = "만들어진 과목 — 누적 0, 할 일 없음")
     @ApiResponse(
             responseCode = "400",
@@ -98,6 +104,31 @@ public class StudySubjectController {
             @AuthenticationPrincipal Long userId,
             @Parameter(description = "과목 ID", example = "3") @PathVariable Long subjectId) {
         subjectService.delete(userId, subjectId);
+    }
+
+    @Operation(summary = "과목 순서 저장", description = """
+            과목 시트에서 끌어 바꾼 순서를 통째로 저장한다 — 드래그가 끝날 때 한 번 부른다. 보낸 순서대로 0부터 번호가 매겨지고 \
+            목록 조회는 이 번호 오름차순(같으면 id)으로 내려온다.
+
+            - `subjectIds`는 살아있는 내 과목 id여야 한다 — 남의 과목·지운 과목·없는 id·중복이 섞이면 400이고 아무것도 바뀌지 않는다.
+            - 목록에서 빠진 살아있는 과목은 기존 상대 순서 그대로 보낸 것들 뒤에 붙는다 — 일부만 보내도 된다.
+            - 새로 만든 과목은 항상 맨 뒤다. 응답에 순서 번호는 없다 — 배열 순서가 곧 순서다.""")
+    @ApiResponse(responseCode = "200", description = "저장된 순서의 전체 과목 배열 — GET /api/subjects와 같은 모양")
+    @ApiResponse(
+            responseCode = "400",
+            description = "내 과목이 아닌 id, 중복 id, 또는 subjectIds 누락",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = {
+                                @ExampleObject(name = "남의 과목", value = "{\"message\": \"사용자의 과목이 아닙니다\"}"),
+                                @ExampleObject(name = "중복", value = "{\"message\": \"subjectIds에 중복이 있습니다\"}")
+                            }))
+    @PutMapping("/order")
+    public List<SubjectResponse> reorder(
+            @AuthenticationPrincipal Long userId, @Valid @RequestBody SubjectOrderRequest request) {
+        return subjectService.reorder(userId, request.subjectIds());
     }
 
     @Operation(summary = "할 일 추가", description = "과목 아래 할 일을 만든다. 마감일은 없다. 그 과목의 살아있는 할 일이 30개면 400.")

@@ -32,7 +32,10 @@ public record StudySessionResponse(
         List<StatusEventResponse> events,
 
         @Schema(description = "과목·할 일별 시간 — 제출한 subjectTimes가 자정 분할로 나뉘면 각 세션에 조각 몫으로 귀속된다. 없으면 []")
-        List<SubjectTimeResponse> subjectTimes) {
+        List<SubjectTimeResponse> subjectTimes,
+
+        @Schema(description = "이 세션(조각)에서 완료한 할 일 ID — 오름차순. 자정 분할이면 완료 시각이 속한 조각에만 실린다. 없으면 []", example = "[12, 15]")
+        List<Long> completedTaskIds) {
 
     // focusRate 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다
     public static StudySessionResponse from(StudySession session, double focusRate) {
@@ -48,6 +51,8 @@ public record StudySessionResponse(
                 session.getEvents().stream().map(StatusEventResponse::from).toList(),
                 session.getSubjectTimes().stream()
                         .map(SubjectTimeResponse::from)
-                        .toList());
+                        .toList(),
+                // Set은 순서가 없으니 정렬해 계약을 안정시킨다
+                session.getCompletedTaskIds().stream().sorted().toList());
     }
 }
