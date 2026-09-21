@@ -18,6 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
+import project.study.config.ApiVersionConfig;
 import tools.jackson.databind.ObjectMapper;
 
 /** BY-698 과목 > 할 일 API — 생성·완료 노출 규칙·soft delete·소유·상한. 누적 합산은 StudySessionSubjectTimeApiTest. */
@@ -34,6 +35,9 @@ class StudySubjectApiTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    /** 과목 API는 기본버전(1)에 매핑돼 있다 — asUser가 붙이는 2를 덮어써야 라우팅된다. */
+    private static final String SUBJECT_API_VERSION = "1";
 
     private Long userId;
 
@@ -58,6 +62,7 @@ class StudySubjectApiTest {
     private MvcTestResult postJson(String uri, String body) {
         return mvc.post()
                 .uri(uri)
+                .header(ApiVersionConfig.HEADER, SUBJECT_API_VERSION)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
                 .with(asUser(userId))
@@ -67,6 +72,7 @@ class StudySubjectApiTest {
     private MvcTestResult patchJson(String uri, String body) {
         return mvc.patch()
                 .uri(uri)
+                .header(ApiVersionConfig.HEADER, SUBJECT_API_VERSION)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
                 .with(asUser(userId))
@@ -74,7 +80,11 @@ class StudySubjectApiTest {
     }
 
     private MvcTestResult list() {
-        return mvc.get().uri("/api/subjects").with(asUser(userId)).exchange();
+        return mvc.get()
+                .uri("/api/subjects")
+                .header(ApiVersionConfig.HEADER, SUBJECT_API_VERSION)
+                .with(asUser(userId))
+                .exchange();
     }
 
     private long idOf(MvcTestResult result) {
@@ -107,7 +117,7 @@ class StudySubjectApiTest {
                 .hasPathSatisfying("$.length()", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying("$[0].tasks.length()", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying("$[0].tasks[0].name", v -> assertThat(v).isEqualTo("3단원 문제풀기"))
-                .hasPathSatisfying("$[0].tasks[0].studySec", v -> assertThat(v).isEqualTo(0));
+                .hasPathSatisfying("$[0].tasks[0].name", v -> assertThat(v).isEqualTo("3단원 문제풀기"));
     }
 
     @Test
@@ -144,7 +154,10 @@ class StudySubjectApiTest {
         long subjectId = idOf(postJson("/api/subjects", "{\"name\": \"국어\"}"));
         long taskId = idOf(postJson("/api/subjects/" + subjectId + "/tasks", "{\"name\": \"비문학\"}"));
 
-        assertThat(mvc.delete().uri("/api/subjects/" + subjectId).with(asUser(userId)))
+        assertThat(mvc.delete()
+                        .uri("/api/subjects/" + subjectId)
+                        .header(ApiVersionConfig.HEADER, SUBJECT_API_VERSION)
+                        .with(asUser(userId)))
                 .hasStatus(HttpStatus.NO_CONTENT);
 
         assertThat(list())

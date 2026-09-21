@@ -33,10 +33,14 @@ import project.study.subject.service.StudySubjectService;
 
 @Tag(name = "StudySubject", description = """
                 과목 > 할 일 관리 API 모음 (BY-698). 세션 화면의 과목 시트가 쓴다 — 과목은 시간이 쌓이는 카테고리, \
-                할 일은 과목 하위의 체크 가능한 항목이다. 항목별 시간은 세션 제출·스냅샷의 `subjectTimes`로 들어오고 \
-                여기서는 누적 합계만 내려준다. 토큰 계약(API-Version: 2) 전용 — 구 앱 경로는 없다.""")
+                할 일은 과목 하위의 체크 가능한 항목이다. 과목별 시간은 세션 제출·스냅샷의 `subjectTimes`로 들어오고 \
+                여기서는 누적 합계만 내려준다.
+
+                ⚠️ **이 API만 `API-Version: 1`이다.** 다른 토큰 계약 API는 2를 쓰지만(ADR-0020) 과목 API는 \
+                구 앱이 호출하지 않아 버전을 가를 이유가 없어 기본버전 하나로 통일했다. 인증은 그대로 \
+                토큰이 필요하다 — 버전은 라우팅만 가르고 인가는 SecurityConfig가 정한다.""")
 @RestController
-@RequestMapping(value = "/api/subjects", version = "2")
+@RequestMapping(value = "/api/subjects", version = "1")
 @RequiredArgsConstructor
 public class StudySubjectController {
 

@@ -7,9 +7,6 @@ import project.study.studysession.entity.StudySessionSubjectTime;
 public record SubjectTimeResponse(
         @Schema(description = "과목 ID", example = "3") Long subjectId,
 
-        @Schema(description = "할 일 ID — 과목만 선택해 잰 시간이면 null", example = "12")
-        Long taskId,
-
         @Schema(description = "이 항목의 총 공부 시간(초)", example = "2400")
         Integer studySec,
 
@@ -17,6 +14,6 @@ public record SubjectTimeResponse(
         Integer focusSec) {
 
     public static SubjectTimeResponse from(StudySessionSubjectTime time) {
-        return new SubjectTimeResponse(time.getSubjectId(), time.getTaskId(), time.getStudySec(), time.getFocusSec());
+        return new SubjectTimeResponse(time.getSubjectId(), time.getStudySec(), time.getFocusSec());
     }
 }

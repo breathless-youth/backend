@@ -52,7 +52,7 @@ public record StudySessionCreateRequest(
         @Schema(
                 description = "과목·할 일별 시간 목록 — 세션 중 항목을 선택한 채 잰 총 공부·순공 시간 (ADR-0021). 선택 필드라 "
                         + "없거나 []이면 기존과 동일하게 저장된다. 항목 studySec 합은 studySec 이하, 항목 focusSec은 항목 studySec "
-                        + "이하여야 하고 subjectId/taskId는 토큰 유저의 것이어야 한다(위반 400). 자정을 넘는 세션은 조각 길이에 "
+                        + "이하여야 하고 subjectId는 토큰 유저의 과목이어야 한다(위반 400). 자정을 넘는 세션은 조각 길이에 "
                         + "비례해 배분된다")
         @Valid
         List<SubjectTimeRequest> subjectTimes) {

@@ -48,23 +48,33 @@ public class OpenApiConfig {
      * springdoc이 버전 있는 오퍼레이션마다 자동으로 싣는 {@code API-Version} 헤더 파라미터를 다듬는다 — 기본값이 Spring
      * 기본버전(1 → "1.0.0")이라 Swagger UI에서 그대로 보내면 구 앱 핸들러로 가서 400이 난다. 문서는 토큰 계약(v2)만
      * 싣으므로 기본값 2·필수로 바꾼다 (ADR-0020). 전체 문서가 만들어진 뒤 도는 customizer라 파라미터 추가 시점과 무관하다.
+     *
+     * <p>예외는 과목 API(`/api/subjects`)다 — 구 앱이 호출하지 않아 기본버전(1) 하나로 통일했으므로 문서 기본값도 1이다.
      */
+    /** 기본버전(1)에 매핑된 유일한 토큰 API — 문서 기본값을 따로 잡아야 한다. */
+    private static final String SUBJECT_PATH_PREFIX = "/api/subjects";
+
     @Bean
     public OpenApiCustomizer apiVersionHeaderParameterCustomizer() {
         return openApi -> {
             if (openApi.getPaths() == null) return;
-            openApi.getPaths().values().stream()
-                    .flatMap(path -> path.readOperations().stream())
-                    .filter(operation -> operation.getParameters() != null)
-                    .flatMap(operation -> operation.getParameters().stream())
-                    .filter(parameter -> ApiVersionConfig.HEADER.equals(parameter.getName()))
-                    .forEach(parameter -> {
-                        parameter.setRequired(true);
-                        parameter.setDescription("토큰 계약 버전 — 새 앱은 항상 `2`. 없거나 `1`이면 구 앱(v1.2.x) 계약으로 해석된다");
-                        if (parameter.getSchema() != null) {
-                            parameter.getSchema().setDefault(TOKEN_API_VERSION);
-                        }
-                    });
+            openApi.getPaths().forEach((path, item) -> {
+                // 과목 API만 기본버전(1)에 매핑돼 있다 — Swagger UI가 2를 보내면 400이므로 문서 기본값도 갈라야 한다.
+                String version =
+                        path.startsWith(SUBJECT_PATH_PREFIX) ? ApiVersionConfig.DEFAULT_VERSION : TOKEN_API_VERSION;
+                item.readOperations().stream()
+                        .filter(operation -> operation.getParameters() != null)
+                        .flatMap(operation -> operation.getParameters().stream())
+                        .filter(parameter -> ApiVersionConfig.HEADER.equals(parameter.getName()))
+                        .forEach(parameter -> {
+                            parameter.setRequired(true);
+                            parameter.setDescription("요청 버전 — 토큰 계약은 `2`, 과목 API(`/api/subjects`)만 `1`이다. "
+                                    + "없거나 `1`이면 구 앱(v1.2.x) 계약으로 해석된다");
+                            if (parameter.getSchema() != null) {
+                                parameter.getSchema().setDefault(version);
+                            }
+                        });
+            });
         };
     }
 

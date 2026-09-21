@@ -102,15 +102,13 @@ Table study_task {
 Table study_session_subject_time {
   id bigint [primary key, increment]
   session_id bigint [ref: > study_session.id, not null]   // ON DELETE CASCADE — 세션과 함께 사라진다
-  subject_id bigint [ref: > study_subject.id, not null]
-  task_id bigint [ref: > study_task.id]                   // NULL = 과목만 선택해 잰 시간
-  study_sec integer [not null]   // 자정 분할 시 조각 몫. 항목 합 <= 세션 study_sec
-  focus_sec integer [not null]   // 항목 study_sec 이하
+  subject_id bigint [ref: > study_subject.id, not null]   // 측정 단위는 과목뿐이다 (V17에서 task_id 제거)
+  study_sec integer [not null]   // 자정 분할 시 조각 몫. 과목 합 <= 세션 study_sec
+  focus_sec integer [not null]   // 그 과목의 study_sec 이하
 
   indexes {
     (session_id)
     (subject_id)   // 과목 누적 = 합
-    (task_id) [note: 'WHERE task_id IS NOT NULL']   // 할 일 누적 = 합
   }
 }
 

@@ -82,7 +82,9 @@ ADR-0019(BY-526)로 모든 보호 API가 `Authorization: Bearer` + `@Authenticat
 - 경로변수 타입 불일치(`/api/users/me/profile`에 헤더 없음 등)는 `GlobalExceptionHandler`가
   `TypeMismatchException`을 400으로 받는다 — 전에는 generic 핸들러가 500·Sentry로 흘렸다.
 - Swagger: 레거시 오퍼레이션은 `deprecated` + `[구 앱 전용 · API-Version 없음]` 접두, 문서 설명에
-  헤더 규칙. 테스트 헬퍼 `AuthTestSupport.asUser`는 `API-Version: 2`를 함께 싣는다 — 인증된 요청은
+  헤더 규칙. 예외는 과목 API(`/api/subjects`)뿐이다 — 구 앱이 부르지 않는 새 API라 기본버전(1) 하나로
+  통일했다(ADR-0021 2026-09-21 갱신). 토큰은 그대로 필요하다.
+  테스트 헬퍼 `AuthTestSupport.asUser`는 `API-Version: 2`를 함께 싣는다 — 인증된 요청은
   곧 토큰 계약이다.
 - 검증: `LegacyApiSecurityTest`(14경로 × 헤더 없음/1/2), `Legacy{User,Room,StudySession,RtcStat}ApiTest`,
   `ApiVersionApiTest`, `UserIdChannelInterceptorTest`(STOMP 폴백), `RequestLoggingIntegrationTest`(MDC).

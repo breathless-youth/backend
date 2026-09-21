@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
+import project.study.config.ApiVersionConfig;
 import project.study.studysession.buffer.ActiveSnapshotBuffer;
 
 /** BY-698 세션 계약 확장 — 제출·스냅샷·복구의 subjectTimes 저장·검증·자정 분할·누적 합산. */
@@ -41,7 +42,6 @@ class StudySessionSubjectTimeApiTest {
 
     private Long userId;
     private Long subjectId;
-    private Long taskId;
 
     private final LocalDate today = LocalDate.now(KST);
     private final Instant sessionStart =
@@ -52,8 +52,6 @@ class StudySessionSubjectTimeApiTest {
     void setUp() {
         userId = insertUser();
         subjectId = insertSubject(userId, "수학");
-        taskId = jdbcTemplate.queryForObject(
-                "INSERT INTO study_task (subject_id, name) VALUES (?, ?) RETURNING id", Long.class, subjectId, "3단원");
     }
 
     // 스케줄러 풀스캔 오염 방지 — ActiveSessionSnapshotApiTest와 같은 이유
@@ -75,9 +73,9 @@ class StudySessionSubjectTimeApiTest {
                 "INSERT INTO study_subject (user_id, name) VALUES (?, ?) RETURNING id", Long.class, ownerId, name);
     }
 
-    private static String time(Long subject, Long task, int studySec, int focusSec) {
+    private static String time(Long subject, int studySec, int focusSec) {
         return """
-                {"subjectId": %d, "taskId": %s, "studySec": %d, "focusSec": %d}""".formatted(subject, task == null ? "null" : task.toString(), studySec, focusSec);
+                {"subjectId": %d, "studySec": %d, "focusSec": %d}""".formatted(subject, studySec, focusSec);
     }
 
     private MvcTestResult submit(Instant start, Instant end, int studySec, int focusSec, String subjectTimesJson) {
@@ -92,8 +90,8 @@ class StudySessionSubjectTimeApiTest {
     }
 
     @Test
-    void 세션_제출의_항목별_시간이_저장되고_과목_목록_누적에_합산된다() {
-        String times = "[" + time(subjectId, taskId, 4000, 3500) + "," + time(subjectId, null, 2000, 1800) + "]";
+    void 세션_제출의_과목별_시간이_저장되고_과목_목록_누적에_합산된다() {
+        String times = "[" + time(subjectId, 4000, 3500) + "," + time(subjectId, 2000, 1800) + "]";
 
         assertThat(submit(sessionStart, sessionEnd, 7200, 6600, times))
                 .hasStatus(HttpStatus.CREATED)
@@ -101,25 +99,24 @@ class StudySessionSubjectTimeApiTest {
                 .hasPathSatisfying(
                         "$[0].subjectTimes.length()", v -> assertThat(v).isEqualTo(2))
                 .hasPathSatisfying(
-                        "$[0].subjectTimes[0].taskId", v -> assertThat(v).isEqualTo(taskId.intValue()))
-                .hasPathSatisfying(
-                        "$[0].subjectTimes[1].taskId", v -> assertThat(v).isNull());
+                        "$[0].subjectTimes[0].subjectId", v -> assertThat(v).isEqualTo(subjectId.intValue()));
 
         Integer rows = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM study_session_subject_time WHERE subject_id = ?", Integer.class, subjectId);
         assertThat(rows).isEqualTo(2);
 
-        assertThat(mvc.get().uri("/api/subjects").with(asUser(userId)))
+        assertThat(mvc.get()
+                        .uri("/api/subjects")
+                        .header(ApiVersionConfig.HEADER, "1")
+                        .with(asUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$[0].studySec", v -> assertThat(v).isEqualTo(6000))
-                .hasPathSatisfying("$[0].focusSec", v -> assertThat(v).isEqualTo(5300))
-                .hasPathSatisfying("$[0].tasks[0].studySec", v -> assertThat(v).isEqualTo(4000))
-                .hasPathSatisfying("$[0].tasks[0].focusSec", v -> assertThat(v).isEqualTo(3500));
+                .hasPathSatisfying("$[0].focusSec", v -> assertThat(v).isEqualTo(5300));
     }
 
     @Test
-    void 항목별_시간_없이_제출하면_기존처럼_저장된다() {
+    void 과목별_시간_없이_제출하면_기존처럼_저장된다() {
         String body = """
                 {"startedAt": "%s", "endedAt": "%s", "studySec": 7200, "focusSec": 6600, "events": []}""".formatted(sessionStart, sessionEnd);
 
@@ -135,8 +132,8 @@ class StudySessionSubjectTimeApiTest {
     }
 
     @Test
-    void 항목_합이_세션_총공부를_넘으면_400이고_세션도_저장되지_않는다() {
-        String times = "[" + time(subjectId, taskId, 5000, 4000) + "," + time(subjectId, null, 3000, 2000) + "]";
+    void 과목_시간_합이_세션_총공부를_넘으면_400이고_세션도_저장되지_않는다() {
+        String times = "[" + time(subjectId, 5000, 4000) + "," + time(subjectId, 3000, 2000) + "]";
 
         assertThat(submit(sessionStart, sessionEnd, 7200, 6600, times)).hasStatus(HttpStatus.BAD_REQUEST);
 
@@ -149,25 +146,17 @@ class StudySessionSubjectTimeApiTest {
     void 다른_사용자의_과목이면_400이다() {
         Long otherSubjectId = insertSubject(insertUser(), "남의 과목");
 
-        assertThat(submit(sessionStart, sessionEnd, 7200, 6600, "[" + time(otherSubjectId, null, 100, 90) + "]"))
+        assertThat(submit(sessionStart, sessionEnd, 7200, 6600, "[" + time(otherSubjectId, 100, 90) + "]"))
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
 
     @Test
-    void 할_일이_그_과목의_것이_아니면_400이다() {
-        Long anotherSubjectId = insertSubject(userId, "영어");
-
-        assertThat(submit(sessionStart, sessionEnd, 7200, 6600, "[" + time(anotherSubjectId, taskId, 100, 90) + "]"))
-                .hasStatus(HttpStatus.BAD_REQUEST);
-    }
-
-    @Test
-    void 자정을_넘는_제출은_항목_시간도_두_조각으로_나뉜다() {
+    void 자정을_넘는_제출은_과목_시간도_두_조각으로_나뉜다() {
         // 그저께 23:00 ~ 어제 01:00 (KST) — 항상 과거라 미래 검증에 걸리지 않는다
         Instant start = today.minusDays(2).atStartOfDay(KST).plusHours(23).toInstant();
         Instant end = start.plusSeconds(7200);
 
-        assertThat(submit(start, end, 7200, 6000, "[" + time(subjectId, null, 6000, 5000) + "]"))
+        assertThat(submit(start, end, 7200, 6000, "[" + time(subjectId, 6000, 5000) + "]"))
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying("$.length()", v -> assertThat(v).isEqualTo(2))
@@ -186,7 +175,7 @@ class StudySessionSubjectTimeApiTest {
         Instant started = Instant.now().minusSeconds(7200);
         Instant reported = Instant.now().minusSeconds(60);
         String body = """
-                {"startedAt": "%s", "reportedAt": "%s", "studySec": 7000, "focusSec": 6500, "events": [], "subjectTimes": [%s]}""".formatted(started, reported, time(subjectId, taskId, 3000, 2800));
+                {"startedAt": "%s", "reportedAt": "%s", "studySec": 7000, "focusSec": 6500, "events": [], "subjectTimes": [%s]}""".formatted(started, reported, time(subjectId, 3000, 2800));
 
         assertThat(mvc.put()
                         .uri("/api/study-sessions/active")
@@ -202,8 +191,6 @@ class StudySessionSubjectTimeApiTest {
                 .hasPathSatisfying("$.subjectTimes.length()", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying(
                         "$.subjectTimes[0].subjectId", v -> assertThat(v).isEqualTo(subjectId.intValue()))
-                .hasPathSatisfying(
-                        "$.subjectTimes[0].taskId", v -> assertThat(v).isEqualTo(taskId.intValue()))
                 .hasPathSatisfying(
                         "$.subjectTimes[0].studySec", v -> assertThat(v).isEqualTo(3000));
     }
