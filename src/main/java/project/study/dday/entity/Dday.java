@@ -38,9 +38,4 @@ public class Dday extends BaseTimeEntity {
         this.title = title;
         this.targetDate = targetDate;
     }
-
-    public void update(String title, LocalDate targetDate) {
-        this.title = title;
-        this.targetDate = targetDate;
-    }
 }

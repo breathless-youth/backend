@@ -28,7 +28,7 @@ public class DdayService {
         return ddayRepository.findByUserId(userId).map(DdayService::toResponse);
     }
 
-    /** 있으면 덮어쓰고 없으면 만든다 — 유저당 1개라 upsert 하나면 충분하다. */
+    /** 있으면 덮어쓰고 없으면 만든다 — DB의 ON CONFLICT 한 문장이라 동시 PUT에도 행은 하나다. */
     @Transactional
     public DdayResponse save(Long userId, DdayRequest request) {
         LocalDate today = LocalDate.ofInstant(clock.instant(), KST);
@@ -36,14 +36,8 @@ public class DdayService {
             throw new BadRequestException("목표 날짜는 오늘 이후여야 합니다");
         }
         String title = request.title().strip();
-        Dday dday = ddayRepository
-                .findByUserId(userId)
-                .map(existing -> {
-                    existing.update(title, request.targetDate());
-                    return existing;
-                })
-                .orElseGet(() -> ddayRepository.save(new Dday(userId, title, request.targetDate())));
-        return toResponse(dday);
+        ddayRepository.upsert(userId, title, request.targetDate());
+        return new DdayResponse(title, request.targetDate());
     }
 
     /** 없어도 성공 — 삭제는 멱등이다. */

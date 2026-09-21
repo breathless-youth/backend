@@ -3,7 +3,13 @@ package project.study.dday;
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.support.AuthTestSupport.asUser;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +23,8 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
+import project.study.dday.dto.DdayRequest;
+import project.study.dday.service.DdayService;
 
 /** 홈 D-Day API — upsert·조회·멱등 삭제·검증·유저 격리. 오늘 경계는 DdayServiceTest가 고정 시계로 검증한다. */
 @SpringBootTest
@@ -34,6 +42,9 @@ class DdayApiTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private DdayService ddayService;
 
     private Long userId;
 
@@ -139,6 +150,40 @@ class DdayApiTest {
         assertThat(get(userId)).hasStatus(HttpStatus.NO_CONTENT);
         assertThat(delete(userId)).hasStatus(HttpStatus.NO_CONTENT);
         assertThat(rowCount()).isZero();
+    }
+
+    @Test
+    void 같은_유저의_동시_첫_저장은_둘_다_성공하고_행은_하나다() throws Exception {
+        int requests = 2;
+        CountDownLatch ready = new CountDownLatch(requests);
+        CountDownLatch go = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(requests);
+        try {
+            List<Future<?>> results = List.of(
+                    pool.submit(() -> saveWhenReleased(ready, go, "수능")),
+                    pool.submit(() -> saveWhenReleased(ready, go, "토익")));
+            ready.await();
+            go.countDown();
+            for (Future<?> result : results) {
+                result.get(); // 어느 쪽이든 예외 없이 끝나야 한다 — 조회-후-저장이면 한쪽이 유니크 충돌로 죽는다
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(rowCount()).isEqualTo(1);
+        assertThat(get(userId)).hasStatus(HttpStatus.OK);
+    }
+
+    private void saveWhenReleased(CountDownLatch ready, CountDownLatch go, String title) {
+        ready.countDown();
+        try {
+            go.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+        ddayService.save(userId, new DdayRequest(title, LocalDate.of(2099, 11, 18)));
     }
 
     @Test
