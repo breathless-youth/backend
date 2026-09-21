@@ -28,7 +28,8 @@ ADR-0019(BY-526)로 모든 보호 API가 `Authorization: Bearer` + `@Authenticat
    - 등록 `POST /api/users`도 v1 핸들러를 따로 둔다. 응답에 토큰이 추가된 것은 additive지만,
      구 앱 JSON 파서가 모르는 필드를 무시한다는 가정에 기대지 않고, 구 앱이 실행마다 부르는
      등록이 refresh 토큰을 헛되이 발급·폐기하지 않게 한다. v1 응답은 `{userId, isNew}`.
-   - `POST /api/auth/refresh`는 v1.2.1에 없던 경로라 버전 없이 둔다(모든 버전에 매칭).
+   - `POST /api/auth/refresh`는 v1.2.1에 없던 경로라 버전 없이 뒀다(모든 버전에 매칭) — ADR-0015
+     2026-09-22 갱신으로 다른 새 경로와 같이 기본버전 1에 둔다.
    - userId 누락은 `@NotNull`로 400이다(v1.2.1은 500/404였음). 구 앱은 항상 보내므로 영향 없다.
 3. **시큐리티는 "전부 permitAll"이 아니라 헤더 기반 매처다.** `LegacyApiRequestMatcher`가
    "구 앱이 쓰는 (메서드, 경로) 14개" AND "헤더 없음/1"일 때만 permitAll이고 나머지는 ADR-0019

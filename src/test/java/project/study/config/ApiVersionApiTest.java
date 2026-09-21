@@ -26,8 +26,7 @@ import tools.jackson.databind.ObjectMapper;
  * 미지원·파싱 불가·불일치 버전은 매핑 단계에서 400이다.
  *
  * <p>버전은 엔드포인트 단위다 — 구 앱이 부르던 경로만 2이고 구 앱 대응이 없는 새 경로는 기본버전 1이라
- * 새 경로에 2를 보내면 400이다 (ADR-0015 갱신 2026-09-22). 예외는 토큰 재발급으로, 버전 속성이 없어
- * 어떤 값으로도 매칭된다.
+ * 새 경로에 2를 보내면 400이다 (ADR-0015 갱신 2026-09-22). 토큰 재발급도 예외 없이 같다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -130,18 +129,17 @@ class ApiVersionApiTest {
     }
 
     @Test
-    void 토큰_재발급은_버전_무관이라_어떤_API_Version_값으로도_매칭된다() {
-        // 의도된 예외(ADR-0015 갱신 2026-09-22) — access 만료 복구 경로가 버전 불일치로 400이 나면 앱이 통째로 잠긴다.
-        // refresh는 1회용이라 회전된 토큰으로 이어서 부른다
+    void 토큰_재발급도_구_앱_대응이_없는_새_경로라_기본버전_1이다() {
+        // 예외 없이 같은 규칙 — 1과 헤더 없음은 200, 2는 400. refresh는 1회용이라 회전된 토큰으로 이어서 부른다
         String refreshToken = registerV2().get("refreshToken").asString();
 
         refreshToken = refresh(refreshToken, "1");
-        refreshToken = refresh(refreshToken, "2");
-        refresh(refreshToken, null);
+        refreshToken = refresh(refreshToken, null);
+        assertThat(refreshRequest(refreshToken, "2")).hasStatus(HttpStatus.BAD_REQUEST);
     }
 
-    /** 주어진 버전 헤더(null이면 헤더 없음)로 재발급하고, 회전된 새 refresh 토큰을 돌려준다. */
-    private String refresh(String refreshToken, String apiVersion) {
+    /** 주어진 버전 헤더(null이면 헤더 없음)로 재발급 요청을 만든다. */
+    private MockMvcTester.MockMvcRequestBuilder refreshRequest(String refreshToken, String apiVersion) {
         MockMvcTester.MockMvcRequestBuilder request = mvc.post()
                 .uri("/api/auth/refresh")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -149,7 +147,12 @@ class ApiVersionApiTest {
         if (apiVersion != null) {
             request.header(API_VERSION, apiVersion);
         }
-        MvcTestResult result = request.exchange();
+        return request;
+    }
+
+    /** 재발급이 성공해야 하며, 회전된 새 refresh 토큰을 돌려준다. */
+    private String refresh(String refreshToken, String apiVersion) {
+        MvcTestResult result = refreshRequest(refreshToken, apiVersion).exchange();
         assertThat(result).hasStatusOk();
         return objectMapper
                 .readTree(result.getResponse().getContentAsByteArray())

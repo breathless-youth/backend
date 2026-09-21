@@ -68,6 +68,9 @@ class ApiVersionSwaggerDocsTest {
                         "$.paths['/api/subjects'].get.parameters[?(@.name=='API-Version')].schema.default",
                         v -> assertThat(v).asList().containsExactly("1"))
                 .hasPathSatisfying(
+                        "$.paths['/api/auth/refresh'].post.parameters[?(@.name=='API-Version')].schema.default",
+                        v -> assertThat(v).asList().containsExactly("1"))
+                .hasPathSatisfying(
                         "$.paths['/api/users/me/profile'].get.parameters[?(@.name=='API-Version')].required",
                         v -> assertThat(v).asList().containsExactly(true));
     }
