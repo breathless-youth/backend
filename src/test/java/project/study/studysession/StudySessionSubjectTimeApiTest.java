@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
+import project.study.config.ApiVersionConfig;
 import project.study.studysession.buffer.ActiveSnapshotBuffer;
 
 /** BY-698 세션 계약 확장 — 제출·스냅샷·복구의 subjectTimes 저장·검증·자정 분할·누적 합산. */
@@ -104,7 +105,10 @@ class StudySessionSubjectTimeApiTest {
                 "SELECT count(*) FROM study_session_subject_time WHERE subject_id = ?", Integer.class, subjectId);
         assertThat(rows).isEqualTo(2);
 
-        assertThat(mvc.get().uri("/api/subjects").with(asUser(userId)))
+        assertThat(mvc.get()
+                        .uri("/api/subjects")
+                        .header(ApiVersionConfig.HEADER, "1")
+                        .with(asUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$[0].studySec", v -> assertThat(v).isEqualTo(6000))
