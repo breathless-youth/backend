@@ -20,8 +20,10 @@ import project.study.studysession.service.StudySessionService;
 
 @Tag(name = "StudySessionStats", description = "공부 세션 통계 조회 API 모음 — 하루 목록·합계, 연속 공부일(스트릭), 기간 집계를 조회한다")
 @RestController
-// 토큰 계약(v2). 구 앱(API-Version 없음/1)은 Legacy 컨트롤러가 받는다 — 강제 업데이트 뒤 contract 시 ADR-0020 참고
-@RequestMapping(value = "/api/stats", version = "2")
+// 버전은 메서드마다 단다 (ADR-0015 갱신 2026-09-22). 구 앱(v1.2.x)이 부르던 list·streak·period는 토큰 계약 2이고
+// 헤더 없음/1은 Legacy 컨트롤러가 받는다 — 강제 업데이트 뒤 contract 시 ADR-0020 참고. study-days는 구 앱 대응이
+// 없는 새 경로라 기본버전 1이다 — 클래스 레벨 2를 물려받으면 FE의 엔드포인트별 버전 표가 어긋난다
+@RequestMapping("/api/stats")
 @RequiredArgsConstructor
 public class StudySessionStatsController {
 
@@ -50,7 +52,7 @@ public class StudySessionStatsController {
                     합계는 0, longestFocusSec은 0, focusRate는 0.0, totalEventCounts는 모든 상태 0인 객체가 내려온다. \
                     studiedDatesInMonth는 해당 달의 기록 여부와 무관하게 항상 계산된다.""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 목록 + 세션 개수 + 그날 합계·집중률·상태별 이벤트 건수")
-    @GetMapping
+    @GetMapping(version = "2")
     public StudySessionListResponse list(
             @AuthenticationPrincipal Long userId,
             @Parameter(description = "조회할 날짜 (ISO-8601, 예: 2026-07-24) — statDate 기준", example = "2026-07-24")
@@ -75,7 +77,7 @@ public class StudySessionStatsController {
 
                     기록이 없거나 존재하지 않는 userId면 streak/maxStreak 둘 다 0이다 (목록 조회와 같은 계약).""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 현재 스트릭, 역대 최장 스트릭, (선택) 기간 내 공부일 목록")
-    @GetMapping("/streak")
+    @GetMapping(value = "/streak", version = "2")
     public StudySessionStreakResponse streak(
             @AuthenticationPrincipal Long userId,
             @Parameter(description = "기간 조회 시작일 (ISO-8601) — to와 함께 지정해야 한다", example = "2026-07-01")
@@ -97,7 +99,7 @@ public class StudySessionStatsController {
 
                     기록이 없거나 존재하지 않는 userId면 totalDays는 0이다 (다른 통계 조회와 같은 계약).""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 누적 공부일 수")
-    @GetMapping("/study-days")
+    @GetMapping(value = "/study-days", version = "1")
     public StudyDaysResponse studyDays(@AuthenticationPrincipal Long userId) {
         return studySessionService.studyDays(userId);
     }
@@ -109,7 +111,7 @@ public class StudySessionStatsController {
                     미지정 시 compareFrom/compareTo는 null, compareDailyList는 빈 배열. 총합·비교는 응답의 배열을 합산해 계산한다. \
                     from>to, compare 한쪽만 지정, 366일 초과 범위(메인·비교 공통)는 400.""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — from~to 일별 배열 + (선택) compare 구간 일별 배열")
-    @GetMapping("/period")
+    @GetMapping(value = "/period", version = "2")
     public StudyPeriodStatsResponse period(
             @AuthenticationPrincipal Long userId,
             @Parameter(description = "구간 시작일(ISO-8601, 포함)", example = "2026-08-24")

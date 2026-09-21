@@ -23,6 +23,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import project.study.TestcontainersConfiguration;
+import project.study.config.ApiVersionConfig;
 
 /**
  * 누적 공부일의 "오늘" 경계 (BY-645). 시계를 KST 23:59에 고정해, 오늘 세션은 세고 시계 오차 허용(5분)으로 저장된
@@ -74,7 +75,11 @@ class StudyDaysBoundaryApiTest {
     }
 
     private void assertTotalDays(int expected) {
-        assertThat(mvc.get().uri("/api/stats/study-days").with(asUser(userId)))
+        // 구 앱 대응이 없는 새 경로라 기본버전 1이다 — asUser의 기본 헤더(2)를 덮는다 (ADR-0015 갱신)
+        assertThat(mvc.get()
+                        .uri("/api/stats/study-days")
+                        .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
+                        .with(asUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.totalDays", v -> assertThat(v).isEqualTo(expected));

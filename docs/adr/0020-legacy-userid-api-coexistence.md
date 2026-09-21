@@ -16,8 +16,9 @@ ADR-0019(BY-526)로 모든 보호 API가 `Authorization: Bearer` + `@Authenticat
 ## 결정
 1. **구분 신호는 `API-Version` 요청 헤더다(ADR-0015 그대로).** 헤더가 없거나 `1`이면 구 앱
    계약(v1.2.1과 동일), `2`면 토큰 계약. 구 앱은 헤더를 못 보내므로 "헤더 없음 = 기본버전 1"이
-   병행의 핵심 장치다. **새 앱은 모든 HTTP 요청에 `API-Version: 2`를 붙인다**(WebSocket은 헤더가
-   없으므로 CONNECT의 Authorization만으로 충분하다).
+   병행의 핵심 장치다. **새 앱은 구 앱 대응이 있는 경로(아래 표)에 `API-Version: 2`를 붙인다**(WebSocket은
+   헤더가 없으므로 CONNECT의 Authorization만으로 충분하다). 처음엔 "모든 HTTP 요청에 2"였으나 구 앱
+   대응이 없는 새 경로는 기본버전 1로 통일했다 — ADR-0015 2026-09-22 갱신.
    - `Authorization` 유무로 구분하는 대안은 기각 — 인증과 계약 모양이 섞여 나중에 걷어내기 어렵고,
      새 앱의 access가 만료됐을 때 구 핸들러로 흘러 401 대신 엉뚱한 에러가 난다.
 2. **구 앱 핸들러는 `version = "1"` 어댑터로 분리한다.** 도메인마다 `Legacy*Controller`가 v1.2.1
@@ -71,7 +72,7 @@ ADR-0019(BY-526)로 모든 보호 API가 `Authorization: Bearer` + `@Authenticat
 | 14 | `POST /api/rtc-stats` | body `userId` + 기존 필드 | userId 없는 body |
 | WS | `GET /ws?userId=` + CONNECT에 Authorization 없음 | 세션 속성 | CONNECT `Authorization: Bearer` |
 
-`GET /api/stats/study-days`는 토큰 계약에서 추가된 경로라 구 앱 버전이 없다.
+`GET /api/stats/study-days`는 구 앱 대응이 없는 새 경로라 기본버전 1 하나뿐이다(ADR-0015 2026-09-22 갱신).
 
 ## 구현 요약
 - Spring 7 `VersionRequestCondition`: 버전 없는 매핑은 모든 요청 버전에 매칭, 고정 버전은
@@ -82,10 +83,11 @@ ADR-0019(BY-526)로 모든 보호 API가 `Authorization: Bearer` + `@Authenticat
 - 경로변수 타입 불일치(`/api/users/me/profile`에 헤더 없음 등)는 `GlobalExceptionHandler`가
   `TypeMismatchException`을 400으로 받는다 — 전에는 generic 핸들러가 500·Sentry로 흘렸다.
 - Swagger: 레거시 오퍼레이션은 `deprecated` + `[구 앱 전용 · API-Version 없음]` 접두, 문서 설명에
-  헤더 규칙. 예외는 과목 API(`/api/subjects`)뿐이다 — 구 앱이 부르지 않는 새 API라 기본버전(1) 하나로
-  통일했다(ADR-0021 2026-09-21 갱신). 토큰은 그대로 필요하다.
-  테스트 헬퍼 `AuthTestSupport.asUser`는 `API-Version: 2`를 함께 싣는다 — 인증된 요청은
-  곧 토큰 계약이다.
+  헤더 규칙. 구 앱 대응이 없는 새 API(`/api/subjects`, `/api/stats/study-days`)는 기본버전(1) 하나다
+  (ADR-0015 2026-09-22 갱신). 토큰은 그대로 필요하다. 헤더 파라미터 기본값은 경로 목록이 아니라 실제
+  매핑 버전에서 읽는다.
+  테스트 헬퍼 `AuthTestSupport.asUser`는 `API-Version: 2`를 함께 싣는다 — 기본버전 경로 테스트는
+  헤더를 직접 1로 지정한다.
 - 검증: `LegacyApiSecurityTest`(14경로 × 헤더 없음/1/2), `Legacy{User,Room,StudySession,RtcStat}ApiTest`,
   `ApiVersionApiTest`, `UserIdChannelInterceptorTest`(STOMP 폴백), `RequestLoggingIntegrationTest`(MDC).
 

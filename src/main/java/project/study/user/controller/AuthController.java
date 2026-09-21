@@ -54,6 +54,8 @@ public class AuthController {
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
     @SecurityRequirements // access가 만료된 상태에서 부르므로 인증 없이 열려 있다
+    // 버전 속성이 없는 것은 의도다 — 어떤 API-Version으로도 매칭된다. access 만료 복구 경로가 버전 불일치로 400이 나면
+    // 앱이 통째로 잠기고, 구 앱 대응도 계약 차이도 없어 가를 것이 없다 (ADR-0015 갱신 2026-09-22, ADR-0020 결정 2)
     @PostMapping("/refresh")
     public TokenResponse refresh(@Valid @RequestBody RefreshRequest request) {
         return authService.refresh(request);
