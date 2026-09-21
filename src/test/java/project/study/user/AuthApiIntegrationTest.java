@@ -18,7 +18,9 @@ import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
 import project.study.user.dto.TokenResponse;
 import project.study.user.dto.UserRegisterResponse;
+import project.study.user.entity.Provider;
 import project.study.user.jwt.JwtUtil;
+import project.study.user.repository.UserRepository;
 import tools.jackson.databind.ObjectMapper;
 
 /** 실제 JWT·refresh 왕복을 검증하는 유일한 API 테스트. 다른 API 테스트는 AuthTestSupport로 principal만 주입한다. */
@@ -36,11 +38,21 @@ class AuthApiIntegrationTest {
     @Autowired
     private JwtUtil jwtUtil;
 
-    @Test
-    void 기기_등록은_userId와_함께_access_refresh_쌍을_발급한다() {
-        UserRegisterResponse device = registerDevice(UUID.randomUUID().toString());
+    @Autowired
+    private UserRepository userRepository;
 
-        assertThat(jwtUtil.getUserId(device.accessToken())).isEqualTo(String.valueOf(device.userId()));
+    @Test
+    void 기기_등록은_access_refresh_쌍을_발급하고_userId는_access_토큰_sub로만_전달한다() {
+        String deviceId = UUID.randomUUID().toString();
+        UserRegisterResponse device = registerDevice(deviceId);
+
+        // 응답 본문에 userId 필드는 없다(UserApiIntegrationTest) — FE는 access 토큰의 sub에서 읽는다.
+        // sub가 "숫자"인 것만으로는 부족하고, 이 deviceId로 실제 만들어진 유저의 id여야 한다
+        Long registeredId = userRepository
+                .findByProviderAndProviderUserId(Provider.DEVICE, deviceId)
+                .orElseThrow()
+                .getId();
+        assertThat(jwtUtil.getUserId(device.accessToken())).isEqualTo(String.valueOf(registeredId));
         assertThat(device.refreshToken()).hasSize(36); // opaque UUID
     }
 
@@ -99,7 +111,7 @@ class AuthApiIntegrationTest {
         assertThat(result).hasStatusOk();
         TokenResponse rotated = readBody(result, TokenResponse.class);
         assertThat(rotated.refreshToken()).isNotEqualTo(device.refreshToken());
-        assertThat(jwtUtil.getUserId(rotated.accessToken())).isEqualTo(String.valueOf(device.userId()));
+        assertThat(jwtUtil.getUserId(rotated.accessToken())).isEqualTo(jwtUtil.getUserId(device.accessToken()));
 
         // 회전된 구 토큰 재사용 → 거부 + 탈취 의심으로 전체 폐기 (방금 발급한 새 토큰까지)
         assertThat(refreshRequest(device.refreshToken()))
@@ -116,7 +128,7 @@ class AuthApiIntegrationTest {
         UserRegisterResponse first = registerDevice(deviceId);
         UserRegisterResponse again = registerDevice(deviceId);
 
-        assertThat(again.userId()).isEqualTo(first.userId());
+        assertThat(jwtUtil.getUserId(again.accessToken())).isEqualTo(jwtUtil.getUserId(first.accessToken()));
         assertThat(again.refreshToken()).isNotEqualTo(first.refreshToken());
         assertThat(refreshRequest(first.refreshToken())).hasStatus(HttpStatus.UNAUTHORIZED);
         assertThat(refreshRequest(again.refreshToken())).hasStatusOk();

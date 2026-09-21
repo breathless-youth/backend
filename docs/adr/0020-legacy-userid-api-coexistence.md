@@ -54,7 +54,7 @@ ADR-0019(BY-526)로 모든 보호 API가 `Authorization: Bearer` + `@Authenticat
 ## 구 앱 표면 (v1.2.1 = prod 계약, `git diff v1.2.1 dev`로 확인)
 | # | 메서드·경로 | userId 위치 | 토큰 계약(v2) |
 |---|---|---|---|
-| 0 | `POST /api/users` | — (응답 `{userId, isNew}`) | 응답에 토큰 쌍 추가 |
+| 0 | `POST /api/users` | — (응답 `{userId, isNew}`) | `{isNew, accessToken, refreshToken}` — userId는 토큰 `sub` (BY-715) |
 | 1 | `GET /api/users/{userId}/profile` | path | `GET /api/users/me/profile` |
 | 2 | `PATCH /api/users/{userId}/profile` | path | `PATCH /api/users/me/profile` |
 | 3 | `POST /api/rooms` | body `{userId}` | 본문 없음 |
