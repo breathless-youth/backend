@@ -11,6 +11,7 @@ import project.study.metrics.scheduler.DailyReportScheduler;
 import project.study.metrics.service.DailyReportService;
 import project.study.studysession.repository.StudySessionRepository;
 import project.study.studysession.service.StudySessionService;
+import project.study.subject.service.StudySubjectService;
 import project.study.user.service.UserService;
 
 /**
@@ -23,6 +24,7 @@ class FeatureSwitchTest {
             .withBean(UserService.class, () -> mock(UserService.class))
             .withBean(StudySessionService.class, () -> mock(StudySessionService.class))
             .withBean(StudySessionRepository.class, () -> mock(StudySessionRepository.class))
+            .withBean(StudySubjectService.class, () -> mock(StudySubjectService.class))
             .withBean(Clock.class, Clock::systemUTC)
             .withUserConfiguration(DevDataSeeder.class);
 
