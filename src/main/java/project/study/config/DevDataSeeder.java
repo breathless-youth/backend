@@ -18,14 +18,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.dto.StudySessionCreateRequest;
+import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.repository.StudySessionRepository;
 import project.study.studysession.service.StudySessionService;
+import project.study.subject.dto.SubjectResponse;
+import project.study.subject.service.StudySubjectService;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.service.UserService;
 
 /**
- * 목데이터 시더 — 데모 유저와 엣지케이스 세션 5건 + 최근 30일 하루 0~8개 랜덤 세션을 시딩한다.
+ * 목데이터 시더 — 데모 유저·과목 3개와 엣지케이스 세션 5건(앞 3건에 과목 구간) + 최근 30일 하루 0~8개 랜덤 세션을 시딩한다.
  * {@code app.seed.enabled=true}일 때만 뜬다(dev yaml에서 켠다). 프로필 이름이 아니라 스위치에 묶는 이유: 고정 deviceId는
  * 우리 인증 모델에서 곧 자격증명이라, 프로필 값이 잘못 들어온 운영에서 조용히 켜지면 안 된다 — 값이 없으면 꺼짐 (BY-640).
  * 세션이 아예 없는 날도 섞여있어 스트릭이 끊기는 케이스, 빈 날짜 조회도 데모 데이터로 확인할 수 있다.
@@ -57,6 +60,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private final UserService userService;
     private final StudySessionService studySessionService;
     private final StudySessionRepository studySessionRepository;
+    private final StudySubjectService subjectService;
     private final Clock clock;
 
     @Override
@@ -65,32 +69,45 @@ public class DevDataSeeder implements ApplicationRunner {
         Long userId =
                 userService.register(new UserRegisterRequest(DEMO_DEVICE_ID)).userId();
         studySessionRepository.deleteByUserId(userId);
+        List<Long> subjectIds = seedSubjects(userId);
 
         // 서브초를 버려야 세션 1이 자정에 걸릴 때(01~03시 기동) 조각별 내림 초 합계가 원본 총초와 같아진다
         Instant now = clock.instant().truncatedTo(ChronoUnit.SECONDS);
         LocalDate today = now.atZone(KST).toLocalDate();
 
-        List<Range> curatedRanges = seedCuratedSessions(userId, now, today);
+        List<Range> curatedRanges = seedCuratedSessions(userId, now, today, subjectIds);
         int generated = seedRandomDays(userId, today, curatedRanges);
 
         log.info(
-                "dev 목데이터 시딩 완료 — 데모 userId={} (deviceId={}), 엣지케이스 5건 + 랜덤 {}건 제출", userId, DEMO_DEVICE_ID, generated);
+                "dev 목데이터 시딩 완료 — 데모 userId={} (deviceId={}), 과목 {}개, 엣지케이스 5건 + 랜덤 {}건 제출",
+                userId,
+                DEMO_DEVICE_ID,
+                subjectIds.size(),
+                generated);
     }
 
-    /** 엣지케이스 세션 5건을 제출하고, 고정 시각 세션 2~5의 구간을 반환한다 — 랜덤 시딩이 이 구간을 피해 생성한다. */
-    private List<Range> seedCuratedSessions(Long userId, Instant now, LocalDate today) {
-        // 1) 오늘: 3시간 전~1시간 전 2시간 세션 — 미래 시각 검증을 피하려고 현재 시각 기준으로 잡는다
-        Instant s1 = now.minus(Duration.ofHours(3));
-        submit(
-                userId,
-                s1,
-                now.minus(Duration.ofHours(1)),
-                List.of(
-                        event(EventStatus.PHONE, s1.plus(Duration.ofMinutes(30)), s1.plus(Duration.ofMinutes(40))),
-                        event(EventStatus.AWAY, s1.plus(Duration.ofMinutes(70)), s1.plus(Duration.ofMinutes(80))),
-                        event(EventStatus.SLEEP, s1.plus(Duration.ofMinutes(100)), s1.plus(Duration.ofMinutes(110)))));
+    /** 데모 과목 3개 — 이미 있으면(재시작) 살아있는 과목을 순서대로 다시 쓴다. 과목은 soft delete라 세션처럼 갈아끼우지 않는다. */
+    private List<Long> seedSubjects(Long userId) {
+        List<SubjectResponse> existing = subjectService.list(userId);
+        if (existing.size() >= 3) {
+            return existing.subList(0, 3).stream().map(SubjectResponse::id).toList();
+        }
+        List<Long> ids =
+                new ArrayList<>(existing.stream().map(SubjectResponse::id).toList());
+        for (String name : List.of("영어", "수학", "국어").subList(existing.size(), 3)) {
+            ids.add(subjectService.create(userId, name).id());
+        }
+        return ids;
+    }
 
-        // 2) 어제 14~17시: DEVICE 20분 + PAUSE 10분
+    /**
+     * 엣지케이스 세션 5건을 제출하고, 고정 시각 세션 2~5의 구간을 반환한다 — 랜덤 시딩이 이 구간을 피해 생성한다.
+     * 앞 3건에는 과목 구간을 실어 기록 탭 타임테이블에 과목 색이 보이게 한다 (ADR-0023).
+     */
+    private List<Range> seedCuratedSessions(Long userId, Instant now, LocalDate today, List<Long> subjects) {
+        seedTodaySession(userId, now, subjects);
+
+        // 2) 어제 14~17시: DEVICE 20분 + PAUSE 10분 — 국어 3시간 내내
         Instant s2 = kst(today.minusDays(1), 14);
         submit(
                 userId,
@@ -98,11 +115,19 @@ public class DevDataSeeder implements ApplicationRunner {
                 kst(today.minusDays(1), 17),
                 List.of(
                         event(EventStatus.DEVICE, s2.plus(Duration.ofMinutes(60)), s2.plus(Duration.ofMinutes(80))),
-                        event(EventStatus.PAUSE, s2.plus(Duration.ofMinutes(120)), s2.plus(Duration.ofMinutes(130)))));
+                        event(EventStatus.PAUSE, s2.plus(Duration.ofMinutes(120)), s2.plus(Duration.ofMinutes(130)))),
+                List.of(segment(subjects.get(2), s2, kst(today.minusDays(1), 17))));
 
-        // 3) 2일 전 20:00~21:30: 이벤트 없음 (집중률 100%)
+        // 3) 2일 전 20:00~21:30: 이벤트 없음 (집중률 100%) — 수학 45분, 영어 45분
         Instant s3 = kst(today.minusDays(2), 20);
-        submit(userId, s3, s3.plus(Duration.ofMinutes(90)), List.of());
+        submit(
+                userId,
+                s3,
+                s3.plus(Duration.ofMinutes(90)),
+                List.of(),
+                List.of(
+                        segment(subjects.get(1), s3, s3.plus(Duration.ofMinutes(45))),
+                        segment(subjects.get(0), s3.plus(Duration.ofMinutes(45)), s3.plus(Duration.ofMinutes(90)))));
 
         // 4) 3일 전 23시~2일 전 1시: 자정을 넘겨 두 세션으로 분할 저장, PHONE 20분이 자정에 10분씩 걸침
         Instant midnight = today.minusDays(2).atStartOfDay(KST).toInstant();
@@ -128,6 +153,25 @@ public class DevDataSeeder implements ApplicationRunner {
                 new Range(s3, s3.plus(Duration.ofMinutes(90))),
                 new Range(midnight.minus(Duration.ofHours(1)), midnight.plus(Duration.ofHours(1))),
                 new Range(s5, s5.plus(Duration.ofMinutes(45))));
+    }
+
+    /**
+     * 1) 오늘: 3시간 전~1시간 전 2시간 세션 — 미래 시각 검증을 피하려고 현재 시각 기준으로 잡는다.
+     * 영어 0~50분, 수학 50~100분, 100~120분은 과목 미선택. 랜덤 시딩이 오늘을 건너뛰므로 구간 목록에는 넣지 않는다.
+     */
+    private void seedTodaySession(Long userId, Instant now, List<Long> subjects) {
+        Instant s1 = now.minus(Duration.ofHours(3));
+        submit(
+                userId,
+                s1,
+                now.minus(Duration.ofHours(1)),
+                List.of(
+                        event(EventStatus.PHONE, s1.plus(Duration.ofMinutes(30)), s1.plus(Duration.ofMinutes(40))),
+                        event(EventStatus.AWAY, s1.plus(Duration.ofMinutes(70)), s1.plus(Duration.ofMinutes(80))),
+                        event(EventStatus.SLEEP, s1.plus(Duration.ofMinutes(100)), s1.plus(Duration.ofMinutes(110)))),
+                List.of(
+                        segment(subjects.get(0), s1, s1.plus(Duration.ofMinutes(50))),
+                        segment(subjects.get(1), s1.plus(Duration.ofMinutes(50)), s1.plus(Duration.ofMinutes(100)))));
     }
 
     /**
@@ -201,8 +245,17 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     private void submit(Long userId, Instant startedAt, Instant endedAt, List<StatusEventRequest> events) {
+        submit(userId, startedAt, endedAt, events, null);
+    }
+
+    private void submit(
+            Long userId,
+            Instant startedAt,
+            Instant endedAt,
+            List<StatusEventRequest> events,
+            List<SubjectSegmentRequest> segments) {
         // studySec/focusSec는 요청값이 그대로 저장되므로, 앱이 보내듯 값을 계산해 보낸다.
-        // studySec은 PAUSE(일시정지) 구간만 빼고, focusSec은 전체 이벤트 구간을 뺀다.
+        // studySec은 PAUSE(일시정지) 구간만 빼고, focusSec은 전체 이벤트 구간을 뺀다. 과목별 값은 서버가 구간으로 계산한다.
         long totalSec = Duration.between(startedAt, endedAt).toSeconds();
         long pauseSec = events.stream()
                 .filter(event -> event.status() == EventStatus.PAUSE)
@@ -217,8 +270,12 @@ public class DevDataSeeder implements ApplicationRunner {
         int focusSec = (int) (totalSec - nonFocusSec);
         studySessionService.create(
                 userId,
-                new StudySessionCreateRequest(startedAt, endedAt, studySec, focusSec, events, null, null),
+                new StudySessionCreateRequest(startedAt, endedAt, studySec, focusSec, events, segments, null),
                 false);
+    }
+
+    private static SubjectSegmentRequest segment(Long subjectId, Instant startedAt, Instant endedAt) {
+        return new SubjectSegmentRequest(subjectId, startedAt, endedAt);
     }
 
     private static StatusEventRequest event(EventStatus status, Instant startedAt, Instant endedAt) {

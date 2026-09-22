@@ -77,3 +77,9 @@
   UI에서 과목 API 호출이 400이라 경로별로 실제 매핑 버전을 넣도록 고쳤다.
 - ⚠️ 테스트 헬퍼 `AuthTestSupport.asUser`는 `API-Version: 2`를 함께 싣는다. 과목 API 테스트는 헤더를
   직접 1로 지정해야 라우팅된다.
+
+## 갱신 (2026-09-22) — 과목 시간을 구간으로 받는다 (ADR-0023)
+
+§3의 합계 테이블 `study_session_subject_time`과 비례 배분, §4의 합계 검증은 ADR-0023으로 대체됐다. 앱은 과목 전환
+구간(`subjectSegments`)만 보내고 서버가 구간과 이벤트로 과목별 총공부·순공을 계산해 `study_session_subject_segment`에
+둔다(V20). §1(soft delete·지운 과목 허용)·§5(스냅샷 동일 필드)·§6(소유 검증은 컨트롤러)·§7(구 앱 경로 없음)은 그대로다.

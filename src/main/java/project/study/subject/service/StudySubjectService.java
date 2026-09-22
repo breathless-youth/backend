@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -19,9 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.CompletedTask;
-import project.study.studysession.dto.SubjectTimeRequest;
 import project.study.studysession.dto.SubjectTimeSum;
-import project.study.studysession.repository.StudySessionSubjectTimeRepository;
+import project.study.studysession.repository.StudySessionSubjectSegmentRepository;
 import project.study.subject.dto.SubjectResponse;
 import project.study.subject.dto.TaskResponse;
 import project.study.subject.dto.TaskUpdateRequest;
@@ -31,7 +31,7 @@ import project.study.subject.repository.StudySubjectLockRepository;
 import project.study.subject.repository.StudySubjectRepository;
 import project.study.subject.repository.StudyTaskRepository;
 
-/** 과목 > 할 일 관리와, 세션이 보내는 항목별 시간의 소유 검증 (BY-698, ADR-0021). 순서·색은 ADR-0022. */
+/** 과목 > 할 일 관리와, 세션이 보내는 과목 구간의 소유 검증 (BY-698, ADR-0021·0023). 순서·색은 ADR-0022. */
 @Service
 @RequiredArgsConstructor
 public class StudySubjectService {
@@ -49,7 +49,7 @@ public class StudySubjectService {
     private final StudySubjectRepository subjectRepository;
     private final StudySubjectLockRepository lockRepository;
     private final StudyTaskRepository taskRepository;
-    private final StudySessionSubjectTimeRepository subjectTimeRepository;
+    private final StudySessionSubjectSegmentRepository subjectSegmentRepository;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -150,15 +150,14 @@ public class StudySubjectService {
     }
 
     /**
-     * 세션 제출·스냅샷의 항목이 토큰 유저의 것인지 확인한다 — 위반은 400. 세션 중 지운 과목·할 일은 허용한다:
-     * 거절하면 공부 기록 전체가 함께 거절되고, 정책상 삭제해도 시간 기록은 남기기 때문이다.
+     * 세션 제출·스냅샷의 과목 구간이 토큰 유저의 과목인지 확인한다 — 위반은 400. 세션 중 지운 과목은 허용한다:
+     * 거절하면 공부 기록 전체가 함께 거절되고, 정책상 삭제해도 시간 기록은 남기기 때문이다 (ADR-0021 §1, ADR-0023).
      */
     @Transactional(readOnly = true)
-    public void assertOwned(Long userId, List<SubjectTimeRequest> times) {
-        if (times.isEmpty()) {
+    public void assertOwned(Long userId, Collection<Long> subjectIds) {
+        if (subjectIds.isEmpty()) {
             return;
         }
-        Set<Long> subjectIds = times.stream().map(SubjectTimeRequest::subjectId).collect(toSet());
         Set<Long> owned = subjectRepository.findByIdInAndUserId(subjectIds, userId).stream()
                 .map(StudySubject::getId)
                 .collect(toSet());
@@ -235,7 +234,7 @@ public class StudySubjectService {
                 clock.instant().atZone(KST).toLocalDate().atStartOfDay(KST).toInstant();
         Map<Long, List<StudyTask>> tasksBySubject = taskRepository.findVisible(subjectIds, todayStart).stream()
                 .collect(groupingBy(StudyTask::getSubjectId));
-        Map<Long, SubjectTimeSum> subjectSums = index(subjectTimeRepository.sumBySubjectIds(subjectIds));
+        Map<Long, SubjectTimeSum> subjectSums = index(subjectSegmentRepository.sumBySubjectIds(subjectIds));
 
         return subjects.stream()
                 .map(subject -> {

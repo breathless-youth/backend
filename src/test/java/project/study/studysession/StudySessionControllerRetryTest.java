@@ -38,7 +38,7 @@ class StudySessionControllerRetryTest {
     @Mock
     private StudySessionService studySessionService;
 
-    // 소유 검증은 컨트롤러가 먼저 부른다(ADR-0021·0022) — subjectTimes는 비어 있어 assertOwned는 아무것도 하지 않고,
+    // 소유 검증은 컨트롤러가 먼저 부른다(ADR-0021·0022) — subjectSegments는 비어 있어 assertOwned는 아무것도 하지 않고,
     // assertTasksOwned는 stub한 완료 목록을 돌려준다. 그 목록이 재시도에도 같은 인스턴스로 실리는지 verify로 본다
     @Mock
     private StudySubjectService subjectService;

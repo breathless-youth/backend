@@ -31,8 +31,8 @@ public record StudySessionResponse(
         @Schema(description = "비공부 상태 이벤트 목록 — 시작 시각 오름차순, 제출한 이벤트가 자정 분할로 나뉘면 각 세션에 조각으로 귀속된다")
         List<StatusEventResponse> events,
 
-        @Schema(description = "과목·할 일별 시간 — 제출한 subjectTimes가 자정 분할로 나뉘면 각 세션에 조각 몫으로 귀속된다. 없으면 []")
-        List<SubjectTimeResponse> subjectTimes,
+        @Schema(description = "과목 구간 — 시작 시각 오름차순. 자정 분할 조각에는 잘린 구간이 담기고 파생값은 그 조각 이벤트로 계산된다. 없으면 []")
+        List<SubjectSegmentResponse> subjectSegments,
 
         @Schema(description = "이 세션(조각)에서 완료한 할 일 ID — 오름차순. 자정 분할이면 완료 시각이 속한 조각에만 실린다. 없으면 []", example = "[12, 15]")
         List<Long> completedTaskIds) {
@@ -49,8 +49,8 @@ public record StudySessionResponse(
                 session.getFocusSec(),
                 focusRate,
                 session.getEvents().stream().map(StatusEventResponse::from).toList(),
-                session.getSubjectTimes().stream()
-                        .map(SubjectTimeResponse::from)
+                session.getSubjectSegments().stream()
+                        .map(SubjectSegmentResponse::from)
                         .toList(),
                 // Set은 순서가 없으니 정렬해 계약을 안정시킨다
                 session.getCompletedTaskIds().stream().sorted().toList());

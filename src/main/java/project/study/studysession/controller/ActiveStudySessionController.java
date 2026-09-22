@@ -56,7 +56,7 @@ public class ActiveStudySessionController {
     @PutMapping("/active")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void report(@AuthenticationPrincipal Long userId, @Valid @RequestBody ActiveSessionSnapshotRequest request) {
-        subjectService.assertOwned(userId, request.subjectTimesOrEmpty());
+        subjectService.assertOwned(userId, request.subjectIds());
         activeStudySessionService.reportSnapshot(userId, request);
     }
 
@@ -71,7 +71,9 @@ public class ActiveStudySessionController {
 
 					조회 직후 서버가 그 세션을 자동 확정하는 극단적 타이밍이 겹쳐도 받은 데이터로 이어서 \
 					보고·제출하면 대체 정책이 더 완전한 기록으로 수렴시키므로 클라이언트가 따로 처리할 것은 없다.""")
-    @ApiResponse(responseCode = "200", description = "진행중 스냅샷 — startedAt/reportedAt/studySec/focusSec/events")
+    @ApiResponse(
+            responseCode = "200",
+            description = "진행중 스냅샷 — startedAt/reportedAt/studySec/focusSec/events/subjectSegments")
     @ApiResponse(
             responseCode = "404",
             description = "진행중 세션 없음 — 이미 자동 확정됐거나 애초에 없던 경우. 확정본은 통계 조회에 이미 반영돼 있으므로 새로 시작하면 된다",
