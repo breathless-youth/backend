@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
@@ -47,7 +48,11 @@ class SubjectSegmentSplitTest {
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
+        service = new StudySessionService(
+                studySessionRepository,
+                activeStudySessionRepository,
+                CLOCK,
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
     }
 
     private static SubjectSegmentRequest seg(long subjectId, String start, String end) {

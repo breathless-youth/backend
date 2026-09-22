@@ -37,8 +37,9 @@ public class StudySessionStatsController {
                     보이지 않는다 (`studiedDatesInMonth`도 동일 기준 적용).
 
                     응답은 세션 목록과 그날 전체 통계를 함께 담은 객체다.
-                    - `sessions` — 세션 요약 목록, 시작 시각 내림차순. 원본 이벤트 목록(시각)은 미포함이고, \
-                    각 세션 항목 안에 그 세션의 상태별 이벤트 건수(`sessions[].eventCounts`)만 담긴다
+                    - `sessions` — 세션 요약 목록, 시작 시각 내림차순. 각 항목에 상태별 이벤트 건수(`eventCounts`)와 함께 \
+                    원본 이벤트(`events`)·과목 구간(`subjectSegments`, 서버 계산 시간 포함)·완료한 할 일(`completedTasks`, 이름 포함)이 \
+                    담긴다 — 날짜 상세·타임테이블·세션 바텀시트를 이 응답 하나로 그린다 (BY-734)
                     - `sessionCount` — 조회된 세션 개수 (자정 분할 세션은 각각 1개로 센다)
                     - `totalStudySec` / `totalFocusSec` — 그날 총 공부 시간·순공 시간 합계(초) — sessions[].studySec/focusSec의 합
                     - `longestFocusSec` — 그날 최장집중시간(초). 세션 하나 안에서 이벤트(PHONE/DEVICE/AWAY/SLEEP/PAUSE)로 끊기지 \
@@ -47,11 +48,15 @@ public class StudySessionStatsController {
                     - `totalEventCounts` — 그날 전체 상태별 이벤트 발생 건수 합계 — sessions[].eventCounts를 모두 더한 값. 없는 상태도 0으로 내려간다
                     - `studiedDatesInMonth` — `date`가 속한 달 동안 공부 기록이 있는 날짜 목록. \
                     캘린더에 공부일을 표시하는 용도(중복 없음, 오름차순)
+                    - `subjects` — 그날 세션이 참조한 과목의 이름·색(id 오름차순). 지운 과목도 포함되며(deleted=true), \
+                    sessions[].subjectSegments[].subjectId와 completedTasks[].subjectId를 여기서 찾는다
 
                     존재하지 않는 userId거나 기록 없는 날짜면 sessions는 빈 배열, sessionCount는 0, \
                     합계는 0, longestFocusSec은 0, focusRate는 0.0, totalEventCounts는 모든 상태 0인 객체가 내려온다. \
                     studiedDatesInMonth는 해당 달의 기록 여부와 무관하게 항상 계산된다.""")
-    @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 목록 + 세션 개수 + 그날 합계·집중률·상태별 이벤트 건수")
+    @ApiResponse(
+            responseCode = "200",
+            description = "조회 성공 — 세션 목록(이벤트·과목 구간·완료 할 일 포함) + 세션 개수 + 그날 합계·집중률·상태별 이벤트 건수 + 참조 과목 이름·색")
     @GetMapping(version = "2")
     public StudySessionListResponse list(
             @AuthenticationPrincipal Long userId,

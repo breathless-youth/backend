@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.studysession.dto.StudySessionListResponse;
+import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
@@ -44,7 +45,11 @@ class StudySessionServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
+        service = new StudySessionService(
+                studySessionRepository,
+                activeStudySessionRepository,
+                CLOCK,
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
     }
 
     private StatusEvent event(EventStatus status, String startedAt, String endedAt) {

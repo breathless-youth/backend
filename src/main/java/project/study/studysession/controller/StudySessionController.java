@@ -78,7 +78,7 @@ public class StudySessionController {
 
                     **완료한 할 일** — `completedTaskIds`로 세션 중 체크한 할 일을 함께 보낸다(선택, ADR-0022). 토큰 유저의 \
                     할 일이 아니면 400이고 세션 중 지운 할 일은 허용된다. 자정 분할이면 각 할 일은 완료 시각이 속한 조각 하나에만 \
-                    붙고(없거나 밖이면 마지막 조각) 응답 각 세션의 `completedTaskIds`에 실린다. 스냅샷·복구·자동 확정에는 실리지 않는다.
+                    붙고(없거나 밖이면 마지막 조각) 응답 각 세션의 `completedTasks`(이름 포함)에 실리며, 참조한 과목의 이름·색은 `subjects`에 실린다(지운 것도 포함, BY-734). 스냅샷·복구·자동 확정에는 실리지 않는다.
 
                     **멱등 재제출 — 중복 저장 방지.** 토큰의 userId + `startedAt`이 멱등 키다. 같은 키로 다시 제출하면 \
                     (앱 강제종료 후 재접속해 로컬 보관분을 재전송하는 경우 등) 새로 저장하지 않고 이미 저장된 \
@@ -88,7 +88,7 @@ public class StudySessionController {
     @ApiResponse(
             responseCode = "201",
             description =
-                    "저장 성공 — studySec/focusSec/focusRate/statDate·subjectSegments·completedTaskIds를 포함한 세션 배열 (자정 분할 시 2개)")
+                    "저장 성공 — studySec/focusSec/focusRate/statDate·subjectSegments·completedTasks·subjects를 포함한 세션 배열 (자정 분할 시 2개)")
     @ApiResponse(
             responseCode = "400",
             description = "검증 실패 — 시간 규칙 위반, 이벤트 겹침, 필수 값 누락 등",
@@ -167,7 +167,7 @@ public class StudySessionController {
             summary = "세션 단건 상세 조회",
             description =
                     "세션 id로 단건 상세를 조회한다. events에 비공부 상태 구간(status·시각)이 원시로 담긴다. " + "토큰의 유저가 소유자가 아니거나 없는 세션이면 404.")
-    @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 상세 + 이벤트 구간 + 과목별 시간·완료한 할 일")
+    @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 상세 + 이벤트 구간 + 과목 구간·완료한 할 일(이름) + 참조 과목 이름·색")
     @ApiResponse(
             responseCode = "404",
             description = "세션을 찾을 수 없음 — 존재하지 않거나 다른 유저의 세션",

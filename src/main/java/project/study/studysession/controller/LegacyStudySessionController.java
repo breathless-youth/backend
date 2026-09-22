@@ -19,6 +19,7 @@ import project.study.studysession.dto.LegacyActiveSessionSnapshotRequest;
 import project.study.studysession.dto.LegacyStudySessionCreateRequest;
 import project.study.studysession.dto.SessionRecoveryResponse;
 import project.study.studysession.dto.StudySessionResponse;
+import project.study.studysession.service.StudySessionService;
 import project.study.user.service.UserService;
 
 /**
@@ -39,6 +40,7 @@ public class LegacyStudySessionController {
     private final StudySessionController studySessionController;
     private final ActiveStudySessionController activeStudySessionController;
     private final UserService userService;
+    private final StudySessionService studySessionService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -48,7 +50,8 @@ public class LegacyStudySessionController {
 
     @GetMapping("/{id}")
     public StudySessionResponse detail(@PathVariable Long id, @RequestParam Long userId) {
-        return studySessionController.detail(userId, id);
+        // 익명 userId 경로라 과목·할 일 이름은 싣지 않는다 (BY-734) — 구 앱은 그 필드를 읽지 않는다
+        return studySessionService.findById(userId, id, false);
     }
 
     @PutMapping("/active")

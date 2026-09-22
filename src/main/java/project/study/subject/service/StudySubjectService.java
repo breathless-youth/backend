@@ -20,8 +20,12 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.CompletedTask;
+import project.study.studysession.dto.CompletedTaskResponse;
+import project.study.studysession.dto.SubjectLookup;
+import project.study.studysession.dto.SubjectRef;
 import project.study.studysession.dto.SubjectTimeSum;
 import project.study.studysession.repository.StudySessionSubjectSegmentRepository;
+import project.study.studysession.service.SubjectLookupProvider;
 import project.study.subject.dto.SubjectResponse;
 import project.study.subject.dto.TaskResponse;
 import project.study.subject.dto.TaskUpdateRequest;
@@ -34,7 +38,7 @@ import project.study.subject.repository.StudyTaskRepository;
 /** 과목 > 할 일 관리와, 세션이 보내는 과목 구간의 소유 검증 (BY-698, ADR-0021·0023). 순서·색은 ADR-0022. */
 @Service
 @RequiredArgsConstructor
-public class StudySubjectService {
+public class StudySubjectService implements SubjectLookupProvider {
 
     /** 시트 스크롤·서버 부담의 안전선 — 실제로 닿을 일은 드물다 (인터뷰 13차 확정). */
     public static final int MAX_SUBJECTS = 20;
@@ -183,6 +187,36 @@ public class StudySubjectService {
         return owned.stream()
                 .map(task -> new CompletedTask(task.getId(), task.getDoneAt()))
                 .toList();
+    }
+
+    /**
+     * 세션 응답에 실을 과목·할 일 이름 (BY-734). deleted_at을 무시한다 — 세션 기록은 지운 과목·할 일도 남기고,
+     * 할 일 목록 API는 "미완료 + 오늘 완료"만 주므로 어제 완료한 할 일의 이름은 이 경로가 유일한 출처다.
+     * 소유는 세션이 이미 그 유저 것이라 다시 보지 않는다.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public SubjectLookup lookup(Collection<Long> subjectIds, Collection<Long> taskIds) {
+        if (subjectIds.isEmpty() && taskIds.isEmpty()) {
+            return SubjectLookup.EMPTY;
+        }
+        Map<Long, CompletedTaskResponse> tasks = taskRepository.findAllById(taskIds).stream()
+                .collect(toMap(
+                        StudyTask::getId,
+                        task -> new CompletedTaskResponse(
+                                task.getId(), task.getName(), task.getSubjectId(), task.getDeletedAt() != null)));
+        // 할 일의 과목이 구간에 없어도 이름·색이 필요하다
+        Set<Long> allSubjectIds = new HashSet<>(subjectIds);
+        tasks.values().forEach(task -> allSubjectIds.add(task.subjectId()));
+        Map<Long, SubjectRef> subjects = subjectRepository.findAllById(allSubjectIds).stream()
+                .collect(toMap(
+                        StudySubject::getId,
+                        subject -> new SubjectRef(
+                                subject.getId(),
+                                subject.getName(),
+                                subject.getColorIndex(),
+                                subject.getDeletedAt() != null)));
+        return new SubjectLookup(subjects, tasks);
     }
 
     private List<StudySubject> liveSubjects(Long userId) {
