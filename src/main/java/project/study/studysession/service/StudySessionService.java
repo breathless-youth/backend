@@ -27,10 +27,10 @@ import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.dto.StudySessionSummaryResponse;
+import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
-import project.study.studysession.entity.StudySessionSubjectTime;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
@@ -86,7 +86,7 @@ public class StudySessionService {
                 request.studySec(),
                 request.focusSec(),
                 events,
-                new SessionAttachments(request.getSubjectTimeList(), completedTasks));
+                new SessionAttachments(request.subjectSegmentsOrEmpty(), completedTasks));
         if (autoFinalized) {
             sessions.forEach(StudySession::markAutoFinalized);
         }
@@ -193,7 +193,7 @@ public class StudySessionService {
                 userId, startedAt, endedAt, studySec, focusSec, events, SessionAttachments.NONE);
     }
 
-    /** 과목·할 일별 시간(subjectTimes)도 함께 검증하고 조각마다 세션과 같은 가중치로 배분한다 (ADR-0021). */
+    /** 과목 구간(subjectSegments)도 함께 검증하고 조각마다 잘라 그 조각의 이벤트로 과목별 시간을 계산한다 (ADR-0023). */
     List<StudySession> validateAndBuildSessions(
             Long userId,
             Instant startedAt,
@@ -201,7 +201,7 @@ public class StudySessionService {
             int studySec,
             int focusSec,
             List<StatusEvent> events,
-            List<StudySessionSubjectTime> subjectTimes) {
+            List<SubjectSegmentRequest> subjectSegments) {
         return validateAndBuildSessions(
                 userId,
                 startedAt,
@@ -209,7 +209,7 @@ public class StudySessionService {
                 studySec,
                 focusSec,
                 events,
-                new SessionAttachments(subjectTimes, List.of()));
+                new SessionAttachments(subjectSegments, List.of()));
     }
 
     /** 완료 할 일(attachments.completedTasks)은 배분하지 않고 완료 시각이 속한 조각에 붙인다 (ADR-0022). */
@@ -235,10 +235,12 @@ public class StudySessionService {
         // 조각 이후에 검증
         validateStudySec(studySec, weights.totalStudyActiveSec());
         validateFocusSec(focusSec, studySec);
-        validateSubjectTimes(attachments.subjectTimes(), studySec);
+        List<SubjectSegmentRequest> sortedSegments = attachments.subjectSegments().stream()
+                .sorted(Comparator.comparing(SubjectSegmentRequest::startedAt))
+                .toList();
+        validateSubjectSegments(startedAt, endedAt, sortedSegments);
 
-        return buildSessions(
-                userId, cuts, weights, studySec, focusSec, attachments.subjectTimes(), attachments.completedTasks());
+        return buildSessions(userId, cuts, weights, studySec, focusSec, sortedSegments, attachments.completedTasks());
     }
 
     /**

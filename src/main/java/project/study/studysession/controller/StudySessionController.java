@@ -71,6 +71,11 @@ public class StudySessionController {
                     자정을 넘지 않으면 요소가 1개인 배열이 내려온다. \
                     정확히 자정에 시작하거나 끝나는 세션은 분할되지 않는다.
 
+                    **과목 구간** — `subjectSegments`로 과목을 선택한 채 공부한 구간(subjectId/startedAt/endedAt)을 함께 보낸다(선택, ADR-0023). \
+                    검증은 이벤트와 같다(세션 안·겹침 없음·맞닿음 허용·순서 무관). 과목별 총공부·순공은 앱이 보내지 않고 서버가 구간과 \
+                    비공부 이벤트를 겹쳐 계산해 응답 `subjectSegments`에 싣는다 — PAUSE 겹침은 둘 다에서, 나머지는 순공에서만 뺀다. \
+                    자정 분할이면 구간도 자정에서 잘려 조각마다 다시 계산된다.
+
                     **완료한 할 일** — `completedTaskIds`로 세션 중 체크한 할 일을 함께 보낸다(선택, ADR-0022). 토큰 유저의 \
                     할 일이 아니면 400이고 세션 중 지운 할 일은 허용된다. 자정 분할이면 각 할 일은 완료 시각이 속한 조각 하나에만 \
                     붙고(없거나 밖이면 마지막 조각) 응답 각 세션의 `completedTaskIds`에 실린다. 스냅샷·복구·자동 확정에는 실리지 않는다.
@@ -83,7 +88,7 @@ public class StudySessionController {
     @ApiResponse(
             responseCode = "201",
             description =
-                    "저장 성공 — studySec/focusSec/focusRate/statDate·subjectTimes·completedTaskIds를 포함한 세션 배열 (자정 분할 시 2개)")
+                    "저장 성공 — studySec/focusSec/focusRate/statDate·subjectSegments·completedTaskIds를 포함한 세션 배열 (자정 분할 시 2개)")
     @ApiResponse(
             responseCode = "400",
             description = "검증 실패 — 시간 규칙 위반, 이벤트 겹침, 필수 값 누락 등",
@@ -105,6 +110,8 @@ public class StudySessionController {
                                         value = "{\"message\": \"순공 시간은 0 이상, 총 공부 시간 이하여야 합니다\"}"),
                                 @ExampleObject(name = "이벤트 겹침", value = "{\"message\": \"이벤트 구간이 서로 겹칠 수 없습니다\"}"),
                                 @ExampleObject(name = "이벤트가 세션 밖", value = "{\"message\": \"이벤트는 세션 구간 안에 있어야 합니다\"}"),
+                                @ExampleObject(name = "과목 구간 겹침", value = "{\"message\": \"과목 구간이 서로 겹칠 수 없습니다\"}"),
+                                @ExampleObject(name = "남의 과목", value = "{\"message\": \"사용자의 과목이 아닙니다\"}"),
                                 @ExampleObject(name = "남의 할 일", value = "{\"message\": \"사용자의 할 일이 아닙니다\"}"),
                                 @ExampleObject(name = "필수 값 누락", value = "{\"message\": \"startedAt: 널이어서는 안됩니다\"}")
                             }))
@@ -133,7 +140,7 @@ public class StudySessionController {
     public List<StudySessionResponse> create(
             @AuthenticationPrincipal Long userId, @Valid @RequestBody StudySessionCreateRequest request) {
         // 과목·할 일 소유 검증은 세션 도메인 밖에서 먼저 한다 (ADR-0021·0022) — 재시도·멱등 경로와 무관한 순수 400 검증
-        subjectService.assertOwned(userId, request.subjectTimesOrEmpty());
+        subjectService.assertOwned(userId, request.subjectIds());
         List<CompletedTask> completedTasks = subjectService.assertTasksOwned(userId, request.completedTaskIdsOrEmpty());
         try {
             return studySessionService.create(userId, request, completedTasks, false);

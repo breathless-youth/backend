@@ -62,10 +62,11 @@ public class StudySession {
     @OrderBy("startedAt ASC")
     private List<StatusEvent> events = new ArrayList<>();
 
-    // 과목·할 일별 시간 (ADR-0021) — 이벤트와 같은 자식 컬렉션. 자정 분할 조각마다 비례 배분된 행이 생긴다
+    // 과목 구간 (ADR-0023) — 이벤트와 같은 자식 컬렉션. 자정 분할 조각마다 잘린 행이 생기고 파생값은 서버가 계산한다
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "session_id", nullable = false)
-    private List<StudySessionSubjectTime> subjectTimes = new ArrayList<>();
+    @OrderBy("startedAt ASC")
+    private List<StudySessionSubjectSegment> subjectSegments = new ArrayList<>();
 
     // 세션 제출 시 완료한 할 일 (ADR-0022) — (session_id, task_id)가 PK인 값 컬렉션이라 엔티티 대신 값으로 매핑한다.
     // 자정 분할이면 완료 시각이 속한 조각 하나에만 붙는다. 세션과 함께 저장·대체·삭제된다
@@ -106,9 +107,9 @@ public class StudySession {
         this.submissionStartedAt = submissionStartedAt;
     }
 
-    /** 조각별로 배분된 과목·할 일 시간을 붙인다 — 분할 직후 서비스만 호출한다. */
-    public void attachSubjectTimes(List<StudySessionSubjectTime> subjectTimes) {
-        this.subjectTimes = new ArrayList<>(subjectTimes);
+    /** 조각별로 잘라 계산한 과목 구간을 붙인다 — 분할 직후 서비스만 호출한다. */
+    public void attachSubjectSegments(List<StudySessionSubjectSegment> subjectSegments) {
+        this.subjectSegments = new ArrayList<>(subjectSegments);
     }
 
     /** 조각별로 귀속된 완료 할 일을 붙인다 — 분할 직후 서비스만 호출한다. */

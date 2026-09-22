@@ -35,8 +35,8 @@ import project.study.subject.service.StudySubjectService;
 
 @Tag(name = "StudySubject", description = """
                 과목 > 할 일 관리 API 모음 (BY-698). 세션 화면의 과목 시트가 쓴다 — 과목은 시간이 쌓이는 카테고리, \
-                할 일은 과목 하위의 체크 가능한 항목이다. 과목별 시간은 세션 제출·스냅샷의 `subjectTimes`로 들어오고 \
-                여기서는 누적 합계만 내려준다.
+                할 일은 과목 하위의 체크 가능한 항목이다. 과목별 시간은 세션 제출·스냅샷의 과목 구간(`subjectSegments`)으로 들어오고 \
+                서버가 계산한 값의 누적 합계만 여기서 내려준다.
 
                 ⚠️ **이 API만 `API-Version: 1`이다.** 다른 토큰 계약 API는 2를 쓰지만(ADR-0020) 과목 API는 \
                 구 앱이 호출하지 않아 버전을 가를 이유가 없어 기본버전 하나로 통일했다. 인증은 그대로 \
@@ -54,7 +54,7 @@ public class StudySubjectController {
 
             - **색** = `colorIndex`(0..19). 만들 때 서버가 덜 쓴 색을 배정하고 이후 바뀌지 않는다 — 앱은 팔레트에 매핑만 한다.
             - **보이는 할 일** = 미완료 전부 + 완료 시각이 오늘(KST)인 것. 어제 완료한 할 일은 숨지만 삭제되지 않는다.
-            - **누적 시간** = 저장된 모든 세션의 `subjectTimes` 합. 과목 시간은 할 일을 골랐든 과목만 골랐든 그 과목 전부의 합이다.
+            - **누적 시간** = 저장된 모든 세션의 과목 구간(`subjectSegments`)에서 서버가 계산한 총공부·순공의 합. 과목 시간은 할 일을 골랐든 과목만 골랐든 그 과목 전부의 합이다.
             - 과목이 하나도 없으면 빈 배열 — 앱은 이때 추천 칩을 보여준다.""")
     @ApiResponse(responseCode = "200", description = "과목 배열 — 각 원소에 tasks·studySec·focusSec")
     @GetMapping

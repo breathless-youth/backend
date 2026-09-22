@@ -5,8 +5,9 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import project.study.studysession.entity.StatusEvent;
-import project.study.studysession.entity.StudySessionSubjectTime;
 
 public record StudySessionCreateRequest(
         @Schema(
@@ -50,12 +51,12 @@ public record StudySessionCreateRequest(
         List<StatusEventRequest> events,
 
         @Schema(
-                description = "과목·할 일별 시간 목록 — 세션 중 항목을 선택한 채 잰 총 공부·순공 시간 (ADR-0021). 선택 필드라 "
-                        + "없거나 []이면 기존과 동일하게 저장된다. 항목 studySec 합은 studySec 이하, 항목 focusSec은 항목 studySec "
-                        + "이하여야 하고 subjectId는 토큰 유저의 과목이어야 한다(위반 400). 자정을 넘는 세션은 조각 길이에 "
-                        + "비례해 배분된다")
+                description = "과목 구간 목록 — 과목을 선택한 채 공부한 [startedAt, endedAt) (ADR-0023). 선택 필드라 없거나 []이면 "
+                        + "기존과 동일하게 저장된다. 구간은 세션 안에 있고 서로 겹치지 않아야 하며(맞닿음 허용, 순서 무관) subjectId는 "
+                        + "토큰 유저의 과목이어야 한다(위반 400). 구간 사이 빈 시간은 과목 미선택이다. 과목별 총공부·순공은 서버가 "
+                        + "비공부 이벤트와 겹쳐 계산해 응답 subjectSegments에 싣는다. 자정을 넘는 세션은 구간도 자정에서 잘린다")
         @Valid
-        List<SubjectTimeRequest> subjectTimes,
+        List<SubjectSegmentRequest> subjectSegments,
 
         @Schema(
                 description = "세션 중 완료한 할 일 ID 목록 (ADR-0022). 선택 필드라 없거나 []이면 없음. 토큰 유저의 할 일이어야 하고"
@@ -68,12 +69,15 @@ public record StudySessionCreateRequest(
     }
 
     /** 선택 필드라 null이면 빈 목록으로 다룬다. */
-    public List<SubjectTimeRequest> subjectTimesOrEmpty() {
-        return subjectTimes == null ? List.of() : subjectTimes;
+    public List<SubjectSegmentRequest> subjectSegmentsOrEmpty() {
+        return subjectSegments == null ? List.of() : subjectSegments;
     }
 
-    public List<StudySessionSubjectTime> getSubjectTimeList() {
-        return subjectTimesOrEmpty().stream().map(SubjectTimeRequest::toEntity).toList();
+    /** 소유 검증용 과목 id 집합 — 없으면 빈 집합. */
+    public Set<Long> subjectIds() {
+        return subjectSegmentsOrEmpty().stream()
+                .map(SubjectSegmentRequest::subjectId)
+                .collect(Collectors.toSet());
     }
 
     /** 선택 필드라 null이면 빈 목록, 중복은 한 번으로 본다. */

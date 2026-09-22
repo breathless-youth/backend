@@ -23,8 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import project.study.common.exception.BadRequestException;
 import project.study.studysession.dto.CompletedTask;
-import project.study.studysession.dto.SubjectTimeRequest;
-import project.study.studysession.repository.StudySessionSubjectTimeRepository;
+import project.study.studysession.repository.StudySessionSubjectSegmentRepository;
 import project.study.subject.dto.SubjectResponse;
 import project.study.subject.dto.TaskUpdateRequest;
 import project.study.subject.entity.StudySubject;
@@ -51,14 +50,14 @@ class StudySubjectServiceTest {
     private StudyTaskRepository taskRepository;
 
     @Mock
-    private StudySessionSubjectTimeRepository subjectTimeRepository;
+    private StudySessionSubjectSegmentRepository subjectSegmentRepository;
 
     private StudySubjectService service;
 
     @BeforeEach
     void setUp() {
         service = new StudySubjectService(
-                subjectRepository, lockRepository, taskRepository, subjectTimeRepository, CLOCK);
+                subjectRepository, lockRepository, taskRepository, subjectSegmentRepository, CLOCK);
     }
 
     /** 엔티티에 id setter를 두지 않으므로 테스트에서만 리플렉션으로 채운다. */
@@ -164,8 +163,7 @@ class StudySubjectServiceTest {
     void 다른_사용자의_과목이_섞이면_소유_검증이_거절한다() {
         when(subjectRepository.findByIdInAndUserId(Set.of(5L), 1L)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.assertOwned(1L, List.of(new SubjectTimeRequest(5L, 100, 90))))
-                .isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> service.assertOwned(1L, Set.of(5L))).isInstanceOf(BadRequestException.class);
     }
 
     @Test

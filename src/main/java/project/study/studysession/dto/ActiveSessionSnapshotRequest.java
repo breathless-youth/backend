@@ -5,7 +5,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
-import project.study.studysession.entity.StudySessionSubjectTime;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** 진행중 세션의 누적 스냅샷 — 30초마다 통째로 보내 서버 draft를 덮어쓴다 (BY-447). */
 public record ActiveSessionSnapshotRequest(
@@ -34,17 +35,20 @@ public record ActiveSessionSnapshotRequest(
         List<StatusEventRequest> events,
 
         @Schema(
-                description = "지금까지의 과목·할 일별 시간 전체 — 최종 제출의 subjectTimes와 같은 규칙. 진행 중인 항목은 "
-                        + "reportedAt 기준 누적값으로 보낸다. 선택 필드라 없거나 []이면 기존과 동일")
+                description = "지금까지의 과목 구간 전체 — 최종 제출의 subjectSegments와 같은 규칙(reportedAt을 세션 끝으로 본다). "
+                        + "진행 중인 구간은 reportedAt에서 닫아서 보낸다. 선택 필드라 없거나 []이면 기존과 동일")
         @Valid
-        List<SubjectTimeRequest> subjectTimes) {
+        List<SubjectSegmentRequest> subjectSegments) {
 
     /** 선택 필드라 null이면 빈 목록으로 다룬다. */
-    public List<SubjectTimeRequest> subjectTimesOrEmpty() {
-        return subjectTimes == null ? List.of() : subjectTimes;
+    public List<SubjectSegmentRequest> subjectSegmentsOrEmpty() {
+        return subjectSegments == null ? List.of() : subjectSegments;
     }
 
-    public List<StudySessionSubjectTime> getSubjectTimeList() {
-        return subjectTimesOrEmpty().stream().map(SubjectTimeRequest::toEntity).toList();
+    /** 소유 검증용 과목 id 집합 — 없으면 빈 집합. */
+    public Set<Long> subjectIds() {
+        return subjectSegmentsOrEmpty().stream()
+                .map(SubjectSegmentRequest::subjectId)
+                .collect(Collectors.toSet());
     }
 }

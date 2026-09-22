@@ -9,10 +9,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import project.study.studysession.dto.CompletedTask;
+import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
-import project.study.studysession.entity.StudySessionSubjectTime;
 
 /**
  * 세션을 KST 자정 경계로 분할하고, studySec/focusSec을 조각별로 배분하는 순수 로직 (BY-447, BY-471).
@@ -113,8 +113,9 @@ final class StudySessionSplitter {
     }
 
     /**
-     * 조각별 가중치대로 studySec/focusSec(과목·할 일별 시간 포함)을 비례 배분해 세션들을 만든다 — 마지막 조각이
-     * 나머지를 가져가 합이 항상 요청값과 같다. 완료 할 일은 배분하지 않고 완료 시각이 속한 조각에 붙인다.
+     * 조각별 가중치대로 studySec/focusSec을 비례 배분해 세션들을 만든다 — 마지막 조각이 나머지를 가져가 합이 항상
+     * 요청값과 같다. 과목 구간은 배분하지 않고 조각에 맞춰 잘라 다시 계산하며(ADR-0023), 완료 할 일은 완료 시각이 속한
+     * 조각에 붙인다.
      */
     static List<StudySession> buildSessions(
             Long userId,
@@ -122,11 +123,9 @@ final class StudySessionSplitter {
             SegmentWeights weights,
             int studySec,
             int focusSec,
-            List<StudySessionSubjectTime> subjectTimes,
+            List<SubjectSegmentRequest> subjectSegments,
             List<CompletedTask> completedTasks) {
         int segmentCount = cuts.size() - 1;
-        List<List<StudySessionSubjectTime>> subjectTimesBySegment =
-                splitSubjectTimes(subjectTimes, weights, segmentCount);
         List<Set<Long>> completedBySegment = splitCompletedTasks(completedTasks, cuts);
         List<StudySession> sessions = new ArrayList<>();
         long allocatedStudySec = 0;
@@ -142,7 +141,8 @@ final class StudySessionSplitter {
                     (int) segmentStudySec,
                     (int) segmentFocusSec,
                     weights.segmentEvents().get(i));
-            session.attachSubjectTimes(subjectTimesBySegment.get(i));
+            session.attachSubjectSegments(SubjectSegmentSplitter.clip(
+                    subjectSegments, weights.segmentEvents().get(i), cuts.get(i), cuts.get(i + 1)));
             session.attachCompletedTasks(completedBySegment.get(i));
             sessions.add(session);
             allocatedStudySec += segmentStudySec;
@@ -151,33 +151,6 @@ final class StudySessionSplitter {
         // 조각들이 원본 제출의 시작 시각을 루트로 공유해야 재제출 판별·응답 조회가 조각 단위로 어긋나지 않는다
         sessions.forEach(session -> session.attachToSubmission(cuts.get(0)));
         return sessions;
-    }
-
-    /**
-     * 항목별 시간을 조각마다 세션과 같은 가중치로 배분한다 (ADR-0021) — 항목마다 마지막 조각이 나머지를 가져가
-     * 합이 보존되고, 두 값이 모두 0인 조각은 행을 만들지 않는다.
-     */
-    static List<List<StudySessionSubjectTime>> splitSubjectTimes(
-            List<StudySessionSubjectTime> times, SegmentWeights weights, int segmentCount) {
-        List<List<StudySessionSubjectTime>> result = new ArrayList<>(segmentCount);
-        for (int i = 0; i < segmentCount; i++) {
-            result.add(new ArrayList<>());
-        }
-        for (StudySessionSubjectTime time : times) {
-            long allocatedStudy = 0;
-            long allocatedFocus = 0;
-            for (int i = 0; i < segmentCount; i++) {
-                boolean last = i == segmentCount - 1;
-                long study = last ? time.getStudySec() - allocatedStudy : studyShare(weights, i, time.getStudySec());
-                long focus = last ? time.getFocusSec() - allocatedFocus : focusShare(weights, i, time.getFocusSec());
-                allocatedStudy += study;
-                allocatedFocus += focus;
-                if (study > 0 || focus > 0) {
-                    result.get(i).add(new StudySessionSubjectTime(time.getSubjectId(), (int) study, (int) focus));
-                }
-            }
-        }
-        return result;
     }
 
     /**
