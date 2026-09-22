@@ -164,14 +164,14 @@ ALTER TABLE active_study_session ADD COLUMN subject_segments JSONB NOT NULL DEFA
 // StudySessionResponse — subjectTimes → subjectSegments, completedTaskIds → completedTasks, subjects 추가
 ```
 
-### 5.2 조립
+### 5.2 조립 (구현 중 갱신)
 
-ADR-0021 §6의 방향(세션 도메인은 과목 엔티티를 모른다, 의존은 subject → studysession.dto)을 지킨다.
+ADR-0021 §6의 방향(세션 도메인은 과목 엔티티를 모른다, 의존은 subject → studysession)을 지킨다.
 
-- `StudySubjectService.lookup(Collection<Long> subjectIds, Collection<Long> taskIds)` → `SubjectLookup(subjects, tasks)`. **`deleted_at`을 무시**한다 — 이 경로가 지운 과목·어제 완료한 할 일 이름의 유일한 출처다. 소유는 세션이 이미 그 유저 것이라 다시 검증하지 않는다.
-- `SubjectLookup`·`SubjectRef(id, name, colorIndex, deleted)`·`TaskRef(id, name, subjectId, deleted)` 레코드는 `CompletedTask`처럼 **`studysession.dto`에 둔다** — 과목 도메인이 만들어 세션 DTO에 넘기는 값이라, 의존 방향이 subject → studysession.dto 하나로 유지된다.
-- 세션 서비스는 id만 채운 응답을 만들고, 컨트롤러(`StudySessionStatsController.list`, `StudySessionController.create`·`detail`)가 `lookup`으로 `subjects[]`·`completedTasks[]`를 채운다. 조립은 DTO의 `resolve(SubjectLookup)`가 한다.
-- 구 앱(Legacy) 컨트롤러는 조립하지 않고 빈 배열로 둔다.
+- 세션 도메인이 소유한 인터페이스 `studysession.service.SubjectLookupProvider.lookup(Collection<Long> subjectIds, Collection<Long> taskIds)` → `SubjectLookup`을 `StudySubjectService`가 구현한다. **`deleted_at`을 무시**한다 — 이 경로가 지운 과목·어제 완료한 할 일 이름의 유일한 출처다. 완료 할 일의 과목이 구간에 없어도 함께 싣는다. 소유는 세션이 이미 그 유저 것이라 다시 검증하지 않는다.
+- `SubjectLookup`·`SubjectRef(id, name, colorIndex, deleted)`·`CompletedTaskResponse(id, name, subjectId, deleted)` 레코드는 `CompletedTask`처럼 **`studysession.dto`에 둔다**.
+- `StudySessionService`가 제공자를 주입받아 응답을 만들 때(`create`·`findExistingSubmission`·`findById`·`list`) 세션들이 참조한 id를 모아 **한 번** 조회하고 DTO에 붙인다. 세션 단위테스트는 람다 `(s, t) -> SubjectLookup.EMPTY`로 대신한다.
+- 처음 설계한 "컨트롤러 조립"은 기각 — 구 앱 컨트롤러가 v2 컨트롤러 메서드에 위임해 두 곳이 어긋날 수 있고, 제출 응답까지 세 경로가 같은 조립을 반복한다. 구 앱은 같은 응답을 받지만 필드 추가만이라 영향 없다.
 
 ### 5.3 테스트·문서
 

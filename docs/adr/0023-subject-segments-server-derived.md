@@ -53,6 +53,19 @@
 - 코드: `SubjectSegmentSplitter`(절단·계산 순수 로직), `StudySessionValidator.validateSubjectSegments`,
   `StudySubjectService.assertOwned(userId, subjectIds)`. 비례 배분(`splitSubjectTimes`)·합계 검증은 사라진다.
 - dev 시더가 데모 과목 3개와 큐레이션 세션 3건의 구간을 심는다.
-- 후속: BY-734가 일간 목록·상세 응답에 이벤트·구간·완료 할 일과 과목 이름·색을 싣는다(ADR-0022 §9의 읽기 후속).
-  이벤트 요청(`StatusEventRequest`)의 나노초는 같은 부류의 잠재 문제가 남아 있다 — 앱(웹뷰)은 밀리초만 보내 실제로는
+- 이벤트 요청(`StatusEventRequest`)의 나노초는 같은 부류의 잠재 문제가 남아 있다 — 앱(웹뷰)은 밀리초만 보내 실제로는
   닿지 않으므로 이번엔 건드리지 않았다.
+
+## 갱신 (2026-09-22) — 일간 조회에 이름·색을 붙인다 (BY-734, ADR-0022 §9의 읽기 후속)
+
+- `GET /api/stats?date=`의 `sessions[]`마다 `events[]`·`subjectSegments[]`·`completedTasks[]`(id·name·subjectId·deleted)를 싣고,
+  응답 최상위 `subjects[]`(id·name·colorIndex·deleted)에 그날 세션이 참조한 과목을 id 오름차순으로 한 번 붙인다. 날짜 상세·
+  타임테이블·세션 바텀시트를 이 응답 하나로 그린다. `StudySessionResponse`(상세·제출)는 `completedTaskIds` → `completedTasks[]`로
+  바꾸고 `subjects[]`를 더해 모양을 맞춘다. 구 앱이 읽는 필드는 그대로다(구 앱 컨트롤러는 v2 메서드에 위임).
+- **이름 조회는 `deleted_at`을 무시한다.** 지운 과목·할 일도 기록엔 남고(ADR-0021 §1), 할 일 목록 API가 "미완료 + 오늘 완료"만
+  주므로 어제 완료한 할 일의 이름은 이 경로가 유일한 출처다. 완료 할 일의 과목이 구간에 없어도 함께 싣는다.
+- **조립은 세션 서비스가 하되, 과목 도메인은 세션 도메인이 소유한 `SubjectLookupProvider` 인터페이스로만 닿는다.**
+  `StudySubjectService`가 구현하고 `StudySessionService`가 주입받아 세션들이 참조한 id를 모아 한 번 조회한다. 의존 방향은
+  여전히 subject → studysession뿐이고(ADR-0021 §6), 세션 단위테스트는 람다(`(s, t) -> SubjectLookup.EMPTY`)로 대신한다.
+  - 컨트롤러 조립은 기각: 구 앱 컨트롤러가 v2 컨트롤러 메서드에 위임하므로 두 곳이 어긋날 수 있고, 제출 응답(`create`)까지
+    세 경로에서 같은 조립을 반복하게 된다.
