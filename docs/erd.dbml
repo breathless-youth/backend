@@ -69,7 +69,7 @@ Table status_event {
 }
 
 // ---------------------------------------------------------
-// 과목 > 할 일 / 세션 과목 시간 (ADR-0021, BY-698)
+// 과목 > 할 일 / 세션 과목 구간 (ADR-0021·0023)
 // ---------------------------------------------------------
 
 Table study_subject {
@@ -101,12 +101,14 @@ Table study_task {
   }
 }
 
-Table study_session_subject_time {
+Table study_session_subject_segment {
   id bigint [primary key, increment]
   session_id bigint [ref: > study_session.id, not null]   // ON DELETE CASCADE — 세션과 함께 사라진다
-  subject_id bigint [ref: > study_subject.id, not null]   // 측정 단위는 과목뿐이다 (V17에서 task_id 제거)
-  study_sec integer [not null]   // 자정 분할 시 조각 몫. 과목 합 <= 세션 study_sec
-  focus_sec integer [not null]   // 그 과목의 study_sec 이하
+  subject_id bigint [ref: > study_subject.id, not null]
+  started_at timestamptz [not null]   // 과목을 선택한 채 공부한 구간 — 자정 분할 조각에는 잘린 구간 (ADR-0023)
+  ended_at timestamptz [not null]
+  study_sec integer [not null]   // 서버 파생값: 길이 − PAUSE 겹침
+  focus_sec integer [not null]   // 서버 파생값: 길이 − 모든 이벤트 겹침
 
   indexes {
     (session_id)
