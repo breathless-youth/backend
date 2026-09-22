@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionStreakResponse;
+import project.study.studysession.service.StudySessionService;
 
 /**
  * 구 앱(v1.2.x) 전용 통계 API — API-Version 헤더가 없거나 1인 요청만 여기로 온다 (ADR-0020).
@@ -28,11 +29,13 @@ import project.study.studysession.dto.StudySessionStreakResponse;
 public class LegacyStudySessionStatsController {
 
     private final StudySessionStatsController statsController;
+    private final StudySessionService studySessionService;
 
     @GetMapping
     public StudySessionListResponse list(
             @RequestParam Long userId, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return statsController.list(userId, date);
+        // 익명 userId 경로라 과목·할 일 이름은 싣지 않는다 (BY-734) — 구 앱은 그 필드를 읽지 않는다
+        return studySessionService.list(userId, date, false);
     }
 
     @GetMapping("/streak")

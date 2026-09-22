@@ -22,6 +22,7 @@ import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 @Entity
 @Table(name = "study_session")
@@ -57,15 +58,19 @@ public class StudySession {
     @Column(name = "focus_sec")
     private Integer focusSec;
 
+    // 자식 컬렉션 셋은 일간 목록이 세션마다 따로 읽지 않게 세션 id IN 배치로 한 번에 읽는다 — 하루 세션 수는 두 자리라 64면
+    // 한 번이다 (BY-734, Codex 리뷰 P2)
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "session_id", nullable = false)
     @OrderBy("startedAt ASC")
+    @BatchSize(size = 64)
     private List<StatusEvent> events = new ArrayList<>();
 
     // 과목 구간 (ADR-0023) — 이벤트와 같은 자식 컬렉션. 자정 분할 조각마다 잘린 행이 생기고 파생값은 서버가 계산한다
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "session_id", nullable = false)
     @OrderBy("startedAt ASC")
+    @BatchSize(size = 64)
     private List<StudySessionSubjectSegment> subjectSegments = new ArrayList<>();
 
     // 세션 제출 시 완료한 할 일 (ADR-0022) — (session_id, task_id)가 PK인 값 컬렉션이라 엔티티 대신 값으로 매핑한다.
@@ -73,6 +78,7 @@ public class StudySession {
     @ElementCollection
     @CollectionTable(name = "study_session_task_done", joinColumns = @JoinColumn(name = "session_id", nullable = false))
     @Column(name = "task_id", nullable = false)
+    @BatchSize(size = 64)
     private Set<Long> completedTaskIds = new HashSet<>();
 
     // BY-447: 자동 확정본 표시 — true인 세션은 잠정 기록이라 늦은 최종 제출·재확정이 대체할 수 있다

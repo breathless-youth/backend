@@ -116,12 +116,12 @@ class StudySessionCompletedTaskApiTest {
                 .bodyJson()
                 .hasPathSatisfying("$.length()", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying(
-                        "$[0].completedTaskIds.length()", v -> assertThat(v).isEqualTo(2))
+                        "$[0].completedTasks.length()", v -> assertThat(v).isEqualTo(2))
                 // 응답은 id 오름차순 — 보낸 순서와 무관하다
                 .hasPathSatisfying(
-                        "$[0].completedTaskIds[0]", v -> assertThat(v).isEqualTo(t1.intValue()))
+                        "$[0].completedTasks[0].id", v -> assertThat(v).isEqualTo(t1.intValue()))
                 .hasPathSatisfying(
-                        "$[0].completedTaskIds[1]", v -> assertThat(v).isEqualTo(t2.intValue()));
+                        "$[0].completedTasks[1].id", v -> assertThat(v).isEqualTo(t2.intValue()));
 
         long sessionId = firstSessionId(created);
         assertThat(countRows(sessionId)).isEqualTo(2);
@@ -130,7 +130,7 @@ class StudySessionCompletedTaskApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying(
-                        "$.completedTaskIds.length()", v -> assertThat(v).isEqualTo(2));
+                        "$.completedTasks.length()", v -> assertThat(v).isEqualTo(2));
     }
 
     @Test
@@ -147,15 +147,15 @@ class StudySessionCompletedTaskApiTest {
                 .bodyJson()
                 .hasPathSatisfying("$.length()", v -> assertThat(v).isEqualTo(2))
                 .hasPathSatisfying(
-                        "$[0].completedTaskIds.length()", v -> assertThat(v).isEqualTo(1))
+                        "$[0].completedTasks.length()", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying(
-                        "$[0].completedTaskIds[0]", v -> assertThat(v).isEqualTo(beforeMidnight.intValue()))
+                        "$[0].completedTasks[0].id", v -> assertThat(v).isEqualTo(beforeMidnight.intValue()))
                 .hasPathSatisfying(
-                        "$[1].completedTaskIds.length()", v -> assertThat(v).isEqualTo(2))
+                        "$[1].completedTasks.length()", v -> assertThat(v).isEqualTo(2))
                 .hasPathSatisfying(
-                        "$[1].completedTaskIds[0]", v -> assertThat(v).isEqualTo(afterMidnight.intValue()))
+                        "$[1].completedTasks[0].id", v -> assertThat(v).isEqualTo(afterMidnight.intValue()))
                 .hasPathSatisfying(
-                        "$[1].completedTaskIds[1]", v -> assertThat(v).isEqualTo(undone.intValue()));
+                        "$[1].completedTasks[1].id", v -> assertThat(v).isEqualTo(undone.intValue()));
     }
 
     @Test
@@ -186,7 +186,7 @@ class StudySessionCompletedTaskApiTest {
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying(
-                        "$[0].completedTaskIds.length()", v -> assertThat(v).isEqualTo(0));
+                        "$[0].completedTasks.length()", v -> assertThat(v).isEqualTo(0));
     }
 
     @Test
@@ -198,7 +198,7 @@ class StudySessionCompletedTaskApiTest {
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying(
-                        "$[0].completedTaskIds.length()", v -> assertThat(v).isEqualTo(1));
+                        "$[0].completedTasks.length()", v -> assertThat(v).isEqualTo(1));
         long sessionId = firstSessionId(first);
         assertThat(countRows(sessionId)).isEqualTo(1);
 
@@ -209,7 +209,7 @@ class StudySessionCompletedTaskApiTest {
                 .bodyJson()
                 .hasPathSatisfying("$[0].id", v -> assertThat(v).isEqualTo((int) sessionId))
                 .hasPathSatisfying(
-                        "$[0].completedTaskIds[0]", v -> assertThat(v).isEqualTo(task.intValue()));
+                        "$[0].completedTasks[0].id", v -> assertThat(v).isEqualTo(task.intValue()));
         assertThat(countRows(sessionId)).isEqualTo(1);
     }
 
@@ -236,7 +236,7 @@ class StudySessionCompletedTaskApiTest {
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying(
-                        "$[0].completedTaskIds[0]", v -> assertThat(v).isEqualTo(task.intValue()));
+                        "$[0].completedTasks[0].id", v -> assertThat(v).isEqualTo(task.intValue()));
         long newSessionId = firstSessionId(replaced);
 
         assertThat(newSessionId).isNotEqualTo(autoFinalizedId);
@@ -256,6 +256,6 @@ class StudySessionCompletedTaskApiTest {
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying(
-                        "$[0].completedTaskIds[0]", v -> assertThat(v).isEqualTo(task.intValue()));
+                        "$[0].completedTasks[0].id", v -> assertThat(v).isEqualTo(task.intValue()));
     }
 }

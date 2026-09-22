@@ -84,6 +84,7 @@ class StudySessionControllerRetryTest {
                 94.4,
                 List.of(),
                 List.of(),
+                List.of(),
                 List.of()));
         when(studySessionService.create(USER_ID, request, COMPLETED, false))
                 .thenThrow(new DuplicateSessionException("첫 실패"))

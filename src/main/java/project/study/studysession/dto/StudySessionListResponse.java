@@ -7,7 +7,9 @@ import java.util.Map;
 import project.study.studysession.entity.EventStatus;
 
 public record StudySessionListResponse(
-        @Schema(description = "조회 범위 내 세션 요약 목록 — 시작 시각 내림차순 (없으면 빈 배열). 세션마다 자기 몫의 eventCounts를 갖는다")
+        @Schema(
+                description =
+                        "조회 범위 내 세션 요약 목록 — 시작 시각 내림차순 (없으면 빈 배열). 세션마다 자기 몫의 eventCounts·events·subjectSegments·completedTasks를 갖는다")
         List<StudySessionSummaryResponse> sessions,
 
         @Schema(description = "조회 범위 내 세션 개수 — sessions 배열 길이와 같다 (자정 분할 세션은 각각 1개로 센다)", example = "2")
@@ -34,4 +36,9 @@ public record StudySessionListResponse(
         Map<EventStatus, Long> totalEventCounts,
 
         @Schema(description = "date가 속한 달 동안 공부 기록이 있는 날짜 목록 — 캘린더 표시용 (중복 없음, 오름차순, 없으면 빈 배열)")
-        List<LocalDate> studiedDatesInMonth) {}
+        List<LocalDate> studiedDatesInMonth,
+
+        @Schema(
+                description = "그날 세션이 참조한 과목(구간·완료 할 일의 과목)의 이름·색 — id 오름차순, 지운 과목 포함(deleted=true). "
+                        + "sessions[].subjectSegments[].subjectId·completedTasks[].subjectId를 여기서 찾는다. 없으면 [] (BY-734)")
+        List<SubjectRef> subjects) {}

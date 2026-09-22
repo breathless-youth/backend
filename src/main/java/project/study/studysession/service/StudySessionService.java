@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -27,10 +28,12 @@ import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.dto.StudySessionSummaryResponse;
+import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.entity.StudySessionSubjectSegment;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
@@ -52,6 +55,7 @@ public class StudySessionService {
     private final StudySessionRepository studySessionRepository;
     private final ActiveStudySessionRepository activeStudySessionRepository;
     private final Clock clock;
+    private final SubjectLookupProvider subjectLookupProvider;
 
     /** autoFinalized=true는 확정 스케줄러 전용 — 저장되는 세션에 자동 확정 표시를 남긴다. 완료 할 일은 없다 (ADR-0022). */
     @Transactional
@@ -71,7 +75,7 @@ public class StudySessionService {
         if (!existing.isEmpty()) {
             // 클라 제출본이 하나라도 있으면 불가침 — 기존 멱등 동작(저장된 결과 반환)
             if (!existing.stream().allMatch(StudySession::isAutoFinalized)) {
-                return existing.stream().map(this::toResponse).toList();
+                return toResponses(existing);
             }
             // 전부 자동 확정본이면 잠정 기록 — 새 도착분(최종 제출·재확정)으로 대체한다. 길이 비교는 하지 않는다: 스냅샷이 누적값이라 나중 도착분이 항상 상위집합이다 (ADR-0014)
             studySessionRepository.deleteAll(existing);
@@ -94,7 +98,7 @@ public class StudySessionService {
             List<StudySession> saved = studySessionRepository.saveAll(sessions);
             studySessionRepository.flush();
             activeStudySessionRepository.deleteByUserIdAndStartedAt(userId, request.startedAt());
-            return saved.stream().map(this::toResponse).toList();
+            return toResponses(saved);
         } catch (DataIntegrityViolationException e) {
             String constraint = violatedConstraint(e);
             if (STARTED_AT_UNIQUE_CONSTRAINT.equalsIgnoreCase(constraint)) {
@@ -113,11 +117,8 @@ public class StudySessionService {
      */
     @Transactional(readOnly = true)
     public List<StudySessionResponse> findExistingSubmission(Long userId, Instant submissionStartedAt) {
-        return studySessionRepository
-                .findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(userId, submissionStartedAt)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return toResponses(studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
+                userId, submissionStartedAt));
     }
 
     /** 원인 체인에서 위반된 제약 이름을 찾는다 — 없으면 null. */
@@ -139,6 +140,15 @@ public class StudySessionService {
      */
     @Transactional(readOnly = true)
     public StudySessionListResponse list(Long userId, LocalDate date) {
+        return list(userId, date, true);
+    }
+
+    /**
+     * includeNames=false는 구 앱(API-Version 1) 경로용이다 — 그 경로는 토큰 없이 쿼리 userId로 열려 있어 과목·할 일 이름까지
+     * 실으면 익명 노출이 늘어난다(Codex 리뷰 P1). 구 앱은 그 필드를 읽지 않으므로 빈 배열로 둔다. 구간(id)·이벤트는 그대로다.
+     */
+    @Transactional(readOnly = true)
+    public StudySessionListResponse list(Long userId, LocalDate date, boolean includeNames) {
         List<StudySession> sessions =
                 studySessionRepository.findInPeriodWithMinFocusSec(userId, date, date, MIN_LIST_FOCUS_SEC);
         long totalStudySec =
@@ -150,8 +160,10 @@ public class StudySessionService {
                 .max()
                 .orElse(0);
 
-        List<StudySessionSummaryResponse> summaries =
-                sessions.stream().map(this::toSummaryResponse).toList();
+        SubjectLookup lookup = includeNames ? lookupFor(sessions) : SubjectLookup.EMPTY;
+        List<StudySessionSummaryResponse> summaries = sessions.stream()
+                .map(session -> toSummaryResponse(session, lookup))
+                .toList();
         Map<EventStatus, Long> totalEventCounts = StudySessionStatsCalculator.countByStatus(
                 sessions.stream().flatMap(s -> s.getEvents().stream()).toList());
 
@@ -167,19 +179,41 @@ public class StudySessionService {
                 longestFocusSec,
                 StudySessionStatsCalculator.focusRate(totalFocusSec, totalStudySec),
                 totalEventCounts,
-                studiedDatesInMonth);
+                studiedDatesInMonth,
+                lookup.allSubjects());
     }
 
-    private StudySessionResponse toResponse(StudySession session) {
+    /** 세션들이 참조한 과목·할 일 이름을 한 번에 조회한다 (BY-734) — 둘 다 없으면 조회하지 않는다. */
+    private SubjectLookup lookupFor(List<StudySession> sessions) {
+        Set<Long> subjectIds = sessions.stream()
+                .flatMap(session -> session.getSubjectSegments().stream())
+                .map(StudySessionSubjectSegment::getSubjectId)
+                .collect(Collectors.toSet());
+        Set<Long> taskIds = sessions.stream()
+                .flatMap(session -> session.getCompletedTaskIds().stream())
+                .collect(Collectors.toSet());
+        if (subjectIds.isEmpty() && taskIds.isEmpty()) {
+            return SubjectLookup.EMPTY;
+        }
+        return subjectLookupProvider.lookup(subjectIds, taskIds);
+    }
+
+    private List<StudySessionResponse> toResponses(List<StudySession> sessions) {
+        SubjectLookup lookup = lookupFor(sessions);
+        return sessions.stream().map(session -> toResponse(session, lookup)).toList();
+    }
+
+    private StudySessionResponse toResponse(StudySession session, SubjectLookup lookup) {
         return StudySessionResponse.from(
-                session, StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()));
+                session, StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()), lookup);
     }
 
-    private StudySessionSummaryResponse toSummaryResponse(StudySession session) {
+    private StudySessionSummaryResponse toSummaryResponse(StudySession session, SubjectLookup lookup) {
         return StudySessionSummaryResponse.from(
                 session,
                 StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()),
-                StudySessionStatsCalculator.countByStatus(session.getEvents()));
+                StudySessionStatsCalculator.countByStatus(session.getEvents()),
+                lookup);
     }
 
     /**
@@ -311,9 +345,15 @@ public class StudySessionService {
 
     @Transactional(readOnly = true)
     public StudySessionResponse findById(Long userId, Long id) {
+        return findById(userId, id, true);
+    }
+
+    /** includeNames=false는 구 앱 경로용 — list와 같은 이유로 과목·할 일 이름을 싣지 않는다. */
+    @Transactional(readOnly = true)
+    public StudySessionResponse findById(Long userId, Long id, boolean includeNames) {
         StudySession session = studySessionRepository
                 .findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new NotFoundException("세션을 찾을 수 없습니다"));
-        return toResponse(session);
+        return toResponse(session, includeNames ? lookupFor(List.of(session)) : SubjectLookup.EMPTY);
     }
 }
