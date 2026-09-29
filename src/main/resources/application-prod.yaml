@@ -112,6 +112,7 @@ metrics:
     webhook-url: ${SLACK_WEBHOOK_URL:}
 
 # 처리되지 않은 예외(4xx+5xx)를 전부 Sentry로 보낸다.
+# 단 /api/ 밖 경로의 봇 스캐닝 404는 BotScanEventFilter가 버린다 (ADR-0024).
 # 설계: docs/superpowers/specs/2026-08-06-sentry-4xx-collection-design.md
 sentry:
   # DSN이 없으면 SDK가 no-op으로 동작한다. DB 설정과 달리 기본값을 두는 이유는,
