@@ -10,16 +10,22 @@ import org.slf4j.MDC;
  */
 public final class LogContext {
 
-    /** 요청·메시지를 보낸 유저의 ID. HTTP는 파라미터/바디에서, STOMP는 프린시펄에서 채운다. */
+    /** 요청·메시지를 보낸 유저의 ID. HTTP는 JwtFilter가 SecurityContext에서, STOMP는 프린시펄에서 채운다. */
     public static final String USER_ID = "userId";
 
     /** 요청 하나를 식별하는 ID. */
     public static final String REQUEST_ID = "requestId";
 
+    /**
+     * 요청의 유효 API 버전 — 헤더가 없으면 기본버전 {@code 1}. 구 앱(v1.2.x) 병행 중 구 호출량을 세는 근거다:
+     * {@code filter apiVersion = "1" and path like /api/} (ADR-0020, ADR-0015 결정 5).
+     */
+    public static final String API_VERSION = "apiVersion";
+
     private LogContext() {}
 
     /** null이면 키를 만들지 않는다 — 빈 값이 필드로 실려 필터 조회를 오염시키지 않게. */
-    static void putUserId(Object userId) {
+    public static void putUserId(Object userId) {
         if (userId != null) {
             MDC.put(USER_ID, String.valueOf(userId));
         }

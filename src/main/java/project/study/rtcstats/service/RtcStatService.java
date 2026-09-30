@@ -16,12 +16,12 @@ public class RtcStatService {
 
     /** getStats() 샘플 1건을 그대로 적재한다 (fire-and-forget 텔레메트리). */
     @Transactional
-    public void record(RtcStatRequest request) {
+    public void record(Long userId, RtcStatRequest request) {
         Instant clientAt = request.at() == null ? null : Instant.ofEpochMilli(request.at());
         repository.save(RtcConnectionStat.builder()
                 .connectionId(request.connectionId())
                 .roomId(request.roomId())
-                .userId(request.userId())
+                .userId(userId)
                 .peerUserId(request.peerUserId())
                 .candidateType(request.candidateType())
                 .relayProtocol(request.relayProtocol())

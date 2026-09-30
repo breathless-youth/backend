@@ -27,6 +27,6 @@ public class RoomMessenger {
 
     /** 구독 거부·확정 실패 — FE는 join을 다시 부르거나 종료 안내를 띄운다. 배달은 보장되지 않는다(스펙 §2.9). */
     public void roomUnavailable(String userName, String sessionId, Long roomId) {
-        toSession(userName, sessionId, Map.of("type", "ROOM_UNAVAILABLE", "roomId", roomId));
+        toSession(userName, sessionId, Map.of("type", RoomMessageType.ROOM_UNAVAILABLE.name(), "roomId", roomId));
     }
 }

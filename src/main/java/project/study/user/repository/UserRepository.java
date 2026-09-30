@@ -1,9 +1,11 @@
 package project.study.user.repository;
 
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,6 +35,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("colorIndex") int colorIndex);
 
     boolean existsByNickname(String nickname);
+
+    // 토큰 발급·회전·전량 폐기를 유저 단위로 직렬화하는 뮤텍스(SELECT ... FOR UPDATE). 잠금 없이 폐기하면
+    // "지금 커밋 중인" 회전의 새 토큰을 삭제 대상 조회가 못 보고 남긴다 (ADR-0019, Codex P1)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id")
+    Optional<User> findByIdForUpdate(@Param("id") Long id);
 
     // 기간별 가입 수 — Between은 양끝 포함이라 하루 경계에서 다음날 00:00:00.000을 삼킨다.
     // 반개구간 [from, to)로 세어 날짜 간 중복 집계를 막는다

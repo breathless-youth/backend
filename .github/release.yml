@@ -1,0 +1,14 @@
+# GitHub 자동 릴리스 노트(--generate-notes) 분류 설정.
+# 릴리스 워크플로(.github/workflows/release.yml)가 태그 푸시 때 이 설정으로 노트를 그룹화한다.
+# 그룹 기준은 PR 라벨이고, 라벨은 pr-label 워크플로가 제목 접두어에서 자동으로 붙인다.
+changelog:
+  categories:
+    - title: 새 기능
+      labels: [feature]
+    - title: 버그 수정
+      labels: [fix]
+    - title: 설정·문서·기타
+      labels: [chore, docs]
+    # 라벨이 붙지 않은 PR도 누락 없이 담는 catch-all. 반드시 마지막에 둔다.
+    - title: 기타 변경
+      labels: ["*"]

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
@@ -47,7 +48,11 @@ class StudySessionMidnightSplitTest {
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
+        service = new StudySessionService(
+                studySessionRepository,
+                activeStudySessionRepository,
+                CLOCK,
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
     }
 
     private StatusEvent event(EventStatus status, String startedAt, String endedAt) {
@@ -130,6 +135,20 @@ class StudySessionMidnightSplitTest {
         assertThat(sessions.get(0).getStudySec()).isEqualTo(3600);
         assertThat(sessions.get(1).getStudySec()).isEqualTo(3600);
         // focusActiveSec: 조각1=3000, 조각2=3600, 합 6600 → 6600을 3000:3600으로 배분
+        assertThat(sessions.get(0).getFocusSec()).isEqualTo(3000);
+        assertThat(sessions.get(1).getFocusSec()).isEqualTo(3600);
+    }
+
+    @Test
+    void 자정_분할_시_SLEEP은_PAUSE가_아니라_PHONE과_같은_가중치로_배분된다() {
+        // 졸음은 순공 타이머만 멈춘다 — 총공부시간 배분엔 영향이 없어야 한다 (BY-706)
+        List<StatusEvent> events = List.of(event(EventStatus.SLEEP, "2026-07-23T14:00:00Z", "2026-07-23T14:10:00Z"));
+
+        List<StudySession> sessions = service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 7200, 6600, events);
+
+        assertThat(sessions.get(0).getStudySec()).isEqualTo(3600);
+        assertThat(sessions.get(1).getStudySec()).isEqualTo(3600);
+        // focusActiveSec: 조각1=3000, 조각2=3600 — PHONE 케이스와 같은 값이어야 한다
         assertThat(sessions.get(0).getFocusSec()).isEqualTo(3000);
         assertThat(sessions.get(1).getFocusSec()).isEqualTo(3600);
     }

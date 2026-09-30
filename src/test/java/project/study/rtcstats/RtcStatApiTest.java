@@ -1,6 +1,7 @@
 package project.study.rtcstats;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -37,13 +38,14 @@ class RtcStatApiTest {
                 .uri("/api/rtc-stats")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
+                .with(asUser(2))
                 .exchange();
     }
 
     @Test
     void 유효한_relay_통계는_저장되고_204다() {
         String body = """
-                {"connectionId":"c-1","roomId":1,"userId":2,"peerUserId":3,"candidateType":"relay","relayProtocol":"udp","bytesReceived":1000,"bytesSent":500,"rttMs":40,"isFinal":true,"at":1700000000000}""";
+                {"connectionId":"c-1","roomId":1,"peerUserId":3,"candidateType":"relay","relayProtocol":"udp","bytesReceived":1000,"bytesSent":500,"rttMs":40,"isFinal":true,"at":1700000000000}""";
 
         assertThat(post(body)).hasStatus(HttpStatus.NO_CONTENT);
 
@@ -56,7 +58,7 @@ class RtcStatApiTest {
     @Test
     void 최소_필드만으로도_저장된다() {
         String body = """
-                {"connectionId":"c-2","roomId":1,"userId":2,"candidateType":"host","isFinal":false}""";
+                {"connectionId":"c-2","roomId":1,"candidateType":"host","isFinal":false}""";
 
         assertThat(post(body)).hasStatus(HttpStatus.NO_CONTENT);
     }
@@ -64,7 +66,7 @@ class RtcStatApiTest {
     @Test
     void candidateType이_허용값이_아니면_400이다() {
         String body = """
-                {"connectionId":"c-3","roomId":1,"userId":2,"candidateType":"wat","isFinal":false}""";
+                {"connectionId":"c-3","roomId":1,"candidateType":"wat","isFinal":false}""";
 
         assertThat(post(body)).hasStatus(HttpStatus.BAD_REQUEST);
     }
@@ -72,7 +74,7 @@ class RtcStatApiTest {
     @Test
     void connectionId_누락은_400이다() {
         String body = """
-                {"roomId":1,"userId":2,"candidateType":"host","isFinal":false}""";
+                {"roomId":1,"candidateType":"host","isFinal":false}""";
 
         assertThat(post(body)).hasStatus(HttpStatus.BAD_REQUEST);
     }
@@ -81,7 +83,7 @@ class RtcStatApiTest {
     void 필수값_누락은_400이다() {
         // roomId, isFinal 누락
         String body = """
-                {"connectionId":"c-4","userId":2,"candidateType":"host"}""";
+                {"connectionId":"c-4","candidateType":"host"}""";
 
         assertThat(post(body)).hasStatus(HttpStatus.BAD_REQUEST);
     }
@@ -89,7 +91,7 @@ class RtcStatApiTest {
     @Test
     void 음수_bytes는_400이다() {
         String body = """
-                {"connectionId":"c-5","roomId":1,"userId":2,"candidateType":"relay","bytesReceived":-1,"isFinal":true}""";
+                {"connectionId":"c-5","roomId":1,"candidateType":"relay","bytesReceived":-1,"isFinal":true}""";
 
         assertThat(post(body)).hasStatus(HttpStatus.BAD_REQUEST);
     }

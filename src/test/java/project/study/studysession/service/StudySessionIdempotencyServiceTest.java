@@ -24,6 +24,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
+import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.entity.StudySession;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
@@ -54,11 +55,15 @@ class StudySessionIdempotencyServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
+        service = new StudySessionService(
+                studySessionRepository,
+                activeStudySessionRepository,
+                CLOCK,
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
     }
 
     private static StudySessionCreateRequest request(Instant startedAt, Instant endedAt) {
-        return new StudySessionCreateRequest(1L, startedAt, endedAt, 7200, 6600, List.of());
+        return new StudySessionCreateRequest(startedAt, endedAt, 7200, 6600, List.of(), null, null);
     }
 
     private static StudySession session(Instant startedAt, Instant endedAt) {

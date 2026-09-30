@@ -21,4 +21,7 @@ public record ActiveSessionSnapshotResponse(
         @Schema(description = "마지막 스냅샷까지의 누적 순공 시간(초)", example = "540")
         Integer focusSec,
 
-        @Schema(description = "마지막 스냅샷까지의 비공부 이벤트 전체") List<StatusEventRequest> events) {}
+        @Schema(description = "마지막 스냅샷까지의 비공부 이벤트 전체") List<StatusEventRequest> events,
+
+        @Schema(description = "마지막 스냅샷까지의 과목 구간 — 보고 요청과 같은 모양, 시작 시각 오름차순. 마지막 원소의 과목으로 선택 상태를 복원한다. 없으면 []")
+        List<SubjectSegmentRequest> subjectSegments) {}

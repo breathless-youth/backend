@@ -11,6 +11,7 @@ import project.study.metrics.scheduler.DailyReportScheduler;
 import project.study.metrics.service.DailyReportService;
 import project.study.studysession.repository.StudySessionRepository;
 import project.study.studysession.service.StudySessionService;
+import project.study.subject.service.StudySubjectService;
 import project.study.user.service.UserService;
 
 /**
@@ -23,6 +24,7 @@ class FeatureSwitchTest {
             .withBean(UserService.class, () -> mock(UserService.class))
             .withBean(StudySessionService.class, () -> mock(StudySessionService.class))
             .withBean(StudySessionRepository.class, () -> mock(StudySessionRepository.class))
+            .withBean(StudySubjectService.class, () -> mock(StudySubjectService.class))
             .withBean(Clock.class, Clock::systemUTC)
             .withUserConfiguration(DevDataSeeder.class);
 
@@ -32,6 +34,9 @@ class FeatureSwitchTest {
 
     private final ApplicationContextRunner openApi =
             new ApplicationContextRunner().withUserConfiguration(OpenApiConfig.class);
+
+    private final ApplicationContextRunner docs =
+            new ApplicationContextRunner().withUserConfiguration(DocsResourceConfig.class);
 
     @Test
     void 시더는_스위치가_없으면_뜨지_않는다() {
@@ -87,5 +92,16 @@ class FeatureSwitchTest {
                                 context.getBean(OpenAPI.class).getInfo().getDescription())
                         .contains("목데이터 안내")
                         .contains(DevDataSeeder.DEMO_DEVICE_ID));
+    }
+
+    @Test
+    void 문서_페이지_서빙은_스위치가_없으면_뜨지_않는다() {
+        docs.run(context -> assertThat(context).doesNotHaveBean(DocsResourceConfig.class));
+    }
+
+    @Test
+    void 문서_페이지_서빙은_스위치를_켜면_뜬다() {
+        docs.withPropertyValues("app.docs.enabled=true")
+                .run(context -> assertThat(context).hasSingleBean(DocsResourceConfig.class));
     }
 }

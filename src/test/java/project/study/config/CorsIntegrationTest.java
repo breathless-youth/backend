@@ -1,6 +1,7 @@
 package project.study.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,7 +64,7 @@ class CorsIntegrationTest {
     void 실제_요청_응답에도_CORS_헤더가_붙는다() {
         MvcTestResult result = mvc.get()
                 .uri("/api/stats/streak")
-                .param("userId", "1")
+                .with(asUser(1))
                 .header("Origin", ALLOWED_ORIGIN)
                 .exchange();
 
