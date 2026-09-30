@@ -13,40 +13,44 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
+import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.service.DuplicateSessionException;
 import project.study.studysession.service.StudySessionService;
+import project.study.subject.service.StudySubjectService;
 
 @Tag(
         name = "StudySession",
         description = "공부 세션 기록 API 모음 — 방 퇴장 시 세션 전체를 한 번에 제출받아 검증·계산·저장한다 (ADR-0003). 통계 조회는 StudySessionStats 참고")
 @RestController
-@RequestMapping("/api/study-sessions")
+// 토큰 계약(v2). 구 앱(API-Version 없음/1)은 Legacy 컨트롤러가 받는다 — 강제 업데이트 뒤 contract 시 ADR-0020 참고
+@RequestMapping(value = "/api/study-sessions", version = "2")
 @RequiredArgsConstructor
 public class StudySessionController {
 
     private final StudySessionService studySessionService;
+    private final StudySubjectService subjectService;
 
     @Operation(summary = "공부 세션 제출", description = """
                     공부를 마칠 때(방 퇴장 시) 세션 전체를 한 번에 제출한다. \
                     서버는 세션을 실시간으로 추적하지 않는다 — 앱에서 제출한 \
                     시작/종료 시각, 앱이 잰 총 공부 시간(`studySec`)과 순공 시간(`focusSec`), \
-                    온디바이스에서 제공한 **비공부 상태 이벤트**(PHONE·DEVICE·AWAY·PAUSE) 목록이 데이터의 전부다. \
+                    온디바이스에서 제공한 **비공부 상태 이벤트**(PHONE·DEVICE·AWAY·SLEEP·PAUSE) 목록이 데이터의 전부다. \
                     이벤트 1건은 `status`/`startedAt`/`endedAt` 3개 필드만 있으면 된다.
 
                     세션(방 입장~퇴장) 안에 총 공부시간 타이머가 있고, 그 안에 다시 순공시간 타이머가 있는 구조다 — \
                     `PAUSE`(일시정지, 앱에서 직접 멈추는 상태)는 총공부·순공 타이머를 모두 멈추고, \
-                    나머지(PHONE/DEVICE/AWAY)는 순공 타이머만 멈춘다.
+                    나머지(PHONE/DEVICE/AWAY/SLEEP)는 순공 타이머만 멈춘다.
 
                     **검증 규칙**
                     - 종료 시각은 시작 시각 이후여야 한다 (세션·이벤트 모두)
@@ -67,14 +71,24 @@ public class StudySessionController {
                     자정을 넘지 않으면 요소가 1개인 배열이 내려온다. \
                     정확히 자정에 시작하거나 끝나는 세션은 분할되지 않는다.
 
-                    **멱등 재제출 — 중복 저장 방지.** `userId`+`startedAt`이 멱등 키다. 같은 키로 다시 제출하면 \
+                    **과목 구간** — `subjectSegments`로 과목을 선택한 채 공부한 구간(subjectId/startedAt/endedAt)을 함께 보낸다(선택, ADR-0023). \
+                    검증은 이벤트와 같다(세션 안·겹침 없음·맞닿음 허용·순서 무관). 과목별 총공부·순공은 앱이 보내지 않고 서버가 구간과 \
+                    비공부 이벤트를 겹쳐 계산해 응답 `subjectSegments`에 싣는다 — PAUSE 겹침은 둘 다에서, 나머지는 순공에서만 뺀다. \
+                    자정 분할이면 구간도 자정에서 잘려 조각마다 다시 계산된다.
+
+                    **완료한 할 일** — `completedTaskIds`로 세션 중 체크한 할 일을 함께 보낸다(선택, ADR-0022). 토큰 유저의 \
+                    할 일이 아니면 400이고 세션 중 지운 할 일은 허용된다. 자정 분할이면 각 할 일은 완료 시각이 속한 조각 하나에만 \
+                    붙고(없거나 밖이면 마지막 조각) 응답 각 세션의 `completedTasks`(이름 포함)에 실리며, 참조한 과목의 이름·색은 `subjects`에 실린다(지운 것도 포함, BY-734). 스냅샷·복구·자동 확정에는 실리지 않는다.
+
+                    **멱등 재제출 — 중복 저장 방지.** 토큰의 userId + `startedAt`이 멱등 키다. 같은 키로 다시 제출하면 \
                     (앱 강제종료 후 재접속해 로컬 보관분을 재전송하는 경우 등) 새로 저장하지 않고 이미 저장된 \
                     세션 배열을 그대로 `201`로 돌려준다 — 재제출 본문의 다른 필드는 무시된다. \
                     시작 시각이 기존 세션(자정 분할 조각 포함)과 겹치는 별개 제출이 동시에 들어오면 `409`로 거절된다. \
                     자동 확정본(잠정 기록)이 이미 저장돼 있으면 재제출이 아니라 대체가 일어난다 — 진행중 세션 스냅샷 API 참고 (ADR-0014).""")
     @ApiResponse(
             responseCode = "201",
-            description = "저장 성공 — studySec/focusSec/focusRate/statDate를 포함한 세션 배열 (자정 분할 시 2개)")
+            description =
+                    "저장 성공 — studySec/focusSec/focusRate/statDate·subjectSegments·completedTasks·subjects를 포함한 세션 배열 (자정 분할 시 2개)")
     @ApiResponse(
             responseCode = "400",
             description = "검증 실패 — 시간 규칙 위반, 이벤트 겹침, 필수 값 누락 등",
@@ -96,7 +110,10 @@ public class StudySessionController {
                                         value = "{\"message\": \"순공 시간은 0 이상, 총 공부 시간 이하여야 합니다\"}"),
                                 @ExampleObject(name = "이벤트 겹침", value = "{\"message\": \"이벤트 구간이 서로 겹칠 수 없습니다\"}"),
                                 @ExampleObject(name = "이벤트가 세션 밖", value = "{\"message\": \"이벤트는 세션 구간 안에 있어야 합니다\"}"),
-                                @ExampleObject(name = "필수 값 누락", value = "{\"message\": \"userId: 널이어서는 안됩니다\"}")
+                                @ExampleObject(name = "과목 구간 겹침", value = "{\"message\": \"과목 구간이 서로 겹칠 수 없습니다\"}"),
+                                @ExampleObject(name = "남의 과목", value = "{\"message\": \"사용자의 과목이 아닙니다\"}"),
+                                @ExampleObject(name = "남의 할 일", value = "{\"message\": \"사용자의 할 일이 아닙니다\"}"),
+                                @ExampleObject(name = "필수 값 누락", value = "{\"message\": \"startedAt: 널이어서는 안됩니다\"}")
                             }))
     @ApiResponse(
             responseCode = "409",
@@ -111,7 +128,7 @@ public class StudySessionController {
                                             value = "{\"message\": \"이미 같은 시각에 시작한 세션이 저장되어 있습니다\"}")))
     @ApiResponse(
             responseCode = "404",
-            description = "존재하지 않는 userId — 먼저 POST /api/users 로 유저를 등록해야 한다",
+            description = "토큰의 유저가 존재하지 않음(삭제된 유저) — POST /api/users로 다시 등록해야 한다",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -120,19 +137,23 @@ public class StudySessionController {
                                     @ExampleObject(name = "유저 없음", value = "{\"message\": \"존재하지 않는 사용자입니다: 999\"}")))
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public List<StudySessionResponse> create(@Valid @RequestBody StudySessionCreateRequest request) {
+    public List<StudySessionResponse> create(
+            @AuthenticationPrincipal Long userId, @Valid @RequestBody StudySessionCreateRequest request) {
+        // 과목·할 일 소유 검증은 세션 도메인 밖에서 먼저 한다 (ADR-0021·0022) — 재시도·멱등 경로와 무관한 순수 400 검증
+        subjectService.assertOwned(userId, request.subjectIds());
+        List<CompletedTask> completedTasks = subjectService.assertTasksOwned(userId, request.completedTaskIdsOrEmpty());
         try {
-            return studySessionService.create(request.userId(), request, false);
+            return studySessionService.create(userId, request, completedTasks, false);
         } catch (DuplicateSessionException | ObjectOptimisticLockingFailureException e) {
             // 자동 확정 스케줄러와의 유니크 레이스에서 진 경우 — 방금 확정된 auto_finalized(잠정) 행을
             // 그대로 돌려주면 최종 제출이 영구 유실되므로, create를 1회 재시도해 대체 로직을 태운다
             // (기존 클라본이면 멱등 반환, 전부 auto_finalized면 대체, 재충돌이면 아래 폴백) (ADR-0014).
             try {
-                return studySessionService.create(request.userId(), request, false);
+                return studySessionService.create(userId, request, completedTasks, false);
             } catch (DuplicateSessionException retryEx) {
                 // 또 다른 요청과 레이스에서 진 경우 현재 확정되어 있는 세션을 조회해서 반환
                 List<StudySessionResponse> concurrent =
-                        studySessionService.findExistingSubmission(request.userId(), request.startedAt());
+                        studySessionService.findExistingSubmission(userId, request.startedAt());
                 if (!concurrent.isEmpty()) {
                     return concurrent;
                 }
@@ -144,9 +165,9 @@ public class StudySessionController {
 
     @Operation(
             summary = "세션 단건 상세 조회",
-            description = "세션 id로 단건 상세를 조회한다. events에 비공부 상태 구간(status·시각)이 원시로 담긴다. "
-                    + "userId는 소유권 검증용 — 없거나 남의 세션이면 404.")
-    @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 상세 + 이벤트 구간")
+            description =
+                    "세션 id로 단건 상세를 조회한다. events에 비공부 상태 구간(status·시각)이 원시로 담긴다. " + "토큰의 유저가 소유자가 아니거나 없는 세션이면 404.")
+    @ApiResponse(responseCode = "200", description = "조회 성공 — 세션 상세 + 이벤트 구간 + 과목 구간·완료한 할 일(이름) + 참조 과목 이름·색")
     @ApiResponse(
             responseCode = "404",
             description = "세션을 찾을 수 없음 — 존재하지 않거나 다른 유저의 세션",
@@ -157,8 +178,8 @@ public class StudySessionController {
                             examples = @ExampleObject(name = "세션 없음", value = "{\"message\": \"세션을 찾을 수 없습니다\"}")))
     @GetMapping("/{id}")
     public StudySessionResponse detail(
-            @Parameter(description = "세션 ID", example = "10") @PathVariable Long id,
-            @Parameter(description = "소유권 검증용 유저 ID", example = "1") @RequestParam Long userId) {
+            @AuthenticationPrincipal Long userId,
+            @Parameter(description = "세션 ID", example = "10") @PathVariable Long id) {
         return studySessionService.findById(userId, id);
     }
 }

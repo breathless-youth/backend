@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import project.study.room.service.AutoLeave;
 import project.study.room.service.RoomCleanupService;
+import project.study.room.websocket.RoomMessageType;
 
 /**
  * 만료 스윕 진행자 — 5초마다 정리 서비스를 돌리고 자리마다 MEMBER_LEFT를 알린다.
@@ -48,7 +49,7 @@ public class RoomCleanupScheduler {
     private void broadcastLeft(AutoLeave autoLeave) {
         try {
             messagingTemplate.convertAndSend("/topic/room/" + autoLeave.roomId(), (Object)
-                    Map.of("type", "MEMBER_LEFT", "userId", autoLeave.userId()));
+                    Map.of("type", RoomMessageType.MEMBER_LEFT.name(), "userId", autoLeave.userId()));
         } catch (RuntimeException e) {
             log.warn("MEMBER_LEFT 발송 실패: roomId={}, userId={}", autoLeave.roomId(), autoLeave.userId(), e);
         }

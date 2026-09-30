@@ -51,8 +51,8 @@ class DevDataSeederTest {
 
         // 엣지케이스 5건(+자정 분할 1행) — 랜덤 시딩은 0개인 날도 있어 하한을 보장하지 않는다
         assertThat(sessions).isGreaterThanOrEqualTo(5);
-        // 이벤트 6개 제출 + 자정에 걸친 PHONE 1건이 2행으로 분할 = 최소 7행
-        assertThat(events).isGreaterThanOrEqualTo(7);
+        // 이벤트 7개 제출 + 자정에 걸친 PHONE 1건이 2행으로 분할 = 최소 8행
+        assertThat(events).isGreaterThanOrEqualTo(8);
     }
 
     @Test

@@ -19,7 +19,6 @@ import project.study.metrics.dto.NewUser;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
-import project.study.user.dto.UserRegisterResponse;
 import project.study.user.entity.Provider;
 import project.study.user.entity.User;
 import project.study.user.nickname.Nicknames;
@@ -41,7 +40,7 @@ public class UserService {
 
     // @Modifying 네이티브 쿼리는 트랜잭션 안에서만 실행할 수 있다
     @Transactional
-    public UserRegisterResponse register(UserRegisterRequest request) {
+    public RegisterResult register(UserRegisterRequest request) {
         // 플랫폼마다 UUID 대소문자 표기가 달라 같은 기기가 유저를 중복 생성하지 않도록 정규화
         String deviceId = request.deviceId().toLowerCase(Locale.ROOT);
 
@@ -50,8 +49,11 @@ public class UserService {
                 .findByProviderAndProviderUserId(Provider.DEVICE, deviceId)
                 .orElseThrow(() -> new IllegalStateException("등록 이후 조회 실패")));
 
-        return new UserRegisterResponse(user.getId(), existing.isEmpty());
+        return new RegisterResult(user.getId(), existing.isEmpty());
     }
+
+    /** 등록 결과. 토큰은 컨트롤러가 AuthService로 덧붙인다 — 시더 같은 내부 호출은 토큰이 필요 없다. */
+    public record RegisterResult(Long userId, boolean isNew) {}
 
     // 자동 닉네임(포메{랜덤5자리})이 기존 닉네임과 충돌하면 재생성해서 재시도한다.
     private Optional<User> insertWithAutoNickname(String deviceId) {

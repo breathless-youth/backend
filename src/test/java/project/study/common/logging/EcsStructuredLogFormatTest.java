@@ -12,6 +12,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import project.study.TestcontainersConfiguration;
+import project.study.support.AuthTestSupport;
 
 /**
  * 이 기능의 전제 — "prod의 ECS JSON 포맷은 MDC를 최상위 필드로 싣는다" — 를 실제 콘솔 출력으로 못박는다.
@@ -30,7 +31,7 @@ class EcsStructuredLogFormatTest {
     void 액세스_로그_JSON에_userId와_requestId가_최상위_필드로_실린다(CapturedOutput output) {
         String requestId = mvc.get()
                 .uri("/api/stats/streak")
-                .param("userId", "77")
+                .with(AuthTestSupport.asUser(77))
                 .exchange()
                 .getResponse()
                 .getHeader("X-Request-Id");

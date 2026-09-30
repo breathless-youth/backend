@@ -50,7 +50,7 @@ final class StudySessionStatsCalculator {
         return counts;
     }
 
-    /** 세션 내부에서 이벤트(PHONE/DEVICE/AWAY/PAUSE)로 끊기지 않고 이어진 가장 긴 구간(초) — 이벤트가 없으면 세션 전체 길이. */
+    /** 세션 내부에서 이벤트(PHONE/DEVICE/AWAY/SLEEP/PAUSE)로 끊기지 않고 이어진 가장 긴 구간(초) — 이벤트가 없으면 세션 전체 길이. */
     static long longestFocusStreakSec(StudySession session) {
         List<StatusEvent> sorted = session.getEvents().stream()
                 .sorted(Comparator.comparing(StatusEvent::getStartedAt))
