@@ -29,6 +29,7 @@ import project.study.metrics.dto.NewUser;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
+import project.study.user.dto.UserRegisterResponse;
 import project.study.user.entity.Provider;
 import project.study.user.entity.User;
 import project.study.user.repository.UserRepository;
@@ -51,7 +52,7 @@ class UserServiceTest {
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.of(userWithId(1L, DEVICE_ID)));
 
-        UserService.RegisterResult response = userService.register(new UserRegisterRequest(DEVICE_ID));
+        UserRegisterResponse response = userService.register(new UserRegisterRequest(DEVICE_ID));
 
         assertThat(response.userId()).isEqualTo(1L);
         assertThat(response.isNew()).isTrue();
@@ -79,7 +80,7 @@ class UserServiceTest {
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.of(userWithId(7L, DEVICE_ID)));
 
-        UserService.RegisterResult response = userService.register(new UserRegisterRequest(DEVICE_ID));
+        UserRegisterResponse response = userService.register(new UserRegisterRequest(DEVICE_ID));
 
         assertThat(response.userId()).isEqualTo(7L);
         assertThat(response.isNew()).isFalse();
@@ -107,7 +108,7 @@ class UserServiceTest {
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(userWithId(1L, DEVICE_ID)));
 
-        UserService.RegisterResult response = userService.register(new UserRegisterRequest(DEVICE_ID));
+        UserRegisterResponse response = userService.register(new UserRegisterRequest(DEVICE_ID));
 
         assertThat(response.isNew()).isTrue();
     }

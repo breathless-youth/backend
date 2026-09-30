@@ -16,7 +16,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.studysession.dto.DailyStudyStat;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
-import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
@@ -35,11 +34,7 @@ class StudySessionPeriodServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(
-                studySessionRepository,
-                activeStudySessionRepository,
-                CLOCK,
-                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
+        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
     }
 
     @Test

@@ -5,11 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
-import project.study.studysession.dto.CompletedTask;
-import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
@@ -18,7 +14,7 @@ import project.study.studysession.entity.StudySession;
  * 세션을 KST 자정 경계로 분할하고, studySec/focusSec을 조각별로 배분하는 순수 로직 (BY-447, BY-471).
  *
  * <p>안 넘으면 조각 1개, 걸친 이벤트는 시각 기준으로 각 조각에 귀속된다. PAUSE는 총공부·순공 타이머를
- * 모두 멈추므로 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY/SLEEP)는 순공 타이머만 멈추므로
+ * 모두 멈추므로 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY)는 순공 타이머만 멈추므로
  * focusSec 배분에서만 빠진다.
  */
 final class StudySessionSplitter {
@@ -112,88 +108,42 @@ final class StudySessionSplitter {
         return base;
     }
 
-    /**
-     * 조각별 가중치대로 studySec/focusSec을 비례 배분해 세션들을 만든다 — 마지막 조각이 나머지를 가져가 합이 항상
-     * 요청값과 같다. 과목 구간은 배분하지 않고 조각에 맞춰 잘라 다시 계산하며(ADR-0023), 완료 할 일은 완료 시각이 속한
-     * 조각에 붙인다.
-     */
+    /** 조각별 가중치대로 studySec/focusSec을 비례 배분해 세션들을 만든다 — 마지막 조각이 나머지를 가져가 합이 항상 요청값과 같다. */
     static List<StudySession> buildSessions(
-            Long userId,
-            List<Instant> cuts,
-            SegmentWeights weights,
-            int studySec,
-            int focusSec,
-            List<SubjectSegmentRequest> subjectSegments,
-            List<CompletedTask> completedTasks) {
+            Long userId, List<Instant> cuts, SegmentWeights weights, int studySec, int focusSec) {
         int segmentCount = cuts.size() - 1;
-        List<Set<Long>> completedBySegment = splitCompletedTasks(completedTasks, cuts);
         List<StudySession> sessions = new ArrayList<>();
         long allocatedStudySec = 0;
         long allocatedFocusSec = 0;
         for (int i = 0; i < segmentCount; i++) {
-            boolean last = i == segmentCount - 1;
-            long segmentStudySec = last ? studySec - allocatedStudySec : studyShare(weights, i, studySec);
-            long segmentFocusSec = last ? focusSec - allocatedFocusSec : focusShare(weights, i, focusSec);
-            StudySession session = buildSession(
+            long segmentStudySec;
+            long segmentFocusSec;
+            if (i == segmentCount - 1) {
+                segmentStudySec = studySec - allocatedStudySec;
+                segmentFocusSec = focusSec - allocatedFocusSec;
+            } else {
+                segmentStudySec =
+                        studySec == 0 ? 0 : studySec * weights.studyActiveSecs()[i] / weights.totalStudyActiveSec();
+                // focusActiveSec 합이 0(전 구간이 이벤트로 덮인 경우)이면 studyActiveSec 비율로 대체 배분
+                boolean noFocusActiveTime = weights.totalFocusActiveSec() == 0;
+                long focusWeight = noFocusActiveTime ? weights.studyActiveSecs()[i] : weights.focusActiveSecs()[i];
+                long focusWeightTotal =
+                        noFocusActiveTime ? weights.totalStudyActiveSec() : weights.totalFocusActiveSec();
+                segmentFocusSec = focusSec == 0 ? 0 : focusSec * focusWeight / focusWeightTotal;
+            }
+            sessions.add(buildSession(
                     userId,
                     cuts.get(i),
                     cuts.get(i + 1),
                     (int) segmentStudySec,
                     (int) segmentFocusSec,
-                    weights.segmentEvents().get(i));
-            session.attachSubjectSegments(SubjectSegmentSplitter.clip(
-                    subjectSegments, weights.segmentEvents().get(i), cuts.get(i), cuts.get(i + 1)));
-            session.attachCompletedTasks(completedBySegment.get(i));
-            sessions.add(session);
+                    weights.segmentEvents().get(i)));
             allocatedStudySec += segmentStudySec;
             allocatedFocusSec += segmentFocusSec;
         }
         // 조각들이 원본 제출의 시작 시각을 루트로 공유해야 재제출 판별·응답 조회가 조각 단위로 어긋나지 않는다
         sessions.forEach(session -> session.attachToSubmission(cuts.get(0)));
         return sessions;
-    }
-
-    /**
-     * 완료한 할 일을 완료 시각이 속한 [start, end) 조각 하나에 붙인다 — 완료 시각이 없거나 어느 조각에도 없으면
-     * 마지막 조각 (ADR-0022). 시간처럼 비례 배분하지 않는다: 체크는 양이 아니라 사건이다.
-     */
-    static List<Set<Long>> splitCompletedTasks(List<CompletedTask> tasks, List<Instant> cuts) {
-        int segmentCount = cuts.size() - 1;
-        List<Set<Long>> result = new ArrayList<>(segmentCount);
-        for (int i = 0; i < segmentCount; i++) {
-            result.add(new LinkedHashSet<>());
-        }
-        for (CompletedTask task : tasks) {
-            result.get(segmentOf(task.doneAt(), cuts)).add(task.taskId());
-        }
-        return result;
-    }
-
-    /** 반개구간이라 정확히 자정에 완료하면 다음 조각, 종료 시각과 같으면 범위 밖이라 마지막 조각이다. */
-    private static int segmentOf(Instant doneAt, List<Instant> cuts) {
-        int last = cuts.size() - 2;
-        if (doneAt == null) {
-            return last;
-        }
-        for (int i = 0; i <= last; i++) {
-            if (!doneAt.isBefore(cuts.get(i)) && doneAt.isBefore(cuts.get(i + 1))) {
-                return i;
-            }
-        }
-        return last;
-    }
-
-    /** studySec 계열의 조각 몫 — PAUSE를 제외한 조각 길이 비율. */
-    private static long studyShare(SegmentWeights weights, int segment, long value) {
-        return value == 0 ? 0 : value * weights.studyActiveSecs()[segment] / weights.totalStudyActiveSec();
-    }
-
-    /** focusSec 계열의 조각 몫 — 이벤트를 제외한 조각 길이 비율. 그 합이 0(전 구간이 이벤트)이면 studySec 비율로 대체한다. */
-    private static long focusShare(SegmentWeights weights, int segment, long value) {
-        boolean noFocusActiveTime = weights.totalFocusActiveSec() == 0;
-        long weight = noFocusActiveTime ? weights.studyActiveSecs()[segment] : weights.focusActiveSecs()[segment];
-        long total = noFocusActiveTime ? weights.totalStudyActiveSec() : weights.totalFocusActiveSec();
-        return value == 0 ? 0 : value * weight / total;
     }
 
     private static StudySession buildSession(

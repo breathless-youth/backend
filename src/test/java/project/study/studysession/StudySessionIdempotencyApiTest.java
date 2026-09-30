@@ -1,7 +1,6 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -63,12 +62,11 @@ class StudySessionIdempotencyApiTest {
 
     private MvcTestResult submit(Long uid, Instant startedAt, Instant endedAt, int studySec, int focusSec) {
         String body = """
-                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(startedAt, endedAt, studySec, focusSec);
+                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(uid, startedAt, endedAt, studySec, focusSec);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
-                .with(asUser(uid))
                 .exchange();
     }
 

@@ -17,7 +17,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.StudySessionResponse;
-import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
@@ -39,11 +38,7 @@ class StudySessionDetailServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(
-                studySessionRepository,
-                activeStudySessionRepository,
-                CLOCK,
-                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
+        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
     }
 
     @Test

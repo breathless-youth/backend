@@ -1,7 +1,6 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -71,7 +70,7 @@ class StudySessionDetailApiTest {
     void 세션_상세를_이벤트구간까지_반환한다() throws Exception {
         MvcTestResult result = mvc.get()
                 .uri("/api/study-sessions/{id}", sessionId)
-                .with(asUser(userId))
+                .param("userId", String.valueOf(userId))
                 .exchange();
 
         assertThat(result).hasStatusOk();
@@ -92,7 +91,7 @@ class StudySessionDetailApiTest {
 
         assertThat(mvc.get()
                         .uri("/api/study-sessions/{id}", sessionId)
-                        .with(asUser(other))
+                        .param("userId", String.valueOf(other))
                         .exchange())
                 .hasStatus(HttpStatus.NOT_FOUND);
     }
@@ -101,7 +100,7 @@ class StudySessionDetailApiTest {
     void 없는_세션이면_404() {
         assertThat(mvc.get()
                         .uri("/api/study-sessions/{id}", 999999)
-                        .with(asUser(userId))
+                        .param("userId", String.valueOf(userId))
                         .exchange())
                 .hasStatus(HttpStatus.NOT_FOUND);
     }

@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,12 +16,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import project.study.studysession.controller.StudySessionController;
-import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.service.DuplicateSessionException;
 import project.study.studysession.service.StudySessionService;
-import project.study.subject.service.StudySubjectService;
 
 /**
  * BY-447 최종 리뷰 Fix 1 — 자동 확정 스케줄러와의 유니크 레이스에서 진 최종 제출이 findExistingSubmission으로
@@ -38,36 +35,23 @@ class StudySessionControllerRetryTest {
     @Mock
     private StudySessionService studySessionService;
 
-    // 소유 검증은 컨트롤러가 먼저 부른다(ADR-0021·0022) — subjectSegments는 비어 있어 assertOwned는 아무것도 하지 않고,
-    // assertTasksOwned는 stub한 완료 목록을 돌려준다. 그 목록이 재시도에도 같은 인스턴스로 실리는지 verify로 본다
-    @Mock
-    private StudySubjectService subjectService;
-
     @InjectMocks
     private StudySessionController controller;
 
-    private final StudySessionCreateRequest request = new StudySessionCreateRequest(
-            STARTED_AT, STARTED_AT.plusSeconds(3600), 3600, 3400, List.of(), null, List.of(9L));
-
-    /** 소유 검증이 돌려준 완료 할 일 — 재시도·폴백 어느 경로든 첫 검증 결과가 그대로 create에 실려야 한다. */
-    private static final List<CompletedTask> COMPLETED = List.of(new CompletedTask(9L, null));
-
-    @BeforeEach
-    void stubOwnership() {
-        when(subjectService.assertTasksOwned(USER_ID, List.of(9L))).thenReturn(COMPLETED);
-    }
+    private final StudySessionCreateRequest request =
+            new StudySessionCreateRequest(USER_ID, STARTED_AT, STARTED_AT.plusSeconds(3600), 3600, 3400, List.of());
 
     @Test
     void 첫_create가_레이스로_지면_재시도해서_성공하면_그_결과를_반환하고_재조회는_안한다() {
         List<StudySessionResponse> retryResult = List.of();
-        when(studySessionService.create(USER_ID, request, COMPLETED, false))
+        when(studySessionService.create(USER_ID, request, false))
                 .thenThrow(new DuplicateSessionException("레이스 패배"))
                 .thenReturn(retryResult);
 
-        List<StudySessionResponse> response = controller.create(USER_ID, request);
+        List<StudySessionResponse> response = controller.create(request);
 
         assertThat(response).isSameAs(retryResult);
-        verify(studySessionService, times(2)).create(USER_ID, request, COMPLETED, false);
+        verify(studySessionService, times(2)).create(USER_ID, request, false);
         verify(studySessionService, never()).findExistingSubmission(USER_ID, STARTED_AT);
     }
 
@@ -82,42 +66,39 @@ class StudySessionControllerRetryTest {
                 3600,
                 3400,
                 94.4,
-                List.of(),
-                List.of(),
-                List.of(),
                 List.of()));
-        when(studySessionService.create(USER_ID, request, COMPLETED, false))
+        when(studySessionService.create(USER_ID, request, false))
                 .thenThrow(new DuplicateSessionException("첫 실패"))
                 .thenThrow(new DuplicateSessionException("재시도도 실패"));
         when(studySessionService.findExistingSubmission(USER_ID, STARTED_AT)).thenReturn(existing);
 
-        List<StudySessionResponse> response = controller.create(USER_ID, request);
+        List<StudySessionResponse> response = controller.create(request);
 
         assertThat(response).isSameAs(existing);
-        verify(studySessionService, times(2)).create(USER_ID, request, COMPLETED, false);
+        verify(studySessionService, times(2)).create(USER_ID, request, false);
     }
 
     @Test
     void findExistingSubmission도_비어있으면_예외가_전파된다() {
-        when(studySessionService.create(USER_ID, request, COMPLETED, false))
+        when(studySessionService.create(USER_ID, request, false))
                 .thenThrow(new DuplicateSessionException("첫 실패"))
                 .thenThrow(new DuplicateSessionException("재시도도 실패"));
         when(studySessionService.findExistingSubmission(USER_ID, STARTED_AT)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> controller.create(USER_ID, request)).isInstanceOf(DuplicateSessionException.class);
+        assertThatThrownBy(() -> controller.create(request)).isInstanceOf(DuplicateSessionException.class);
     }
 
     @Test
     void ObjectOptimisticLockingFailureException도_같은_재시도_흐름을_탄다() {
         List<StudySessionResponse> retryResult = List.of();
-        when(studySessionService.create(USER_ID, request, COMPLETED, false))
+        when(studySessionService.create(USER_ID, request, false))
                 .thenThrow(new ObjectOptimisticLockingFailureException(StudySessionCreateRequest.class, USER_ID))
                 .thenReturn(retryResult);
 
-        List<StudySessionResponse> response = controller.create(USER_ID, request);
+        List<StudySessionResponse> response = controller.create(request);
 
         assertThat(response).isSameAs(retryResult);
-        verify(studySessionService, times(2)).create(USER_ID, request, COMPLETED, false);
+        verify(studySessionService, times(2)).create(USER_ID, request, false);
         verify(studySessionService, never()).findExistingSubmission(USER_ID, STARTED_AT);
     }
 }

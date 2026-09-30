@@ -1,7 +1,6 @@
 package project.study.room;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.asUser;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -46,7 +45,11 @@ class RoomApiTest {
     }
 
     private String createRoomAndGetCode(long userId) {
-        MvcTestResult result = mvc.post().uri("/api/rooms").with(asUser(userId)).exchange();
+        MvcTestResult result = mvc.post()
+                .uri("/api/rooms")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userId\": " + userId + "}")
+                .exchange();
         assertThat(result).hasStatus(HttpStatus.CREATED);
         return objectMapper
                 .readTree(result.getResponse().getContentAsByteArray())
@@ -58,14 +61,16 @@ class RoomApiTest {
         return mvc.post()
                 .uri("/api/rooms/join")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"inviteCode\": \"" + inviteCode + "\"}")
-                .with(asUser(userId));
+                .content("{\"userId\": " + userId + ", \"inviteCode\": \"" + inviteCode + "\"}");
     }
 
     @Test
     void 방을_만들면_201과_초대코드가_내려온다() {
         long userId = registerUser();
-        assertThat(mvc.post().uri("/api/rooms").with(asUser(userId)))
+        assertThat(mvc.post()
+                        .uri("/api/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + userId + "}"))
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying("$.roomId", v -> assertThat(v).isNotNull())
@@ -75,7 +80,10 @@ class RoomApiTest {
 
     @Test
     void 등록되지_않은_유저는_방을_만들_수_없다() {
-        assertThat(mvc.post().uri("/api/rooms").with(asUser(999_999_999L)))
+        assertThat(mvc.post()
+                        .uri("/api/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": 999999999}"))
                 .hasStatus(HttpStatus.NOT_FOUND)
                 .bodyJson()
                 .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("USER_NOT_FOUND"));
@@ -152,7 +160,7 @@ class RoomApiTest {
                 .get("roomId")
                 .asLong();
 
-        assertThat(mvc.post().uri("/api/rooms/" + roomId + "/leave").with(asUser(userId)))
+        assertThat(mvc.post().uri("/api/rooms/" + roomId + "/leave").param("userId", String.valueOf(userId)))
                 .hasStatus(HttpStatus.NO_CONTENT);
     }
 
@@ -165,12 +173,21 @@ class RoomApiTest {
                 .readTree(joined.getResponse().getContentAsByteArray())
                 .get("roomId")
                 .asLong();
-        assertThat(mvc.post().uri("/api/rooms/" + roomId + "/leave").with(asUser(userId)))
+        assertThat(mvc.post().uri("/api/rooms/" + roomId + "/leave").param("userId", String.valueOf(userId)))
                 .hasStatus(HttpStatus.NO_CONTENT);
 
         assertThat(joinRequest(registerUser(), code))
                 .hasStatus(HttpStatus.NOT_FOUND)
                 .bodyJson()
                 .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("ROOM_CLOSED"));
+    }
+
+    @Test
+    void userId_없이_방을_만들면_400이다() {
+        assertThat(mvc.post()
+                        .uri("/api/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .hasStatus(HttpStatus.BAD_REQUEST);
     }
 }

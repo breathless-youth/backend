@@ -1,7 +1,6 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -56,12 +55,11 @@ class StudySessionApiTest {
 
     private MockMvcTester.MockMvcRequestBuilder submitRequest(int studySec, int focusSec, String eventsJson) {
         String body = """
-                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": %s}""".formatted(sessionStart, sessionEnd, studySec, focusSec, eventsJson);
+                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": %s}""".formatted(userId, sessionStart, sessionEnd, studySec, focusSec, eventsJson);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body)
-                .with(asUser(userId));
+                .content(body);
     }
 
     private String eventJson(String status, Instant startedAt, Instant endedAt) {
@@ -95,7 +93,7 @@ class StudySessionApiTest {
     }
 
     private MockMvcTester.MockMvcRequestBuilder listRequest(LocalDate date) {
-        return mvc.get().uri("/api/stats").with(asUser(userId)).param("date", date.toString());
+        return mvc.get().uri("/api/stats").param("userId", userId.toString()).param("date", date.toString());
     }
 
     @Test
@@ -156,13 +154,12 @@ class StudySessionApiTest {
         Instant midnight = today.minusDays(1).atStartOfDay(KST).toInstant();
         String phoneEvent = eventJson("PHONE", midnight.minusSeconds(600), midnight.plusSeconds(600));
         String body = """
-                {"startedAt": "%s", "endedAt": "%s", "studySec": 7200, "focusSec": 6000, "events": [%s]}""".formatted(midnight.minusSeconds(3600), midnight.plusSeconds(3600), phoneEvent);
+                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": 7200, "focusSec": 6000, "events": [%s]}""".formatted(userId, midnight.minusSeconds(3600), midnight.plusSeconds(3600), phoneEvent);
 
         assertThat(mvc.post()
                         .uri("/api/study-sessions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-                        .with(asUser(userId)))
+                        .content(body))
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying("$.length()", length -> assertThat(length).isEqualTo(2))
@@ -233,7 +230,7 @@ class StudySessionApiTest {
     }
 
     private MockMvcTester.MockMvcRequestBuilder streakRequest() {
-        return mvc.get().uri("/api/stats/streak").with(asUser(userId));
+        return mvc.get().uri("/api/stats/streak").param("userId", userId.toString());
     }
 
     @Test
@@ -268,7 +265,8 @@ class StudySessionApiTest {
 
     @Test
     void date_없이_조회하면_400을_반환한다() {
-        assertThat(mvc.get().uri("/api/stats").with(asUser(userId))).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(mvc.get().uri("/api/stats").param("userId", userId.toString()))
+                .hasStatus(HttpStatus.BAD_REQUEST);
     }
 
     @Test
@@ -291,13 +289,12 @@ class StudySessionApiTest {
     @Test
     void studySec_없이_제출하면_400을_반환한다() {
         String body = """
-                {"startedAt": "%s", "endedAt": "%s", "focusSec": 7200, "events": []}""".formatted(sessionStart, sessionEnd);
+                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "focusSec": 7200, "events": []}""".formatted(userId, sessionStart, sessionEnd);
 
         assertThat(mvc.post()
                         .uri("/api/study-sessions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-                        .with(asUser(userId)))
+                        .content(body))
                 .hasStatus(HttpStatus.BAD_REQUEST)
                 .bodyJson()
                 .hasPathSatisfying(
@@ -307,13 +304,12 @@ class StudySessionApiTest {
     @Test
     void focusSec_없이_제출하면_400을_반환한다() {
         String body = """
-                {"startedAt": "%s", "endedAt": "%s", "studySec": 7200, "events": []}""".formatted(sessionStart, sessionEnd);
+                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": 7200, "events": []}""".formatted(userId, sessionStart, sessionEnd);
 
         assertThat(mvc.post()
                         .uri("/api/study-sessions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-                        .with(asUser(userId)))
+                        .content(body))
                 .hasStatus(HttpStatus.BAD_REQUEST)
                 .bodyJson()
                 .hasPathSatisfying(
@@ -366,15 +362,12 @@ class StudySessionApiTest {
     @Test
     void 존재하지_않는_사용자면_404를_반환한다() {
         String body = """
-                {"startedAt": "%s", "endedAt": "%s", "studySec": 7200, "focusSec": 7200, "events": []}""".formatted(sessionStart, sessionEnd);
+                {"userId": 999999999, "startedAt": "%s", "endedAt": "%s", "studySec": 7200, "focusSec": 7200, "events": []}""".formatted(sessionStart, sessionEnd);
 
-        // 토큰은 유효하지만 유저 행이 없는 경우(삭제) — 등록 없이 발급된 principal로 흉내 낸다
         assertThat(mvc.post()
                         .uri("/api/study-sessions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-                        .with(asUser(userId))
-                        .with(asUser(999_999_999L)))
+                        .content(body))
                 .hasStatus(HttpStatus.NOT_FOUND);
     }
 }

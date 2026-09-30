@@ -3,7 +3,6 @@ package project.study.studysession.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Map;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StudySession;
@@ -33,20 +32,12 @@ public record StudySessionSummaryResponse(
 
         @Schema(
                 description = "이 세션에서 발생한 상태별 이벤트 건수 — 이벤트가 없던 상태는 0으로 내려간다(키 누락 없음)",
-                example = "{\"PHONE\": 2, \"DEVICE\": 0, \"AWAY\": 1, \"SLEEP\": 1, \"PAUSE\": 0}")
-        Map<EventStatus, Long> eventCounts,
+                example = "{\"PHONE\": 2, \"DEVICE\": 0, \"AWAY\": 1, \"PAUSE\": 0}")
+        Map<EventStatus, Long> eventCounts) {
 
-        @Schema(description = "비공부 상태 이벤트 원본(시각) — 시작 시각 오름차순. 타임테이블의 휴식 칸을 그린다 (BY-734)")
-        List<StatusEventResponse> events,
-
-        @Schema(description = "과목 구간 — 시작 시각 오름차순, 서버가 계산한 studySec·focusSec 포함. 타임테이블의 과목 칸을 그린다. 없으면 []")
-        List<SubjectSegmentResponse> subjectSegments,
-
-        @Schema(description = "이 세션에서 완료한 할 일 — 이름 포함, id 오름차순, 지운 할 일도 남는다. 없으면 []")
-        List<CompletedTaskResponse> completedTasks) {
-    // focusRate/eventCounts 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다. 과목 이름·색은 목록 응답의 subjects[]에 한 번 실린다
+    // focusRate/eventCounts 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다
     public static StudySessionSummaryResponse from(
-            StudySession session, double focusRate, Map<EventStatus, Long> eventCounts, SubjectLookup lookup) {
+            StudySession session, double focusRate, Map<EventStatus, Long> eventCounts) {
         return new StudySessionSummaryResponse(
                 session.getId(),
                 session.getStatDate(),
@@ -55,11 +46,6 @@ public record StudySessionSummaryResponse(
                 session.getStudySec(),
                 session.getFocusSec(),
                 focusRate,
-                eventCounts,
-                session.getEvents().stream().map(StatusEventResponse::from).toList(),
-                session.getSubjectSegments().stream()
-                        .map(SubjectSegmentResponse::from)
-                        .toList(),
-                lookup.tasksFor(session.getCompletedTaskIds()));
+                eventCounts);
     }
 }

@@ -1,7 +1,6 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -65,12 +64,11 @@ class ActiveSessionSnapshotApiTest {
     private MvcTestResult report(
             Long uid, Instant started, Instant reported, int studySec, int focusSec, String eventsJson) {
         String body = """
-				{"startedAt": "%s", "reportedAt": "%s", "studySec": %d, "focusSec": %d, "events": %s}""".formatted(started, reported, studySec, focusSec, eventsJson);
+				{"userId": %d, "startedAt": "%s", "reportedAt": "%s", "studySec": %d, "focusSec": %d, "events": %s}""".formatted(uid, started, reported, studySec, focusSec, eventsJson);
         MvcTestResult result = mvc.put()
                 .uri("/api/study-sessions/active")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
-                .with(asUser(uid))
                 .exchange();
         buffer.flush(); // 버퍼에 들어간 스냅샷을 지금 DB에 반영한다 — 검증 실패(400)면 버퍼가 비어 있어 no-op
         return result;
@@ -122,21 +120,6 @@ class ActiveSessionSnapshotApiTest {
     }
 
     @Test
-    void SLEEP_이벤트가_실린_스냅샷도_저장되고_재접속_조회에_그대로_내려온다() {
-        // DB(마이크로초)·JSON 직렬화 왕복에서 표기가 어긋나지 않도록 초 단위로 자른 시각을 쓴다
-        Instant started = startedAt.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
-        String events = """
-				[{"status":"SLEEP","startedAt":"%s","endedAt":"%s"}]""".formatted(started.plusSeconds(10), started.plusSeconds(20));
-        assertThat(report(userId, started, started.plusSeconds(30), 20, 10, events))
-                .hasStatus(HttpStatus.NO_CONTENT);
-
-        assertThat(restore(userId))
-                .hasStatus(HttpStatus.OK)
-                .bodyJson()
-                .hasPathSatisfying("$.events[0].status", v -> assertThat(v).isEqualTo("SLEEP"));
-    }
-
-    @Test
     void reportedAt이_startedAt_이전이면_400이다() {
         assertThat(report(userId, startedAt, startedAt, 0, 0)).hasStatus(HttpStatus.BAD_REQUEST);
         assertThat(draftRows(userId)).isEqualTo(0);
@@ -167,12 +150,11 @@ class ActiveSessionSnapshotApiTest {
     @Test
     void 필수값_누락은_400이다() {
         String body = """
-				{"startedAt": "%s"}""".formatted(startedAt);
+				{"userId": %d, "startedAt": "%s"}""".formatted(userId, startedAt);
         assertThat(mvc.put()
                         .uri("/api/study-sessions/active")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body)
-                        .with(asUser(userId))
                         .exchange())
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
@@ -180,7 +162,7 @@ class ActiveSessionSnapshotApiTest {
     // ── 복구 조회 (BY-448) ──────────────────────────────────────────
 
     private MvcTestResult restore(Long uid) {
-        return mvc.get().uri("/api/study-sessions/active").with(asUser(uid)).exchange();
+        return mvc.get().uri("/api/study-sessions/active?userId=" + uid).exchange();
     }
 
     @Test
