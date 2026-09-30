@@ -1,6 +1,7 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -65,7 +66,7 @@ class StudySessionPeriodApiTest {
 
         MvcTestResult result = mvc.get()
                 .uri("/api/stats/period")
-                .param("userId", String.valueOf(userId))
+                .with(asUser(userId))
                 .param("from", "2026-08-24")
                 .param("to", "2026-08-30")
                 .param("compareFrom", "2026-08-17")
@@ -99,7 +100,7 @@ class StudySessionPeriodApiTest {
 
         MvcTestResult result = mvc.get()
                 .uri("/api/stats/period")
-                .param("userId", String.valueOf(userId))
+                .with(asUser(userId))
                 .param("from", "2026-08-24")
                 .param("to", "2026-08-30")
                 .exchange();
@@ -117,7 +118,7 @@ class StudySessionPeriodApiTest {
     void from이_to보다_이후면_400() {
         assertThat(mvc.get()
                         .uri("/api/stats/period")
-                        .param("userId", String.valueOf(userId))
+                        .with(asUser(userId))
                         .param("from", "2026-08-30")
                         .param("to", "2026-08-24")
                         .exchange())
@@ -128,7 +129,7 @@ class StudySessionPeriodApiTest {
     void compare를_한쪽만_지정하면_400() {
         assertThat(mvc.get()
                         .uri("/api/stats/period")
-                        .param("userId", String.valueOf(userId))
+                        .with(asUser(userId))
                         .param("from", "2026-08-24")
                         .param("to", "2026-08-30")
                         .param("compareFrom", "2026-08-17")

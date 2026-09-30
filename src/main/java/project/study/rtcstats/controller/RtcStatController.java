@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,7 +17,8 @@ import project.study.rtcstats.service.RtcStatService;
 
 @Tag(name = "RTC Stats", description = "WebRTC 연결 통계 수집 — 릴레이 비율·coturn egress 측정용 (BY-490)")
 @RestController
-@RequestMapping("/api/rtc-stats")
+// 토큰 계약(v2). 구 앱(API-Version 없음/1)은 Legacy 컨트롤러가 받는다 — 강제 업데이트 뒤 contract 시 ADR-0020 참고
+@RequestMapping(value = "/api/rtc-stats", version = "2")
 @RequiredArgsConstructor
 public class RtcStatController {
 
@@ -29,7 +31,7 @@ public class RtcStatController {
     @ApiResponse(responseCode = "400", description = "필수값 누락 또는 candidateType 허용값 위반")
     @PostMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void report(@Valid @RequestBody RtcStatRequest request) {
-        rtcStatService.record(request);
+    public void report(@AuthenticationPrincipal Long userId, @Valid @RequestBody RtcStatRequest request) {
+        rtcStatService.record(userId, request);
     }
 }

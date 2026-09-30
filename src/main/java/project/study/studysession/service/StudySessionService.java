@@ -13,21 +13,27 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.NotFoundException;
+import project.study.studysession.dto.CompletedTask;
+import project.study.studysession.dto.StudyDaysResponse;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.dto.StudySessionSummaryResponse;
+import project.study.studysession.dto.SubjectLookup;
+import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.entity.StudySessionSubjectSegment;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
@@ -49,16 +55,27 @@ public class StudySessionService {
     private final StudySessionRepository studySessionRepository;
     private final ActiveStudySessionRepository activeStudySessionRepository;
     private final Clock clock;
+    private final SubjectLookupProvider subjectLookupProvider;
 
-    /** autoFinalized=true는 확정 스케줄러 전용 — 저장되는 세션에 자동 확정 표시를 남긴다. */
+    /** autoFinalized=true는 확정 스케줄러 전용 — 저장되는 세션에 자동 확정 표시를 남긴다. 완료 할 일은 없다 (ADR-0022). */
     @Transactional
     public List<StudySessionResponse> create(Long userId, StudySessionCreateRequest request, boolean autoFinalized) {
+        return create(userId, request, List.of(), autoFinalized);
+    }
+
+    /**
+     * completedTasks는 컨트롤러가 StudySubjectService.assertTasksOwned로 검증해 넘긴 값이다 — 서비스는
+     * request.completedTaskIds()를 직접 읽지 않는다(과목 소유 검증과 같은 배치, ADR-0021 §6).
+     */
+    @Transactional
+    public List<StudySessionResponse> create(
+            Long userId, StudySessionCreateRequest request, List<CompletedTask> completedTasks, boolean autoFinalized) {
         List<StudySession> existing = studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
                 userId, request.startedAt());
         if (!existing.isEmpty()) {
             // 클라 제출본이 하나라도 있으면 불가침 — 기존 멱등 동작(저장된 결과 반환)
             if (!existing.stream().allMatch(StudySession::isAutoFinalized)) {
-                return existing.stream().map(this::toResponse).toList();
+                return toResponses(existing);
             }
             // 전부 자동 확정본이면 잠정 기록 — 새 도착분(최종 제출·재확정)으로 대체한다. 길이 비교는 하지 않는다: 스냅샷이 누적값이라 나중 도착분이 항상 상위집합이다 (ADR-0014)
             studySessionRepository.deleteAll(existing);
@@ -67,7 +84,13 @@ public class StudySessionService {
         List<StatusEvent> events = request.getStatusEventList();
 
         List<StudySession> sessions = validateAndBuildSessions(
-                userId, request.startedAt(), request.endedAt(), request.studySec(), request.focusSec(), events);
+                userId,
+                request.startedAt(),
+                request.endedAt(),
+                request.studySec(),
+                request.focusSec(),
+                events,
+                new SessionAttachments(request.subjectSegmentsOrEmpty(), completedTasks));
         if (autoFinalized) {
             sessions.forEach(StudySession::markAutoFinalized);
         }
@@ -75,7 +98,7 @@ public class StudySessionService {
             List<StudySession> saved = studySessionRepository.saveAll(sessions);
             studySessionRepository.flush();
             activeStudySessionRepository.deleteByUserIdAndStartedAt(userId, request.startedAt());
-            return saved.stream().map(this::toResponse).toList();
+            return toResponses(saved);
         } catch (DataIntegrityViolationException e) {
             String constraint = violatedConstraint(e);
             if (STARTED_AT_UNIQUE_CONSTRAINT.equalsIgnoreCase(constraint)) {
@@ -94,11 +117,8 @@ public class StudySessionService {
      */
     @Transactional(readOnly = true)
     public List<StudySessionResponse> findExistingSubmission(Long userId, Instant submissionStartedAt) {
-        return studySessionRepository
-                .findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(userId, submissionStartedAt)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return toResponses(studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
+                userId, submissionStartedAt));
     }
 
     /** 원인 체인에서 위반된 제약 이름을 찾는다 — 없으면 null. */
@@ -120,6 +140,15 @@ public class StudySessionService {
      */
     @Transactional(readOnly = true)
     public StudySessionListResponse list(Long userId, LocalDate date) {
+        return list(userId, date, true);
+    }
+
+    /**
+     * includeNames=false는 구 앱(API-Version 1) 경로용이다 — 그 경로는 토큰 없이 쿼리 userId로 열려 있어 과목·할 일 이름까지
+     * 실으면 익명 노출이 늘어난다(Codex 리뷰 P1). 구 앱은 그 필드를 읽지 않으므로 빈 배열로 둔다. 구간(id)·이벤트는 그대로다.
+     */
+    @Transactional(readOnly = true)
+    public StudySessionListResponse list(Long userId, LocalDate date, boolean includeNames) {
         List<StudySession> sessions =
                 studySessionRepository.findInPeriodWithMinFocusSec(userId, date, date, MIN_LIST_FOCUS_SEC);
         long totalStudySec =
@@ -131,8 +160,10 @@ public class StudySessionService {
                 .max()
                 .orElse(0);
 
-        List<StudySessionSummaryResponse> summaries =
-                sessions.stream().map(this::toSummaryResponse).toList();
+        SubjectLookup lookup = includeNames ? lookupFor(sessions) : SubjectLookup.EMPTY;
+        List<StudySessionSummaryResponse> summaries = sessions.stream()
+                .map(session -> toSummaryResponse(session, lookup))
+                .toList();
         Map<EventStatus, Long> totalEventCounts = StudySessionStatsCalculator.countByStatus(
                 sessions.stream().flatMap(s -> s.getEvents().stream()).toList());
 
@@ -148,28 +179,82 @@ public class StudySessionService {
                 longestFocusSec,
                 StudySessionStatsCalculator.focusRate(totalFocusSec, totalStudySec),
                 totalEventCounts,
-                studiedDatesInMonth);
+                studiedDatesInMonth,
+                lookup.allSubjects());
     }
 
-    private StudySessionResponse toResponse(StudySession session) {
+    /** 세션들이 참조한 과목·할 일 이름을 한 번에 조회한다 (BY-734) — 둘 다 없으면 조회하지 않는다. */
+    private SubjectLookup lookupFor(List<StudySession> sessions) {
+        Set<Long> subjectIds = sessions.stream()
+                .flatMap(session -> session.getSubjectSegments().stream())
+                .map(StudySessionSubjectSegment::getSubjectId)
+                .collect(Collectors.toSet());
+        Set<Long> taskIds = sessions.stream()
+                .flatMap(session -> session.getCompletedTaskIds().stream())
+                .collect(Collectors.toSet());
+        if (subjectIds.isEmpty() && taskIds.isEmpty()) {
+            return SubjectLookup.EMPTY;
+        }
+        return subjectLookupProvider.lookup(subjectIds, taskIds);
+    }
+
+    private List<StudySessionResponse> toResponses(List<StudySession> sessions) {
+        SubjectLookup lookup = lookupFor(sessions);
+        return sessions.stream().map(session -> toResponse(session, lookup)).toList();
+    }
+
+    private StudySessionResponse toResponse(StudySession session, SubjectLookup lookup) {
         return StudySessionResponse.from(
-                session, StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()));
+                session, StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()), lookup);
     }
 
-    private StudySessionSummaryResponse toSummaryResponse(StudySession session) {
+    private StudySessionSummaryResponse toSummaryResponse(StudySession session, SubjectLookup lookup) {
         return StudySessionSummaryResponse.from(
                 session,
                 StudySessionStatsCalculator.focusRate(session.getFocusSec(), session.getStudySec()),
-                StudySessionStatsCalculator.countByStatus(session.getEvents()));
+                StudySessionStatsCalculator.countByStatus(session.getEvents()),
+                lookup);
     }
 
     /**
      * 세션을 KST 자정 경계로 분할해 생성한다 — 안 넘으면 1개, 걸친 이벤트는 시각 기준으로 각 세션에 귀속.
      * studySec/focusSec은 제출값을 조각 길이 비례로 배분한다. PAUSE는 총공부·순공 타이머를 모두 멈추므로
-     * 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY)는 순공 타이머만 멈추므로 focusSec 배분에서만 빠진다.
+     * 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY/SLEEP)는 순공 타이머만 멈추므로 focusSec 배분에서만 빠진다.
      */
     List<StudySession> validateAndBuildSessions(
             Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
+        return validateAndBuildSessions(
+                userId, startedAt, endedAt, studySec, focusSec, events, SessionAttachments.NONE);
+    }
+
+    /** 과목 구간(subjectSegments)도 함께 검증하고 조각마다 잘라 그 조각의 이벤트로 과목별 시간을 계산한다 (ADR-0023). */
+    List<StudySession> validateAndBuildSessions(
+            Long userId,
+            Instant startedAt,
+            Instant endedAt,
+            int studySec,
+            int focusSec,
+            List<StatusEvent> events,
+            List<SubjectSegmentRequest> subjectSegments) {
+        return validateAndBuildSessions(
+                userId,
+                startedAt,
+                endedAt,
+                studySec,
+                focusSec,
+                events,
+                new SessionAttachments(subjectSegments, List.of()));
+    }
+
+    /** 완료 할 일(attachments.completedTasks)은 배분하지 않고 완료 시각이 속한 조각에 붙인다 (ADR-0022). */
+    List<StudySession> validateAndBuildSessions(
+            Long userId,
+            Instant startedAt,
+            Instant endedAt,
+            int studySec,
+            int focusSec,
+            List<StatusEvent> events,
+            SessionAttachments attachments) {
         // 분할 후 조각은 항상 24시간 이내가 되므로, 24시간 한도 등은 반드시 분할 전 원본 기준으로 먼저 검증한다
         validatePeriod(startedAt, endedAt, clock.instant());
 
@@ -184,8 +269,12 @@ public class StudySessionService {
         // 조각 이후에 검증
         validateStudySec(studySec, weights.totalStudyActiveSec());
         validateFocusSec(focusSec, studySec);
+        List<SubjectSegmentRequest> sortedSegments = attachments.subjectSegments().stream()
+                .sorted(Comparator.comparing(SubjectSegmentRequest::startedAt))
+                .toList();
+        validateSubjectSegments(startedAt, endedAt, sortedSegments);
 
-        return buildSessions(userId, cuts, weights, studySec, focusSec);
+        return buildSessions(userId, cuts, weights, studySec, focusSec, sortedSegments, attachments.completedTasks());
     }
 
     /**
@@ -210,6 +299,16 @@ public class StudySessionService {
                 : studySessionRepository.findDistinctStatDatesBetween(userId, from, to, MIN_STREAK_FOCUS_SEC);
         return new StudySessionStreakResponse(
                 currentStreak(statDates, today), maxStreak(statDates), studiedDatesInRange);
+    }
+
+    /**
+     * 누적 공부일 — 가입 이후 순공시간 1분 이상 세션이 하루라도 있었던 날의 수. 목록 조회와 같은 기준(ADR-0009)이라
+     * "목록에 세션이 보이는 날"과 일치한다. 스트릭과 같은 이유로 오늘(KST)까지만 센다.
+     */
+    @Transactional(readOnly = true)
+    public StudyDaysResponse studyDays(Long userId) {
+        LocalDate today = clock.instant().atZone(KST).toLocalDate();
+        return new StudyDaysResponse(studySessionRepository.countDistinctStatDates(userId, MIN_LIST_FOCUS_SEC, today));
     }
 
     /** 오늘(기록이 아직 없으면 어제)부터 거꾸로 이어진 연속 공부일. 오늘이 지나기 전엔 스트릭이 끊긴 게 아니다. */
@@ -246,9 +345,15 @@ public class StudySessionService {
 
     @Transactional(readOnly = true)
     public StudySessionResponse findById(Long userId, Long id) {
+        return findById(userId, id, true);
+    }
+
+    /** includeNames=false는 구 앱 경로용 — list와 같은 이유로 과목·할 일 이름을 싣지 않는다. */
+    @Transactional(readOnly = true)
+    public StudySessionResponse findById(Long userId, Long id, boolean includeNames) {
         StudySession session = studySessionRepository
                 .findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new NotFoundException("세션을 찾을 수 없습니다"));
-        return toResponse(session);
+        return toResponse(session, includeNames ? lookupFor(List.of(session)) : SubjectLookup.EMPTY);
     }
 }

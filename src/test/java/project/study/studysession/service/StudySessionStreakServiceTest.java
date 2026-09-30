@@ -15,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.studysession.dto.StudySessionStreakResponse;
+import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
@@ -36,7 +37,11 @@ class StudySessionStreakServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StudySessionService(studySessionRepository, activeStudySessionRepository, CLOCK);
+        service = new StudySessionService(
+                studySessionRepository,
+                activeStudySessionRepository,
+                CLOCK,
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
     }
 
     @Test

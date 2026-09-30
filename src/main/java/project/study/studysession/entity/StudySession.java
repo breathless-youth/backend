@@ -1,7 +1,9 @@
 package project.study.studysession.entity;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -13,10 +15,14 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 @Entity
 @Table(name = "study_session")
@@ -52,10 +58,28 @@ public class StudySession {
     @Column(name = "focus_sec")
     private Integer focusSec;
 
+    // 자식 컬렉션 셋은 일간 목록이 세션마다 따로 읽지 않게 세션 id IN 배치로 한 번에 읽는다 — 하루 세션 수는 두 자리라 64면
+    // 한 번이다 (BY-734, Codex 리뷰 P2)
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "session_id", nullable = false)
     @OrderBy("startedAt ASC")
+    @BatchSize(size = 64)
     private List<StatusEvent> events = new ArrayList<>();
+
+    // 과목 구간 (ADR-0023) — 이벤트와 같은 자식 컬렉션. 자정 분할 조각마다 잘린 행이 생기고 파생값은 서버가 계산한다
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "session_id", nullable = false)
+    @OrderBy("startedAt ASC")
+    @BatchSize(size = 64)
+    private List<StudySessionSubjectSegment> subjectSegments = new ArrayList<>();
+
+    // 세션 제출 시 완료한 할 일 (ADR-0022) — (session_id, task_id)가 PK인 값 컬렉션이라 엔티티 대신 값으로 매핑한다.
+    // 자정 분할이면 완료 시각이 속한 조각 하나에만 붙는다. 세션과 함께 저장·대체·삭제된다
+    @ElementCollection
+    @CollectionTable(name = "study_session_task_done", joinColumns = @JoinColumn(name = "session_id", nullable = false))
+    @Column(name = "task_id", nullable = false)
+    @BatchSize(size = 64)
+    private Set<Long> completedTaskIds = new HashSet<>();
 
     // BY-447: 자동 확정본 표시 — true인 세션은 잠정 기록이라 늦은 최종 제출·재확정이 대체할 수 있다
     @Column(name = "auto_finalized", nullable = false)
@@ -87,6 +111,16 @@ public class StudySession {
     /** 자정 분할 조각을 루트 제출에 귀속시킨다 — 분할 직후 서비스만 호출한다 (기본값은 자신의 시작 시각 = 단독 세션). */
     public void attachToSubmission(Instant submissionStartedAt) {
         this.submissionStartedAt = submissionStartedAt;
+    }
+
+    /** 조각별로 잘라 계산한 과목 구간을 붙인다 — 분할 직후 서비스만 호출한다. */
+    public void attachSubjectSegments(List<StudySessionSubjectSegment> subjectSegments) {
+        this.subjectSegments = new ArrayList<>(subjectSegments);
+    }
+
+    /** 조각별로 귀속된 완료 할 일을 붙인다 — 분할 직후 서비스만 호출한다. */
+    public void attachCompletedTasks(Collection<Long> taskIds) {
+        this.completedTaskIds = new HashSet<>(taskIds);
     }
 
     /** 확정 스케줄러가 만든 세션임을 표시한다 — 저장 직전 서비스만 호출한다. */

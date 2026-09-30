@@ -33,7 +33,7 @@ class RtcStatServiceTest {
     @Test
     void 요청을_엔티티로_매핑해_저장한다() {
         service.record(
-                new RtcStatRequest("conn-1", 1L, 2L, 3L, "relay", "udp", 1000L, 500L, 40, true, 1_700_000_000_000L));
+                2L, new RtcStatRequest("conn-1", 1L, 3L, "relay", "udp", 1000L, 500L, 40, true, 1_700_000_000_000L));
 
         RtcConnectionStat s = saved();
         assertThat(s.getConnectionId()).isEqualTo("conn-1");
@@ -52,7 +52,7 @@ class RtcStatServiceTest {
 
     @Test
     void at이_null이면_clientAt은_null이다() {
-        service.record(new RtcStatRequest("conn-2", 1L, 2L, null, "host", null, null, null, null, false, null));
+        service.record(2L, new RtcStatRequest("conn-2", 1L, null, "host", null, null, null, null, false, null));
 
         assertThat(saved().getClientAt()).isNull();
     }

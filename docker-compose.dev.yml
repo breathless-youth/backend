@@ -1,0 +1,25 @@
+# dev 서버(EC2) 전용 compose. 서버 .env에 COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml 이 있어
+# 평소처럼 `docker compose up -d --build`만 쳐도 이 파일이 합쳐진다. 로컬(COMPOSE_FILE 없음)은 postgres만 뜬다.
+# application-dev.yaml이 시크릿을 기본값 없는 환경변수로만 받으므로(BY-642), 실제 값은 같은 디렉터리의
+# .env(추적 안 함)에 두고 env_file로 앱 컨테이너에 주입한다. 배포 절차는 docs/runbooks/dev-deploy.md (BY-670).
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      JAVA_TOOL_OPTIONS: "-Xmx384m -XX:MaxMetaspaceSize=128m"
+    mem_limit: 640m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  postgres:
+    # 앱이 인증에 쓰는 SPRING_DATASOURCE_PASSWORD와 postgres 초기화 비밀번호를 한 값으로 묶는다.
+    # ${...}는 compose가 이 디렉터리 .env에서 자동 치환한다(env_file 주입과는 별개 경로지만 같은 파일).
+    environment:
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?dev 서버에는 .env에 SPRING_DATASOURCE_PASSWORD가 필요하다}
+    restart: unless-stopped
+    mem_limit: 256m

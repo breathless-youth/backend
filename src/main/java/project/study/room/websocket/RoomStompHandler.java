@@ -21,8 +21,9 @@ import project.study.room.service.RoomStateService;
 @Slf4j
 public class RoomStompHandler {
 
-    private static final Set<String> SIGNAL_KINDS = Set.of("OFFER", "ANSWER", "CANDIDATE");
-    private static final Set<String> FOCUS_STATES = Set.of("FOCUS", "DISTRACTED");
+    // 대조 테스트(WebSocketDocsContractTest)가 문서와 비교하므로 패키지 가시성으로 둔다
+    static final Set<String> SIGNAL_KINDS = Set.of("OFFER", "ANSWER", "CANDIDATE");
+    static final Set<String> FOCUS_STATES = Set.of("FOCUS", "DISTRACTED");
 
     private final RoomStateService roomStateService;
     private final RoomMessenger roomMessenger;
@@ -47,7 +48,9 @@ public class RoomStompHandler {
         // 세션 스코프 발송 — 같은 유저의 남은 옛 세션까지 배달되지 않도록 요청 세션에만 보낸다.
         // 헤더 구성은 RoomMessenger 한 곳에만 둔다 (ROOM_UNAVAILABLE과 같은 경로)
         roomMessenger.toSession(
-                principal.getName(), accessor.getSessionId(), Map.of("type", "SNAPSHOT", "members", members));
+                principal.getName(),
+                accessor.getSessionId(),
+                Map.of("type", RoomMessageType.SNAPSHOT.name(), "members", members));
     }
 
     @MessageMapping("/room/{roomId}/signal")
@@ -74,7 +77,10 @@ public class RoomStompHandler {
         }
 
         messagingTemplate.convertAndSendToUser(payload.toUserId().toString(), "/queue/room", (Object) Map.of(
-                "type", "SIGNAL", "fromUserId", fromUserId, "kind", payload.kind(), "payload", payload.payload()));
+                "type", RoomMessageType.SIGNAL.name(),
+                "fromUserId", fromUserId,
+                "kind", payload.kind(),
+                "payload", payload.payload()));
     }
 
     // 필드별 검증은 SQL 전에 지금처럼 한다 — 무효한 필드만 무시(null)하고 나머지는 반영한다 (스펙 §2.7)
@@ -110,16 +116,16 @@ public class RoomStompHandler {
     private void broadcastChanges(Long roomId, Long userId, StateChange change) {
         String topic = "/topic/room/" + roomId;
         if (change.cameraOn() != null) {
-            messagingTemplate.convertAndSend(
-                    topic, (Object) Map.of("type", "CAMERA_CHANGED", "userId", userId, "cameraOn", change.cameraOn()));
+            messagingTemplate.convertAndSend(topic, (Object) Map.of(
+                    "type", RoomMessageType.CAMERA_CHANGED.name(), "userId", userId, "cameraOn", change.cameraOn()));
         }
         if (change.focusState() != null) {
-            messagingTemplate.convertAndSend(topic, (Object)
-                    Map.of("type", "FOCUS_CHANGED", "userId", userId, "focusState", change.focusState()));
+            messagingTemplate.convertAndSend(topic, (Object) Map.of(
+                    "type", RoomMessageType.FOCUS_CHANGED.name(), "userId", userId, "focusState", change.focusState()));
         }
         if (change.focusSec() != null) {
-            messagingTemplate.convertAndSend(
-                    topic, (Object) Map.of("type", "STUDY_TIME", "userId", userId, "focusSec", change.focusSec()));
+            messagingTemplate.convertAndSend(topic, (Object)
+                    Map.of("type", RoomMessageType.STUDY_TIME.name(), "userId", userId, "focusSec", change.focusSec()));
         }
     }
 }
