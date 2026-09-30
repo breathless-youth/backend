@@ -3,7 +3,7 @@
 # .env(compose env_file)에만 있고, 로컬 개발은 gitignore 대상인 application-local.yaml에 둔다.
 # 누락 시 동작: @Value로 읽는 값(카카오 앱 키, TURN 시크릿)은 'Could not resolve placeholder'로 즉시 기동 실패.
 # datasource는 @ConfigurationProperties 바인딩이라 미해결 placeholder 문자열이 그대로 비밀번호로 쓰여
-# DB 인증 실패로 기동이 멈춘다(조용히 뜨지는 않음). JWT_SECRET도 JwtUtil이 @Value로 읽어 누락 시 기동 실패다 (BY-526).
+# DB 인증 실패로 기동이 멈춘다(조용히 뜨지는 않음). JWT_SECRET은 인증 파킹 중이라 지금은 읽는 코드가 없다.
 spring:
   application:
     name: study
@@ -42,7 +42,7 @@ oauth:
     # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
     client-id: ${OAUTH_GOOGLE_CLIENT_ID:320200622450-5bqjf3j6lu8akp20p4oikiio7t8brjtd.apps.googleusercontent.com}
   kakao:
-    app-key: ${OAUTH_KAKAO_APP_KEY:4c3e41ef0da3566b0ca844c6546457ba}
+    app-key: ${OAUTH_KAKAO_APP_KEY}
   apple:
     client-id: ${OAUTH_APPLE_CLIENT_ID:com.breathlessyouth.mobile}
 
@@ -50,7 +50,7 @@ springdoc:
   override-with-generic-response: false
 
 jwt:
-  secret: ${JWT_SECRET} # 32자 이상 랜덤 문자열. JwtUtil이 @Value로 읽는다 — 누락 = 기동 실패 (ADR-0019)
+  secret: ${JWT_SECRET} # 32자 이상 랜덤 문자열. 인증 재도입(JwtUtil 복구) 시 @Value가 읽으며 그때부터 누락 = 기동 실패
   access-expiration: 1800000 # 30분
 
 refresh-token:
@@ -73,9 +73,6 @@ logging:
 app:
   # 데모 데이터 시딩 + Swagger 목데이터 안내 (BY-640: 프로필 대신 스위치). dev 서버 전용 편의 기능
   seed:
-    enabled: true
-  # FE용 계약 문서(/docs/websocket.html) 서빙. 값이 없으면 꺼짐 — prod에는 넣지 않는다 (BY-667)
-  docs:
     enabled: true
   ws:
     stats-logging-period-ms: 30000   # 30초

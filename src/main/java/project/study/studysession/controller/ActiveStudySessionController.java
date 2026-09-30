@@ -1,6 +1,7 @@
 package project.study.studysession.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,12 +11,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
@@ -24,18 +25,15 @@ import project.study.studysession.dto.ActiveSessionSnapshotResponse;
 import project.study.studysession.dto.SessionRecoveryResponse;
 import project.study.studysession.service.ActiveStudySessionService;
 import project.study.studysession.service.SessionRecoveryService;
-import project.study.subject.service.StudySubjectService;
 
 @Tag(name = "StudySession", description = "공부 세션 기록 API 모음.  통계 조회는 StudySessionStats 참고")
 @RestController
-// 토큰 계약(v2). 구 앱(API-Version 없음/1)은 Legacy 컨트롤러가 받는다 — 강제 업데이트 뒤 contract 시 ADR-0020 참고
-@RequestMapping(value = "/api/study-sessions", version = "2")
+@RequestMapping("/api/study-sessions")
 @RequiredArgsConstructor
 public class ActiveStudySessionController {
 
     private final ActiveStudySessionService activeStudySessionService;
     private final SessionRecoveryService sessionRecoveryService;
-    private final StudySubjectService subjectService;
 
     @Operation(summary = "진행중 세션 스냅샷 보고", description = """
 				공부 중 1초마다 진행중 세션의 누적 스냅샷을 보고한다. \
@@ -55,9 +53,8 @@ public class ActiveStudySessionController {
 				앱은 확정 여부를 신경 쓸 필요 없이 늘 하던 대로 제출하면 된다.""")
     @PutMapping("/active")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void report(@AuthenticationPrincipal Long userId, @Valid @RequestBody ActiveSessionSnapshotRequest request) {
-        subjectService.assertOwned(userId, request.subjectIds());
-        activeStudySessionService.reportSnapshot(userId, request);
+    public void report(@Valid @RequestBody ActiveSessionSnapshotRequest request) {
+        activeStudySessionService.reportSnapshot(request);
     }
 
     @Operation(summary = "진행중 세션 복구 조회", description = """
@@ -71,9 +68,7 @@ public class ActiveStudySessionController {
 
 					조회 직후 서버가 그 세션을 자동 확정하는 극단적 타이밍이 겹쳐도 받은 데이터로 이어서 \
 					보고·제출하면 대체 정책이 더 완전한 기록으로 수렴시키므로 클라이언트가 따로 처리할 것은 없다.""")
-    @ApiResponse(
-            responseCode = "200",
-            description = "진행중 스냅샷 — startedAt/reportedAt/studySec/focusSec/events/subjectSegments")
+    @ApiResponse(responseCode = "200", description = "진행중 스냅샷 — startedAt/reportedAt/studySec/focusSec/events")
     @ApiResponse(
             responseCode = "404",
             description = "진행중 세션 없음 — 이미 자동 확정됐거나 애초에 없던 경우. 확정본은 통계 조회에 이미 반영돼 있으므로 새로 시작하면 된다",
@@ -83,7 +78,8 @@ public class ActiveStudySessionController {
                             schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(name = "진행중 세션 없음", value = "{\"message\": \"진행중인 세션이 없습니다\"}")))
     @GetMapping("/active")
-    public ActiveSessionSnapshotResponse restore(@AuthenticationPrincipal Long userId) {
+    public ActiveSessionSnapshotResponse restore(
+            @Parameter(description = "세션 주인의 유저 ID", example = "1") @RequestParam Long userId) {
         return activeStudySessionService.findLatestSnapshot(userId);
     }
 
@@ -111,7 +107,8 @@ public class ActiveStudySessionController {
                             schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(name = "복구 대상 없음", value = "{\"message\": \"복구할 세션이 없습니다\"}")))
     @PostMapping("/recovery")
-    public SessionRecoveryResponse recover(@AuthenticationPrincipal Long userId) {
+    public SessionRecoveryResponse recover(
+            @Parameter(description = "세션 주인의 유저 ID", example = "1") @RequestParam Long userId) {
         return sessionRecoveryService.recover(userId);
     }
 }

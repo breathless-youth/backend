@@ -1,7 +1,6 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -62,12 +61,11 @@ class ActiveSnapshotBufferTest {
 
     private void report(int studySec, int focusSec, Instant reportedAt) {
         String body = """
-                {"startedAt": "%s", "reportedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(startedAt, reportedAt, studySec, focusSec);
+                {"userId": %d, "startedAt": "%s", "reportedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(userId, startedAt, reportedAt, studySec, focusSec);
         assertThat(mvc.put()
                         .uri("/api/study-sessions/active")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body)
-                        .with(asUser(userId))
                         .exchange())
                 .hasStatus(HttpStatus.NO_CONTENT);
     }

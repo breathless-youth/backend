@@ -1,7 +1,6 @@
 package project.study.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.asUser;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +24,7 @@ class WsStatsEndpointTest {
 
     @Test
     void wsstats가_세션_통계와_send_limit_카운트를_반환한다() {
-        assertThat(mvc.get().uri("/actuator/wsstats").with(asUser(1)).exchange())
+        assertThat(mvc.get().uri("/actuator/wsstats").exchange())
                 .hasStatus(HttpStatus.OK)
                 .bodyJson()
                 // 송신버퍼 한도 초과 종료 수 — 부하테스트 스냅샷이 수집하는 핵심 필드
@@ -33,11 +32,5 @@ class WsStatsEndpointTest {
                         "$.sendLimitExceededSessions", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.currentWsSessions", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.stompConnect", v -> assertThat(v).isEqualTo(0));
-    }
-
-    @Test
-    void 헬스체크_외_actuator는_토큰이_있어야_본다() {
-        // 운영 지표를 인터넷에 공개하지 않는다 — 부하테스트 수집기도 등록으로 받은 access 토큰을 붙인다
-        assertThat(mvc.get().uri("/actuator/wsstats")).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 }

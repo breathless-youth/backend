@@ -64,8 +64,6 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
 6. Security 설정 변경(permitAll 추가 등)은 반드시 변경 이유를 설명하고 승인받기
 7. **퀴즈 게이트**: 기능 구현 완료 후 커밋 전에 구현 코드·코드 흐름에 대한 퀴즈 5개를 사용자에게 낸다.
    못 맞추면 커밋하지 않고, 통과할 때까지 다른 퀴즈를 계속 낸다 (학습 목적 프로젝트)
-8. 룸 STOMP 계약(메시지 type·필드·목적지·수치)을 바꾸면 `src/main/resources/docs/websocket.html`과 그 변경 이력을
-   같은 PR에서 갱신한다. `WebSocketDocsContractTest`가 type·목적지 누락은 잡지만 필드 의미·수치는 못 잡는다 (BY-667)
 
 ## 크로스 코드체크 (Claude ↔ Codex)
 - 기능 구현 완료 후 커밋 전: Claude 자체 리뷰와 별개로 `/codex review`로 독립 2차 리뷰 (P1 발견 시 FAIL 게이트)
@@ -112,8 +110,3 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
 - `<설명>`: 무엇을 제공/변경하는지 간결하게
 
 예: `[feat] BY-257 설정 화면 문서·문의를 앱 내에서 제공`
-
-## 릴리즈
-릴리즈 PR(dev → main) 머지 후 그 머지 커밋에 annotated 태그 `vX.Y.Z`를 푸시하면 GitHub Release가
-자동 생성된다(태그 메시지 = 사람이 쓰는 요약, 아래에 자동 PR 목록). 절차·요약 작성 규칙은
-`docs/runbooks/release.md`.

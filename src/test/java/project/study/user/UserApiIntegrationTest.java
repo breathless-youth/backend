@@ -1,8 +1,6 @@
 package project.study.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.TOKEN_API_VERSION;
-import static project.study.support.AuthTestSupport.asUser;
 
 import java.util.Locale;
 import java.util.UUID;
@@ -22,10 +20,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
-import project.study.config.ApiVersionConfig;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
-import project.study.user.jwt.JwtUtil;
 import project.study.user.service.UserService;
 import tools.jackson.databind.ObjectMapper;
 
@@ -46,14 +42,9 @@ class UserApiIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    private JwtUtil jwtUtil;
-
-    // 토큰 계약(API-Version: 2)의 등록 — 헤더 없는 구 앱 등록은 LegacyUserApiTest (ADR-0020)
     private MockMvcTester.MockMvcRequestBuilder registerRequest(String deviceId) {
         return mvc.post()
                 .uri("/api/users")
-                .header(ApiVersionConfig.HEADER, TOKEN_API_VERSION)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"deviceId\":\"" + deviceId + "\"}");
     }
@@ -63,24 +54,20 @@ class UserApiIntegrationTest {
         assertThat(registerRequest(UUID.randomUUID().toString()))
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
-                .doesNotHavePath("$.userId") // FE는 access 토큰의 sub에서 읽는다
-                .hasPathSatisfying(
-                        "$.accessToken", token -> assertThat(token).asString().isNotBlank())
-                .hasPathSatisfying(
-                        "$.refreshToken", token -> assertThat(token).asString().isNotBlank())
+                .hasPathSatisfying("$.userId", id -> assertThat(id).isNotNull())
                 .extractingPath("$.isNew")
                 .isEqualTo(true);
     }
 
     @Test
-    void 같은_기기의_재등록은_200과_같은_유저의_토큰을_반환한다() {
+    void 같은_기기의_재등록은_200과_같은_userId를_반환한다() {
         String deviceId = UUID.randomUUID().toString();
         MvcTestResult first = registerRequest(deviceId).exchange();
         assertThat(first).hasStatus(HttpStatus.CREATED);
 
         MvcTestResult second = registerRequest(deviceId).exchange();
         assertThat(second).hasStatusOk();
-        assertThat(userIdOf(second)).isEqualTo(userIdOf(first));
+        assertThat(readBody(second).userId()).isEqualTo(readBody(first).userId());
         assertThat(readBody(second).isNew()).isFalse();
     }
 
@@ -93,7 +80,7 @@ class UserApiIntegrationTest {
         MvcTestResult second =
                 registerRequest(deviceId.toUpperCase(Locale.ROOT)).exchange();
         assertThat(second).hasStatusOk();
-        assertThat(userIdOf(second)).isEqualTo(userIdOf(first));
+        assertThat(readBody(second).userId()).isEqualTo(readBody(first).userId());
     }
 
     @Test
@@ -103,16 +90,16 @@ class UserApiIntegrationTest {
         try {
             // 두 요청이 실제 DB의 유니크 제약 충돌 경로를 타도록 동시에 출발시킨다
             CountDownLatch start = new CountDownLatch(1);
-            Callable<UserService.RegisterResult> task = () -> {
+            Callable<UserRegisterResponse> task = () -> {
                 start.await();
                 return userService.register(new UserRegisterRequest(deviceId));
             };
-            Future<UserService.RegisterResult> first = executor.submit(task);
-            Future<UserService.RegisterResult> second = executor.submit(task);
+            Future<UserRegisterResponse> first = executor.submit(task);
+            Future<UserRegisterResponse> second = executor.submit(task);
             start.countDown();
 
-            UserService.RegisterResult r1 = first.get();
-            UserService.RegisterResult r2 = second.get();
+            UserRegisterResponse r1 = first.get();
+            UserRegisterResponse r2 = second.get();
 
             assertThat(r1.userId()).isEqualTo(r2.userId());
             assertThat(r1.isNew() ^ r2.isNew()).as("정확히 한쪽만 신규여야 한다").isTrue();
@@ -142,15 +129,15 @@ class UserApiIntegrationTest {
 
     private MockMvcTester.MockMvcRequestBuilder patchProfile(long userId, String json) {
         return mvc.patch()
-                .uri("/api/users/me/profile")
-                .with(asUser(userId))
+                .uri("/api/users/{userId}/profile", userId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json);
     }
 
     @Test
     void 프로필_부분_수정은_보낸_필드만_바꾸고_나머지는_유지한다() {
-        long userId = userIdOf(registerRequest(UUID.randomUUID().toString()).exchange());
+        long userId = readBody(registerRequest(UUID.randomUUID().toString()).exchange())
+                .userId();
 
         assertThat(patchProfile(userId, "{\"goal\":\"올해 안에 이직 성공\"}"))
                 .hasStatus(HttpStatus.OK)
@@ -187,10 +174,5 @@ class UserApiIntegrationTest {
     // getContentAsString과 달리 getContentAsByteArray는 checked 예외가 없어 테스트에 throws가 안 번진다
     private UserRegisterResponse readBody(MvcTestResult result) {
         return objectMapper.readValue(result.getResponse().getContentAsByteArray(), UserRegisterResponse.class);
-    }
-
-    // 응답에 userId 필드가 없으므로 FE와 같은 방식으로 access 토큰의 sub에서 읽는다
-    private long userIdOf(MvcTestResult result) {
-        return Long.parseLong(jwtUtil.getUserId(readBody(result).accessToken()));
     }
 }
