@@ -10,8 +10,13 @@ services:
     env_file: .env
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      JAVA_TOOL_OPTIONS: "-Xmx384m -XX:MaxMetaspaceSize=128m"
-    mem_limit: 640m
+      JAVA_TOOL_OPTIONS: "-Xmx384m -XX:MaxMetaspaceSize=256m"
+    mem_limit: 768m
+    # dev 로그는 최근 장애 추적용 — 기본(json-file 무제한)이면 p6spy SQL 로그로 하루 100MB+ 쌓인다
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "2"
     depends_on:
       postgres:
         condition: service_healthy
