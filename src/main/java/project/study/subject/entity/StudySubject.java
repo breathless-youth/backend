@@ -64,4 +64,10 @@ public class StudySubject extends BaseTimeEntity {
     public void delete(Instant at) {
         this.deletedAt = at;
     }
+
+    /** 지운 과목을 같은 이름으로 다시 만들 때 — id·색은 그대로 두고 목록 맨 뒤로 되살린다. */
+    public void restore(int sortOrder) {
+        this.deletedAt = null;
+        this.sortOrder = sortOrder;
+    }
 }
