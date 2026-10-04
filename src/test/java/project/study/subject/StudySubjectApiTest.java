@@ -279,6 +279,23 @@ class StudySubjectApiTest {
     }
 
     @Test
+    void 되살릴_때_예전_색을_살아있는_과목이_쓰고_있으면_덜_쓴_색으로_바꾼다() {
+        long soma = idOf(postJson("/api/subjects", "{\"name\": \"소마\"}"));
+        assertThat(deleteSubject(soma)).hasStatus(HttpStatus.NO_CONTENT);
+        // 소마가 지워져 있는 사이 국어가 같은 색(0)을 받는다
+        assertThat(postJson("/api/subjects", "{\"name\": \"국어\"}"))
+                .bodyJson()
+                .hasPathSatisfying("$.colorIndex", v -> assertThat(v).isEqualTo(0));
+
+        MvcTestResult restored = postJson("/api/subjects", "{\"name\": \"소마\"}");
+
+        assertThat(idOf(restored)).isEqualTo(soma);
+        assertThat(restored)
+                .bodyJson()
+                .hasPathSatisfying("$.colorIndex", v -> assertThat(v).isEqualTo(1));
+    }
+
+    @Test
     void 이름이_공백이면_400이다() {
         assertThat(postJson("/api/subjects", "{\"name\": \"   \"}")).hasStatus(HttpStatus.BAD_REQUEST);
     }
