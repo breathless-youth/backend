@@ -34,6 +34,15 @@ public interface StudyTaskRepository extends JpaRepository<StudyTask, Long> {
               and t.subjectId in (select s.id from StudySubject s where s.userId = :userId)""")
     List<StudyTask> findByIdInAndOwner(@Param("ids") Collection<Long> ids, @Param("userId") Long userId);
 
+    // 날짜별 완료 할 일 — 완료 시각이 [from, to)인 내 할 일. 세션에 붙었는지도, 삭제 여부도 보지 않는다 (ADR-0026)
+    @Query("""
+            select t
+            from StudyTask t
+            where t.doneAt >= :from and t.doneAt < :to
+              and t.subjectId in (select s.id from StudySubject s where s.userId = :userId)
+            order by t.doneAt asc, t.id asc""")
+    List<StudyTask> findDoneBetween(@Param("userId") Long userId, @Param("from") Instant from, @Param("to") Instant to);
+
     // 과목 삭제 시 하위 할 일도 함께 soft delete
     @Modifying
     @Query("update StudyTask t set t.deletedAt = :at where t.subjectId = :subjectId and t.deletedAt is null")
