@@ -279,13 +279,11 @@ class StudySubjectApiTest {
     }
 
     @Test
-    void 되살릴_때_예전_색을_살아있는_과목이_쓰고_있으면_덜_쓴_색으로_바꾼다() {
-        long soma = idOf(postJson("/api/subjects", "{\"name\": \"소마\"}"));
-        assertThat(deleteSubject(soma)).hasStatus(HttpStatus.NO_CONTENT);
-        // 소마가 지워져 있는 사이 국어가 같은 색(0)을 받는다
-        assertThat(postJson("/api/subjects", "{\"name\": \"국어\"}"))
-                .bodyJson()
-                .hasPathSatisfying("$.colorIndex", v -> assertThat(v).isEqualTo(0));
+    void 되살릴_때_예전_색을_다른_과목이_쓰고_있으면_지운_과목이라도_덜_쓴_색으로_바꾼다() {
+        // 규칙이 생기기 전에 쌓인 데이터 — 지운 국어와 지운 소마가 같은 색(0)이다
+        long korean = insertSubject(userId, "국어");
+        long soma = insertSubject(userId, "소마");
+        jdbcTemplate.update("UPDATE study_subject SET deleted_at = now() WHERE id IN (?, ?)", korean, soma);
 
         MvcTestResult restored = postJson("/api/subjects", "{\"name\": \"소마\"}");
 
@@ -372,7 +370,7 @@ class StudySubjectApiTest {
     }
 
     @Test
-    void 과목_색은_덜_쓴_인덱스를_받고_지운_과목의_색은_다시_쓰인다() {
+    void 과목_색은_덜_쓴_인덱스를_받고_지운_과목의_색은_피한다() {
         MvcTestResult first = postJson("/api/subjects", "{\"name\": \"국어\"}");
         long b = idOf(postJson("/api/subjects", "{\"name\": \"수학\"}"));
         MvcTestResult third = postJson("/api/subjects", "{\"name\": \"영어\"}");
@@ -385,12 +383,16 @@ class StudySubjectApiTest {
 
         assertThat(deleteSubject(b)).hasStatus(HttpStatus.NO_CONTENT);
 
-        // 색 1이 풀렸으니 다음 과목은 1 — 목록 색도 그대로 내려온다
+        // 지운 수학(색 1)도 기록에는 남아 있어, 다음 과목은 1을 건너뛰고 3 — 목록 색도 그대로 내려온다
         assertThat(postJson("/api/subjects", "{\"name\": \"탐구\"}"))
                 .bodyJson()
-                .hasPathSatisfying("$.colorIndex", v -> assertThat(v).isEqualTo(1));
+                .hasPathSatisfying("$.colorIndex", v -> assertThat(v).isEqualTo(3));
         assertThat(list())
                 .bodyJson()
-                .hasPathSatisfying("$[2].colorIndex", v -> assertThat(v).isEqualTo(1));
+                .hasPathSatisfying("$[2].colorIndex", v -> assertThat(v).isEqualTo(3));
+        // 되살린 수학은 아무도 안 가져간 예전 색 1을 지킨다
+        assertThat(postJson("/api/subjects", "{\"name\": \"수학\"}"))
+                .bodyJson()
+                .hasPathSatisfying("$.colorIndex", v -> assertThat(v).isEqualTo(1));
     }
 }
