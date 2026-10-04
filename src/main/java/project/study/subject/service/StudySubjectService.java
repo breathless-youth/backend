@@ -6,7 +6,9 @@ import static java.util.stream.Collectors.toSet;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -29,6 +31,8 @@ import project.study.studysession.dto.SubjectRef;
 import project.study.studysession.dto.SubjectTimeSum;
 import project.study.studysession.repository.StudySessionSubjectSegmentRepository;
 import project.study.studysession.service.SubjectLookupProvider;
+import project.study.subject.dto.CompletedTaskItem;
+import project.study.subject.dto.CompletedTasksResponse;
 import project.study.subject.dto.SubjectResponse;
 import project.study.subject.dto.TaskResponse;
 import project.study.subject.dto.TaskUpdateRequest;
@@ -50,6 +54,9 @@ public class StudySubjectService implements SubjectLookupProvider {
 
     /** 색 팔레트 크기 — 앱이 colorIndex를 팔레트에 매핑한다. 과목 상한과 같아 덜 쓴 색 배정이면 20개가 전부 다른 색이다. */
     public static final int SUBJECT_COLOR_COUNT = 20;
+
+    /** 완료 할 일 조회의 기간 상한(일) — 플래너는 이틀이면 되고, 한 달 달력까지는 한 번에 받을 수 있게 둔다. */
+    public static final int MAX_COMPLETED_TASK_RANGE_DAYS = 31;
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -249,6 +256,40 @@ public class StudySubjectService implements SubjectLookupProvider {
                                 subject.getColorIndex(),
                                 subject.getDeletedAt() != null)));
         return new SubjectLookup(subjects, tasks);
+    }
+
+    /**
+     * 기간 안에 완료한 할 일을 완료 시각과 함께 돌려준다 (ADR-0026). 기준은 할 일의 지금 완료 시각이라 세션 없이 체크한
+     * 것도 잡히고, 완료를 해제한 것은 빠진다. from·to는 KST 날짜이고 양끝을 포함한다 — 05시로 자르는 것은 앱이 한다.
+     * 지운 할 일·과목도 싣는다(지난 날 기록이 비지 않게).
+     */
+    @Transactional(readOnly = true)
+    public CompletedTasksResponse completedTasks(Long userId, LocalDate from, LocalDate to) {
+        if (from.isAfter(to)) {
+            throw new BadRequestException("from은 to보다 이후일 수 없습니다");
+        }
+        if (ChronoUnit.DAYS.between(from, to) >= MAX_COMPLETED_TASK_RANGE_DAYS) {
+            throw new BadRequestException("조회 기간은 최대 " + MAX_COMPLETED_TASK_RANGE_DAYS + "일입니다");
+        }
+        List<StudyTask> done = taskRepository.findDoneBetween(
+                userId,
+                from.atStartOfDay(KST).toInstant(),
+                to.plusDays(1).atStartOfDay(KST).toInstant());
+        Set<Long> subjectIds = done.stream().map(StudyTask::getSubjectId).collect(toSet());
+        List<SubjectRef> subjects = subjectRepository.findAllById(subjectIds).stream()
+                .sorted(Comparator.comparing(StudySubject::getId))
+                .map(subject -> new SubjectRef(
+                        subject.getId(), subject.getName(), subject.getColorIndex(), subject.getDeletedAt() != null))
+                .toList();
+        List<CompletedTaskItem> tasks = done.stream()
+                .map(task -> new CompletedTaskItem(
+                        task.getId(),
+                        task.getName(),
+                        task.getSubjectId(),
+                        task.getDoneAt(),
+                        task.getDeletedAt() != null))
+                .toList();
+        return new CompletedTasksResponse(tasks, subjects);
     }
 
     /** 살아있는 과목이 같은 이름을 쓰면 409. 이름은 앞뒤 공백을 뗀 뒤 그대로 비교한다. */

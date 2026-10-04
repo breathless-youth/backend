@@ -98,6 +98,7 @@ Table study_task {
 
   indexes {
     (subject_id) [name: 'idx_study_task_subject_live', note: 'WHERE deleted_at IS NULL']
+    (subject_id, done_at) [name: 'idx_study_task_subject_done', note: 'WHERE done_at IS NOT NULL — 날짜별 완료 할 일 조회 (ADR-0026)']
   }
 }
 
