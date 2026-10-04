@@ -80,7 +80,10 @@ public class StudySubjectService implements SubjectLookupProvider {
                 .findFirstByUserIdAndNameAndDeletedAtIsNotNullOrderByDeletedAtDescIdDesc(userId, stripped)
                 .orElse(null);
         if (deleted != null) {
-            deleted.restore(nextSortOrder(live));
+            // 예전 색을 지켜 주되, 지워져 있던 사이 살아있는 과목이 그 색을 가져갔으면 덜 쓴 색으로 바꾼다
+            int oldColor = deleted.getColorIndex();
+            boolean colorTaken = live.stream().anyMatch(subject -> subject.getColorIndex() == oldColor);
+            deleted.restore(nextSortOrder(live), colorTaken ? leastUsedColor(live) : oldColor);
             return toResponses(List.of(deleted)).get(0);
         }
         StudySubject subject =
