@@ -34,6 +34,11 @@ class DevDataSeederTest {
                 DevDataSeeder.DEMO_DEVICE_ID);
     }
 
+    private List<Long> liveSubjectIds(Long userId) {
+        return jdbcTemplate.queryForList(
+                "SELECT id FROM study_subject WHERE user_id = ? AND deleted_at IS NULL", Long.class, userId);
+    }
+
     private Integer sessionCount(Long userId) {
         return jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM study_session WHERE user_id = ?", Integer.class, userId);
@@ -87,6 +92,17 @@ class DevDataSeederTest {
                 DevDataSeeder.DEMO_DEVICE_ID);
         assertThat(demoUsers).isEqualTo(1);
         assertThat(sessionCount(userId)).isEqualTo(before);
+    }
+
+    @Test
+    void 데모_과목을_지운_뒤_다시_실행해도_기동이_깨지지_않고_지운_과목이_되살아난다() {
+        Long userId = demoUserId();
+        List<Long> before = liveSubjectIds(userId);
+        jdbcTemplate.update("UPDATE study_subject SET deleted_at = now() WHERE id = ?", before.get(0));
+
+        seeder.run(null);
+
+        assertThat(liveSubjectIds(userId)).containsExactlyInAnyOrderElementsOf(before);
     }
 
     @Test

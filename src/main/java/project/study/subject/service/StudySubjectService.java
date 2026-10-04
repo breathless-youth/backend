@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
+import project.study.common.exception.ConflictException;
 import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.CompletedTaskResponse;
@@ -61,23 +62,42 @@ public class StudySubjectService implements SubjectLookupProvider {
         return toResponses(liveSubjects(userId));
     }
 
-    /** 상한·다음 순서·색은 전부 살아있는 과목 목록(≤ 20건) 한 번으로 계산한다 — 별도 집계 쿼리를 두지 않는다. */
+    /**
+     * 상한·다음 순서·색·이름 중복은 전부 살아있는 과목 목록(≤ 20건) 한 번으로 계산한다 — 별도 집계 쿼리를 두지 않는다.
+     * 지운 과목과 같은 이름이면 새로 만들지 않고 그 과목을 되살린다 — id가 이어져 세션 기록이 한 과목으로 모인다.
+     * 되살린 과목의 할 일은 지운 채로 둔다.
+     */
     @Transactional
     public SubjectResponse create(Long userId, String name) {
-        lockRepository.lockUser(userId); // 동시 생성이 같은 색·순서를 받지 않게 사용자 단위로 직렬화
+        lockRepository.lockUser(userId); // 동시 생성이 같은 색·순서·이름을 받지 않게 사용자 단위로 직렬화
+        String stripped = name.strip();
         List<StudySubject> live = liveSubjects(userId);
+        assertNameFree(live, stripped);
         if (live.size() >= MAX_SUBJECTS) {
             throw new BadRequestException("과목은 최대 " + MAX_SUBJECTS + "개까지 만들 수 있습니다");
         }
-        StudySubject subject = subjectRepository.save(
-                new StudySubject(userId, name.strip(), nextSortOrder(live), leastUsedColor(live)));
+        StudySubject deleted = subjectRepository
+                .findFirstByUserIdAndNameAndDeletedAtIsNotNullOrderByDeletedAtDescIdDesc(userId, stripped)
+                .orElse(null);
+        if (deleted != null) {
+            deleted.restore(nextSortOrder(live));
+            return toResponses(List.of(deleted)).get(0);
+        }
+        StudySubject subject =
+                subjectRepository.save(new StudySubject(userId, stripped, nextSortOrder(live), leastUsedColor(live)));
         return new SubjectResponse(subject.getId(), subject.getName(), subject.getColorIndex(), 0, 0, List.of());
     }
 
     @Transactional
     public SubjectResponse rename(Long userId, Long subjectId, String name) {
+        lockRepository.lockUser(userId); // 동시 생성·이름 변경이 같은 이름을 나눠 갖지 않게
         StudySubject subject = ownedSubject(userId, subjectId);
-        subject.rename(name.strip());
+        String stripped = name.strip();
+        // 지금 이름 그대로면 검사하지 않는다 — 규칙이 생기기 전에 쌓인 같은 이름 과목도 제 이름은 유지할 수 있어야 한다
+        if (!subject.getName().equals(stripped)) {
+            assertNameFree(liveSubjects(userId), stripped);
+        }
+        subject.rename(stripped);
         return toResponses(List.of(subject)).get(0);
     }
 
@@ -217,6 +237,13 @@ public class StudySubjectService implements SubjectLookupProvider {
                                 subject.getColorIndex(),
                                 subject.getDeletedAt() != null)));
         return new SubjectLookup(subjects, tasks);
+    }
+
+    /** 살아있는 과목이 같은 이름을 쓰면 409. 이름은 앞뒤 공백을 뗀 뒤 그대로 비교한다. */
+    private static void assertNameFree(List<StudySubject> live, String name) {
+        if (live.stream().anyMatch(subject -> subject.getName().equals(name))) {
+            throw new ConflictException("이미 있는 과목 이름입니다");
+        }
     }
 
     private List<StudySubject> liveSubjects(Long userId) {
