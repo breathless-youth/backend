@@ -117,15 +117,29 @@ class StudySubjectServiceTest {
 
     @Test
     void 덜_쓴_색은_사용_횟수가_가장_적은_인덱스이고_동률이면_작은_번호다() {
-        assertThat(StudySubjectService.leastUsedColor(List.of())).isZero();
-        assertThat(StudySubjectService.leastUsedColor(List.of(subject(1, 0, 0), subject(2, 1, 1), subject(3, 2, 1))))
+        assertThat(StudySubjectService.leastUsedColor(List.of(), List.of())).isZero();
+        assertThat(StudySubjectService.leastUsedColor(
+                        List.of(subject(1, 0, 0), subject(2, 1, 1), subject(3, 2, 1)), List.of()))
                 .isEqualTo(2);
-        assertThat(StudySubjectService.leastUsedColor(List.of(subject(1, 0, 1), subject(2, 1, 2))))
+        assertThat(StudySubjectService.leastUsedColor(List.of(subject(1, 0, 1), subject(2, 1, 2)), List.of()))
                 .isZero();
         // 19개가 0..18을 다 쓰면 마지막 남은 19
         assertThat(StudySubjectService.leastUsedColor(
-                        IntStream.range(0, 19).mapToObj(i -> subject(i, i, i)).toList()))
+                        IntStream.range(0, 19).mapToObj(i -> subject(i, i, i)).toList(), List.of()))
                 .isEqualTo(19);
+    }
+
+    @Test
+    void 살아있는_과목이_안_쓰는_색_중에서는_지운_과목이_덜_쓴_색을_고른다() {
+        // 살아있는 과목은 0을 쓰고, 지운 과목이 1·2를 썼다 — 기록에 남은 색을 피해 3
+        assertThat(StudySubjectService.leastUsedColor(
+                        List.of(subject(1, 0, 0)), List.of(subject(2, 0, 1), subject(3, 0, 2))))
+                .isEqualTo(3);
+        // 살아있는 과목이 먼저다 — 지운 과목이 0을 많이 썼어도 살아있는 과목이 1~19를 다 쓰면 0
+        assertThat(StudySubjectService.leastUsedColor(
+                        IntStream.range(1, 20).mapToObj(i -> subject(i, i, i)).toList(),
+                        List.of(subject(30, 0, 0), subject(31, 0, 0))))
+                .isZero();
     }
 
     @Test
