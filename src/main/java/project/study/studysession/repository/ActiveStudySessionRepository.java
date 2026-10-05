@@ -47,4 +47,7 @@ public interface ActiveStudySessionRepository extends JpaRepository<ActiveStudyS
 
     // 최종 제출 성공 시 같은 트랜잭션에서 draft 정리 — 없으면 no-op
     void deleteByUserIdAndStartedAt(Long userId, Instant startedAt);
+
+    // 인터뷰 대상 판정(ADR-0027) — 진행 중(또는 확정 대기) 세션이 있으면 1·2번 그룹에서 뺀다
+    boolean existsByUserId(Long userId);
 }

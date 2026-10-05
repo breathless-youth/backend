@@ -97,4 +97,30 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             @Param("userId") Long userId,
             @Param("submissionStartedAt") Instant submissionStartedAt,
             @Param("at") Instant at);
+
+    // 인터뷰 대상 판정(ADR-0027) — 자동 종료 세션도 시작한 세션으로 센다
+    boolean existsByUserId(Long userId);
+
+    // 인터뷰 대상 판정(ADR-0027) — 자동 종료 포함 가장 늦은 종료 시각, 세션이 없으면 null
+    @Query("select max(s.endedAt) from StudySession s where s.userId = :userId")
+    Instant findLastEndedAt(@Param("userId") Long userId);
+
+    // 인터뷰 3번 그룹(ADR-0027) — since 이후 끝난 완료 세션 수. 자정 분할 조각은 루트 제출 시각으로 묶어 1건으로 세고
+    // 순공은 합산한다. 완료 = 조각 모두 자동 종료가 아님 + 순공 합 minFocusSec 이상. 세션은 24시간을 넘지 않아
+    // since 이후 끝난 묶음의 조각은 모두 since - 24시간 이후에 시작한다 — scanFrom으로 유니크 인덱스 범위만 읽는다
+    @Query(value = """
+            select count(*) from (
+                select 1
+                from study_session s
+                where s.user_id = :userId and s.started_at > :scanFrom
+                group by coalesce(s.submission_started_at, s.started_at)
+                having bool_and(not s.auto_finalized)
+                   and sum(s.focus_sec) >= :minFocusSec
+                   and max(s.ended_at) > :since
+            ) completed""", nativeQuery = true)
+    long countCompletedSubmissionsEndedAfter(
+            @Param("userId") Long userId,
+            @Param("since") Instant since,
+            @Param("scanFrom") Instant scanFrom,
+            @Param("minFocusSec") int minFocusSec);
 }
