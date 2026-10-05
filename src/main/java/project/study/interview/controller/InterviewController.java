@@ -29,7 +29,7 @@ public class InterviewController {
             완료 세션은 자동 종료가 아니고 순공 10분 이상인 세션이며, 자정에 쪼개진 세션은 1건으로 센다. \
             세션을 제출한 뒤 부르면 방금 끝낸 세션까지 반영된다.
             - **설정 행(`settingsEnabled`)** = 그룹과 무관. 인터뷰 전체·설정 행이 켜져 있고 링크가 등록돼 있으면 true.
-            - 꺼진 쪽의 링크는 null이다. 링크의 사용자 ID 자리는 앱이 채운다.""")
+            - 꺼진 쪽의 링크는 null이다. 링크의 `NICKNAME` 자리는 앱이 URL 인코딩한 닉네임으로 바꾼다(못 가져오면 빈 값).""")
     @ApiResponse(responseCode = "200", description = "카드·설정 입구의 표시 여부와 구글폼 링크")
     @GetMapping("/status")
     public InterviewStatusResponse status(@AuthenticationPrincipal Long userId) {
