@@ -48,15 +48,25 @@ public class StudySessionStatsController {
                     - `totalEventCounts` — 그날 전체 상태별 이벤트 발생 건수 합계 — sessions[].eventCounts를 모두 더한 값. 없는 상태도 0으로 내려간다
                     - `studiedDatesInMonth` — `date`가 속한 달 동안 공부 기록이 있는 날짜 목록. \
                     캘린더에 공부일을 표시하는 용도(중복 없음, 오름차순)
-                    - `subjects` — 그날 세션이 참조한 과목의 이름·색(id 오름차순). 지운 과목도 포함되며(deleted=true), \
-                    sessions[].subjectSegments[].subjectId와 completedTasks[].subjectId를 여기서 찾는다
+                    - `subjects` — 내 과목 목록(이름·색)과 과목별 그날의 할 일(`tasks`). 플래너가 이 조회 하나로 과목과 할 일을 그린다. \
+                    **살아있는 과목은 전부** `GET /api/subjects`와 같은 순서로 실린다 — 그날 공부하지 않았어도, 할 일이 없어도. \
+                    그 뒤에 **지운 과목**(deleted=true)이 id 오름차순으로 붙는데, 그날 세션이 참조했거나 그날의 할 일이 있는 것만이다. \
+                    sessions[].subjectSegments[].subjectId와 completedTasks[].subjectId는 항상 여기서 찾을 수 있다
+                    - `subjects[].tasks` — 그 과목의 그날(KST 자정 기준) 할 일, id 오름차순. 그날이 끝나기 전에 만들었고 그날 시작 전에 \
+                    완료하거나 지우지 않은 것이다 — 미완료도, 세션 없이 체크한 것도 실린다. \
+                    `done`·`doneAt`·`deleted`는 **지금** 값이다: 그날 뒤에 완료한 할 일은 `done: true`와 그날보다 뒤의 `doneAt`으로 \
+                    실리므로, 그날 완료했는지는 앱이 `doneAt`으로 판단한다(미완료면 `doneAt: null`). 그날 이후에 지운 할 일은 \
+                    `deleted: true`로 실린다. `sessions[].completedTasks`는 세션 제출 당시의 기록이라 완료를 해제해도 남고 \
+                    완료 시각이 없다 — 뜻이 다르다. 오늘 날짜로 조회하면 살아있는 과목의 `deleted: false`인 할 일이 \
+                    `GET /api/subjects`의 할 일과 같다. 플래너의 하루(05시~다음 날 05시)는 앱이 그날과 다음 날을 조회해 `doneAt`으로 자른다
 
                     존재하지 않는 userId거나 기록 없는 날짜면 sessions는 빈 배열, sessionCount는 0, \
                     합계는 0, longestFocusSec은 0, focusRate는 0.0, totalEventCounts는 모든 상태 0인 객체가 내려온다. \
+                    subjects는 세션 기록과 무관하게 조회된다 — 기록 없는 날짜에도 살아있는 과목은 실리고, 과목이 없으면 빈 배열이다. \
                     studiedDatesInMonth는 해당 달의 기록 여부와 무관하게 항상 계산된다.""")
     @ApiResponse(
             responseCode = "200",
-            description = "조회 성공 — 세션 목록(이벤트·과목 구간·완료 할 일 포함) + 세션 개수 + 그날 합계·집중률·상태별 이벤트 건수 + 참조 과목 이름·색")
+            description = "조회 성공 — 세션 목록(이벤트·과목 구간·완료 할 일 포함) + 세션 개수 + 그날 합계·집중률·상태별 이벤트 건수 + 과목 목록과 과목별 그날의 할 일")
     @GetMapping(version = "2")
     public StudySessionListResponse list(
             @AuthenticationPrincipal Long userId,

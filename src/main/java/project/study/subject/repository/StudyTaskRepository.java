@@ -34,14 +34,18 @@ public interface StudyTaskRepository extends JpaRepository<StudyTask, Long> {
               and t.subjectId in (select s.id from StudySubject s where s.userId = :userId)""")
     List<StudyTask> findByIdInAndOwner(@Param("ids") Collection<Long> ids, @Param("userId") Long userId);
 
-    // 날짜별 완료 할 일 — 완료 시각이 [from, to)인 내 할 일. 세션에 붙었는지도, 삭제 여부도 보지 않는다 (ADR-0026)
+    // 그날의 할 일 — 그날이 끝나기 전에 만들었고, 그날 시작 전에 완료하거나 지우지 않은 내 할 일.
+    // 미완료와 그날 이후에 지운 것(지운 과목의 것 포함)이 함께 잡힌다. 세션에 붙었는지는 보지 않는다 (ADR-0026)
     @Query("""
             select t
             from StudyTask t
-            where t.doneAt >= :from and t.doneAt < :to
+            where t.createdAt < :dayEnd
+              and (t.doneAt is null or t.doneAt >= :dayStart)
+              and (t.deletedAt is null or t.deletedAt >= :dayStart)
               and t.subjectId in (select s.id from StudySubject s where s.userId = :userId)
-            order by t.doneAt asc, t.id asc""")
-    List<StudyTask> findDoneBetween(@Param("userId") Long userId, @Param("from") Instant from, @Param("to") Instant to);
+            order by t.id asc""")
+    List<StudyTask> findOfDay(
+            @Param("userId") Long userId, @Param("dayStart") Instant dayStart, @Param("dayEnd") Instant dayEnd);
 
     // 과목 삭제 시 하위 할 일도 함께 soft delete
     @Modifying
