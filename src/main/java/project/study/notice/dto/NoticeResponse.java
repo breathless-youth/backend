@@ -29,7 +29,7 @@ public record NoticeResponse(
         @Schema(description = "버튼 문구, 없으면 null(buttonUrl과 함께 있거나 함께 없다)", example = "인터뷰 신청하기")
         String buttonText,
 
-        @Schema(description = "버튼 링크, 없으면 null. 인터뷰 공지는 사용자 ID 자리를 앱이 채운다")
+        @Schema(description = "버튼 링크, 없으면 null. 인터뷰 공지는 구글폼 링크이고 `NICKNAME` 자리를 앱이 URL 인코딩한 닉네임으로 바꾼다")
         String buttonUrl) {
 
     public static NoticeResponse from(Notice notice) {
