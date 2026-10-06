@@ -48,9 +48,4 @@ public record SubjectLookup(Map<Long, SubjectRef> subjects, Map<Long, CompletedT
                 .forEach(ids::add);
         return subjectsFor(ids);
     }
-
-    /** 조회된 과목 전부, id 오름차순 — 일간 목록의 응답 최상위 subjects[]. */
-    public List<SubjectRef> allSubjects() {
-        return subjectsFor(subjects.keySet());
-    }
 }

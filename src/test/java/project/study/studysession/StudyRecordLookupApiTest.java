@@ -293,7 +293,15 @@ class StudyRecordLookupApiTest {
                         .with(asUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.subjects.length()", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying(
+                        "$.sessions[0].subjectSegments.length()",
+                        v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying(
+                        "$.sessions[0].completedTasks.length()",
+                        v -> assertThat(v).isEqualTo(0))
+                // 최상위 subjects에는 세션과 무관하게 살아있는 과목(영어)이 실린다. 세션이 참조하지 않은 지운 과목(수학)은 없다
+                .hasPathSatisfying("$.subjects.length()", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying("$.subjects[0].id", v -> assertThat(v).isEqualTo(english.intValue()))
                 .hasPathSatisfying(
                         "$.sessions[0].events.length()", v -> assertThat(v).isEqualTo(0));
     }

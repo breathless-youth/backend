@@ -8,10 +8,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,11 +21,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
-import project.study.subject.dto.CompletedTasksResponse;
 import project.study.subject.dto.SubjectCreateRequest;
 import project.study.subject.dto.SubjectOrderRequest;
 import project.study.subject.dto.SubjectResponse;
@@ -138,37 +134,6 @@ public class StudySubjectController {
     public List<SubjectResponse> reorder(
             @AuthenticationPrincipal Long userId, @Valid @RequestBody SubjectOrderRequest request) {
         return subjectService.reorder(userId, request.subjectIds());
-    }
-
-    @Operation(summary = "기간 안에 완료한 할 일", description = """
-            `from`~`to`(KST 날짜, 양끝 포함)에 완료한 내 할 일을 완료 시각과 함께 내려준다. 플래너가 "그날 완료한 할 일"을 그릴 때 쓴다.
-
-            - **기준은 할 일의 지금 완료 시각(`doneAt`)이다.** 세션 중에 체크했든 플래너에서 세션 없이 체크했든 잡히고, \
-            완료를 해제한 할 일은 빠진다. 세션 응답의 `completedTasks`(제출 당시 기록)와는 출처가 다르다.
-            - **날짜는 자정(KST) 기준이다.** 플래너의 하루(05시~다음 날 05시)는 앱이 `from=그날&to=다음 날`로 받아 `doneAt`으로 자른다.
-            - 지운 할 일(과목을 지워 함께 지워진 것 포함)도 `deleted: true`로 실린다. 과목 이름·색은 `subjects`에서 찾는다 — 지운 과목도 포함.
-            - `tasks`는 완료 시각 오름차순(같으면 id), `subjects`는 id 오름차순. 없으면 둘 다 빈 배열.""")
-    @ApiResponse(responseCode = "200", description = "완료한 할 일(완료 시각 포함) + 참조 과목 이름·색")
-    @ApiResponse(
-            responseCode = "400",
-            description = "from·to 누락 또는 형식 오류, from이 to보다 이후, 기간이 31일 초과",
-            content =
-                    @Content(
-                            mediaType = MediaType.APPLICATION_JSON_VALUE,
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(name = "기간 초과", value = "{\"message\": \"조회 기간은 최대 31일입니다\"}")))
-    @GetMapping("/completed-tasks")
-    public CompletedTasksResponse completedTasks(
-            @AuthenticationPrincipal Long userId,
-            @Parameter(description = "시작 날짜 (KST, ISO-8601) — 이 날 00:00부터", example = "2026-10-04")
-                    @RequestParam
-                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-                    LocalDate from,
-            @Parameter(description = "끝 날짜 (KST, ISO-8601) — 이 날 24:00 전까지", example = "2026-10-05")
-                    @RequestParam
-                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-                    LocalDate to) {
-        return subjectService.completedTasks(userId, from, to);
     }
 
     @Operation(summary = "할 일 추가", description = "과목 아래 할 일을 만든다. 마감일은 없다. 그 과목의 살아있는 할 일이 30개면 400.")

@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.CompletedTask;
+import project.study.studysession.dto.DaySubjectResponse;
 import project.study.studysession.dto.StudyDaysResponse;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
@@ -146,6 +147,7 @@ public class StudySessionService {
     /**
      * includeNames=false는 구 앱(API-Version 1) 경로용이다 — 그 경로는 토큰 없이 쿼리 userId로 열려 있어 과목·할 일 이름까지
      * 실으면 익명 노출이 늘어난다(Codex 리뷰 P1). 구 앱은 그 필드를 읽지 않으므로 빈 배열로 둔다. 구간(id)·이벤트는 그대로다.
+     * 과목 목록과 과목별 그날의 할 일(subjects)도 이름이 실리므로 같은 이유로 비운다.
      */
     @Transactional(readOnly = true)
     public StudySessionListResponse list(Long userId, LocalDate date, boolean includeNames) {
@@ -161,6 +163,11 @@ public class StudySessionService {
                 .orElse(0);
 
         SubjectLookup lookup = includeNames ? lookupFor(sessions) : SubjectLookup.EMPTY;
+        // 세션과 따로 조회한다 — 그날 공부하지 않은 과목과 세션에 붙지 않은 할 일도 실린다 (ADR-0026)
+        List<DaySubjectResponse> subjects = includeNames
+                ? subjectLookupProvider.daySubjects(
+                        userId, date, lookup.subjects().keySet())
+                : List.of();
         List<StudySessionSummaryResponse> summaries = sessions.stream()
                 .map(session -> toSummaryResponse(session, lookup))
                 .toList();
@@ -180,7 +187,7 @@ public class StudySessionService {
                 StudySessionStatsCalculator.focusRate(totalFocusSec, totalStudySec),
                 totalEventCounts,
                 studiedDatesInMonth,
-                lookup.allSubjects());
+                subjects);
     }
 
     /** 세션들이 참조한 과목·할 일 이름을 한 번에 조회한다 (BY-734) — 둘 다 없으면 조회하지 않는다. */
