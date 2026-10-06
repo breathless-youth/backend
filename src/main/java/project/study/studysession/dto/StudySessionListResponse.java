@@ -39,6 +39,7 @@ public record StudySessionListResponse(
         List<LocalDate> studiedDatesInMonth,
 
         @Schema(
-                description = "그날 세션이 참조한 과목(구간·완료 할 일의 과목)의 이름·색 — id 오름차순, 지운 과목 포함(deleted=true). "
-                        + "sessions[].subjectSegments[].subjectId·completedTasks[].subjectId를 여기서 찾는다. 없으면 [] (BY-734)")
-        List<SubjectRef> subjects) {}
+                description = "내 과목 목록과 과목별 그날의 할 일 — 살아있는 과목 전부(GET /api/subjects와 같은 순서, 그날 공부하지 않았어도 실린다), "
+                        + "그 뒤에 그날 세션이 참조했거나 그날의 할 일이 있는 지운 과목(deleted=true, id 오름차순). 중복 없음. "
+                        + "sessions[].subjectSegments[].subjectId·completedTasks[].subjectId를 여기서 찾는다. 없으면 []")
+        List<DaySubjectResponse> subjects) {}

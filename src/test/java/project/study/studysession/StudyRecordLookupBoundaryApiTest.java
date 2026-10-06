@@ -190,8 +190,9 @@ class StudyRecordLookupBoundaryApiTest {
                 .bodyJson()
                 .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(3));
 
-        // 세션 1 + 공부일 1 + 자식 컬렉션 배치 3(이벤트·구간·할 일) + 이름 조회 2(할 일·과목) = 7. @BatchSize가 없으면 세션마다 3번씩 늘어난다
-        assertThat(statistics.getPrepareStatementCount()).isLessThanOrEqualTo(8);
+        // 세션 1 + 공부일 1 + 자식 컬렉션 배치 3(이벤트·구간·할 일) + 이름 조회 2(할 일·과목)
+        // + 과목 목록 1 + 그날의 할 일 1 = 9. @BatchSize가 없으면 세션마다 3번씩 늘어난다
+        assertThat(statistics.getPrepareStatementCount()).isLessThanOrEqualTo(10);
         statistics.setStatisticsEnabled(false);
     }
 }

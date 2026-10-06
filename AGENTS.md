@@ -117,3 +117,5 @@ curl -s localhost:8080/actuator/health                      # 기동 확인
 릴리즈 PR(dev → main) 머지 후 그 머지 커밋에 annotated 태그 `vX.Y.Z`를 푸시하면 GitHub Release가
 자동 생성된다(태그 메시지 = 사람이 쓰는 요약, 아래에 자동 PR 목록). 절차·요약 작성 규칙은
 `docs/runbooks/release.md`.
+- main에 머지하는 PR(릴리즈·핫픽스)에는 `build.gradle`의 `version`을 그 릴리즈 태그(`vX.Y.Z`)로 올리는 커밋을
+  반드시 포함하고, PR 본문에 버전 변경(`vA.B.C → vX.Y.Z`)을 적는다. 기능 브랜치에서는 버전을 바꾸지 않는다

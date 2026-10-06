@@ -94,8 +94,12 @@ public class DevDataSeeder implements ApplicationRunner {
         }
         List<Long> ids =
                 new ArrayList<>(existing.stream().map(SubjectResponse::id).toList());
-        for (String name : List.of("영어", "수학", "국어").subList(existing.size(), 3)) {
-            ids.add(subjectService.create(userId, name).id());
+        // 과목 이름은 사용자 안에서 하나라, 살아있는 과목이 이미 쓰는 이름은 건너뛴다 — 지운 데모 과목은 create가 되살린다
+        List<String> taken = existing.stream().map(SubjectResponse::name).toList();
+        for (String name : List.of("영어", "수학", "국어")) {
+            if (ids.size() < 3 && !taken.contains(name)) {
+                ids.add(subjectService.create(userId, name).id());
+            }
         }
         return ids;
     }

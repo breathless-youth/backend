@@ -1,26 +1,34 @@
 package project.study.subject.service;
 
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
+import project.study.common.exception.ConflictException;
 import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.CompletedTaskResponse;
+import project.study.studysession.dto.DaySubjectResponse;
+import project.study.studysession.dto.DayTaskResponse;
 import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.dto.SubjectRef;
 import project.study.studysession.dto.SubjectTimeSum;
@@ -61,23 +69,52 @@ public class StudySubjectService implements SubjectLookupProvider {
         return toResponses(liveSubjects(userId));
     }
 
-    /** 상한·다음 순서·색은 전부 살아있는 과목 목록(≤ 20건) 한 번으로 계산한다 — 별도 집계 쿼리를 두지 않는다. */
+    /**
+     * 상한·다음 순서·이름 중복은 살아있는 과목 목록(≤ 20건) 한 번으로 계산한다 — 별도 집계 쿼리를 두지 않는다.
+     * 색과 되살리기는 지운 과목 목록도 한 번 읽는다.
+     * 지운 과목과 같은 이름이면 새로 만들지 않고 그 과목을 되살린다 — id가 이어져 세션 기록이 한 과목으로 모인다.
+     * 되살린 과목의 할 일은 지운 채로 둔다.
+     */
     @Transactional
     public SubjectResponse create(Long userId, String name) {
-        lockRepository.lockUser(userId); // 동시 생성이 같은 색·순서를 받지 않게 사용자 단위로 직렬화
+        lockRepository.lockUser(userId); // 동시 생성이 같은 색·순서·이름을 받지 않게 사용자 단위로 직렬화
+        String stripped = name.strip();
         List<StudySubject> live = liveSubjects(userId);
+        assertNameFree(live, stripped);
         if (live.size() >= MAX_SUBJECTS) {
             throw new BadRequestException("과목은 최대 " + MAX_SUBJECTS + "개까지 만들 수 있습니다");
         }
+        List<StudySubject> gone = subjectRepository.findByUserIdAndDeletedAtIsNotNull(userId);
+        // 같은 이름을 여러 번 지웠으면 가장 최근에 지운 것을 되살린다
+        StudySubject deleted = gone.stream()
+                .filter(subject -> subject.getName().equals(stripped))
+                .max(Comparator.comparing(StudySubject::getDeletedAt).thenComparing(StudySubject::getId))
+                .orElse(null);
+        if (deleted != null) {
+            // 예전 색을 지켜 주되, 다른 과목(지운 과목 포함 — 기록에는 남아 있다)이 그 색을 쓰면 덜 쓴 색으로 바꾼다
+            List<StudySubject> others =
+                    gone.stream().filter(subject -> subject != deleted).toList();
+            int oldColor = deleted.getColorIndex();
+            boolean colorTaken = Stream.concat(live.stream(), others.stream())
+                    .anyMatch(subject -> subject.getColorIndex() == oldColor);
+            deleted.restore(nextSortOrder(live), colorTaken ? leastUsedColor(live, others) : oldColor);
+            return toResponses(List.of(deleted)).get(0);
+        }
         StudySubject subject = subjectRepository.save(
-                new StudySubject(userId, name.strip(), nextSortOrder(live), leastUsedColor(live)));
+                new StudySubject(userId, stripped, nextSortOrder(live), leastUsedColor(live, gone)));
         return new SubjectResponse(subject.getId(), subject.getName(), subject.getColorIndex(), 0, 0, List.of());
     }
 
     @Transactional
     public SubjectResponse rename(Long userId, Long subjectId, String name) {
+        lockRepository.lockUser(userId); // 동시 생성·이름 변경이 같은 이름을 나눠 갖지 않게
         StudySubject subject = ownedSubject(userId, subjectId);
-        subject.rename(name.strip());
+        String stripped = name.strip();
+        // 지금 이름 그대로면 검사하지 않는다 — 규칙이 생기기 전에 쌓인 같은 이름 과목도 제 이름은 유지할 수 있어야 한다
+        if (!subject.getName().equals(stripped)) {
+            assertNameFree(liveSubjects(userId), stripped);
+        }
+        subject.rename(stripped);
         return toResponses(List.of(subject)).get(0);
     }
 
@@ -219,6 +256,56 @@ public class StudySubjectService implements SubjectLookupProvider {
         return new SubjectLookup(subjects, tasks);
     }
 
+    /**
+     * 일간 조회의 subjects (ADR-0026) — 살아있는 과목은 그날 공부하지 않았어도 목록 순서대로 전부, 지운 과목은 그날 세션이
+     * 참조했거나 그날의 할 일이 있을 때만 뒤에 id 순으로 싣는다. 그날의 할 일은 그날이 끝나기 전에 만들었고 그날 시작 전에
+     * 완료하거나 지우지 않은 것이다. 날짜는 KST 자정 기준이고, 완료 여부·시각은 지금 값 그대로다.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<DaySubjectResponse> daySubjects(Long userId, LocalDate date, Collection<Long> referencedSubjectIds) {
+        List<StudySubject> live = liveSubjects(userId);
+        Map<Long, List<DayTaskResponse>> tasksBySubject = taskRepository
+                .findOfDay(
+                        userId,
+                        date.atStartOfDay(KST).toInstant(),
+                        date.plusDays(1).atStartOfDay(KST).toInstant())
+                .stream()
+                .collect(groupingBy(
+                        StudyTask::getSubjectId,
+                        mapping(
+                                task -> new DayTaskResponse(
+                                        task.getId(),
+                                        task.getName(),
+                                        task.getDoneAt() != null,
+                                        task.getDoneAt(),
+                                        task.getDeletedAt() != null),
+                                toList())));
+        Set<Long> goneIds = new HashSet<>(referencedSubjectIds);
+        goneIds.addAll(tasksBySubject.keySet());
+        live.forEach(subject -> goneIds.remove(subject.getId()));
+        List<StudySubject> gone = goneIds.isEmpty()
+                ? List.of()
+                : subjectRepository.findByIdInAndUserId(goneIds, userId).stream()
+                        .sorted(Comparator.comparing(StudySubject::getId))
+                        .toList();
+        return Stream.concat(live.stream(), gone.stream())
+                .map(subject -> new DaySubjectResponse(
+                        subject.getId(),
+                        subject.getName(),
+                        subject.getColorIndex(),
+                        subject.getDeletedAt() != null,
+                        tasksBySubject.getOrDefault(subject.getId(), List.of())))
+                .toList();
+    }
+
+    /** 살아있는 과목이 같은 이름을 쓰면 409. 이름은 앞뒤 공백을 뗀 뒤 그대로 비교한다. */
+    private static void assertNameFree(List<StudySubject> live, String name) {
+        if (live.stream().anyMatch(subject -> subject.getName().equals(name))) {
+            throw new ConflictException("이미 있는 과목 이름입니다");
+        }
+    }
+
     private List<StudySubject> liveSubjects(Long userId) {
         return subjectRepository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscIdAsc(userId);
     }
@@ -229,21 +316,27 @@ public class StudySubjectService implements SubjectLookupProvider {
     }
 
     /**
-     * 살아있는 과목이 가장 적게 쓴 색, 동률이면 작은 번호 — 팔레트 크기까지는 절대 겹치지 않고 지운 과목의 색은 풀린다.
-     * 랜덤이면 과목 5개만 돼도 겹칠 확률이 40%를 넘는다.
+     * 살아있는 과목이 가장 적게 쓴 색. 동률이면 지운 과목이 덜 쓴 색, 그래도 같으면 작은 번호다 —
+     * 지운 과목도 기록 화면에는 남아 있어, 고를 수 있으면 그 색을 피한다.
      */
-    static int leastUsedColor(List<StudySubject> live) {
-        int[] used = new int[SUBJECT_COLOR_COUNT];
-        for (StudySubject subject : live) {
-            used[Math.floorMod(subject.getColorIndex(), SUBJECT_COLOR_COUNT)]++;
-        }
+    static int leastUsedColor(List<StudySubject> live, List<StudySubject> deleted) {
+        int[] used = colorCounts(live);
+        int[] gone = colorCounts(deleted);
         int best = 0;
         for (int color = 1; color < SUBJECT_COLOR_COUNT; color++) {
-            if (used[color] < used[best]) {
+            if (used[color] < used[best] || (used[color] == used[best] && gone[color] < gone[best])) {
                 best = color;
             }
         }
         return best;
+    }
+
+    private static int[] colorCounts(List<StudySubject> subjects) {
+        int[] counts = new int[SUBJECT_COLOR_COUNT];
+        for (StudySubject subject : subjects) {
+            counts[Math.floorMod(subject.getColorIndex(), SUBJECT_COLOR_COUNT)]++;
+        }
+        return counts;
     }
 
     private StudySubject ownedSubject(Long userId, Long subjectId) {
