@@ -133,11 +133,15 @@ class DdayApiTest {
     }
 
     @Test
-    void 제목_11자와_공백_제목은_400이다() {
-        assertThat(put(userId, "{\"title\": \"가나다라마바사아자차카\", \"targetDate\": \"2099-11-18\"}"))
+    void 제목_15자는_저장되고_16자와_공백_제목은_400이다() {
+        assertThat(put(userId, "{\"title\": \"가나다라마바사아자차카타파하가\", \"targetDate\": \"2099-11-18\"}"))
+                .hasStatus(HttpStatus.OK)
+                .bodyJson()
+                .hasPathSatisfying("$.title", v -> assertThat(v).isEqualTo("가나다라마바사아자차카타파하가"));
+        assertThat(put(userId, "{\"title\": \"가나다라마바사아자차카타파하가나\", \"targetDate\": \"2099-11-18\"}"))
                 .hasStatus(HttpStatus.BAD_REQUEST)
                 .bodyJson()
-                .hasPathSatisfying("$.message", v -> assertThat(v).asString().contains("10자"));
+                .hasPathSatisfying("$.message", v -> assertThat(v).asString().contains("15자"));
         assertThat(put(userId, "{\"title\": \"   \", \"targetDate\": \"2099-11-18\"}"))
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
