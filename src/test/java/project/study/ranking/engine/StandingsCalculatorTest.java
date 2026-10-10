@@ -132,6 +132,28 @@ class StandingsCalculatorTest extends RankingIntegrationTestBase {
     }
 
     @Test
+    void 제출이_이미_확정된_draft가_뒤늦은_하트비트로_다시_생겨도_확정_합계만_센다() {
+        long a = user("a");
+        Instant start = NOW.minusSeconds(1800);
+        draft(a, start, NOW.minusSeconds(60), 1630, "[]");
+        session(a, start, 30, 1700); // 최종 제출 — 세션이 저장되고 draft가 지워진다
+        draft(a, start, NOW.minusSeconds(10), 1690, "[]"); // 제출 전에 받은 하트비트가 버퍼에서 뒤늦게 flush돼 draft가 되살아난다
+        RankingBoard board = new RankingBoard(FOCUS_TIME, WEEKLY, null);
+        var window = RankingCalendar.window(board, NOW, 0);
+        List<LivePiece> snapshot = source.livePieces(NOW);
+
+        assertThat(snapshot).hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM active_study_session", Long.class))
+                .isOne();
+        assertThat(calculator.compute(board, window, NOW, snapshot, null))
+                .extracting(RankingEntry::value, RankingEntry::focusing)
+                .containsExactly(tuple(1700.0, false));
+        assertThat(calculator.compute(board, window, NOW, snapshot, a))
+                .extracting(RankingEntry::value, RankingEntry::focusing)
+                .containsExactly(tuple(1700.0, false));
+    }
+
+    @Test
     void 명예의_전당_연속_일수는_최장_연속이다() {
         long k = user("k");
         for (int day : new int[] {1, 2, 3, 5, 6}) {

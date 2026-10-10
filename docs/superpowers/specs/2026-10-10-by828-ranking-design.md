@@ -94,12 +94,14 @@
 
 순공·집중률·시간대 판은 진행 중 세션을 포함한다. 명예의 전당은 실시간이 아니라 확정 세션만 본다.
 
-- **모든 draft를 읽는다.** 하트비트가 끊긴 draft도 자동 확정되면 같은 값이 되므로 포함한다. 확정과 draft 삭제는 한
-  트랜잭션이라(ADR-0014) 확정 합계와 draft는 겹쳐 잡히지 않는다. 다만 draft 조각은 10초 캐시를 판들이 나눠 쓰고 확정 합계는
-  매번 새로 읽어서, 캐시 뒤에 확정된 세션은 두 쪽에 다 들어갈 수 있다. 이를 막으려고 조각마다 출처 draft의 id
-  (`LivePiece.draftId`)를 달고, 순위표 계산(`StandingsCalculator.compute`·`rateTotals`)을 읽기 전용 `REPEATABLE_READ`
-  트랜잭션 하나에서 한다. 그 스냅샷에서 확정 합계와 열려 있는 draft id를 읽고, draft가 아직 열려 있는 조각만 더한다
-  (ADR-0028). 두 메서드를 바깥 트랜잭션 안에서 부르면 격리 수준이 바뀌어 보장이 사라진다.
+- **모든 draft를 읽는다.** 하트비트가 끊긴 draft도 자동 확정되면 같은 값이 되므로 포함한다. 세션 저장과 draft 삭제는
+  `StudySessionService.create`의 한 트랜잭션이라 같은 스냅샷에서는 확정 합계와 draft가 겹쳐 잡히지 않는다. 다만 draft
+  조각은 10초 캐시를 판들이 나눠 쓰고 확정 합계는 매번 새로 읽어서, 캐시 뒤에 확정된 세션은 두 쪽에 다 들어갈 수 있다.
+  이를 막으려고 조각마다 출처 draft의 id(`LivePiece.draftId`)를 달고, 순위표 계산(`StandingsCalculator.compute`·
+  `rateTotals`)을 읽기 전용 `REPEATABLE_READ` 트랜잭션 하나에서 한다. 그 스냅샷에서 확정 합계와 아직 확정되지 않은
+  draft id를 읽고, 그 draft의 조각만 더한다(ADR-0028). 제출이 이미 확정됐는데 뒤늦은 하트비트로 되살아난 draft도
+  뺀다. 같은 `user_id`에 `submission_started_at`이 draft의 `started_at`과 같은 `study_session`이 있는 draft다. 두 메서드를
+  바깥 트랜잭션 안에서 부르면 격리 수준이 바뀌어 보장이 사라진다.
 - **draft는 확정과 같은 분할 로직으로 나눈다.** `reportedAt`을 끝으로 보고 자정 분할 조각과 구간 행을 만든다
   (`StudySessionSplitter` + §5.1의 구간 분할기). 1분 미만 조각 제외도 똑같이 적용한다.
 - **집중 중**: `last_seen_at`이 계산 시각에서 60초 이내이고, 마지막 이벤트의 `endedAt`이 `reportedAt`과 같지 않다
@@ -177,7 +179,7 @@ CREATE TABLE ranking_best (
 - **순위표(`Standings`)**: 한 판·한 기간의 정렬된 참가자 목록 `(userId, nickname, value, achievedAt, focusing)`.
   - 캐시 키 `(board_key, period_start)`. 기간 판 10초, 명예의 전당·지난 기간 60초. 같은 키 동시 요청은 한 번만 계산한다.
   - draft 분할 결과는 10초 동안 판들이 공유한다. 조각마다 출처 draft의 id를 달고, 계산 때 확정 합계와 같은 스냅샷에서
-    읽은 열린 draft id에 없는 조각은 뺀다(§4). 그 사이 확정된 세션이 확정 합계와 캐시된 조각에 두 번 잡히지 않는다.
+    읽은 확정되지 않은 draft id에 없는 조각은 뺀다(§4). 그 사이 확정된 세션이 확정 합계와 캐시된 조각에 두 번 잡히지 않는다.
   - 캐시는 태스크 메모리다(지금 `desired_count` 1). 태스크가 늘어도 각자 계산할 뿐 결과는 같다.
 - **내 값은 매 요청 DB에서 새로 읽는다.** 캐시된 순위표에서 나를 뺀 목록에 내 `(값, 도달 시각, userId)`를 이분 탐색으로
   끼워 순위·앞뒤를 만든다. 세션을 막 끝낸 직후에도 내 숫자가 캐시 때문에 늦지 않는다.

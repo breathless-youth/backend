@@ -48,9 +48,17 @@ public interface ActiveStudySessionRepository extends JpaRepository<ActiveStudyS
     // 최종 제출 성공 시 같은 트랜잭션에서 draft 정리 — 없으면 no-op
     void deleteByUserIdAndStartedAt(Long userId, Instant startedAt);
 
-    // 랭킹이 캐시된 진행 중 조각 중 이미 확정된 것을 가려낼 때 쓴다(BY-828) — 행 전체를 읽지 않고 id만
-    @Query("select d.id from ActiveStudySession d")
-    List<Long> findAllIds();
+    /**
+     * 랭킹이 캐시된 진행 중 조각 중 이미 확정된 것을 가려낼 때 쓴다(BY-828) — 행 전체를 읽지 않고 id만.
+     * 제출이 이미 확정된(같은 user_id·submission_started_at의 study_session이 있는) draft는 뺀다. 제출 직전에 받은
+     * 하트비트가 버퍼에서 뒤늦게 flush되면 확정 뒤에도 draft가 되살아나 자동 확정 스케줄러가 지울 때까지 남는다.
+     */
+    @Query("""
+            select d.id from ActiveStudySession d
+            where not exists (
+                select 1 from StudySession s
+                where s.userId = d.userId and s.submissionStartedAt = d.startedAt)""")
+    List<Long> findUnfinalizedIds();
 
     // 인터뷰 대상 판정(ADR-0027) — 진행 중(또는 확정 대기) 세션이 있으면 1·2번 그룹에서 뺀다
     boolean existsByUserId(Long userId);

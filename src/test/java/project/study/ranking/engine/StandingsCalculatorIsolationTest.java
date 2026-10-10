@@ -33,7 +33,7 @@ class StandingsCalculatorIsolationTest extends RankingIntegrationTestBase {
                     return invocation.callRealMethod();
                 })
                 .when(source)
-                .openDraftIds();
+                .unfinalizedDraftIds();
         RankingBoard board = new RankingBoard(FOCUS_TIME, WEEKLY, null);
 
         calculator.compute(board, RankingCalendar.window(board, NOW, 0), NOW, source.livePieces(NOW), null);

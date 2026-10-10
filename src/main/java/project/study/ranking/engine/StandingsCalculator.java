@@ -103,14 +103,17 @@ public class StandingsCalculator {
         return totals;
     }
 
-    /** 지금도 draft가 남아 있는 조각만 — 그 사이 확정·폐기된 draft의 조각은 확정 합계가 대신한다. 조각이 없으면 조회하지 않는다. */
+    /**
+     * 확정되지 않은 draft가 남아 있는 조각만 — 그 사이 확정·폐기된 draft, 제출이 이미 확정됐는데 뒤늦은 하트비트로 되살아난
+     * draft의 조각은 확정 합계가 대신한다. 조각이 없으면 조회하지 않는다.
+     */
     private List<LivePiece> stillOpen(List<LivePiece> live) {
         if (live.isEmpty()) {
             return live;
         }
-        Set<Long> openDraftIds = source.openDraftIds();
+        Set<Long> unfinalizedDraftIds = source.unfinalizedDraftIds();
         return live.stream()
-                .filter(piece -> openDraftIds.contains(piece.draftId()))
+                .filter(piece -> unfinalizedDraftIds.contains(piece.draftId()))
                 .toList();
     }
 
