@@ -2,6 +2,7 @@ package project.study.ranking.engine;
 
 import static project.study.studysession.StudySessionThresholds.MIN_LIST_FOCUS_SEC;
 
+import java.sql.Connection;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import project.study.ranking.RankingBoard;
 import project.study.ranking.RankingBoardType;
 import project.study.ranking.RankingCalendar;
@@ -48,6 +50,7 @@ public class StandingsCalculator {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<RankingEntry> compute(
             RankingBoard board, Window window, Instant asOf, List<LivePiece> live, Long onlyUserId) {
+        requireRepeatableRead();
         return switch (board.type()) {
             case FOCUS_TIME, TIME_SLOT ->
                 accumulate(board, window, asOf, live, onlyUserId).entrySet().stream()
@@ -77,8 +80,21 @@ public class StandingsCalculator {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Optional<RateTotals> rateTotals(
             RankingBoard board, Window window, Instant asOf, List<LivePiece> live, long userId) {
+        requireRepeatableRead();
         return Optional.ofNullable(accumulate(board, window, asOf, live, userId).get(userId))
                 .map(t -> new RateTotals(t.focusSec, t.studySec));
+    }
+
+    /**
+     * 바깥 트랜잭션에 합류하면 그쪽 격리 수준이 이겨서 한 스냅샷 보장이 조용히 사라진다 — 기본 격리 수준의 바깥 트랜잭션이거나
+     * 트랜잭션 밖에서 불렀으면 바로 실패시킨다.
+     */
+    private static void requireRepeatableRead() {
+        Integer level = TransactionSynchronizationManager.getCurrentTransactionIsolationLevel();
+        if (level == null || level != Connection.TRANSACTION_REPEATABLE_READ) {
+            throw new IllegalStateException("랭킹 집계는 자체 REPEATABLE_READ 트랜잭션에서만 실행한다(현재 격리 수준: " + level
+                    + "). 바깥 트랜잭션 안에서 부르면 확정 합계와 draft id를 한 스냅샷에서 읽는 보장이 사라진다");
+        }
     }
 
     public static long requiredRateFocusSec(RankingPeriod period) {
