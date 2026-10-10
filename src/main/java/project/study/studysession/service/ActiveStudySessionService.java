@@ -1,25 +1,32 @@
 package project.study.studysession.service;
 
+import io.sentry.Sentry;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.NotFoundException;
 import project.study.studysession.buffer.ActiveSnapshotBuffer;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.dto.ActiveSessionSnapshotResponse;
+import project.study.studysession.dto.LivePiece;
 import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.ActiveStudySession;
 import project.study.studysession.entity.StatusEvent;
+import project.study.studysession.entity.StudySession;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 /** 진행중 세션 스냅샷(draft) 관리 — 하트비트 UPSERT와 무응답 draft 자동 확정 (BY-447). */
+@Slf4j
 @Service
 public class ActiveStudySessionService {
 
@@ -150,5 +157,73 @@ public class ActiveStudySessionService {
     @Transactional
     public void discardDraft(Long draftId) {
         activeStudySessionRepository.deleteById(draftId);
+    }
+
+    /** 집중 중 판정 — 마지막 수신이 이 안이어야 한다 (BY-828). 하트비트(30초)를 한 번 놓쳐도 집중 중으로 본다. */
+    public static final Duration FOCUSING_WINDOW = Duration.ofSeconds(60);
+
+    /**
+     * 진행 중 세션을 랭킹 집계용 조각으로 나눈다 (BY-828, ADR-0028). 확정과 같은 분할(자정·시간대 구간)을 쓰고, 지금 집중 중이면
+     * 마지막 수신 뒤 경과 시간(최대 60초)만큼 늘린 가상 스냅샷으로 계산해 asOf 시점 값을 갖게 한다. 하트비트가 끊긴 draft도
+     * 자동 확정되면 같은 값이 되므로 포함한다. 읽지 못하는 draft는 건너뛴다 — 폐기는 확정 스케줄러 몫이다.
+     */
+    @Transactional(readOnly = true)
+    public List<LivePiece> livePieces(Instant asOf) {
+        List<LivePiece> pieces = new ArrayList<>();
+        for (ActiveStudySession draft : activeStudySessionRepository.findAll()) {
+            try {
+                pieces.addAll(toLivePieces(draft, asOf));
+            } catch (RuntimeException e) {
+                log.warn("랭킹 집계에서 draft를 건너뜀: draftId={}", draft.getId(), e);
+                Sentry.captureException(e);
+            }
+        }
+        return pieces;
+    }
+
+    private List<LivePiece> toLivePieces(ActiveStudySession draft, Instant asOf) {
+        List<StatusEvent> events =
+                objectMapper.readValue(draft.getEvents(), new TypeReference<List<StatusEventRequest>>() {}).stream()
+                        .map(StatusEventRequest::toEntity)
+                        .sorted(Comparator.comparing(StatusEvent::getStartedAt))
+                        .toList();
+        boolean focusing = isFocusing(draft, events, asOf);
+        int extendSec = focusing
+                ? (int) Math.max(
+                        0, Duration.between(draft.getLastSeenAt(), asOf).toSeconds())
+                : 0;
+        List<Instant> cuts = StudySessionSplitter.computeCuts(
+                draft.getStartedAt(), draft.getReportedAt().plusSeconds(extendSec));
+        List<StudySession> sessions = StudySessionSplitter.buildSessions(
+                draft.getUserId(),
+                cuts,
+                StudySessionSplitter.computeSegmentWeights(cuts, events),
+                draft.getStudySec() + extendSec,
+                draft.getFocusSec() + extendSec,
+                List.of(),
+                List.of());
+        Instant achievedAt = focusing ? asOf : draft.getLastSeenAt();
+        List<LivePiece> pieces = new ArrayList<>(sessions.size());
+        for (int i = 0; i < sessions.size(); i++) {
+            StudySession piece = sessions.get(i);
+            pieces.add(new LivePiece(
+                    piece.getUserId(),
+                    piece.getStatDate(),
+                    piece.getFocusSec(),
+                    piece.getStudySec(),
+                    List.copyOf(piece.getSlots()),
+                    i == sessions.size() - 1,
+                    focusing,
+                    achievedAt));
+        }
+        return pieces;
+    }
+
+    /** 마지막 수신이 60초 안이고 진행 중인 이벤트가 없으면 집중 중이다 — 앱은 진행 중 이벤트를 reportedAt에서 닫아 보낸다. */
+    static boolean isFocusing(ActiveStudySession draft, List<StatusEvent> sortedEvents, Instant asOf) {
+        if (draft.getLastSeenAt().isBefore(asOf.minus(FOCUSING_WINDOW))) {
+            return false;
+        }
+        return sortedEvents.isEmpty() || !sortedEvents.getLast().getEndedAt().equals(draft.getReportedAt());
     }
 }

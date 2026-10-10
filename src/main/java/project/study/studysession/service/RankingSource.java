@@ -1,16 +1,21 @@
 package project.study.studysession.service;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import project.study.studysession.StudySessionThresholds;
+import project.study.studysession.dto.LivePiece;
 import project.study.studysession.dto.RankingDaysRow;
 import project.study.studysession.dto.RankingStreakRow;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.entity.TimeSlot;
 import project.study.studysession.repository.StudySessionRankingQueries;
+import project.study.studysession.repository.StudySessionRepository;
 
 /**
  * 랭킹(BY-828)이 세션 데이터를 읽는 유일한 입구 — 집계 쿼리·진행 중 조각·스트릭을 한곳에 모아 ranking 도메인이 세션 내부
@@ -21,6 +26,9 @@ import project.study.studysession.repository.StudySessionRankingQueries;
 public class RankingSource {
 
     private final StudySessionRankingQueries queries;
+    private final StudySessionRepository studySessionRepository;
+    private final StudySessionService studySessionService;
+    private final ActiveStudySessionService activeStudySessionService;
 
     public List<RankingTotalRow> periodTotals(LocalDate from, LocalDate to, Long userId) {
         return queries.periodTotals(from, to, userId);
@@ -40,5 +48,22 @@ public class RankingSource {
 
     public Map<Long, String> activeNicknames(Collection<Long> userIds) {
         return queries.activeNicknames(userIds);
+    }
+
+    public List<LivePiece> livePieces(Instant asOf) {
+        return activeStudySessionService.livePieces(asOf);
+    }
+
+    /** 지금 이어지는 연속 공부일 — 스트릭 API의 streak와 같은 값. */
+    public int currentStreak(long userId) {
+        return studySessionService.streak(userId, null, null).streak();
+    }
+
+    /** from~to 중 순공 1분 이상 조각이 있는 날 수 — 누적 일수의 최근 페이스 계산용. */
+    @Transactional(readOnly = true)
+    public int studiedDays(long userId, LocalDate from, LocalDate to) {
+        return studySessionRepository
+                .findDistinctStatDatesBetween(userId, from, to, StudySessionThresholds.MIN_LIST_FOCUS_SEC)
+                .size();
     }
 }
