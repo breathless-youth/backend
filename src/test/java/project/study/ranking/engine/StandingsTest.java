@@ -27,7 +27,7 @@ class StandingsTest {
 
     @Test
     void 나를_끼우면_순위표에_남은_내_옛_줄은_새_값으로_대신한다() {
-        Placement p = Standings.of(List.of(e(1, 300), e(2, 200), e(3, 100)), T0).place(e(3, 250));
+        Placement p = Standings.of(List.of(e(1, 300), e(2, 200), e(3, 100)), T0).place(3, e(3, 250));
 
         assertThat(p.merged()).extracting(RankingEntry::userId).containsExactly(1L, 3L, 2L);
         assertThat(p.myRank()).isEqualTo(2);
@@ -36,12 +36,21 @@ class StandingsTest {
 
     @Test
     void 내가_없으면_남들만_있고_내_순위는_없다() {
-        Placement p = Standings.of(List.of(e(1, 300), e(2, 200)), T0).place(null);
+        Placement p = Standings.of(List.of(e(1, 300), e(2, 200)), T0).place(9, null);
 
         assertThat(p.present()).isFalse();
         assertThat(p.size()).isEqualTo(2);
         assertThat(p.me()).isNull();
         assertThat(p.around()).isEmpty();
+    }
+
+    @Test
+    void 새로_읽은_내_줄이_없으면_순위표에_남은_내_옛_줄도_뺀다() {
+        Placement p = Standings.of(List.of(e(1, 300), e(7, 200), e(2, 100)), T0).place(7, null);
+
+        assertThat(p.merged()).extracting(RankingEntry::userId).containsExactly(1L, 2L);
+        assertThat(p.present()).isFalse();
+        assertThat(p.size()).isEqualTo(2);
     }
 
     @Test

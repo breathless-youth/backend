@@ -129,6 +129,22 @@ class RankingBoardServiceTest extends RankingIntegrationTestBase {
     }
 
     @Test
+    void 캐시에는_있지만_새로_읽은_줄이_없는_내_옛_줄은_빠지고_참가자로_세지_않는다() {
+        weekly("other", 5);
+        long me = user("me");
+        draft(me, NOW.minusSeconds(300), NOW.minusSeconds(10), 70, "[]");
+        assertThat(weeklyBoard(me).me()).isNotNull(); // 진행 중 70초로 캐시에 내 줄이 올라간다
+
+        session(me, NOW.minusSeconds(300), 5, 50); // 제출이 60초 미만으로 확정 — 캐시(10초) 안에서 내 줄이 사라진다
+        RankingBoardResponse r = weeklyBoard(me);
+
+        assertThat(r.me()).isNull();
+        assertThat(r.podium()).extracting(BoardEntry::nickname).containsExactly("other");
+        assertThat(r.around()).isEmpty();
+        assertThat(r.startNowRank()).isEqualTo(2);
+    }
+
+    @Test
     void 직전_기간을_조회할_수_있다() {
         long me = user("me");
         session(me, kst(10, 9, 9, 0), 30, 1800);

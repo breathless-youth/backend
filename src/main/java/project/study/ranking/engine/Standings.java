@@ -39,11 +39,14 @@ public record Standings(List<RankingEntry> entries, Instant asOf) {
         return of(entries.stream().map(entry -> entry.settledAt(asOf, closesAt)).toList(), settledAsOf);
     }
 
-    /** me를 끼운 배치 — 순위표에 남아 있는 내 옛 줄은 빼고 새로 읽은 me로 대신한다. me가 null이면 남들만이다. */
-    public Placement place(RankingEntry me) {
+    /**
+     * me를 끼운 배치 — 순위표에 남아 있는 requesterId의 옛 줄은 me가 있든 없든 뺀다. me가 null이면 요청자는 참가자가 아니고
+     * 남들만 남는다(캐시된 뒤에 60초 미만으로 확정돼 새로 읽은 줄이 사라진 경우 등).
+     */
+    public Placement place(long requesterId, RankingEntry me) {
         List<RankingEntry> merged = new ArrayList<>(entries.size() + 1);
         for (RankingEntry entry : entries) {
-            if (me == null || entry.userId() != me.userId()) {
+            if (entry.userId() != requesterId) {
                 merged.add(entry);
             }
         }
@@ -58,6 +61,6 @@ public record Standings(List<RankingEntry> entries, Instant asOf) {
 
     /** 가정한 줄이 들어가면 받을 순위(1부터) — 같은 userId의 줄은 빼고 센다. */
     public int rankOf(RankingEntry hypothetical) {
-        return place(hypothetical).myRank();
+        return place(hypothetical.userId(), hypothetical).myRank();
     }
 }

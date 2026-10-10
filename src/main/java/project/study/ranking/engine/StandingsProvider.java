@@ -14,7 +14,7 @@ import project.study.studysession.service.RankingSource;
 
 /**
  * 캐시된 순위표와 새로 읽은 내 줄을 묶는다 (BY-828, ADR-0028). 순위표는 판·기간 단위로 캐시하고, 요청 시각까지 집중 중인 줄을
- * 올린 뒤, 캐시와 따로 매번 계산한 내 줄로 순위표의 내 옛 줄을 대신한다.
+ * 올린 뒤, 캐시와 따로 매번 계산한 내 줄로 순위표의 내 옛 줄을 대신한다. 새로 읽은 내 줄이 없으면 내 옛 줄도 뺀다.
  */
 @Component
 @RequiredArgsConstructor
@@ -47,7 +47,7 @@ public class StandingsProvider {
                 .map(entry ->
                         closed ? entry.settledAt(live.asOf(), window.closesAt()) : entry.advancedTo(live.asOf(), now))
                 .orElse(null);
-        return new BoardView(standings, standings.place(me), live);
+        return new BoardView(standings, standings.place(userId, me), live);
     }
 
     public Standings standings(RankingBoard board, Window window, LiveSnapshot live, Instant now) {
