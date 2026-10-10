@@ -56,6 +56,8 @@
 
 - `GET /api/rankings/board` 하나로 모든 판을 조회한다. 마감 기록(PR ②)과 노출용 API(PR ③)는 같은 엔진
   (`StandingsProvider`·`StandingsCalculator`)을 쓴다.
+- 마감 배치(PR ②)는 엔진 계산을 쓰기 트랜잭션 밖에서 한 뒤, `ranking_close`·`ranking_record`·`ranking_best`를 한
+  트랜잭션으로 쓴다. 결정 8 때문에 `compute`·`rateTotals`를 바깥 트랜잭션 안에서 부를 수 없다.
 - 캐시는 태스크 메모리다. 태스크가 늘면 각자 계산할 뿐 결과는 같다.
 - 확장 경로: 사용자가 만 명대가 되어 집계가 아프면 ① 판별 점수 테이블(쓰기 경로 갱신) → ② Redis 정렬 집합 순으로 옮긴다.
 - 세션 저장마다 조각당 구간 행이 최대 6개 더 생긴다.
