@@ -249,9 +249,11 @@ CREATE TABLE ranking_best (
     "best": null,      // total이 0일 때만: { rank, type, period, slot, periodStart } — 역대 마감 최고, 없으면 null
     "closest": null }  // total이 0일 때만: { type, period, slot, gap } — 메달까지 남은 양이 가장 작은 진행 중 시간 판
   ```
-  `closest.gap = max(0, 3위 값 − 내 값, 1800 − 내 값)`(초). 대상은 순공 일·주·월과 시간대 일·주 × 5구간이다.
+  `closest.gap = max(0, 3위 값 − 내 값, 1800 − 내 값)`(초), 3위 밖이면 최소 1. 대상은 순공 일·주·월과 시간대 일·주 × 5구간이다.
+  마감 전까지 그 구간 시간이 더 오지 않는 시간대 판(예: 13시의 오전 일간판)은 이미 메달권(gap 0)일 때만 넣는다. 같으면 위 나열 순서상 앞 판.
 - `GET /api/rankings/records?rank=&type=&cursor=&size=` — 모두 보기(5r). `rank` 1·2·3, `type` `FOCUS_TIME`·`FOCUS_RATE`·`TIME_SLOT`,
   `(closesAt, id)` 내림차순 커서 페이지(기본 20, 최대 50). 달별 묶음은 FE가 한다. `recent`도 같은 순서의 앞 6개다.
+  `cursor`가 비어 있으면 첫 페이지, 형식이 깨졌으면 400.
   ```jsonc
   { "items": [ { "id": 31, "type": "TIME_SLOT", "period": "DAILY", "slot": "MORNING", "periodStart": "2026-10-09",
                  "rank": 1, "value": 11060, "closesAt": "2026-10-09T15:00:00Z" } ],
@@ -261,7 +263,9 @@ CREATE TABLE ranking_best (
   - 안 본 기록을 순위 → 일·주·월 → 순공·집중률·시간대 순으로 준다(명세 §4-5). `total`은 누적 메달 수.
   - **04시 보류**: 가장 최근 04:00 마감분(심야 일간, 월요일이면 심야 주간까지)의 확정이 끝난 뒤에야, 그 시각 이전에 마감된
     기록을 준다. 00:00~04:01 사이엔 그날 00시 마감분을 주지 않는다.
+  - 한 번에 최대 100개다. `seen`으로 표시한 뒤 다시 부르면 나머지를 준다.
 - `POST /api/rankings/records/seen` `{ "ids": [31, 32] }` — 모달을 띄운 뒤 본 것으로 표시. 내 기록만 바뀐다(남의 id는 무시). 204.
+  `ids`는 필수·최대 100개, `[]`는 아무것도 하지 않는다.
 
 ### 7.3 PR ③ — 노출용
 
