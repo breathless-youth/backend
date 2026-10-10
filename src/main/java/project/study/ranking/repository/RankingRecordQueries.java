@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -13,6 +14,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.ranking.RankingBoardType;
 import project.study.ranking.dto.MedalCounts;
+import project.study.ranking.dto.RankingBestRow;
 import project.study.ranking.dto.RankingRecordRow;
 import project.study.ranking.dto.RecordCursor;
 
@@ -77,6 +79,14 @@ public class RankingRecordQueries {
                 .query((rs, i) -> new MedalCounts(
                         rs.getLong("first_count"), rs.getLong("second_count"), rs.getLong("third_count")))
                 .single();
+    }
+
+    public Optional<RankingBestRow> best(long userId) {
+        return jdbc.sql("SELECT rank, board_key, period_start FROM ranking_best WHERE user_id = :userId")
+                .param("userId", userId)
+                .query((rs, i) -> new RankingBestRow(
+                        rs.getInt("rank"), rs.getString("board_key"), rs.getObject("period_start", LocalDate.class)))
+                .optional();
     }
 
     /** 내 기록만 본 것으로 표시한다 — 남의 id·이미 본 id는 그대로 둔다. */

@@ -18,8 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 import project.study.ranking.RankingBoardType;
 import project.study.ranking.dto.RankingRecordPageResponse;
 import project.study.ranking.dto.RankingRecordSeenRequest;
+import project.study.ranking.dto.RankingRecordSummaryResponse;
 import project.study.ranking.dto.RankingUnseenResponse;
 import project.study.ranking.service.RankingRecordService;
+import project.study.ranking.service.RankingRecordSummaryService;
 
 @Tag(name = "Ranking")
 @RestController
@@ -28,6 +30,18 @@ import project.study.ranking.service.RankingRecordService;
 public class RankingRecordController {
 
     private final RankingRecordService recordService;
+    private final RankingRecordSummaryService summaryService;
+
+    @Operation(summary = "마감 기록 요약 (메달 버튼·시트)", description = """
+                    누적 메달 수, 순위별 개수, 최근 기록 6개를 준다.
+
+                    - 기록이 없을 때만(total 0) best(역대 마감 최고 순위, 없으면 null)와 closest(메달까지 남은 양이 가장 작은 진행 중 시간 판)를 준다
+                    - closest.gap = max(0, 3위 값 − 내 값, 1800 − 내 값) 초. 대상은 순공 일·주·월과 시간대 일·주 × 5구간이다""")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
+    @GetMapping(value = "/summary", version = "1")
+    public RankingRecordSummaryResponse summary(@AuthenticationPrincipal Long userId) {
+        return summaryService.summary(userId);
+    }
 
     @Operation(summary = "마감 기록 모두 보기", description = """
                     내가 1·2·3위로 마감한 판을 마감 시각 최신순(같으면 id 내림차순)으로 준다. 달별 묶음은 FE가 한다.
