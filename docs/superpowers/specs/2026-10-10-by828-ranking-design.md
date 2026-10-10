@@ -4,7 +4,7 @@
 - 스토리: [BY-819](https://breathless-youth.atlassian.net/browse/BY-819) 사용자는 랭킹을 보면서 성취감을 느낄 수 있어야 한다
 - 서브태스크: [BE] BY-828 (이 문서) · 짝 [FE] BY-827
 - 명세: AI 위키 `product/specs/BY-819-랭킹.md` (breathless-youth/.ai#23), 피그마 S10, 시안 `assets/BY-819/ranking-flow.html`
-- 상태: 설계 확정 → PR ① 구현 계획(writing-plans)으로 이관
+- 상태: PR ① 머지(#84) · PR ② 구현 계획 `docs/superpowers/plans/2026-10-11-by828-ranking-records.md`
 - 선행 설계: ADR-0005(자정 분할), ADR-0006·0008(순공·총공부 앱 신뢰), ADR-0007·0009(스트릭 계산·임계값),
   ADR-0014(진행 중 스냅샷·자동 확정), ADR-0023(과목 구간 — 파생값을 세션 자식 테이블에 둔 선례)
 
