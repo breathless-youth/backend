@@ -11,6 +11,7 @@ import project.study.studysession.entity.SessionSlot;
  * draftId는 조각이 나온 draft(active_study_session)의 id — 하트비트 UPSERT에도 그대로이고 확정·폐기로 draft가 지워지면
  * 사라지므로, 캐시된 조각이 이미 확정된 세션인지 가려내는 데 쓴다. 제출이 이미 확정된 draft는 뒤늦은 하트비트로 다시
  * 생겨도 확정되지 않은 draft id에 들지 않아 같이 걸러진다.
+ * startedAt·endedAt은 분할된 조각의 시작·끝(집중 중이면 늘린 끝)이다 — 지난 시점 값을 시간 비율로 되돌릴 때 쓴다.
  */
 public record LivePiece(
         long userId,
@@ -21,4 +22,6 @@ public record LivePiece(
         boolean latest,
         boolean focusing,
         Instant achievedAt,
-        long draftId) {}
+        long draftId,
+        Instant startedAt,
+        Instant endedAt) {}
