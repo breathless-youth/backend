@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,7 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 import project.study.ranking.RankingBoardType;
 import project.study.ranking.RankingPeriod;
 import project.study.ranking.dto.RankingBoardResponse;
+import project.study.ranking.dto.RankingHomeResponse;
 import project.study.ranking.service.RankingBoardService;
+import project.study.ranking.service.RankingHomeService;
 import project.study.studysession.entity.TimeSlot;
 
 @Tag(name = "Ranking", description = "랭킹 API — 랭킹판(순공·집중률·시간대)과 명예의 전당을 조회한다 (BY-828)")
@@ -23,6 +26,7 @@ import project.study.studysession.entity.TimeSlot;
 public class RankingController {
 
     private final RankingBoardService rankingBoardService;
+    private final RankingHomeService rankingHomeService;
 
     @Operation(summary = "랭킹판 조회", description = """
                     랭킹판 하나의 시상대(1~3위), 내 순위, 내 주변(앞 2 · 나 · 뒤 2), 바로 위·아래와의 차이를 준다. \
@@ -49,5 +53,24 @@ public class RankingController {
             @Parameter(description = "0=지금 기간, -1=직전 기간(기간 판만)", example = "0") @RequestParam(defaultValue = "0")
                     int offset) {
         return rankingBoardService.board(userId, type, period, slot, offset);
+    }
+
+    @Operation(summary = "홈 랭킹 (한 줄 카드·첫 접속 추월)", description = """
+                    이번 주 순공 판의 내 순위·값·바로 위와의 차이(card)와, since 뒤로 나를 추월한 사람(overtaken)을 준다.
+
+                    - card: 이번 주 기록이 없으면 null
+                    - overtaken: since를 줬을 때만. since가 이번 주 월요일 00:00(KST) 이전이거나 미래이거나, since에 내 순위가 없었거나, \
+                    순위가 내려가지 않았으면 null
+                    - since 시점 값은 그때까지 끝난 조각과, 걸쳐 있던 조각(진행 중 세션 포함)의 시간 비율로 되돌린다
+                    - nearest: 나를 추월한 사람 중 지금 가장 가까운 2명 — since 뒤에 처음 공부한 시각과 그 뒤로 쌓은 순공
+                    - FE 몫: 마지막 포그라운드 시각 보관, 그날 첫 접속 판단, 하루 1회, 마감 모달이 뜬 날 생략""")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
+    @GetMapping(value = "/home", version = "1")
+    public RankingHomeResponse home(
+            @AuthenticationPrincipal Long userId,
+            @Parameter(description = "마지막으로 앱을 본 시각(UTC ISO-8601)", example = "2026-10-07T12:00:00Z")
+                    @RequestParam(required = false)
+                    Instant since) {
+        return rankingHomeService.home(userId, since);
     }
 }
