@@ -214,7 +214,8 @@ public class ActiveStudySessionService {
                     List.copyOf(piece.getSlots()),
                     i == sessions.size() - 1,
                     focusing,
-                    achievedAt));
+                    achievedAt,
+                    draft.getId()));
         }
         return pieces;
     }

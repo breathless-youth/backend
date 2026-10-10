@@ -10,12 +10,14 @@ import static project.study.ranking.RankingBoardType.TIME_SLOT;
 import static project.study.ranking.RankingPeriod.DAILY;
 import static project.study.ranking.RankingPeriod.WEEKLY;
 
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import project.study.ranking.RankingBoard;
 import project.study.ranking.RankingCalendar;
 import project.study.ranking.RankingIntegrationTestBase;
+import project.study.studysession.dto.LivePiece;
 import project.study.studysession.entity.TimeSlot;
 import project.study.studysession.service.RankingSource;
 
@@ -106,6 +108,27 @@ class StandingsCalculatorTest extends RankingIntegrationTestBase {
         assertThat(compute(new RankingBoard(FOCUS_TIME, WEEKLY, null), a))
                 .extracting(RankingEntry::userId)
                 .containsExactly(a);
+    }
+
+    @Test
+    void 캐시된_조각의_draft가_그_사이_확정됐으면_확정_합계만_센다() {
+        long a = user("a");
+        Instant start = NOW.minusSeconds(1800);
+        draft(a, start, NOW.minusSeconds(10), 1690, "[]");
+        List<LivePiece> cachedSnapshot = source.livePieces(NOW);
+        session(a, start, 30, 1700); // 앱의 최종 제출 — 세션 저장과 draft 삭제가 한 트랜잭션이다
+        RankingBoard board = new RankingBoard(FOCUS_TIME, WEEKLY, null);
+        var window = RankingCalendar.window(board, NOW, 0);
+
+        assertThat(cachedSnapshot).hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM active_study_session", Long.class))
+                .isZero();
+        assertThat(calculator.compute(board, window, NOW, cachedSnapshot, null))
+                .extracting(RankingEntry::value, RankingEntry::focusing)
+                .containsExactly(tuple(1700.0, false));
+        assertThat(calculator.compute(board, window, NOW, cachedSnapshot, a))
+                .extracting(RankingEntry::value, RankingEntry::focusing)
+                .containsExactly(tuple(1700.0, false));
     }
 
     @Test

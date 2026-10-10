@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import project.study.studysession.dto.RankingDaysRow;
 import project.study.studysession.dto.RankingStreakRow;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.entity.TimeSlot;
+import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRankingQueries;
 import project.study.studysession.repository.StudySessionRepository;
 
@@ -27,6 +29,7 @@ public class RankingSource {
 
     private final StudySessionRankingQueries queries;
     private final StudySessionRepository studySessionRepository;
+    private final ActiveStudySessionRepository activeStudySessionRepository;
     private final StudySessionService studySessionService;
     private final ActiveStudySessionService activeStudySessionService;
 
@@ -52,6 +55,15 @@ public class RankingSource {
 
     public List<LivePiece> livePieces(Instant asOf) {
         return activeStudySessionService.livePieces(asOf);
+    }
+
+    /**
+     * 지금 남아 있는 draft(active_study_session)의 id 전부. 캐시된 진행 중 조각 중 draftId가 여기 없는 것은 그 사이 확정·폐기된
+     * 세션이다 — 확정은 세션 저장과 draft 삭제가 한 트랜잭션이라, 같은 스냅샷에서 확정 합계를 읽을 때 이 목록으로 걸러야 이중
+     * 집계가 없다.
+     */
+    public Set<Long> openDraftIds() {
+        return Set.copyOf(activeStudySessionRepository.findAllIds());
     }
 
     /** 지금 이어지는 연속 공부일 — 스트릭 API의 streak와 같은 값. */
