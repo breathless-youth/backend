@@ -95,13 +95,19 @@
 순공·집중률·시간대 판은 진행 중 세션을 포함한다. 명예의 전당은 실시간이 아니라 확정 세션만 본다.
 
 - **모든 draft를 읽는다.** 하트비트가 끊긴 draft도 자동 확정되면 같은 값이 되므로 포함한다. 확정과 draft 삭제는 한
-  트랜잭션이라(ADR-0014) 이중 집계가 없다.
+  트랜잭션이라(ADR-0014) 확정 합계와 draft는 겹쳐 잡히지 않는다. 다만 draft 조각은 10초 캐시를 판들이 나눠 쓰고 확정 합계는
+  매번 새로 읽어서, 캐시 뒤에 확정된 세션은 두 쪽에 다 들어갈 수 있다. 이를 막으려고 조각마다 출처 draft의 id
+  (`LivePiece.draftId`)를 달고, 순위표 계산(`StandingsCalculator.compute`·`rateTotals`)을 읽기 전용 `REPEATABLE_READ`
+  트랜잭션 하나에서 한다. 그 스냅샷에서 확정 합계와 열려 있는 draft id를 읽고, draft가 아직 열려 있는 조각만 더한다
+  (ADR-0028). 두 메서드를 바깥 트랜잭션 안에서 부르면 격리 수준이 바뀌어 보장이 사라진다.
 - **draft는 확정과 같은 분할 로직으로 나눈다.** `reportedAt`을 끝으로 보고 자정 분할 조각과 구간 행을 만든다
   (`StudySessionSplitter` + §5.1의 구간 분할기). 1분 미만 조각 제외도 똑같이 적용한다.
 - **집중 중**: `last_seen_at`이 계산 시각에서 60초 이내이고, 마지막 이벤트의 `endedAt`이 `reportedAt`과 같지 않다
   (앱은 진행 중 이벤트를 `reportedAt`에서 닫아 보낸다 — 같으면 지금 PHONE·PAUSE 등 이벤트 중이다).
 - **집중 중인 draft는 계산 시각까지 늘려 계산한다.** `Δ = min(계산 시각 − last_seen_at, 60초)`만큼 `reportedAt`·`studySec`·
-  `focusSec`을 늘린 가상 draft로 분할한다. 경계(자정·구간)를 넘는 Δ도 분할기가 알맞게 나눈다. 집중률은 늘리지 않는다.
+  `focusSec`을 늘린 가상 draft로 분할한다. 경계(자정·구간)를 넘는 Δ도 분할기가 알맞게 나눈다. 늘린 스냅샷 하나가 집중률
+  판을 포함한 모든 판에 들어가 집중률 합계도 이를 쓴다. 집중률 판은 `focusing`을 켜지 않아 FE가 보간하지 않는다. 늘리지
+  않았을 때와의 차이는 순공·총공부 각각 최대 60초다.
 - 응답의 `asOf`(계산 시각)부터 FE가 `focusing: true`인 값을 1초씩 올려 보간한다.
 
 ## 5. 데이터 모델
@@ -170,7 +176,8 @@ CREATE TABLE ranking_best (
   - 의존 방향은 `ranking → studysession` 하나다.
 - **순위표(`Standings`)**: 한 판·한 기간의 정렬된 참가자 목록 `(userId, nickname, value, achievedAt, focusing)`.
   - 캐시 키 `(board_key, period_start)`. 기간 판 10초, 명예의 전당·지난 기간 60초. 같은 키 동시 요청은 한 번만 계산한다.
-  - draft 분할 결과는 10초 동안 판들이 공유한다.
+  - draft 분할 결과는 10초 동안 판들이 공유한다. 조각마다 출처 draft의 id를 달고, 계산 때 확정 합계와 같은 스냅샷에서
+    읽은 열린 draft id에 없는 조각은 뺀다(§4). 그 사이 확정된 세션이 확정 합계와 캐시된 조각에 두 번 잡히지 않는다.
   - 캐시는 태스크 메모리다(지금 `desired_count` 1). 태스크가 늘어도 각자 계산할 뿐 결과는 같다.
 - **내 값은 매 요청 DB에서 새로 읽는다.** 캐시된 순위표에서 나를 뺀 목록에 내 `(값, 도달 시각, userId)`를 이분 탐색으로
   끼워 순위·앞뒤를 만든다. 세션을 막 끝낸 직후에도 내 숫자가 캐시 때문에 늦지 않는다.
@@ -200,7 +207,7 @@ CREATE TABLE ranking_best (
   "around": [ /* 앞 2 · 나 · 뒤 2 — 앞이 부족하면 뒤를 더. me가 null이면 [] */ ],
   "above": { "nickname": "형광펜", "gap": 1320, "focusing": true },    // 바로 위, 1위면 null
   "below": { "nickname": "오늘도출석", "gap": 240, "focusing": true }, // 바로 아래, 꼴찌면 null
-  "startNowRank": null                       // me가 null일 때만: 지금 시작하면 N위 (참가자 수 + 1)
+  "startNowRank": null                       // me가 null일 때만: 지금 시작하면 N위 (참가자 수 + 1). 집중률 판은 항상 null
 }
 ```
 
@@ -311,7 +318,8 @@ CREATE TABLE ranking_best (
 
 - 잘못된 `type`·`period`·`slot`·`offset` 조합, `rank`·`size` 범위 밖, `since` 형식 오류 → 400.
 - `session-gains`의 제출이 없거나 남의 것 → 404.
-- 참가자가 없는 판: `podium` []·`me` null·`startNowRank` 1. 참가자가 1명이면 `above`·`below` null.
+- 참가자가 없는 판: `podium` []·`me` null·`startNowRank` 1. 참가자가 1명이면 `above`·`below` null. 집중률 판은 예외로
+  `startNowRank`가 비어 있어도 null이다(주 10시간·월 30시간을 채워야 참가하므로 `eligibility`가 맡는다).
 - 탈퇴(`DELETE`) 사용자는 집계·마감에서 빠진다. 이미 받은 기록은 남지만 본인만 조회하므로 노출되지 않는다.
 - draft JSON을 읽지 못하면 그 draft만 건너뛰고 Sentry에 남긴다(자동 확정 쪽이 따로 폐기 처리한다).
 
