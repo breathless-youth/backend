@@ -123,4 +123,10 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             @Param("since") Instant since,
             @Param("scanFrom") Instant scanFrom,
             @Param("minFocusSec") int minFocusSec);
+
+    // BY-828 백필 — 시간대 행이 없는 최근 세션. 순공 0·종료 시각 없는(레거시) 세션은 행이 생길 수 없어 뺀다
+    @Query("""
+            select s from StudySession s
+            where s.statDate >= :from and s.focusSec > 0 and s.endedAt is not null and s.slots is empty""")
+    List<StudySession> findSlotlessSince(@Param("from") LocalDate from);
 }

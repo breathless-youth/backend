@@ -81,6 +81,13 @@ public class StudySession {
     @BatchSize(size = 64)
     private Set<Long> completedTaskIds = new HashSet<>();
 
+    // 시간대 랭킹용 구간별 순공 (BY-828) — 조각을 구간 경계로 잘라 배분한 파생값. 완료 할 일처럼 값 컬렉션이라
+    // 세션과 함께 저장·대체·삭제된다
+    @ElementCollection
+    @CollectionTable(name = "study_session_slot", joinColumns = @JoinColumn(name = "session_id", nullable = false))
+    @BatchSize(size = 64)
+    private Set<SessionSlot> slots = new HashSet<>();
+
     // BY-447: 자동 확정본 표시 — true인 세션은 잠정 기록이라 늦은 최종 제출·재확정이 대체할 수 있다
     @Column(name = "auto_finalized", nullable = false)
     private boolean autoFinalized;
@@ -121,6 +128,11 @@ public class StudySession {
     /** 조각별로 귀속된 완료 할 일을 붙인다 — 분할 직후 서비스만 호출한다. */
     public void attachCompletedTasks(Collection<Long> taskIds) {
         this.completedTaskIds = new HashSet<>(taskIds);
+    }
+
+    /** 조각의 구간별 순공을 붙인다 — 분할 직후 서비스(또는 백필)만 호출한다. */
+    public void attachSlots(Collection<SessionSlot> slots) {
+        this.slots = new HashSet<>(slots);
     }
 
     /** 확정 스케줄러가 만든 세션임을 표시한다 — 저장 직전 서비스만 호출한다. */
