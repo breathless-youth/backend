@@ -68,6 +68,9 @@ public class StandingsCalculator {
             Long onlyUserId,
             Instant excludeSubmission) {
         requireRepeatableRead();
+        if (excludeSubmission != null && onlyUserId == null) {
+            throw new IllegalArgumentException("제출 제외는 한 사용자 계산에서만 쓴다");
+        }
         return switch (board.type()) {
             case FOCUS_TIME, TIME_SLOT ->
                 accumulate(board, window, asOf, live, onlyUserId, excludeSubmission).entrySet().stream()

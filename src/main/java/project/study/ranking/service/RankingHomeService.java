@@ -72,6 +72,9 @@ public class RankingHomeService {
         if (since == null || since.isBefore(weekStart) || since.isAfter(now)) {
             return null;
         }
+        if (view.placement().myIndex() == 0) {
+            return null; // 지금 1위면 내려갈 수 없다 — 가장 비싼 주간 전체 집계를 건너뛴다
+        }
         Map<Long, PastEntry> past = calculator
                 .pastTotals(window, since, view.live().pieces())
                 .stream()
@@ -104,6 +107,7 @@ public class RankingHomeService {
         for (int i = overtakers.size() - 1; i >= 0 && rows.size() < NEAREST; i--) {
             RankingEntry other = overtakers.get(i);
             PastEntry then = past.get(other.userId());
+            // 캐시된 지금 순위표(10초)에는 있는데 새로 읽은 지난 값에 없는 사람(그 사이 탈퇴·draft 폐기) — since부터 전부 쌓은 것으로 본다
             long valueThen = then == null ? 0 : then.valueAt();
             Instant studiedFrom = then == null || then.studiedFrom() == null ? since : then.studiedFrom();
             rows.add(new Overtaker(

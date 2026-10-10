@@ -1,6 +1,7 @@
 package project.study.ranking.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static project.study.ranking.RankingBoardType.FOCUS_TIME;
 import static project.study.ranking.RankingBoardType.MAX_STREAK;
 import static project.study.ranking.RankingBoardType.TIME_SLOT;
@@ -11,11 +12,14 @@ import static project.study.ranking.RankingPeriod.WEEKLY;
 
 import java.time.Instant;
 import java.util.EnumSet;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import project.study.ranking.RankingBoard;
 import project.study.ranking.RankingCalendar;
+import project.study.ranking.RankingCalendar.Window;
 import project.study.ranking.RankingIntegrationTestBase;
+import project.study.studysession.dto.LivePiece;
 import project.study.studysession.entity.TimeSlot;
 import project.study.studysession.service.RankingSource;
 
@@ -58,6 +62,18 @@ class StandingsCalculatorExcludeTest extends RankingIntegrationTestBase {
                 .isEqualTo(2);
         assertThat(valueWithout(new RankingBoard(FOCUS_TIME, DAILY, null), me, last))
                 .isZero();
+    }
+
+    @Test
+    void 제출_제외는_한_사용자_계산에서만_쓴다() {
+        RankingBoard board = new RankingBoard(FOCUS_TIME, WEEKLY, null);
+        Window window = RankingCalendar.window(board, NOW, 0);
+        List<LivePiece> live = source.livePieces(NOW);
+        Instant excluded = kst(10, 10, 9, 0);
+
+        assertThatThrownBy(() -> calculator.compute(board, window, NOW, live, null, excluded))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("제출 제외는 한 사용자 계산에서만 쓴다");
     }
 
     @Test

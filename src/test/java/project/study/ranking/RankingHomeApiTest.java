@@ -122,6 +122,20 @@ class RankingHomeApiTest extends RankingIntegrationTestBase {
     }
 
     @Test
+    void 지금_1위면_since가_이번_주_안이어도_추월은_없다() {
+        long me = user("me");
+        session(me, kst(10, 5, 9, 0), 120, 5000);
+        session(user("a"), kst(10, 6, 9, 0), 60, 3000);
+
+        assertThat(home("?since=2026-10-06T15:00:00Z", me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.card.rank", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying("$.card.above", v -> assertThat(v).isNull())
+                .hasPathSatisfying("$.overtaken", v -> assertThat(v).isNull());
+    }
+
+    @Test
     void 이번_주_기록이_없으면_카드도_추월도_없다() {
         assertThat(home("?since=2026-10-06T15:00:00Z", user("me")))
                 .hasStatusOk()
