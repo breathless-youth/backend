@@ -75,6 +75,10 @@ public class RankingHomeService {
         if (view.placement().myIndex() == 0) {
             return null; // 지금 1위면 내려갈 수 없다 — 가장 비싼 주간 전체 집계를 건너뛴다
         }
+        // since가 진행 중 조각 캐시 시각(최대 10초 전) 이후면 같은 순간끼리 비교하는 셈이다 — 집중 중인 사람의 그때 값을 올리지 못해 거짓 추월이 나온다
+        if (!since.isBefore(view.live().asOf())) {
+            return null;
+        }
         Map<Long, PastEntry> past = calculator
                 .pastTotals(window, since, view.live().pieces())
                 .stream()

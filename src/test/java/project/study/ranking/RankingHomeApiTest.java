@@ -3,6 +3,7 @@ package project.study.ranking;
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.support.AuthTestSupport.asUser;
 
+import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -88,6 +89,27 @@ class RankingHomeApiTest extends RankingIntegrationTestBase {
                 .hasPathSatisfying(
                         "$.overtaken.nearest[0].studiedFocusSec",
                         v -> assertThat(v).isEqualTo(3480));
+    }
+
+    @Test
+    void since가_진행_중_조각_캐시_시각_뒤면_집중_중인_사람의_그때_값을_못_올리니_추월은_없다() {
+        long me = user("me");
+        session(me, kst(10, 5, 9, 0), 60, 3000);
+        long y = user("y");
+        // 15:00엔 2998로 내 뒤(마지막 수신 5초 전 — 집중 중이라 5초 연장), 15:00:04엔 3002로 이미 내 앞, 15:00:08엔 3006
+        draft(y, kst(10, 10, 13, 0), NOW.minusSeconds(5), 2993, "[]");
+
+        assertThat(home("?since=" + NOW.minus(1, ChronoUnit.HOURS), me)) // 진행 중 조각을 15:00에 캐시한다
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.card.rank", v -> assertThat(v).isEqualTo(1));
+        clock.set(NOW.plusSeconds(8)); // 캐시(10초)는 그대로다
+
+        assertThat(home("?since=" + NOW.plusSeconds(4), me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.card.rank", v -> assertThat(v).isEqualTo(2))
+                .hasPathSatisfying("$.overtaken", v -> assertThat(v).isNull());
     }
 
     // 이번 주 월요일 00:00 KST 직전, 미래(15:00:01 KST)

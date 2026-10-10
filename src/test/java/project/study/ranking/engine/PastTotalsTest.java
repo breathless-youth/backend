@@ -61,4 +61,15 @@ class PastTotalsTest extends RankingIntegrationTestBase {
                 .extracting(PastEntry::nickname, PastEntry::valueAt, PastEntry::studiedFrom)
                 .containsExactly(tuple("c", 3600L, kst(10, 10, 14, 0)));
     }
+
+    @Test
+    void since에_소수_초가_있어도_밀리초_비율로_한_번만_내린다() {
+        long d = user("d");
+        Instant start = kst(10, 10, 13, 0);
+        draft(d, start, start.plusSeconds(200), 199, "[]"); // 200초 중 199초 — 99.9초 시점은 99.4, 초로 먼저 내리면 98이 된다
+
+        assertThat(pastAt(start.plusMillis(99_900)))
+                .extracting(PastEntry::nickname, PastEntry::valueAt)
+                .containsExactly(tuple("d", 99L));
+    }
 }

@@ -20,13 +20,20 @@ public record PastEntry(long userId, String nickname, long valueAt, Instant achi
         } else if (!start.isBefore(since)) {
             value = 0;
         } else {
-            value = piece.focusSec()
-                    * Duration.between(start, since).toSeconds()
-                    / Duration.between(start, end).toSeconds();
+            value = straddling(piece, since);
         }
         Instant achievedAt = start.isBefore(since) ? earlier(end, since) : null;
         Instant studiedFrom = end.isAfter(since) ? later(start, since) : null;
         return new PastEntry(piece.userId(), null, value, achievedAt, studiedFrom);
+    }
+
+    /** 걸친 조각의 시간 비율 — 밀리초로 구해 소수 초가 있는 시각에서도 한 번만 내린다. 길이가 밀리초로 0이면 끝난 것으로 본다. */
+    private static long straddling(LivePiece piece, Instant since) {
+        long lengthMillis = Duration.between(piece.startedAt(), piece.endedAt()).toMillis();
+        if (lengthMillis == 0) {
+            return piece.focusSec();
+        }
+        return piece.focusSec() * Duration.between(piece.startedAt(), since).toMillis() / lengthMillis;
     }
 
     PastEntry plus(PastEntry other) {
