@@ -276,6 +276,10 @@ CREATE TABLE ranking_best (
   - `since` 시점의 값은 그때까지 끝난 조각으로 복원하고, 걸쳐 있던 조각(진행 중 draft 포함)은 시간 비율로 나눈다.
   - `count`는 `since`에 내 뒤(또는 미참가)였다가 지금 내 앞인 사람 수. `nearest`는 그중 지금 나와 가장 가까운 2명과,
     그 사람이 `since` 이후 처음 공부를 시작한 시각·`since` 이후 쌓은 순공("새벽 5시부터 3시간 집중").
+  - 조각 단위로 되돌린다: since까지 끝난 조각은 전부, since 뒤에 시작한 조각은 0, 걸친 조각은 `floor(순공 × 걸친 앞부분 ÷ 조각 길이)`.
+    1분 기준은 조각 전체에 건다. since 시점의 도달 시각은 그때까지 쌓인 마지막 순간이다.
+  - `studiedFrom`은 since 뒤에 끝나는 조각 중 가장 이른 `max(시작, since)`다 — since에 공부 중이었으면 since. `studiedFocusSec`은 지금 값 − since 값.
+  - since에 내 순위가 없었으면(그때 이번 주 기록이 없었으면) `overtaken`은 null이다.
   - FE 몫: 마지막 포그라운드 시각 보관, 그날 첫 접속 판단, 하루 1회, 마감 모달이 뜬 날 생략.
 - `GET /api/rankings/session-gains?startedAt=` — 공부 결과 화면 "랭킹이 올랐어요"(5i). `startedAt`은 제출한 세션의 시작 시각
   (자정 분할 조각 전부를 묶는 `submission_started_at`). 없거나 내 세션이 아니면 404.
@@ -287,6 +291,7 @@ CREATE TABLE ranking_best (
   - `before`는 내 값에서 이 제출의 기여분을 뺀 값, `after`는 지금 내 값을 **같은 다른 사람들** 사이에서 매긴 순위.
     `before`가 있고 `after < before`인 판만 준다. `others`는 명세 칩 순서(순공 일→월, 집중률, 시간대, 명예의 전당).
   - 제출 응답에 넣지 않은 이유: 세션 도메인이 랭킹을 몰라야 의존 방향이 한쪽으로 유지된다.
+  - `before`는 같은 엔진으로 이 제출의 확정 조각을 빼고 다시 계산한 값이다(명예의 전당 포함). 진행 중인 다른 세션은 전·후 모두 그대로 둔다.
 
 ## 8. 마감 배치 (PR ②)
 
