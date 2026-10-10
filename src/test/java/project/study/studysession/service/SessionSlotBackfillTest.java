@@ -3,12 +3,11 @@ package project.study.studysession.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
-import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.time.temporal.TemporalAdjusters;
+import java.time.ZonedDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,11 +70,10 @@ class SessionSlotBackfillTest {
     @Test
     void 지난_주_월요일부터의_세션의_빠진_구간_행만_채우고_다시_돌려도_그대로다() {
         LocalDate today = clock.instant().atZone(KST).toLocalDate();
-        LocalDate lastMonday =
-                today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).minusDays(7);
+        LocalDate from = SessionSlotBackfill.fromDate(clock.instant());
         long thisWeek = legacySession(today);
-        long lastWeek = legacySession(lastMonday);
-        long beforeLastWeek = legacySession(lastMonday.minusDays(1));
+        long lastWeek = legacySession(from);
+        long beforeLastWeek = legacySession(from.minusDays(1));
         long old = legacySession(today.minusDays(20));
 
         backfill.run(new DefaultApplicationArguments());
@@ -85,5 +83,27 @@ class SessionSlotBackfillTest {
         assertThat(slotCount(lastWeek)).isEqualTo(1);
         assertThat(slotCount(beforeLastWeek)).isZero();
         assertThat(slotCount(old)).isZero();
+    }
+
+    private static Instant kst(int month, int day, int hour) {
+        return ZonedDateTime.of(2026, month, day, hour, 0, 0, 0, KST).toInstant();
+    }
+
+    @Test
+    void 월요일_새벽엔_아직_일요일_귀속이라_지지난_주_월요일부터_채운다() {
+        // 심야판의 현재 기간은 월요일 04시까지 일요일 귀속 — 주간 offset=-1 판은 9/28~10/4
+        assertThat(SessionSlotBackfill.fromDate(kst(10, 12, 1))).isEqualTo(LocalDate.of(2026, 9, 28));
+        assertThat(SessionSlotBackfill.fromDate(kst(10, 12, 3))).isEqualTo(LocalDate.of(2026, 9, 28));
+    }
+
+    @Test
+    void 월요일_04시부터는_지난_주_월요일부터_채운다() {
+        assertThat(SessionSlotBackfill.fromDate(kst(10, 12, 4))).isEqualTo(LocalDate.of(2026, 10, 5));
+        assertThat(SessionSlotBackfill.fromDate(kst(10, 12, 5))).isEqualTo(LocalDate.of(2026, 10, 5));
+    }
+
+    @Test
+    void 일요일_밤에도_월요일_새벽과_같은_날짜부터_채운다() {
+        assertThat(SessionSlotBackfill.fromDate(kst(10, 11, 23))).isEqualTo(LocalDate.of(2026, 9, 28));
     }
 }
