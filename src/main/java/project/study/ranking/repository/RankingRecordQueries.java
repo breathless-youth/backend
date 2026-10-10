@@ -1,8 +1,10 @@
 package project.study.ranking.repository;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
@@ -10,6 +12,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.ranking.RankingBoardType;
+import project.study.ranking.dto.MedalCounts;
 import project.study.ranking.dto.RankingRecordRow;
 import project.study.ranking.dto.RecordCursor;
 
@@ -50,5 +53,40 @@ public class RankingRecordQueries {
         }
         sql.append(" ORDER BY closes_at DESC, id DESC LIMIT :limit");
         return jdbc.sql(sql.toString()).paramSource(params).query(ROW).list();
+    }
+
+    /** 안 본 기록 중 closedUpTo까지(포함) 마감한 것. 순서는 서비스가 정한다. */
+    public List<RankingRecordRow> unseen(long userId, Instant closedUpTo) {
+        return jdbc.sql(
+                        "SELECT " + COLUMNS
+                                + " FROM ranking_record WHERE user_id = :userId AND seen_at IS NULL AND closes_at <= :closedUpTo")
+                .param("userId", userId)
+                .param("closedUpTo", closedUpTo.atOffset(ZoneOffset.UTC))
+                .query(ROW)
+                .list();
+    }
+
+    public MedalCounts counts(long userId) {
+        return jdbc.sql("""
+                        SELECT count(*) FILTER (WHERE rank = 1) AS first_count,
+                               count(*) FILTER (WHERE rank = 2) AS second_count,
+                               count(*) FILTER (WHERE rank = 3) AS third_count
+                        FROM ranking_record
+                        WHERE user_id = :userId""")
+                .param("userId", userId)
+                .query((rs, i) -> new MedalCounts(
+                        rs.getLong("first_count"), rs.getLong("second_count"), rs.getLong("third_count")))
+                .single();
+    }
+
+    /** 내 기록만 본 것으로 표시한다 — 남의 id·이미 본 id는 그대로 둔다. */
+    public int markSeen(long userId, Collection<Long> ids, Instant seenAt) {
+        return jdbc.sql("""
+                        UPDATE ranking_record SET seen_at = :seenAt
+                        WHERE user_id = :userId AND id IN (:ids) AND seen_at IS NULL""")
+                .param("seenAt", seenAt.atOffset(ZoneOffset.UTC))
+                .param("userId", userId)
+                .param("ids", ids)
+                .update();
     }
 }
