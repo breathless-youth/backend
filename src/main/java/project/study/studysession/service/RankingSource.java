@@ -57,6 +57,11 @@ public class RankingSource {
         return activeStudySessionService.livePieces(asOf);
     }
 
+    /** 마감 확정용 진행 중 조각 — 집중 중 보정 없이 보고된 스냅샷 그대로 나눈다(ADR-0029). */
+    public List<LivePiece> settledPieces(Instant asOf) {
+        return activeStudySessionService.livePieces(asOf, false);
+    }
+
     /**
      * 아직 확정되지 않은 채 남아 있는 draft(active_study_session)의 id. 캐시된 진행 중 조각 중 draftId가 여기 없는 것은 그 사이
      * 확정·폐기된 세션이다 — 확정은 세션 저장과 draft 삭제가 한 트랜잭션이라, 같은 스냅샷에서 확정 합계를 읽을 때 이 목록으로

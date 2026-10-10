@@ -158,4 +158,22 @@ class ActiveSessionLivePiecesTest {
         assertThat(mine(asOf, broken)).isEmpty();
         assertThat(mine(asOf, userId)).hasSize(1);
     }
+
+    @Test
+    void 보정을_끄면_집중_중이어도_보고된_스냅샷_그대로_나눈다() {
+        Instant asOf = at(15, 15, 0, 0);
+        Instant reportedAt = asOf.minusSeconds(10);
+        draft(userId, asOf.minusSeconds(600), reportedAt, 590, "[]");
+
+        assertThat(service.livePieces(asOf, false).stream()
+                        .filter(p -> p.userId() == userId)
+                        .toList())
+                .singleElement()
+                .satisfies(p -> {
+                    assertThat(p.focusSec()).isEqualTo(590);
+                    assertThat(p.studySec()).isEqualTo(590);
+                    assertThat(p.focusing()).isFalse();
+                    assertThat(p.achievedAt()).isEqualTo(reportedAt);
+                });
+    }
 }

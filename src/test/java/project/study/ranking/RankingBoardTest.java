@@ -52,4 +52,26 @@ class RankingBoardTest {
         assertThat(new RankingBoard(TIME_SLOT, DAILY, TimeSlot.NIGHT).key()).isEqualTo("TIME_SLOT:DAILY:NIGHT");
         assertThat(new RankingBoard(TOTAL_TIME, null, null).key()).isEqualTo("TOTAL_TIME");
     }
+
+    @Test
+    void 마감하는_판은_15개이고_순공_집중률_시간대_순이다() {
+        assertThat(RankingBoard.closable()).hasSize(15);
+        assertThat(RankingBoard.closable().subList(0, 6))
+                .containsExactly(
+                        new RankingBoard(FOCUS_TIME, DAILY, null),
+                        new RankingBoard(FOCUS_TIME, WEEKLY, null),
+                        new RankingBoard(FOCUS_TIME, MONTHLY, null),
+                        new RankingBoard(FOCUS_RATE, WEEKLY, null),
+                        new RankingBoard(FOCUS_RATE, MONTHLY, null),
+                        new RankingBoard(TIME_SLOT, DAILY, TimeSlot.DAWN));
+        assertThat(RankingBoard.closable().getLast()).isEqualTo(new RankingBoard(TIME_SLOT, WEEKLY, TimeSlot.NIGHT));
+    }
+
+    @Test
+    void 키에서_판을_되돌린다() {
+        for (RankingBoard board : RankingBoard.closable()) {
+            assertThat(RankingBoard.fromKey(board.key())).isEqualTo(board);
+        }
+        assertThat(RankingBoard.fromKey("TOTAL_TIME")).isEqualTo(new RankingBoard(TOTAL_TIME, null, null));
+    }
 }
