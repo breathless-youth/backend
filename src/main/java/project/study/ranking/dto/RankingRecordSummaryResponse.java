@@ -24,6 +24,8 @@ public record RankingRecordSummaryResponse(
 
     public record Best(int rank, RankingBoardType type, RankingPeriod period, TimeSlot slot, LocalDate periodStart) {}
 
-    @Schema(description = "gap = max(0, 3위 값 − 내 값, 1800 − 내 값) 초 — 순공 일·주·월, 시간대 일·주 × 5구간 중 가장 작은 것")
+    @Schema(
+            description = "gap = max(0, 3위 값 − 내 값, 1800 − 내 값) 초 — 순공 일·주·월, 시간대 일·주 × 5구간 중 가장 작은 것. "
+                    + "지금부터 더 쌓을 수 있는 판만 — 오늘 이미 지난 구간의 일간판은 메달권(gap 0)일 때만")
     public record Closest(RankingBoardType type, RankingPeriod period, TimeSlot slot, long gap) {}
 }

@@ -63,6 +63,23 @@ class RankingRecordSummaryApiTest extends RankingRecordTestBase {
     }
 
     @Test
+    void 오늘_이미_지난_구간의_일간판은_30분이_안_되면_빼고_같은_구간의_주간판을_준다() {
+        long me = user("me");
+        session(me, kst(10, 10, 9, 0), 30, 1500); // 오늘 오전 — 오전 판엔 나뿐이라 30분까지 300초. 일간판은 오전이 이미 지났다
+        session(user("a"), kst(10, 10, 12, 0), 120, 5000);
+        session(user("b"), kst(10, 10, 12, 0), 90, 4000);
+        session(user("c"), kst(10, 10, 13, 0), 60, 3000);
+
+        assertThat(get(SUMMARY, me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.closest.type", v -> assertThat(v).isEqualTo("TIME_SLOT"))
+                .hasPathSatisfying("$.closest.period", v -> assertThat(v).isEqualTo("WEEKLY"))
+                .hasPathSatisfying("$.closest.slot", v -> assertThat(v).isEqualTo("MORNING"))
+                .hasPathSatisfying("$.closest.gap", v -> assertThat(v).isEqualTo(300));
+    }
+
+    @Test
     void 아무것도_없으면_best는_null이고_closest는_30분_남은_순공_일간판이다() {
         assertThat(get(SUMMARY, user("me")))
                 .hasStatusOk()

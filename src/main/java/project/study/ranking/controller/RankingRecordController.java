@@ -36,7 +36,8 @@ public class RankingRecordController {
                     누적 메달 수, 순위별 개수, 최근 기록 6개를 준다.
 
                     - 기록이 없을 때만(total 0) best(역대 마감 최고 순위, 없으면 null)와 closest(메달까지 남은 양이 가장 작은 진행 중 시간 판)를 준다
-                    - closest.gap = max(0, 3위 값 − 내 값, 1800 − 내 값) 초. 대상은 순공 일·주·월과 시간대 일·주 × 5구간이다""")
+                    - closest.gap = max(0, 3위 값 − 내 값, 1800 − 내 값) 초. 대상은 순공 일·주·월과 시간대 일·주 × 5구간이다
+                    - 지금부터 더 쌓을 수 있는 판만 본다 — 오늘 이미 지난 구간의 일간판은 메달권(gap 0)일 때만 후보다""")
     @ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping(value = "/summary", version = "1")
     public RankingRecordSummaryResponse summary(@AuthenticationPrincipal Long userId) {
