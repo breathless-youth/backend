@@ -52,27 +52,44 @@ public class StandingsCalculator {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<RankingEntry> compute(
             RankingBoard board, Window window, Instant asOf, List<LivePiece> live, Long onlyUserId) {
+        return compute(board, window, asOf, live, onlyUserId, null);
+    }
+
+    /**
+     * excludeSubmission을 주면 그 제출(submission_started_at)의 확정 조각을 빼고 계산한다 — 세션 뒤 오른 랭킹의 "이번 세션 전" 내
+     * 값(BY-828 §7.3). 진행 중 조각은 그대로 둔다. 한 사용자(onlyUserId)를 계산할 때 쓴다.
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public List<RankingEntry> compute(
+            RankingBoard board,
+            Window window,
+            Instant asOf,
+            List<LivePiece> live,
+            Long onlyUserId,
+            Instant excludeSubmission) {
         requireRepeatableRead();
         return switch (board.type()) {
             case FOCUS_TIME, TIME_SLOT ->
-                accumulate(board, window, asOf, live, onlyUserId).entrySet().stream()
+                accumulate(board, window, asOf, live, onlyUserId, excludeSubmission).entrySet().stream()
                         .map(e -> e.getValue().toEntry(e.getKey(), e.getValue().focusSec))
                         .toList();
             case FOCUS_RATE ->
-                accumulate(board, window, asOf, live, onlyUserId).entrySet().stream()
+                accumulate(board, window, asOf, live, onlyUserId, excludeSubmission).entrySet().stream()
                         .filter(e -> e.getValue().focusSec >= requiredRateFocusSec(board.period()))
                         .map(e -> e.getValue().toEntry(e.getKey(), e.getValue().rate()))
                         .toList();
             case TOTAL_TIME ->
-                source.periodTotals(RankingCalendar.ALL_TIME_START, window.end(), onlyUserId).stream()
+                source
+                        .periodTotals(RankingCalendar.ALL_TIME_START, window.end(), onlyUserId, excludeSubmission)
+                        .stream()
                         .map(r -> RankingEntry.of(r.userId(), r.nickname(), r.focusSec(), r.achievedAt()))
                         .toList();
             case TOTAL_DAYS ->
-                source.studyDays(window.end(), onlyUserId).stream()
+                source.studyDays(window.end(), onlyUserId, excludeSubmission).stream()
                         .map(r -> RankingEntry.of(r.userId(), r.nickname(), r.days(), r.achievedAt()))
                         .toList();
             case MAX_STREAK ->
-                source.maxStreaks(window.end(), onlyUserId).stream()
+                source.maxStreaks(window.end(), onlyUserId, excludeSubmission).stream()
                         .map(r -> RankingEntry.of(r.userId(), r.nickname(), r.days(), r.achievedAt()))
                         .toList();
         };
@@ -83,7 +100,8 @@ public class StandingsCalculator {
     public Optional<RateTotals> rateTotals(
             RankingBoard board, Window window, Instant asOf, List<LivePiece> live, long userId) {
         requireRepeatableRead();
-        return Optional.ofNullable(accumulate(board, window, asOf, live, userId).get(userId))
+        return Optional.ofNullable(
+                        accumulate(board, window, asOf, live, userId, null).get(userId))
                 .map(t -> new RateTotals(t.focusSec, t.studySec));
     }
 
@@ -126,9 +144,14 @@ public class StandingsCalculator {
     }
 
     private Map<Long, Totals> accumulate(
-            RankingBoard board, Window window, Instant asOf, List<LivePiece> live, Long onlyUserId) {
+            RankingBoard board,
+            Window window,
+            Instant asOf,
+            List<LivePiece> live,
+            Long onlyUserId,
+            Instant excludeSubmission) {
         Map<Long, Totals> totals = new HashMap<>();
-        for (RankingTotalRow row : finalizedRows(board, window, onlyUserId)) {
+        for (RankingTotalRow row : finalizedRows(board, window, onlyUserId, excludeSubmission)) {
             totals.put(row.userId(), new Totals(row.nickname(), row.focusSec(), row.studySec(), row.achievedAt()));
         }
         for (LivePiece piece : stillOpen(piecesOf(live, onlyUserId))) {
@@ -164,10 +187,11 @@ public class StandingsCalculator {
                 .toList();
     }
 
-    private List<RankingTotalRow> finalizedRows(RankingBoard board, Window window, Long onlyUserId) {
+    private List<RankingTotalRow> finalizedRows(
+            RankingBoard board, Window window, Long onlyUserId, Instant excludeSubmission) {
         return board.type() == RankingBoardType.TIME_SLOT
-                ? source.slotTotals(board.slot(), window.start(), window.end(), onlyUserId)
-                : source.periodTotals(window.start(), window.end(), onlyUserId);
+                ? source.slotTotals(board.slot(), window.start(), window.end(), onlyUserId, excludeSubmission)
+                : source.periodTotals(window.start(), window.end(), onlyUserId, excludeSubmission);
     }
 
     /** 조각이 이 판에 더하는 몫 — 판 기간 밖이면 null. 집중 중 표시는 지금 이 판에 값이 오르는 경우에만 켠다. */

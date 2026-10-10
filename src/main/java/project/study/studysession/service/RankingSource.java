@@ -3,8 +3,10 @@ package project.study.studysession.service;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,7 @@ import project.study.studysession.dto.RankingDaysRow;
 import project.study.studysession.dto.RankingPastRow;
 import project.study.studysession.dto.RankingStreakRow;
 import project.study.studysession.dto.RankingTotalRow;
+import project.study.studysession.entity.StudySession;
 import project.study.studysession.entity.TimeSlot;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRankingQueries;
@@ -83,5 +86,35 @@ public class RankingSource {
     /** 기간 순공을 since 시점으로 되돌린 합 — 첫 접속 추월. */
     public List<RankingPastRow> periodTotalsAt(LocalDate from, LocalDate to, Instant since) {
         return queries.periodTotalsAt(from, to, since);
+    }
+
+    public List<RankingTotalRow> periodTotals(LocalDate from, LocalDate to, Long userId, Instant excludeSubmission) {
+        return queries.periodTotals(from, to, userId, excludeSubmission);
+    }
+
+    public List<RankingTotalRow> slotTotals(
+            TimeSlot slot, LocalDate from, LocalDate to, Long userId, Instant excludeSubmission) {
+        return queries.slotTotals(slot, from, to, userId, excludeSubmission);
+    }
+
+    public List<RankingDaysRow> studyDays(LocalDate today, Long userId, Instant excludeSubmission) {
+        return queries.studyDays(today, userId, excludeSubmission);
+    }
+
+    public List<RankingStreakRow> maxStreaks(LocalDate today, Long userId, Instant excludeSubmission) {
+        return queries.maxStreaks(today, userId, excludeSubmission);
+    }
+
+    /** 한 제출(자정 분할 조각 전부)이 지난 시간대 구간 — 내 제출이 아니거나 없으면 empty. */
+    @Transactional(readOnly = true)
+    public Optional<Set<TimeSlot>> submissionSlots(long userId, Instant submissionStartedAt) {
+        List<StudySession> pieces = studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
+                userId, submissionStartedAt);
+        if (pieces.isEmpty()) {
+            return Optional.empty();
+        }
+        Set<TimeSlot> slots = EnumSet.noneOf(TimeSlot.class);
+        pieces.forEach(piece -> piece.getSlots().forEach(slot -> slots.add(slot.getSlot())));
+        return Optional.of(slots);
     }
 }

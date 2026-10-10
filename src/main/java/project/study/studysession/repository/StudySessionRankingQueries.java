@@ -46,6 +46,11 @@ public class StudySessionRankingQueries {
 
     /** 기간(stat_date) 순공·총공부 합. 도달 시각은 그 값을 만든 마지막 조각의 종료 시각이다. */
     public List<RankingTotalRow> periodTotals(LocalDate from, LocalDate to, Long userId) {
+        return periodTotals(from, to, userId, null);
+    }
+
+    /** excludeSubmission을 주면 그 제출(submission_started_at)의 조각을 뺀다 — 세션 뒤 오른 랭킹의 "이번 세션 전" 값. */
+    public List<RankingTotalRow> periodTotals(LocalDate from, LocalDate to, Long userId, Instant excludeSubmission) {
         String sql = """
                 SELECT s.user_id, u.nickname,
                        SUM(s.focus_sec) AS focus_sec,
@@ -56,15 +61,20 @@ public class StudySessionRankingQueries {
                 WHERE s.stat_date BETWEEN :from AND :to
                   AND s.focus_sec >= :minFocusSec
                   AND %s%s
-                GROUP BY s.user_id, u.nickname""".formatted(NOT_WITHDRAWN, userFilter(userId));
+                GROUP BY s.user_id, u.nickname""".formatted(NOT_WITHDRAWN, userFilter(userId) + excludeFilter(excludeSubmission));
         return jdbc.sql(sql)
-                .paramSource(range(userId, from, to))
+                .paramSource(exclude(range(userId, from, to), excludeSubmission))
                 .query(TOTAL_ROW)
                 .list();
     }
 
     /** 시간대 구간 순공 합 — 구간 행은 조각 단위라 조각의 1분 기준을 그대로 건다. */
     public List<RankingTotalRow> slotTotals(TimeSlot slot, LocalDate from, LocalDate to, Long userId) {
+        return slotTotals(slot, from, to, userId, null);
+    }
+
+    public List<RankingTotalRow> slotTotals(
+            TimeSlot slot, LocalDate from, LocalDate to, Long userId, Instant excludeSubmission) {
         String sql = """
                 SELECT s.user_id, u.nickname,
                        SUM(sl.focus_sec) AS focus_sec,
@@ -77,9 +87,9 @@ public class StudySessionRankingQueries {
                   AND sl.slot_date BETWEEN :from AND :to
                   AND s.focus_sec >= :minFocusSec
                   AND %s%s
-                GROUP BY s.user_id, u.nickname""".formatted(NOT_WITHDRAWN, userFilter(userId));
+                GROUP BY s.user_id, u.nickname""".formatted(NOT_WITHDRAWN, userFilter(userId) + excludeFilter(excludeSubmission));
         return jdbc.sql(sql)
-                .paramSource(range(userId, from, to).addValue("slot", slot.name()))
+                .paramSource(exclude(range(userId, from, to).addValue("slot", slot.name()), excludeSubmission))
                 .query(TOTAL_ROW)
                 .list();
     }
@@ -119,6 +129,10 @@ public class StudySessionRankingQueries {
 
     /** 누적 공부일 — 순공 1분 이상 조각이 있는 날 수(오늘까지). 누적 공부일 API와 같은 숫자다. */
     public List<RankingDaysRow> studyDays(LocalDate today, Long userId) {
+        return studyDays(today, userId, null);
+    }
+
+    public List<RankingDaysRow> studyDays(LocalDate today, Long userId, Instant excludeSubmission) {
         String sql = """
                 WITH days AS (
                     SELECT s.user_id, s.stat_date, COALESCE(MIN(s.ended_at), MIN(s.started_at)) AS first_done
@@ -131,11 +145,11 @@ public class StudySessionRankingQueries {
                 FROM days d
                 JOIN users u ON u.id = d.user_id
                 WHERE %s
-                GROUP BY d.user_id, u.nickname""".formatted(userFilter(userId), NOT_WITHDRAWN);
+                GROUP BY d.user_id, u.nickname""".formatted(userFilter(userId) + excludeFilter(excludeSubmission), NOT_WITHDRAWN);
         MapSqlParameterSource params =
                 params(userId).addValue("today", today).addValue("minFocusSec", MIN_LIST_FOCUS_SEC);
         return jdbc.sql(sql)
-                .paramSource(params)
+                .paramSource(exclude(params, excludeSubmission))
                 .query((rs, i) -> new RankingDaysRow(
                         rs.getLong("user_id"), rs.getString("nickname"), rs.getInt("days"), instant(rs, "achieved_at")))
                 .list();
@@ -146,6 +160,10 @@ public class StudySessionRankingQueries {
      * 고른다. 스트릭 API의 maxStreak와 같은 숫자다.
      */
     public List<RankingStreakRow> maxStreaks(LocalDate today, Long userId) {
+        return maxStreaks(today, userId, null);
+    }
+
+    public List<RankingStreakRow> maxStreaks(LocalDate today, Long userId, Instant excludeSubmission) {
         String sql = """
                 WITH days AS (
                     SELECT s.user_id, s.stat_date, COALESCE(MIN(s.ended_at), MIN(s.started_at)) AS first_done
@@ -169,11 +187,11 @@ public class StudySessionRankingQueries {
                 FROM best b
                 JOIN runs r ON r.user_id = b.user_id AND r.stat_date = b.end_date
                 JOIN users u ON u.id = b.user_id
-                WHERE %s""".formatted(userFilter(userId), NOT_WITHDRAWN);
+                WHERE %s""".formatted(userFilter(userId) + excludeFilter(excludeSubmission), NOT_WITHDRAWN);
         MapSqlParameterSource params =
                 params(userId).addValue("today", today).addValue("minFocusSec", MIN_STREAK_FOCUS_SEC);
         return jdbc.sql(sql)
-                .paramSource(params)
+                .paramSource(exclude(params, excludeSubmission))
                 .query((rs, i) -> new RankingStreakRow(
                         rs.getLong("user_id"),
                         rs.getString("nickname"),
@@ -202,6 +220,16 @@ public class StudySessionRankingQueries {
 
     private static String userFilter(Long userId) {
         return userId == null ? "" : " AND s.user_id = :userId";
+    }
+
+    private static String excludeFilter(Instant excludeSubmission) {
+        return excludeSubmission == null ? "" : " AND s.submission_started_at IS DISTINCT FROM :excludeSubmission";
+    }
+
+    private static MapSqlParameterSource exclude(MapSqlParameterSource params, Instant excludeSubmission) {
+        return excludeSubmission == null
+                ? params
+                : params.addValue("excludeSubmission", excludeSubmission.atOffset(ZoneOffset.UTC));
     }
 
     private static MapSqlParameterSource params(Long userId) {
