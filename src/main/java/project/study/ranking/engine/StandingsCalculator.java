@@ -107,10 +107,9 @@ public class StandingsCalculator {
         for (RankingTotalRow row : finalizedRows(board, window, onlyUserId)) {
             totals.put(row.userId(), new Totals(row.nickname(), row.focusSec(), row.studySec(), row.achievedAt()));
         }
-        for (LivePiece piece : stillOpen(live)) {
-            boolean included =
-                    (onlyUserId == null || piece.userId() == onlyUserId) && piece.focusSec() >= MIN_LIST_FOCUS_SEC;
-            Contribution contribution = included ? contribution(board, window, asOf, piece) : null;
+        for (LivePiece piece : stillOpen(piecesOf(live, onlyUserId))) {
+            Contribution contribution =
+                    piece.focusSec() >= MIN_LIST_FOCUS_SEC ? contribution(board, window, asOf, piece) : null;
             if (contribution != null) {
                 totals.computeIfAbsent(piece.userId(), id -> new Totals(null, 0, 0, Instant.EPOCH))
                         .add(contribution);
@@ -118,6 +117,13 @@ public class StandingsCalculator {
         }
         fillLiveOnlyNicknames(totals);
         return totals;
+    }
+
+    /** 한 사용자만 계산할 때는 그 사용자의 조각만 남겨, 남은 draft id 조회가 다른 사람의 조각 때문에 돌지 않게 한다. */
+    private static List<LivePiece> piecesOf(List<LivePiece> live, Long onlyUserId) {
+        return onlyUserId == null
+                ? live
+                : live.stream().filter(piece -> piece.userId() == onlyUserId).toList();
     }
 
     /**
