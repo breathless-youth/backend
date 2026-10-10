@@ -12,6 +12,11 @@ import project.study.common.exception.BadRequestException;
  */
 public record RecordCursor(Instant closesAt, long id) {
 
+    /** 1970-01-01T00:00:00Z ~ 9999-12-31T23:59:59Z — 이 밖의 시각은 쿼리 파라미터로 못 쓴다. */
+    private static final long MIN_EPOCH_SECOND = 0;
+
+    private static final long MAX_EPOCH_SECOND = 253_402_300_799L;
+
     public String encode() {
         String raw = closesAt.getEpochSecond() + ":" + id;
         return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
@@ -22,11 +27,17 @@ public record RecordCursor(Instant closesAt, long id) {
         try {
             String raw = new String(Base64.getUrlDecoder().decode(value), StandardCharsets.UTF_8);
             int separator = raw.indexOf(':');
-            return new RecordCursor(
-                    Instant.ofEpochSecond(Long.parseLong(raw.substring(0, separator))),
-                    Long.parseLong(raw.substring(separator + 1)));
+            long epochSecond = Long.parseLong(raw.substring(0, separator));
+            if (epochSecond < MIN_EPOCH_SECOND || epochSecond > MAX_EPOCH_SECOND) {
+                throw invalid();
+            }
+            return new RecordCursor(Instant.ofEpochSecond(epochSecond), Long.parseLong(raw.substring(separator + 1)));
         } catch (IllegalArgumentException | IndexOutOfBoundsException | DateTimeException e) {
-            throw new BadRequestException("cursor 형식이 올바르지 않습니다");
+            throw invalid();
         }
+    }
+
+    private static BadRequestException invalid() {
+        return new BadRequestException("cursor 형식이 올바르지 않습니다");
     }
 }

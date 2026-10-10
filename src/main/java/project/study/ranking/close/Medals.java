@@ -41,6 +41,7 @@ public final class Medals {
 
     /** 기록 값 — 시간 판은 초, 집중률은 %를 소수 1자리로 반올림한다(응답 표기와 같다). */
     public static BigDecimal recordValue(double value) {
-        return BigDecimal.valueOf(value).setScale(1, RoundingMode.HALF_UP);
+        double rounded = Math.round(value * 10) / 10.0; // BoardValues.round1과 같은 반올림이라 응답 표기와 어긋나지 않는다
+        return BigDecimal.valueOf(rounded).setScale(1, RoundingMode.HALF_UP);
     }
 }

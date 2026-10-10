@@ -8,8 +8,6 @@ import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
@@ -20,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
 import project.study.ranking.RankingBoard;
 import project.study.ranking.RankingBoardType;
+import project.study.ranking.RankingCalendar;
 import project.study.ranking.RankingPeriod;
 import project.study.ranking.close.Medals;
 import project.study.ranking.dto.RankingRecordItem;
@@ -41,9 +40,9 @@ public class RankingRecordService {
 
     private static final Set<RankingBoardType> RECORDED_TYPES = EnumSet.of(FOCUS_TIME, FOCUS_RATE, TIME_SLOT);
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final LocalTime NIGHT_CLOSE = LocalTime.of(4, 0);
-    private static final String DAILY_NIGHT = new RankingBoard(TIME_SLOT, RankingPeriod.DAILY, TimeSlot.NIGHT).key();
+    private static final RankingBoard DAILY_NIGHT_BOARD =
+            new RankingBoard(TIME_SLOT, RankingPeriod.DAILY, TimeSlot.NIGHT);
+    private static final String DAILY_NIGHT = DAILY_NIGHT_BOARD.key();
     private static final String WEEKLY_NIGHT = new RankingBoard(TIME_SLOT, RankingPeriod.WEEKLY, TimeSlot.NIGHT).key();
 
     /** 마감 모달 순서 — 순위 → 일·주·월 → 순공·집중률·시간대(명세 §4-5) → 구간 → 마감 시각 → id. */
@@ -62,7 +61,7 @@ public class RankingRecordService {
     @Transactional(readOnly = true)
     public RankingRecordPageResponse list(long userId, Integer rank, RankingBoardType type, String cursor, int size) {
         validate(rank, type, size);
-        RecordCursor after = cursor == null ? null : RecordCursor.decode(cursor);
+        RecordCursor after = cursor == null || cursor.isBlank() ? null : RecordCursor.decode(cursor);
         List<RankingRecordRow> rows = queries.page(userId, rank, type, after, size + 1);
         boolean hasNext = rows.size() > size;
         List<RankingRecordRow> page = hasNext ? rows.subList(0, size) : rows;
@@ -100,14 +99,11 @@ public class RankingRecordService {
         LocalDate day = TimeSlot.slotDateOf(now);
         List<String> nightKeys =
                 day.getDayOfWeek() == DayOfWeek.MONDAY ? List.of(DAILY_NIGHT, WEEKLY_NIGHT) : List.of(DAILY_NIGHT);
-        Instant latestNightClose = nightClose(day);
+        Instant latestNightClose =
+                RankingCalendar.window(DAILY_NIGHT_BOARD, now, -1).closesAt();
         return closes.countClosedAt(nightKeys, latestNightClose) == nightKeys.size()
                 ? latestNightClose
-                : nightClose(day.minusDays(1));
-    }
-
-    private static Instant nightClose(LocalDate day) {
-        return day.atTime(NIGHT_CLOSE).atZone(KST).toInstant();
+                : RankingCalendar.window(DAILY_NIGHT_BOARD, now, -2).closesAt();
     }
 
     private static void validate(Integer rank, RankingBoardType type, int size) {

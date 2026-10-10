@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -91,6 +92,8 @@ public class RankingCloseRepository {
         for (int i = 0; i < userIdsInRankOrder.size(); i++) {
             rows.add(new Object[] {userIdsInRankOrder.get(i), i + 1, boardKey, periodStart});
         }
+        // 동시에 다른 판을 확정하는 태스크와 행 잠금 순서를 맞춘다
+        rows.sort(Comparator.comparingLong(row -> (Long) row[0]));
         jdbcTemplate.batchUpdate(UPSERT_BEST, rows);
     }
 

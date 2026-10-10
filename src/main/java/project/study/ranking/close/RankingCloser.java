@@ -42,10 +42,13 @@ public class RankingCloser {
         List<LivePiece> pieces = null;
         for (RankingBoard board : RankingBoard.closable()) {
             Window window = RankingCalendar.window(board, now, -1);
-            if (now.isBefore(window.closesAt().plus(SETTLE_DELAY)) || closes.isClosed(board.key(), window.start())) {
+            if (now.isBefore(window.closesAt().plus(SETTLE_DELAY))) {
                 continue;
             }
             try {
+                if (closes.isClosed(board.key(), window.start())) {
+                    continue;
+                }
                 if (now.isAfter(window.closesAt().plus(CATCH_UP_LIMIT))) {
                     skip(board, window, now);
                     continue;

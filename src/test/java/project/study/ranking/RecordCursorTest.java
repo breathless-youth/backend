@@ -19,9 +19,9 @@ class RecordCursorTest {
         assertThat(RecordCursor.decode(cursor.encode())).isEqualTo(cursor);
     }
 
-    // 깨진 base64, "nope", "123", "a:b", "9223372036854775807:1"(범위 밖 시각)
+    // 깨진 base64, "nope", "123", "a:b", "9223372036854775807:1"·"9999999999999:1"(범위 밖 시각)
     @ParameterizedTest
-    @ValueSource(strings = {"!!!", "bm9wZQ", "MTIz", "YTpi", "OTIyMzM3MjAzNjg1NDc3NTgwNzox"})
+    @ValueSource(strings = {"!!!", "bm9wZQ", "MTIz", "YTpi", "OTIyMzM3MjAzNjg1NDc3NTgwNzox", "OTk5OTk5OTk5OTk5OTox"})
     void 형식이_틀리면_400이다(String value) {
         assertThatThrownBy(() -> RecordCursor.decode(value)).isInstanceOf(BadRequestException.class);
     }

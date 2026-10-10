@@ -39,6 +39,13 @@ class MedalGapTest {
     }
 
     @Test
+    void 삼위_밖이면_삼위와_값이_같아도_최소_1이다() {
+        Placement placement = new Placement(List.of(entry(1, 5000), entry(2, 4000), entry(3, 3000), entry(4, 3000)), 3);
+
+        assertThat(RankingRecordSummaryService.medalGap(placement)).isEqualTo(1);
+    }
+
+    @Test
     void 참가_전이고_세_명이_안_되면_30분이다() {
         Placement placement = new Placement(List.of(entry(2, 1200)), -1);
 

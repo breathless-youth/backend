@@ -99,12 +99,13 @@ public class RankingRecordSummaryService {
         return false;
     }
 
-    /** max(0, 3위 값 − 내 값, 1800 − 내 값) — 참가 전이면 내 값 0, 3위가 없으면 3위 값 0. */
+    /** max(0, 3위 값 − 내 값, 1800 − 내 값) — 참가 전이면 내 값 0, 3위가 없으면 3위 값 0. 3위 밖이면 값이 같아도 최소 1이다. */
     static long medalGap(Placement placement) {
         double mine = placement.present() ? placement.me().value() : 0;
         double third = placement.size() >= Medals.PODIUM
                 ? placement.merged().get(Medals.PODIUM - 1).value()
                 : 0;
-        return Math.round(Math.max(0, Math.max(third - mine, Medals.MIN_TIME_VALUE - mine)));
+        long gap = Math.round(Math.max(0, Math.max(third - mine, Medals.MIN_TIME_VALUE - mine)));
+        return placement.present() && placement.myIndex() >= Medals.PODIUM ? Math.max(1, gap) : gap;
     }
 }

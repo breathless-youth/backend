@@ -73,6 +73,7 @@ class RankingRecordListApiTest extends RankingRecordTestBase {
         record(me, "FOCUS_TIME:DAILY", WED, kst(10, 8, 0, 0), 1, "5000.0");
         long slot2 = record(me, "TIME_SLOT:DAILY:MORNING", WED, kst(10, 8, 0, 0), 2, "3000.0");
         record(me, "FOCUS_TIME:WEEKLY", LocalDate.of(2026, 9, 28), kst(10, 5, 0, 0), 2, "40000.0");
+        record(me, "TIME_SLOT:DAILY:EVENING", WED, kst(10, 8, 0, 0), 1, "2500.0"); // 종목은 맞지만 순위가 달라 빠진다
         record(other, "TIME_SLOT:DAILY:EVENING", WED, kst(10, 8, 0, 0), 2, "2000.0");
 
         assertThat(get(RECORDS + "?rank=2&type=TIME_SLOT", me))
@@ -81,6 +82,18 @@ class RankingRecordListApiTest extends RankingRecordTestBase {
                 .extractingPath("$.items[*].id")
                 .asArray()
                 .containsExactly((int) slot2);
+    }
+
+    @Test
+    void 커서가_비어_있으면_첫_페이지를_준다() {
+        long me = user("me");
+        long daily = record(me, "FOCUS_TIME:DAILY", WED, kst(10, 8, 0, 0), 2, "2400.0");
+
+        assertThat(get(RECORDS + "?cursor=", me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.items[0].id", v -> assertThat(v).isEqualTo((int) daily))
+                .hasPathSatisfying("$.nextCursor", v -> assertThat(v).isNull());
     }
 
     @ParameterizedTest
