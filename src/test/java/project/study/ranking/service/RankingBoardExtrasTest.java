@@ -62,6 +62,18 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
     }
 
     @Test
+    void 집중률_차이는_화면에_보이는_두_값의_차이다() {
+        session(user("x"), kst(10, 6, 0, 30), 720, 39_597); // 91.66 -> 91.7
+        long me = user("me");
+        session(me, kst(10, 8, 0, 30), 720, 37_990); // 87.94 -> 87.9
+
+        RankingBoardResponse r = service.board(me, FOCUS_RATE, WEEKLY, null, 0);
+
+        assertThat(r.above().gap()).isEqualTo(3.8);
+        assertThat(r.me().value()).isEqualTo(87.9);
+    }
+
+    @Test
     void 시간대_구간을_안_주면_지금_구간이다() {
         long me = user("me");
         session(me, kst(10, 10, 12, 30), 60, 3600);

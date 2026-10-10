@@ -118,9 +118,6 @@ public class RankingBoardService {
         }
         Long catchUp = above && type == RankingBoardType.FOCUS_RATE ? catchUpFocusSec(other, me) : null;
         return new BoardNeighbor(
-                other.nickname(),
-                BoardValues.value(type, Math.abs(other.value() - me.value())),
-                other.focusing(),
-                catchUp);
+                other.nickname(), BoardValues.gap(type, other.value(), me.value()), other.focusing(), catchUp);
     }
 }
