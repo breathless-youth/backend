@@ -144,6 +144,11 @@ final class StudySessionSplitter {
             session.attachSubjectSegments(SubjectSegmentSplitter.clip(
                     subjectSegments, weights.segmentEvents().get(i), cuts.get(i), cuts.get(i + 1)));
             session.attachCompletedTasks(completedBySegment.get(i));
+            session.attachSlots(SlotSplitter.split(
+                    cuts.get(i),
+                    cuts.get(i + 1),
+                    (int) segmentFocusSec,
+                    weights.segmentEvents().get(i)));
             sessions.add(session);
             allocatedStudySec += segmentStudySec;
             allocatedFocusSec += segmentFocusSec;
