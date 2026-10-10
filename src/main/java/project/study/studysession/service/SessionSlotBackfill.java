@@ -17,8 +17,9 @@ import project.study.studysession.entity.StudySession;
 import project.study.studysession.repository.StudySessionRepository;
 
 /**
- * V26 이전에 저장된 세션의 시간대 구간 행을 기동 때 채운다 (BY-828). 시간대 랭킹은 일·주뿐이라 이번 주(전주 일요일
- * 심야 포함) 세션만 있으면 된다. 출시 뒤엔 모든 새 세션에 행이 있어 조회 한 번으로 끝난다.
+ * V26 이전에 저장된 세션의 시간대 구간 행을 기동 때 채운다 (BY-828). 시간대 랭킹은 일·주뿐이라 지난 주 월요일부터의
+ * 세션만 있으면 된다 — 이번 주 판과 직전 주(offset=-1) 판이 모두 완전해진다. 출시 뒤엔 모든 새 세션에 행이 있어 조회 한 번으로
+ * 끝난다.
  */
 @Slf4j
 @Component
@@ -31,7 +32,7 @@ public class SessionSlotBackfill implements ApplicationRunner {
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
 
-    /** 실패해도 기동은 막지 않는다 — 이번 주 시간대 값이 비는 것보다 서버가 안 뜨는 게 더 나쁘다. */
+    /** 실패해도 기동은 막지 않는다 — 시간대 값이 비는 것보다 서버가 안 뜨는 게 더 나쁘다. */
     @Override
     public void run(ApplicationArguments args) {
         try {
@@ -52,7 +53,7 @@ public class SessionSlotBackfill implements ApplicationRunner {
     private int backfill() {
         LocalDate today = clock.instant().atZone(KST).toLocalDate();
         LocalDate from =
-                today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).minusDays(1);
+                today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).minusDays(7);
         List<StudySession> sessions = studySessionRepository.findSlotlessSince(from);
         int filled = 0;
         for (StudySession session : sessions) {

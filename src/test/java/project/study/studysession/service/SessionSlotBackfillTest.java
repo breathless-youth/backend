@@ -3,10 +3,12 @@ package project.study.studysession.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.temporal.TemporalAdjusters;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,7 +19,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import project.study.TestcontainersConfiguration;
 
-/** 기동 때 이번 주 세션 중 구간 행이 없는 것을 채운다 — 멱등이고 지난 주 이전은 건드리지 않는다 (BY-828). */
+/** 기동 때 지난 주 월요일부터의 세션 중 구간 행이 없는 것을 채운다 — 멱등이고 그 이전은 건드리지 않는다 (BY-828). */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
 class SessionSlotBackfillTest {
@@ -67,15 +69,21 @@ class SessionSlotBackfillTest {
     }
 
     @Test
-    void 이번_주_세션의_빠진_구간_행만_채우고_다시_돌려도_그대로다() {
+    void 지난_주_월요일부터의_세션의_빠진_구간_행만_채우고_다시_돌려도_그대로다() {
         LocalDate today = clock.instant().atZone(KST).toLocalDate();
+        LocalDate lastMonday =
+                today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).minusDays(7);
         long thisWeek = legacySession(today);
+        long lastWeek = legacySession(lastMonday);
+        long beforeLastWeek = legacySession(lastMonday.minusDays(1));
         long old = legacySession(today.minusDays(20));
 
         backfill.run(new DefaultApplicationArguments());
         backfill.run(new DefaultApplicationArguments());
 
         assertThat(slotCount(thisWeek)).isEqualTo(1);
+        assertThat(slotCount(lastWeek)).isEqualTo(1);
+        assertThat(slotCount(beforeLastWeek)).isZero();
         assertThat(slotCount(old)).isZero();
     }
 }

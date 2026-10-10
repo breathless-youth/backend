@@ -136,8 +136,9 @@ CREATE INDEX idx_study_session_stat_date ON study_session (stat_date) INCLUDE (u
   `focus_sec`을 이벤트 제외 길이(`focusActiveSec`) 비율로 배분한다. 마지막 구간이 나머지를 가져가 합이 조각 순공과 같다.
   `StudySessionSplitter.computeSegmentWeights`를 경계만 바꿔 재사용한다. 0초 구간은 행을 만들지 않는다.
 - `StudySession`의 cascade 자식 컬렉션이라 자동 확정본 대체·삭제 때 함께 움직인다(과목 구간과 같은 방식, ADR-0023 §6).
-- **백필**: 시간대판은 일·주뿐이라 이번 주(전주 일요일 심야 포함) 세션만 있으면 된다. 기동 때 `stat_date ≥ 이번 주 월요일 − 1일`이고
-  구간 행이 없는 세션을 채우는 멱등 러너를 둔다. 출시 뒤에는 모든 새 세션에 행이 있어 조회 한 번으로 끝난다.
+- **백필**: 시간대판은 일·주뿐이라 지난 주 월요일부터의 세션만 있으면 된다(이번 주 판과 직전 주 `offset=-1` 판이 모두 완전해진다).
+  기동 때 `stat_date ≥ 이번 주 월요일 − 7일`이고 구간 행이 없는 세션을 채우는 멱등 러너를 둔다. 출시 뒤에는 모든 새 세션에
+  행이 있어 조회 한 번으로 끝난다.
 - `stat_date` 인덱스는 전체 사용자의 기간 집계(지금은 `(user_id, stat_date)`뿐)를 위한 것이다.
 
 ### 5.2 V27 — 마감 기록 (PR ②)
