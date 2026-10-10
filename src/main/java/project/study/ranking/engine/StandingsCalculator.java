@@ -29,8 +29,9 @@ import project.study.studysession.service.RankingSource;
  * 세션만 본다. 결과는 정렬하지 않는다 — Standings.of가 정렬한다.
  *
  * <p>진행 중 조각은 10초 캐시된 스냅샷이라 그 사이 draft가 확정됐을 수 있다. 확정은 세션 저장과 draft 삭제가 한 트랜잭션이므로,
- * 확정 합계를 읽는 것과 같은 REPEATABLE READ 스냅샷에서 남아 있는 draft id를 읽어 이미 확정된 draft의 조각을 뺀다 — 둘 중
- * 한쪽만 보여 이중 집계되는 일이 없다. 그래서 계산 메서드는 프록시를 거쳐(다른 빈에서) 불러야 한다.
+ * 확정 합계를 읽는 것과 같은 REPEATABLE READ 스냅샷에서 확정되지 않은 draft id를 읽어 draft가 이미 사라졌거나 제출이 이미
+ * 확정된 draft의 조각을 뺀다 — 둘 중 한쪽만 보여 이중 집계되는 일이 없다. 그래서 계산 메서드는 프록시를 거쳐(다른 빈에서)
+ * 불러야 한다.
  */
 @Component
 @RequiredArgsConstructor

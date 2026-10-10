@@ -100,8 +100,10 @@
   이를 막으려고 조각마다 출처 draft의 id(`LivePiece.draftId`)를 달고, 순위표 계산(`StandingsCalculator.compute`·
   `rateTotals`)을 읽기 전용 `REPEATABLE_READ` 트랜잭션 하나에서 한다. 그 스냅샷에서 확정 합계와 아직 확정되지 않은
   draft id를 읽고, 그 draft의 조각만 더한다(ADR-0028). 제출이 이미 확정됐는데 뒤늦은 하트비트로 되살아난 draft도
-  뺀다. 같은 `user_id`에 `submission_started_at`이 draft의 `started_at`과 같은 `study_session`이 있는 draft다. 두 메서드를
-  바깥 트랜잭션 안에서 부르면 격리 수준이 바뀌어 보장이 사라진다.
+  뺀다. 같은 `user_id`에 `submission_started_at`이 draft의 `started_at`과 같은 `study_session`이 있는 draft다. 자동 확정본도
+  확정된 것으로 친다. 자동 확정 뒤에 같은 세션이 하트비트를 이어 보내면 그 draft는 최종 제출이 자동 확정본을 대체할 때까지
+  숨겨지고 이어진 시간이 그동안 반영되지 않는다. 이 과소 집계는 이중 집계보다 낫다고 보고 받아들였다. 두 메서드를 바깥
+  트랜잭션 안에서 부르면 격리 수준이 바뀌어 보장이 사라진다.
 - **draft는 확정과 같은 분할 로직으로 나눈다.** `reportedAt`을 끝으로 보고 자정 분할 조각과 구간 행을 만든다
   (`StudySessionSplitter` + §5.1의 구간 분할기). 1분 미만 조각 제외도 똑같이 적용한다.
 - **집중 중**: `last_seen_at`이 계산 시각에서 60초 이내이고, 마지막 이벤트의 `endedAt`이 `reportedAt`과 같지 않다
