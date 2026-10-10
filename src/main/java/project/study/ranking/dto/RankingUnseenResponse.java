@@ -8,5 +8,5 @@ import java.util.List;
 public record RankingUnseenResponse(
         @Schema(description = "누적 메달 수(본 것 포함)") long total,
 
-        @Schema(description = "안 본 기록 — 순위 → 일·주·월 → 순공·집중률·시간대 순")
+        @Schema(description = "안 본 기록 — 순위 → 일·주·월 → 순공·집중률·시간대 순, 최대 100개 — 나머지는 seen 뒤 다음 호출에")
         List<RankingRecordItem> records) {}

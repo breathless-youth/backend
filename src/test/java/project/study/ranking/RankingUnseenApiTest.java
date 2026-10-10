@@ -2,9 +2,12 @@ package project.study.ranking;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.jayway.jsonpath.JsonPath;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import org.junit.jupiter.api.Test;
@@ -92,6 +95,38 @@ class RankingUnseenApiTest extends RankingRecordTestBase {
         assertThat(jdbc.queryForObject("SELECT seen_at FROM ranking_record WHERE id = ?", OffsetDateTime.class, mine)
                         .toInstant())
                 .isEqualTo(NOW);
+    }
+
+    @Test
+    void 안_본_기록이_100개를_넘으면_100개만_주고_seen_뒤에_나머지를_준다() throws Exception {
+        long me = user("me");
+        closed("TIME_SLOT:DAILY:NIGHT", LocalDate.of(2026, 10, 9), kst(10, 10, 4, 0), false);
+        insertDailyRecords(me, 101);
+
+        List<Integer> first = unseenIds(me);
+        assertThat(first).hasSize(100);
+        assertThat(get(UNSEEN, me))
+                .bodyJson()
+                .hasPathSatisfying("$.total", v -> assertThat(v).isEqualTo(101));
+
+        String ids = first.stream().map(String::valueOf).collect(Collectors.joining(",", "{\"ids\": [", "]}"));
+        assertThat(post(SEEN, me, ids)).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(unseenIds(me)).hasSize(1).doesNotContainAnyElementsOf(first);
+    }
+
+    /** 순위 1위 기록 count개 — 판은 같고 기간만 하루씩 다르다. 모두 오늘 04시 보류 상한 안에서 마감한다. */
+    private void insertDailyRecords(long userId, int count) {
+        for (int i = 0; i < count; i++) {
+            LocalDate periodStart = LocalDate.of(2026, 1, 1).plusDays(i);
+            Instant closesAt = periodStart.plusDays(1).atStartOfDay(KST).toInstant();
+            record(userId, "FOCUS_TIME:DAILY", periodStart, closesAt, 1, "3000.0");
+        }
+    }
+
+    private List<Integer> unseenIds(long userId) throws Exception {
+        String body = get(UNSEEN, userId).exchange().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.records[*].id");
     }
 
     @Test

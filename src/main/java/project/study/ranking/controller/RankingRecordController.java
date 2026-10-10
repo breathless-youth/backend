@@ -66,6 +66,7 @@ public class RankingRecordController {
 
                     - 04시 보류: 그날 04:00 심야 마감(월요일이면 심야 주간까지)이 확정되기 전(00:00~04:01)에는 그날 00시 마감분을 주지 \
                     않는다 — 04시 이후 처음 앱을 열 때 그날 메달을 한 번에 보여준다
+                    - records는 최대 100개다 — seen으로 표시한 뒤 다시 부르면 나머지를 준다
                     - 모달을 띄운 뒤 records/seen으로 본 것으로 표시한다""")
     @ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping(value = "/unseen", version = "1")

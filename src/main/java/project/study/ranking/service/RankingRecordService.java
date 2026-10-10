@@ -25,6 +25,7 @@ import project.study.ranking.close.Medals;
 import project.study.ranking.dto.RankingRecordItem;
 import project.study.ranking.dto.RankingRecordPageResponse;
 import project.study.ranking.dto.RankingRecordRow;
+import project.study.ranking.dto.RankingRecordSeenRequest;
 import project.study.ranking.dto.RankingUnseenResponse;
 import project.study.ranking.dto.RecordCursor;
 import project.study.ranking.repository.RankingCloseRepository;
@@ -74,12 +75,14 @@ public class RankingRecordService {
     /**
      * 마감 모달 — 안 본 기록을 모달 순서로. 04시 보류: 가장 최근 04:00 심야 마감(월요일이면 심야 주간까지)이 표시되기 전에는 그 전날
      * 04:00까지 마감된 기록만 준다 — 00시 메달을 그날 04시 심야 메달과 묶어 04시 이후 처음 앱을 열 때 한 번에 보여주기 위해서다.
+     * 한 번에 최대 100개(seen이 받는 수와 같다) — 나머지는 seen으로 표시한 뒤 다음 호출에 준다.
      */
     @Transactional(readOnly = true)
     public RankingUnseenResponse unseen(long userId) {
         List<RankingRecordItem> records = queries.unseen(userId, unseenCutoff(clock.instant())).stream()
                 .map(RecordItems::of)
                 .sorted(MODAL_ORDER)
+                .limit(RankingRecordSeenRequest.MAX_IDS)
                 .toList();
         return new RankingUnseenResponse(queries.counts(userId).total(), records);
     }
