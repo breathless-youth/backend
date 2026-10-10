@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.studysession.dto.RankingDaysRow;
+import project.study.studysession.dto.RankingPastRow;
 import project.study.studysession.dto.RankingStreakRow;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.entity.TimeSlot;
@@ -79,6 +81,39 @@ public class StudySessionRankingQueries {
         return jdbc.sql(sql)
                 .paramSource(range(userId, from, to).addValue("slot", slot.name()))
                 .query(TOTAL_ROW)
+                .list();
+    }
+
+    /**
+     * 기간 순공을 since 시점으로 되돌린 합 — since까지 끝난 조각은 전부, 걸쳐 있던 조각은 시간 비율만큼 더한다(1분 기준은 조각
+     * 전체에 건다). since 뒤에만 공부한 사람도 값 0으로 낸다 — 추월 팝업이 그 사람의 studiedFrom을 쓴다.
+     */
+    public List<RankingPastRow> periodTotalsAt(LocalDate from, LocalDate to, Instant since) {
+        String sql = """
+                SELECT s.user_id, u.nickname,
+                       SUM(CASE WHEN COALESCE(s.ended_at, s.started_at) <= :since THEN s.focus_sec
+                                WHEN s.started_at >= :since THEN 0
+                                ELSE FLOOR(s.focus_sec * EXTRACT(EPOCH FROM (:since - s.started_at))
+                                           / EXTRACT(EPOCH FROM (s.ended_at - s.started_at)))
+                           END) AS focus_sec,
+                       MAX(CASE WHEN s.started_at < :since
+                                THEN LEAST(COALESCE(s.ended_at, s.started_at), :since) END) AS achieved_at,
+                       MIN(CASE WHEN COALESCE(s.ended_at, s.started_at) > :since
+                                THEN GREATEST(s.started_at, :since) END) AS studied_from
+                FROM study_session s
+                JOIN users u ON u.id = s.user_id
+                WHERE s.stat_date BETWEEN :from AND :to
+                  AND s.focus_sec >= :minFocusSec
+                  AND %s
+                GROUP BY s.user_id, u.nickname""".formatted(NOT_WITHDRAWN);
+        return jdbc.sql(sql)
+                .paramSource(range(null, from, to).addValue("since", since.atOffset(ZoneOffset.UTC)))
+                .query((rs, i) -> new RankingPastRow(
+                        rs.getLong("user_id"),
+                        rs.getString("nickname"),
+                        rs.getLong("focus_sec"),
+                        nullableInstant(rs, "achieved_at"),
+                        nullableInstant(rs, "studied_from")))
                 .list();
     }
 
@@ -179,5 +214,10 @@ public class StudySessionRankingQueries {
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {
         return rs.getObject(column, OffsetDateTime.class).toInstant();
+    }
+
+    private static Instant nullableInstant(ResultSet rs, String column) throws SQLException {
+        OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
     }
 }
