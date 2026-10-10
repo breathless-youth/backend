@@ -3,6 +3,7 @@ package project.study.ranking;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -84,6 +85,26 @@ class RankingCloserTest extends RankingIntegrationTestBase {
         assertThat(records()).isEmpty();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM ranking_best", Integer.class))
                 .isZero();
+    }
+
+    @Test
+    void 심야판은_다음날_04시_1분에_확정하고_그_전에는_열어_둔다() {
+        session(user("a"), kst(10, 9, 23, 0), 60, 3000); // 금요일 심야(22시~다음날 04시)
+
+        closer.closeDue(kst(10, 10, 0, 1));
+        assertThat(skipped("TIME_SLOT:DAILY:NIGHT", FRI)).isNull();
+
+        closer.closeDue(kst(10, 10, 4, 1));
+
+        assertThat(skipped("TIME_SLOT:DAILY:NIGHT", FRI)).isFalse();
+        assertThat(jdbc.queryForObject(
+                                "SELECT closes_at FROM ranking_close WHERE board_key = ? AND period_start = ?",
+                                OffsetDateTime.class,
+                                "TIME_SLOT:DAILY:NIGHT",
+                                FRI)
+                        .toInstant())
+                .isEqualTo(kst(10, 10, 4, 0));
+        assertThat(records()).contains("TIME_SLOT:DAILY:NIGHT a 1 3000.0");
     }
 
     @Test
