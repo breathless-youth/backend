@@ -32,7 +32,7 @@ public record RankingBoardResponse(
         @Schema(description = "바로 위 — 1위면 null") BoardNeighbor above,
         @Schema(description = "바로 아래 — 꼴찌면 null") BoardNeighbor below,
 
-        @Schema(description = "me가 null일 때만: 지금 시작하면 받을 순위(참가자 + 1)")
+        @Schema(description = "me가 null일 때만: 지금 시작하면 받을 순위(참가자 + 1) — 집중률 판·지난 기간(offset=-1)은 null")
         Integer startNowRank,
 
         @Schema(description = "집중률 판만: 참가 조건 진행도") RateEligibility eligibility,

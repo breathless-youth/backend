@@ -113,7 +113,7 @@
   판을 포함한 모든 판에 들어가 집중률 합계도 이를 쓴다. 집중률 판은 `focusing`을 켜지 않아 FE가 보간하지 않는다. 늘리지
   않았을 때와의 차이는 순공·총공부 각각 최대 60초다.
 - 응답의 `asOf`(계산 시각)부터 FE가 `focusing: true`인 값을 1초씩 올려 보간한다.
-- 마감된 기간(`offset=-1`, 마감 직후 지난 기간)은 값을 마감 시각까지만 올리고 모든 줄의 `focusing`을 끈다. 진행 중 조각 캐시(10초)가
+- 마감된 기간(`offset=-1`)은 값을 마감 시각까지만 올리고 모든 줄의 `focusing`을 끈다. 진행 중 조각 캐시(10초)가
   마감 전 스냅샷이면 그 조각이 마지막 조각이고 집중 중이라, 요청 시각까지 올리면 최종 판이 마감 뒤에도 오른다.
 
 ## 5. 데이터 모델
@@ -213,7 +213,7 @@ CREATE TABLE ranking_best (
   "around": [ /* 앞 2 · 나 · 뒤 2 — 앞이 부족하면 뒤를 더. me가 null이면 [] */ ],
   "above": { "nickname": "형광펜", "gap": 1320, "focusing": true },    // 바로 위, 1위면 null
   "below": { "nickname": "오늘도출석", "gap": 240, "focusing": true }, // 바로 아래, 꼴찌면 null
-  "startNowRank": null                       // me가 null일 때만: 지금 시작하면 N위 (참가자 수 + 1). 집중률 판은 항상 null
+  "startNowRank": null                       // me가 null일 때만: 지금 시작하면 N위 (참가자 수 + 1). 집중률 판과 offset=-1은 항상 null
 }
 ```
 
@@ -327,7 +327,8 @@ CREATE TABLE ranking_best (
 - 잘못된 `type`·`period`·`slot`·`offset` 조합, `rank`·`size` 범위 밖, `since` 형식 오류 → 400.
 - `session-gains`의 제출이 없거나 남의 것 → 404.
 - 참가자가 없는 판: `podium` []·`me` null·`startNowRank` 1. 참가자가 1명이면 `above`·`below` null. 집중률 판은 예외로
-  `startNowRank`가 비어 있어도 null이다(주 10시간·월 30시간을 채워야 참가하므로 `eligibility`가 맡는다).
+  `startNowRank`가 비어 있어도 null이다(주 10시간·월 30시간을 채워야 참가하므로 `eligibility`가 맡는다). 지난 기간(`offset=-1`)도
+  모든 판에서 null이다.
 - 탈퇴(`DELETE`) 사용자는 집계·마감에서 빠진다. 이미 받은 기록은 남지만 본인만 조회하므로 노출되지 않는다.
 - draft JSON을 읽지 못하면 그 draft만 건너뛰고 Sentry에 남긴다(자동 확정 쪽이 따로 폐기 처리한다).
 

@@ -53,7 +53,7 @@ public class RankingBoardService {
                 around(placement, eligibility, userId, type),
                 neighbor(placement.above(), me, type, true),
                 neighbor(placement.below(), me, type, false),
-                startNowRank(placement, type),
+                startNowRank(placement, type, offset),
                 eligibility,
                 extras.nextTier(board, placement, userId, now),
                 extras.streakCard(board, view.standings(), userId, now),
@@ -95,8 +95,10 @@ public class RankingBoardService {
         return entries(placement.around(), userId, type);
     }
 
-    private static Integer startNowRank(Placement placement, RankingBoardType type) {
-        return placement.present() || type == RankingBoardType.FOCUS_RATE ? null : placement.size() + 1;
+    /** 지금 기간에 참가하지 않았을 때만 — 지난 기간(offset≠0)에는 "지금 시작하면"이 성립하지 않고, 집중률 판은 eligibility가 맡는다. */
+    private static Integer startNowRank(Placement placement, RankingBoardType type, int offset) {
+        boolean applicable = offset == 0 && type != RankingBoardType.FOCUS_RATE && !placement.present();
+        return applicable ? placement.size() + 1 : null;
     }
 
     private static List<BoardEntry> entries(List<RankedEntry> ranked, long userId, RankingBoardType type) {

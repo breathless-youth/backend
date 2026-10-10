@@ -139,4 +139,16 @@ class RankingBoardServiceTest extends RankingIntegrationTestBase {
         assertThat(r.closesAt()).isEqualTo(kst(10, 10, 0, 0));
         assertThat(r.me().value()).isEqualTo(1800L);
     }
+
+    @Test
+    void 지난_기간에는_지금_시작하면_받을_순위를_주지_않는다() {
+        session(user("yesterday"), kst(10, 9, 9, 0), 30, 1800);
+        session(user("today"), kst(10, 10, 9, 0), 30, 1800);
+        long me = user("me");
+
+        assertThat(service.board(me, FOCUS_TIME, DAILY, null, 0).startNowRank()).isEqualTo(2);
+        RankingBoardResponse closed = service.board(me, FOCUS_TIME, DAILY, null, -1);
+        assertThat(closed.me()).isNull();
+        assertThat(closed.startNowRank()).isNull();
+    }
 }
