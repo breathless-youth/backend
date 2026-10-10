@@ -40,6 +40,19 @@ public record RankingEntry(
         return new RankingEntry(userId, nickname, value + seconds, to, true, focusSec + seconds, studySec + seconds);
     }
 
+    /**
+     * 마감된 판의 줄 — 집중 중이면 마감 시각까지만 올리고 집중 중 표시를 끈다. 기준 시각이 이미 마감 뒤면 값은 그대로 둔다(뒤로
+     * 돌리지 않는다).
+     */
+    public RankingEntry settledAt(Instant from, Instant closesAt) {
+        RankingEntry advanced = advancedTo(from, closesAt);
+        if (!advanced.focusing) {
+            return advanced;
+        }
+        return new RankingEntry(
+                userId, nickname, advanced.value, advanced.achievedAt, false, advanced.focusSec, advanced.studySec);
+    }
+
     /** 도달 시각의 KST 날짜 — 조각 종료는 반개구간의 끝이라 자정에 끝난 조각은 그 전날의 기록이다. */
     public LocalDate achievedDate() {
         return achievedAt.minusNanos(1).atZone(KST).toLocalDate();

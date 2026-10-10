@@ -33,18 +33,25 @@ public class StandingsProvider {
     private final RankingSource source;
     private final Clock clock;
 
+    /**
+     * 마감된 기간(지난 기간)은 마감 시각까지만 올리고 집중 중 표시를 끈다 — 진행 중 조각 캐시가 마감 전 스냅샷이면 그 조각이
+     * 마지막 조각이고 집중 중이라, 요청 시각까지 올리면 최종 판이 마감 뒤에도 오르고 순위가 틀어진다.
+     */
     public BoardView view(RankingBoard board, Window window, long userId, Instant now) {
         LiveSnapshot live = live();
-        Standings standings = standings(board, window, live, now).advancedTo(now);
+        boolean closed = closed(window, now);
+        Standings cached = standings(board, window, live, now);
+        Standings standings = closed ? cached.settledAt(window.closesAt()) : cached.advancedTo(now);
         RankingEntry me = calculator.compute(board, window, live.asOf(), piecesFor(board, live), userId).stream()
                 .findFirst()
-                .map(entry -> entry.advancedTo(live.asOf(), now))
+                .map(entry ->
+                        closed ? entry.settledAt(live.asOf(), window.closesAt()) : entry.advancedTo(live.asOf(), now))
                 .orElse(null);
         return new BoardView(standings, standings.place(me), live);
     }
 
     public Standings standings(RankingBoard board, Window window, LiveSnapshot live, Instant now) {
-        boolean slow = board.type().hallOfFame() || !window.closesAt().isAfter(now);
+        boolean slow = board.type().hallOfFame() || closed(window, now);
         return cache.get(
                 new StandingsKey(board.key(), window.start()),
                 slow ? SLOW_TTL : CURRENT_TTL,
@@ -57,6 +64,11 @@ public class StandingsProvider {
             Instant at = clock.instant();
             return new LiveSnapshot(source.livePieces(at), at);
         });
+    }
+
+    /** 마감 시각이 지났다 — 명예의 전당은 마감이 없다. */
+    private static boolean closed(Window window, Instant now) {
+        return window.closesAt() != null && !window.closesAt().isAfter(now);
     }
 
     private static List<LivePiece> piecesFor(RankingBoard board, LiveSnapshot live) {

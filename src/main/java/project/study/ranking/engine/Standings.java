@@ -27,6 +27,18 @@ public record Standings(List<RankingEntry> entries, Instant asOf) {
         return of(entries.stream().map(entry -> entry.advancedTo(asOf, now)).toList(), now);
     }
 
+    /**
+     * 마감된 판 — 집중 중인 줄을 마감 시각까지만 올리고 모든 줄의 집중 중 표시를 끈 뒤 다시 정렬한다. 기준 시각이 이미 마감 뒤면
+     * 값은 그대로이고 기준 시각도 돌리지 않는다.
+     */
+    public Standings settledAt(Instant closesAt) {
+        Instant settledAsOf = asOf.isAfter(closesAt) ? asOf : closesAt;
+        if (entries.stream().noneMatch(RankingEntry::focusing)) {
+            return new Standings(entries, settledAsOf);
+        }
+        return of(entries.stream().map(entry -> entry.settledAt(asOf, closesAt)).toList(), settledAsOf);
+    }
+
     /** me를 끼운 배치 — 순위표에 남아 있는 내 옛 줄은 빼고 새로 읽은 me로 대신한다. me가 null이면 남들만이다. */
     public Placement place(RankingEntry me) {
         List<RankingEntry> merged = new ArrayList<>(entries.size() + 1);
