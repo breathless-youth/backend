@@ -225,8 +225,9 @@ CREATE TABLE ranking_best (
 **판별 추가 필드**
 
 - `FOCUS_RATE`
-  - `eligibility: { eligible, focusSec, requiredFocusSec, focusRate, expectedRank }` — 기간에 세션이 없으면 null.
-    미달이면 `me`는 null, `expectedRank`는 지금 집중률로 참가하면 받을 순위, `around`는 그 자리 주변(FE가 흐리게 잠근다).
+  - `eligibility: { eligible, focusSec, requiredFocusSec, focusRate, expectedRank, expectedTopPercent }` — 기간에 세션이
+    없으면 null. 미달이면 `me`는 null, `expectedRank`·`expectedTopPercent`는 지금 집중률로 참가하면 받을 순위·상위 %
+    (나를 넣은 참가자 수로 나눈다 — `me.topPercent`와 같은 식), `around`는 그 자리 주변(FE가 흐리게 잠근다). 충족이면 둘 다 null.
   - `above.catchUpFocusSec` — 총공부 시간이 같을 때 순공을 몇 초 더 하면 바로 위를 넘는지. "하루 1분만 더"는 FE가 남은 일수로 나눈다.
 - `TOTAL_TIME`·`TOTAL_DAYS`
   - `nextTier: { percent, remaining, etaDays }` — 1·5·10·20·30·50% 중 내 상위 %보다 좁은 가장 가까운 구간까지 남은 양.

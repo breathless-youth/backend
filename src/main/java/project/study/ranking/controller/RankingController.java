@@ -33,7 +33,7 @@ public class RankingController {
 
     @Operation(summary = "랭킹판 조회", description = """
                     랭킹판 하나의 시상대(1~3위), 내 순위, 내 주변(앞 2 · 나 · 뒤 2), 바로 위·아래와의 차이를 준다. \
-                    참가 인원 수 필드는 없다(`startNowRank`·`topPercent`로 가늠할 수 있다). 다른 사용자의 userId는 내려주지 않는다 — 행 키는 고유한 nickname이다.
+                    참가 인원 수 필드는 없다(`startNowRank`·`topPercent`·`eligibility.expectedTopPercent`로 가늠할 수 있다). 다른 사용자의 userId는 내려주지 않는다 — 행 키는 고유한 nickname이다.
 
                     - 종목·기간: 순공(FOCUS_TIME) 일·주·월, 집중률(FOCUS_RATE) 주·월(참가 조건 주 10시간·월 30시간), \
                     시간대(TIME_SLOT) 일·주(slot 생략 시 지금 구간), 명예의 전당(TOTAL_TIME·TOTAL_DAYS·MAX_STREAK, period 없음)
