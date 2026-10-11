@@ -3,7 +3,7 @@ package project.study.ranking.engine;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 연속 공부 일수 리스트의 한 줄 — 같은 일수의 연속 구간 [startIndex, startIndex + count) (BY-828). */
+/** 일수 판(누적 일수·연속 공부) 묶음 한 줄 — 같은 일수의 연속 구간 [startIndex, startIndex + count) (BY-828). */
 public record DayGroup(int days, int startIndex, int count) {
 
     public boolean contains(int index) {

@@ -93,7 +93,7 @@ class StandingsTest {
     void 가정한_값이_받을_순위를_낸다() {
         Standings s = Standings.of(List.of(e(1, 300), e(2, 200), e(3, 100)), T0);
 
-        assertThat(s.rankOf(e(9, 150))).isEqualTo(3);
-        assertThat(s.rankOf(e(2, 400))).isEqualTo(1);
+        assertThat(s.place(9, e(9, 150)).myRank()).isEqualTo(3);
+        assertThat(s.place(2, e(2, 400)).myRank()).isEqualTo(1);
     }
 }

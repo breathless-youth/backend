@@ -27,6 +27,11 @@ public enum RankingBoardType {
         return periods.isEmpty();
     }
 
+    /** 공동 순위 — 같은 일수면 같은 순위이고 다음 순위는 그 인원만큼 건너뛴다(1, 1, 3). 일수 판만. */
+    public boolean tiedRanks() {
+        return this == TOTAL_DAYS || this == MAX_STREAK;
+    }
+
     public boolean supports(RankingPeriod period) {
         return periods.contains(period);
     }

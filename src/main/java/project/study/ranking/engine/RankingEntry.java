@@ -19,7 +19,7 @@ public record RankingEntry(
         long focusSec,
         long studySec) {
 
-    /** 값 내림차순 → 먼저 도달한 사람 → userId (공동 순위 없음). */
+    /** 값 내림차순 → 먼저 도달한 사람 → userId. 줄 순서는 늘 이 키이고, 일수 판의 공동 순위는 {@link Placement}가 매긴다. */
     public static final Comparator<RankingEntry> ORDER = Comparator.comparingDouble(RankingEntry::value)
             .reversed()
             .thenComparing(RankingEntry::achievedAt)

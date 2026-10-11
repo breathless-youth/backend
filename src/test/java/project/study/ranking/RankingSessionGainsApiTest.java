@@ -3,6 +3,7 @@ package project.study.ranking;
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.support.AuthTestSupport.asUser;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -63,6 +64,33 @@ class RankingSessionGainsApiTest extends RankingIntegrationTestBase {
                 .extractingPath("$.others")
                 .asArray()
                 .isEmpty();
+    }
+
+    @Test
+    void 누적_일수는_공동_순위로_비교한다() {
+        for (String name : List.of("a", "b", "c")) {
+            long id = user(name);
+            for (int day = 1; day <= 3; day++) {
+                session(id, kst(10, day, 9, 0), 15, 900);
+            }
+        }
+        long d = user("d");
+        session(d, kst(10, 1, 9, 0), 15, 900);
+        session(d, kst(10, 2, 9, 0), 15, 900);
+        long me = user("me");
+        session(me, kst(10, 4, 9, 0), 15, 900); // 이번 세션 전 2일 — d보다 늦게 달성했어도 공동 4위
+        session(me, kst(10, 5, 9, 0), 15, 900);
+        session(me, kst(10, 10, 9, 0), 15, 900); // 이번 제출 — 3일이 되어 a·b·c와 공동 1위(늦게 달성했어도)
+
+        assertThat(gains("?startedAt=2026-10-10T00:00:00Z", me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.others[?(@.type == 'TOTAL_DAYS')].before",
+                        v -> assertThat(v).asArray().containsExactly(4))
+                .hasPathSatisfying(
+                        "$.others[?(@.type == 'TOTAL_DAYS')].after",
+                        v -> assertThat(v).asArray().containsExactly(1));
     }
 
     @Test

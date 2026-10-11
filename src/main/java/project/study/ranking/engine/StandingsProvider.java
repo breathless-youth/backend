@@ -47,7 +47,8 @@ public class StandingsProvider {
                 .map(entry ->
                         closed ? entry.settledAt(live.asOf(), window.closesAt()) : entry.advancedTo(live.asOf(), now))
                 .orElse(null);
-        return new BoardView(standings, standings.place(userId, me), live);
+        return new BoardView(
+                standings, standings.place(userId, me).withTies(board.type().tiedRanks()), live);
     }
 
     public Standings standings(RankingBoard board, Window window, LiveSnapshot live, Instant now) {

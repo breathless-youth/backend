@@ -96,8 +96,10 @@ public class RankingSessionGainsService {
         if (before == null) {
             return null;
         }
-        int beforeRank =
-                view.standings().place(userId, before.advancedTo(asOf, now)).myRank();
+        int beforeRank = view.standings()
+                .place(userId, before.advancedTo(asOf, now))
+                .withTies(board.type().tiedRanks())
+                .myRank();
         int afterRank = view.placement().myRank();
         return afterRank < beforeRank ? new Gain(beforeRank, afterRank, beforeRank - afterRank) : null;
     }

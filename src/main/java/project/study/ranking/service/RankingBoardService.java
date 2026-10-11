@@ -48,7 +48,7 @@ public class RankingBoardService {
                 periodStart(board, window),
                 window.closesAt(),
                 now,
-                entries(placement.podium(), userId, type),
+                type.tiedRanks() ? List.of() : entries(placement.podium(), userId, type),
                 myRank(placement, type),
                 around(placement, eligibility, userId, type),
                 neighbor(placement.above(), me, type, true),
@@ -57,7 +57,8 @@ public class RankingBoardService {
                 eligibility,
                 extras.nextTier(board, placement, userId, now),
                 extras.streakCard(board, view.standings(), userId, now),
-                extras.streakGroups(board, placement),
+                extras.aroundGroups(board, placement),
+                extras.podiumGroups(board, placement),
                 extras.goalExamples(board, offset, placement, now));
     }
 
@@ -86,7 +87,7 @@ public class RankingBoardService {
 
     private static List<BoardEntry> around(
             Placement placement, RateEligibility eligibility, long userId, RankingBoardType type) {
-        if (type == RankingBoardType.MAX_STREAK) {
+        if (type.tiedRanks()) {
             return List.of();
         }
         if (eligibility != null && !eligibility.eligible()) {
@@ -95,10 +96,16 @@ public class RankingBoardService {
         return entries(placement.around(), userId, type);
     }
 
-    /** 지금 기간에 참가하지 않았을 때만 — 지난 기간(offset≠0)에는 "지금 시작하면"이 성립하지 않고, 집중률 판은 eligibility가 맡는다. */
+    /**
+     * 지금 기간에 참가하지 않았을 때만 — 지난 기간(offset≠0)에는 "지금 시작하면"이 성립하지 않고, 집중률 판은 eligibility가 맡는다.
+     * 일수 판은 지금 시작하면 1일이 되어 같은 1일끼리 공동 순위다.
+     */
     private static Integer startNowRank(Placement placement, RankingBoardType type, int offset) {
         boolean applicable = offset == 0 && type != RankingBoardType.FOCUS_RATE && !placement.present();
-        return applicable ? placement.size() + 1 : null;
+        if (!applicable) {
+            return null;
+        }
+        return type.tiedRanks() ? placement.tiedRankOf(1) : placement.size() + 1;
     }
 
     private static List<BoardEntry> entries(List<RankedEntry> ranked, long userId, RankingBoardType type) {
