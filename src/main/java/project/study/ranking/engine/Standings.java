@@ -58,9 +58,4 @@ public record Standings(List<RankingEntry> entries, Instant asOf) {
         merged.add(insertion, me);
         return new Placement(Collections.unmodifiableList(merged), insertion);
     }
-
-    /** 가정한 줄이 들어가면 받을 순위(1부터) — 같은 userId의 줄은 빼고 센다. */
-    public int rankOf(RankingEntry hypothetical) {
-        return place(hypothetical.userId(), hypothetical).myRank();
-    }
 }

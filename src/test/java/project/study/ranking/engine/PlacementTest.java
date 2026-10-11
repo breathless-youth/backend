@@ -74,6 +74,62 @@ class PlacementTest {
         assertThat(placement(3257, 1204).topPercent()).isEqualTo(37);
     }
 
+    /** 공동 순위 배치 — 값은 주어진 순서(내림차순), 같은 값은 앞 사람이 먼저 달성, myIndex 자리가 나다 */
+    private static Placement tied(int myIndex, double... values) {
+        List<RankingEntry> entries = IntStream.range(0, values.length)
+                .mapToObj(i -> RankingEntry.of(i + 1, "u" + (i + 1), values[i], T0.plusSeconds(i)))
+                .toList();
+        return new Placement(entries, myIndex, true);
+    }
+
+    @Test
+    void 공동_순위는_같은_값이면_같은_순위이고_다음은_인원만큼_건너뛴다() {
+        Placement p = tied(3, 5, 5, 4, 4, 4, 2);
+
+        assertThat(ranks(p.windowAround(2))).containsExactly(1, 1, 3, 3, 3);
+        assertThat(ranks(p.windowAround(3))).containsExactly(1, 3, 3, 3, 6);
+        assertThat(p.myRank()).isEqualTo(3);
+        assertThat(ranks(p.podium())).containsExactly(1, 1, 3);
+    }
+
+    @Test
+    void 공동_순위가_아니면_같은_값도_자리대로다() {
+        Placement p = tied(3, 5, 5, 4, 4, 4, 2).withTies(false);
+
+        assertThat(ranks(p.windowAround(3))).containsExactly(2, 3, 4, 5, 6);
+        assertThat(p.myRank()).isEqualTo(4);
+    }
+
+    @Test
+    void 공동_순위의_바로_위_아래는_값이_다른_가장_가까운_사람이다() {
+        Placement p = tied(3, 5, 5, 4, 4, 4, 2);
+
+        assertThat(p.above().userId()).isEqualTo(2);
+        assertThat(p.below().userId()).isEqualTo(6);
+    }
+
+    @Test
+    void 공동_순위의_맨_위_묶음이면_바로_위가_없고_맨_아래_묶음이면_바로_아래가_없다() {
+        assertThat(tied(1, 5, 5, 4).above()).isNull();
+        assertThat(tied(2, 5, 4, 4).below()).isNull();
+    }
+
+    @Test
+    void 공동_순위의_상위_퍼센트는_공동_순위로_센다() {
+        Placement p = tied(9, 10, 9, 8, 7, 1, 1, 1, 1, 1, 1);
+
+        assertThat(p.myRank()).isEqualTo(5);
+        assertThat(p.topPercent()).isEqualTo(50);
+    }
+
+    @Test
+    void 값을_가정한_공동_순위는_그보다_큰_사람_수_더하기_1이다() {
+        Placement p = tied(-1, 5, 3, 1, 1);
+
+        assertThat(p.tiedRankOf(1)).isEqualTo(3);
+        assertThat(p.tiedRankOf(6)).isEqualTo(1);
+    }
+
     @Test
     void 내가_없어도_주어진_자리_주변_다섯_줄을_낸다() {
         assertThat(ranks(placement(10, -1).windowAround(9))).containsExactly(6, 7, 8, 9, 10);

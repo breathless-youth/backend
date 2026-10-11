@@ -14,19 +14,19 @@ import project.study.ranking.RankingBoardType;
 import project.study.ranking.RankingCalendar;
 import project.study.ranking.RankingCalendar.Window;
 import project.study.ranking.RankingPeriod;
+import project.study.ranking.dto.RankingBoardResponse.DayGroupRow;
 import project.study.ranking.dto.RankingBoardResponse.GoalExample;
 import project.study.ranking.dto.RankingBoardResponse.NextTier;
 import project.study.ranking.dto.RankingBoardResponse.RateEligibility;
 import project.study.ranking.dto.RankingBoardResponse.StreakCard;
-import project.study.ranking.dto.RankingBoardResponse.StreakGroupRow;
 import project.study.ranking.engine.BoardView;
+import project.study.ranking.engine.DayGroup;
 import project.study.ranking.engine.Placement;
 import project.study.ranking.engine.RankingEntry;
 import project.study.ranking.engine.RateTotals;
 import project.study.ranking.engine.Standings;
 import project.study.ranking.engine.StandingsCalculator;
 import project.study.ranking.engine.StandingsProvider;
-import project.study.ranking.engine.StreakGroup;
 import project.study.ranking.engine.Tiers;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.service.RankingSource;
@@ -65,11 +65,12 @@ class BoardExtras {
             return null;
         }
         RankingEntry cutoff = placement.merged().get(Tiers.cutoffRank(tier.getAsInt(), placement.size()) - 1);
-        long remaining = (long) (cutoff.value() - placement.me().value()) + 1;
+        // 공동 순위면 컷의 값과 같아지기만 해도 그 순위라 넘을 필요가 없다
+        long remaining = (long) (cutoff.value() - placement.me().value()) + (placement.tied() ? 0 : 1);
         return new NextTier(tier.getAsInt(), remaining, etaDays(type, userId, remaining, today(now)));
     }
 
-    /** 연속 공부 일수 카드 — 최고 기록과 지금 연속. 지금이 최고 기록이면 내일도 하면 받을 순위를 붙인다. */
+    /** 연속 공부 일수 카드 — 최고 기록과 지금 연속. 지금이 최고 기록이면 내일도 하면 받을 공동 순위를 붙인다. */
     StreakCard streakCard(RankingBoard board, Standings standings, long userId, Instant now) {
         if (board.type() != RankingBoardType.MAX_STREAK) {
             return null;
@@ -80,24 +81,28 @@ class BoardExtras {
                     int current = source.currentStreak(userId);
                     boolean currentIsBest = current > 0 && current == row.days();
                     Integer nextRank = currentIsBest
-                            ? standings.rankOf(
-                                    RankingEntry.of(userId, null, row.days() + 1, now.plus(Duration.ofDays(1))))
+                            ? standings
+                                    .place(
+                                            userId,
+                                            RankingEntry.of(userId, null, row.days() + 1, now.plus(Duration.ofDays(1))))
+                                    .withTies(true)
+                                    .myRank()
                             : null;
                     return new StreakCard(row.days(), row.startDate(), row.endDate(), current, currentIsBest, nextRank);
                 })
                 .orElse(null);
     }
 
-    /** 같은 일수 묶음 앞 2 · 내 묶음 · 뒤 2 — 내 묶음은 내 순위·이름과 같은 일수 중 몇 번째인지. */
-    List<StreakGroupRow> streakGroups(RankingBoard board, Placement placement) {
-        if (board.type() != RankingBoardType.MAX_STREAK) {
+    /** 일수 판의 같은 일수 묶음 앞 2 · 내 묶음 · 뒤 2 — 내 묶음은 내 이름과 같은 일수 중 몇 번째인지. */
+    List<DayGroupRow> aroundGroups(RankingBoard board, Placement placement) {
+        if (!board.type().tiedRanks()) {
             return null;
         }
         if (!placement.present()) {
             return List.of();
         }
-        List<StreakGroup> groups = StreakGroup.of(placement.merged());
-        int start = Placement.windowStart(groups.size(), StreakGroup.indexContaining(groups, placement.myIndex()));
+        List<DayGroup> groups = DayGroup.of(placement.merged());
+        int start = Placement.windowStart(groups.size(), DayGroup.indexContaining(groups, placement.myIndex()));
         return groups.subList(start, Math.min(groups.size(), start + Placement.WINDOW)).stream()
                 .map(group -> toRow(group, placement))
                 .toList();
@@ -151,10 +156,22 @@ class BoardExtras {
         return perDay <= 0 ? null : (int) Math.ceil(remaining / perDay);
     }
 
-    private static StreakGroupRow toRow(StreakGroup group, Placement placement) {
+    /** 일수 판의 시상대 — 일수 많은 순 묶음 3개. 내가 없어도 준다. */
+    List<DayGroupRow> podiumGroups(RankingBoard board, Placement placement) {
+        if (!board.type().tiedRanks()) {
+            return null;
+        }
+        List<DayGroup> groups = DayGroup.of(placement.merged());
+        return groups.subList(0, Math.min(3, groups.size())).stream()
+                .map(group -> toRow(group, placement))
+                .toList();
+    }
+
+    /** 묶음 순위는 공동 순위(첫 자리 + 1). 대표는 내가 있으면 나, 없으면 먼저 달성한 사람. */
+    private static DayGroupRow toRow(DayGroup group, Placement placement) {
         if (!group.contains(placement.myIndex())) {
             RankingEntry head = placement.merged().get(group.startIndex());
-            return new StreakGroupRow(
+            return new DayGroupRow(
                     group.days(),
                     group.startIndex() + 1,
                     head.nickname(),
@@ -164,9 +181,9 @@ class BoardExtras {
                     null);
         }
         RankingEntry me = placement.me();
-        return new StreakGroupRow(
+        return new DayGroupRow(
                 group.days(),
-                placement.myRank(),
+                group.startIndex() + 1,
                 me.nickname(),
                 group.count() - 1,
                 me.achievedDate(),
