@@ -35,7 +35,10 @@ public record RankingBoardResponse(
         @Schema(description = "me가 null일 때만: 지금 시작하면 받을 순위(참가자 + 1) — 집중률 판·지난 기간(offset=-1)은 null")
         Integer startNowRank,
 
-        @Schema(description = "집중률 판만: 참가 조건 진행도") RateEligibility eligibility,
+        @Schema(
+                description = "집중률 판만: 참가 조건 진행도 — 미달이면 expectedRank·expectedTopPercent는 지금 집중률로 "
+                        + "참가할 때의 순위·상위 %(나를 넣은 참가자 수 기준, me.topPercent와 같은 식). 충족이면 둘 다 null")
+        RateEligibility eligibility,
 
         @Schema(description = "누적 시간·누적 일수 판만: 다음 상위 % 구간까지")
         NextTier nextTier,
@@ -55,7 +58,12 @@ public record RankingBoardResponse(
     public record BoardNeighbor(String nickname, Number gap, boolean focusing, Long catchUpFocusSec) {}
 
     public record RateEligibility(
-            boolean eligible, long focusSec, long requiredFocusSec, double focusRate, Integer expectedRank) {}
+            boolean eligible,
+            long focusSec,
+            long requiredFocusSec,
+            double focusRate,
+            Integer expectedRank,
+            Integer expectedTopPercent) {}
 
     public record NextTier(int percent, long remaining, Integer etaDays) {}
 

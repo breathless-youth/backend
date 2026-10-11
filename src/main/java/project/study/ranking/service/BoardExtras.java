@@ -129,12 +129,15 @@ class BoardExtras {
             RankingPeriod period, Standings standings, RateTotals totals, long userId, Instant now) {
         long required = StandingsCalculator.requiredRateFocusSec(period);
         boolean eligible = totals.focusSec() >= required;
-        Integer expectedRank = eligible
-                ? null
-                : standings.rankOf(new RankingEntry(
-                        userId, null, totals.rate(), now, false, totals.focusSec(), totals.studySec()));
-        return new RateEligibility(
-                eligible, totals.focusSec(), required, BoardValues.round1(totals.rate()), expectedRank);
+        double rate = BoardValues.round1(totals.rate());
+        if (eligible) {
+            return new RateEligibility(true, totals.focusSec(), required, rate, null, null);
+        }
+        // 나를 끼운 배치라 상위 %의 분모는 나를 포함한 참가자 수다 — 참가했을 때의 me.topPercent와 같은 식
+        Placement expected = standings.place(
+                userId,
+                new RankingEntry(userId, null, totals.rate(), now, false, totals.focusSec(), totals.studySec()));
+        return new RateEligibility(false, totals.focusSec(), required, rate, expected.myRank(), expected.topPercent());
     }
 
     private Integer etaDays(RankingBoardType type, long userId, long remaining, LocalDate today) {

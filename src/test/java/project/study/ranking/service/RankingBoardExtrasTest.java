@@ -42,9 +42,23 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         RankingBoardResponse r = service.board(me, FOCUS_RATE, WEEKLY, null, 0);
 
         assertThat(r.me()).isNull();
-        assertThat(r.eligibility()).isEqualTo(new RateEligibility(false, 32_400, 36_000, 90.0, 3));
+        assertThat(r.eligibility()).isEqualTo(new RateEligibility(false, 32_400, 36_000, 90.0, 3, 100));
         assertThat(r.around()).extracting(BoardEntry::nickname).containsExactly("y", "x");
         assertThat(r.startNowRank()).isNull();
+    }
+
+    @Test
+    void 집중률_미달의_예상_상위_퍼센트는_나를_넣은_참가자_수로_센다() {
+        session(user("x"), kst(10, 6, 0, 30), 720, 39_600); // 91.7%
+        session(user("y"), kst(10, 7, 0, 30), 720, 36_000); // 83.3%
+        long me = user("me");
+        session(me, kst(10, 8, 0, 30), 600, 32_400); // 90.0%, 순공 9시간이라 미달
+
+        RankingBoardResponse r = service.board(me, FOCUS_RATE, WEEKLY, null, 0);
+
+        // 3명 중 2위 → ceil(200 ÷ 3) = 67. 나를 빼고 2명으로 나누면 100이 된다
+        assertThat(r.eligibility().expectedRank()).isEqualTo(2);
+        assertThat(r.eligibility().expectedTopPercent()).isEqualTo(67);
     }
 
     @Test
@@ -59,6 +73,7 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         assertThat(r.above().catchUpFocusSec()).isEqualTo(1601L);
         assertThat(r.above().gap()).isEqualTo(3.7);
         assertThat(r.eligibility().eligible()).isTrue();
+        assertThat(r.eligibility().expectedTopPercent()).isNull();
     }
 
     @Test
