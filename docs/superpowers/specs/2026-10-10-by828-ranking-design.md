@@ -79,7 +79,9 @@
 
 ### 3.3 동점
 
-정렬 키는 `값 내림차순 → 도달 시각 오름차순 → userId 오름차순`이다. 공동 순위는 없다.
+정렬 키는 `값 내림차순 → 도달 시각 오름차순 → userId 오름차순`이다. 순위는 이 순서의 자리다. 단 일수 판(누적 일수·연속 공부)은
+**공동 순위**다 — 같은 일수면 같은 순위이고 다음 순위는 그 인원만큼 건너뛴다(1, 1, 3). 줄 순서는 위 정렬 키를 그대로 따른다
+(FE 요청, 2026-10-11).
 
 | 판 | 도달 시각 |
 |---|---|
@@ -87,8 +89,8 @@
 | 누적 일수 | 마지막 공부일에 기준을 처음 넘긴 조각의 종료 시각 |
 | 연속 공부 일수 | 그 길이를 처음 찍은 연속 구간의 끝 날, 그날 10분 기준을 처음 넘긴 조각의 종료 시각 |
 
-연속 공부 일수 리스트는 같은 일수끼리 한 줄로 묶는다. 묶음 안의 순서도 위 정렬 키라서, 묶음의 순위는 첫 사람의
-개인 순위이고 묶음 안 k번째 사람의 개인 순위는 `묶음 순위 + k − 1`이다.
+일수 판의 리스트와 시상대는 같은 일수끼리 한 줄로 묶는다. 묶음의 순위는 공동 순위(첫 자리 + 1)이고, 묶음 안의 순서도
+위 정렬 키다(`myOrder` = 묶음 안 몇 번째).
 
 ## 4. 진행 중 세션 반영
 
@@ -231,13 +233,19 @@ CREATE TABLE ranking_best (
   - `above.catchUpFocusSec` — 총공부 시간이 같을 때 순공을 몇 초 더 하면 바로 위를 넘는지. "하루 1분만 더"는 FE가 남은 일수로 나눈다.
 - `TOTAL_TIME`·`TOTAL_DAYS`
   - `nextTier: { percent, remaining, etaDays }` — 1·5·10·20·30·50% 중 내 상위 %보다 좁은 가장 가까운 구간까지 남은 양.
-    이미 1% 안이면 null. `etaDays`는 최근 7일 평균 페이스로 나눈 일수(올림), 페이스가 0이면 null.
+    이미 1% 안이면 null. `etaDays`는 최근 7일 평균 페이스로 나눈 일수(올림), 페이스가 0이면 null. 누적 일수는 공동 순위라
+    구간 경계 사람의 일수와 같아지면 되므로 `remaining`에 +1이 없다.
 - `MAX_STREAK`
   - `streak: { maxDays, maxStart, maxEnd, currentDays, currentIsBest, nextRankIfContinue }` — `nextRankIfContinue`는
-    `currentIsBest`일 때만, 내일도 공부해 `maxDays + 1`이 되면 받을 순위.
-  - `around` 대신 `aroundGroups[]: { days, rank, nickname, othersCount, achievedDate, me, myOrder }` — 일수 묶음 앞 2 · 내 묶음 · 뒤 2.
-    다른 묶음은 먼저 달성한 사람의 순위·이름·달성일, 내 묶음은 내 순위·내 이름과 `myOrder`(같은 일수 중 몇 번째).
-    `othersCount`는 묶음 인원 − 1.
+    `currentIsBest`일 때만, 내일도 공부해 `maxDays + 1`이 되면 받을 공동 순위.
+- 일수 판(`TOTAL_DAYS`·`MAX_STREAK`) — 공동 순위(§3.3)
+  - `me.rank`·`topPercent`, 세션 뒤 오른 판(`session-gains`)의 전·후 순위가 공동 순위다. `above`·`below`는 나와 일수가 다른
+    가장 가까운 사람(위 묶음의 마지막, 아래 묶음의 첫 사람)이라 `gap`이 0이 아니다. `startNowRank`는 지금 시작하면 1일이 되는
+    공동 순위(2일 이상인 사람 수 + 1).
+  - `podium`·`around`는 []이고, 대신 `podiumGroups[]`(일수 많은 순 묶음 3개, 내 참가와 상관없이)와 `aroundGroups[]`(묶음 앞 2 ·
+    내 묶음 · 뒤 2, me가 null이면 [])를 준다. 줄 모양은 `{ days, rank, nickname, othersCount, achievedDate, me, myOrder }` —
+    `rank`는 공동 순위, `nickname`은 대표(내가 있으면 나, 없으면 먼저 달성한 사람)이고 `achievedDate`는 대표의 달성일,
+    `othersCount`는 묶음 인원 − 1, `myOrder`는 내 묶음에서만 같은 일수 중 몇 번째.
 - `FOCUS_TIME` + `WEEKLY` + `me`가 null
   - `goalExamples[]: { percent, value }` — 지난주 최종 분포에서 구간(1·5·10·20·30·50%)마다 필요한 순공. 지난주 참가자가 없으면 [].
 
