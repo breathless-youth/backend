@@ -63,7 +63,8 @@ public abstract class RankingIntegrationTestBase {
 
     @BeforeEach
     void resetRankingState() {
-        jdbc.execute("TRUNCATE users, active_study_session RESTART IDENTITY CASCADE");
+        jdbc.execute("TRUNCATE users, active_study_session, ranking_close, ranking_record, ranking_best "
+                + "RESTART IDENTITY CASCADE");
         standingsCache.clear();
         clock.set(NOW);
     }

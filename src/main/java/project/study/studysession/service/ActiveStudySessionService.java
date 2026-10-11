@@ -169,10 +169,19 @@ public class ActiveStudySessionService {
      */
     @Transactional(readOnly = true)
     public List<LivePiece> livePieces(Instant asOf) {
+        return livePieces(asOf, true);
+    }
+
+    /**
+     * extendFocusing이 false면 보고된 스냅샷 그대로 나누고 집중 중 표시도 끈다 — 마감 확정은 집중 중 보정 없이 계산한다(BY-828
+     * ADR-0029). 앱 시계가 서버보다 늦으면 연장분이 마감 전 기간으로 들어가기 때문이다.
+     */
+    @Transactional(readOnly = true)
+    public List<LivePiece> livePieces(Instant asOf, boolean extendFocusing) {
         List<LivePiece> pieces = new ArrayList<>();
         for (ActiveStudySession draft : activeStudySessionRepository.findAll()) {
             try {
-                pieces.addAll(toLivePieces(draft, asOf));
+                pieces.addAll(toLivePieces(draft, asOf, extendFocusing));
             } catch (RuntimeException e) {
                 log.warn("랭킹 집계에서 draft를 건너뜀: draftId={}", draft.getId(), e);
                 Sentry.captureException(e);
@@ -181,13 +190,13 @@ public class ActiveStudySessionService {
         return pieces;
     }
 
-    private List<LivePiece> toLivePieces(ActiveStudySession draft, Instant asOf) {
+    private List<LivePiece> toLivePieces(ActiveStudySession draft, Instant asOf, boolean extendFocusing) {
         List<StatusEvent> events =
                 objectMapper.readValue(draft.getEvents(), new TypeReference<List<StatusEventRequest>>() {}).stream()
                         .map(StatusEventRequest::toEntity)
                         .sorted(Comparator.comparing(StatusEvent::getStartedAt))
                         .toList();
-        boolean focusing = isFocusing(draft, events, asOf);
+        boolean focusing = extendFocusing && isFocusing(draft, events, asOf);
         int extendSec = focusing
                 ? (int) Math.max(
                         0, Duration.between(draft.getLastSeenAt(), asOf).toSeconds())
