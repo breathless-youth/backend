@@ -14,19 +14,19 @@ import project.study.ranking.RankingBoardType;
 import project.study.ranking.RankingCalendar;
 import project.study.ranking.RankingCalendar.Window;
 import project.study.ranking.RankingPeriod;
+import project.study.ranking.dto.RankingBoardResponse.DayGroupRow;
 import project.study.ranking.dto.RankingBoardResponse.GoalExample;
 import project.study.ranking.dto.RankingBoardResponse.NextTier;
 import project.study.ranking.dto.RankingBoardResponse.RateEligibility;
 import project.study.ranking.dto.RankingBoardResponse.StreakCard;
-import project.study.ranking.dto.RankingBoardResponse.StreakGroupRow;
 import project.study.ranking.engine.BoardView;
+import project.study.ranking.engine.DayGroup;
 import project.study.ranking.engine.Placement;
 import project.study.ranking.engine.RankingEntry;
 import project.study.ranking.engine.RateTotals;
 import project.study.ranking.engine.Standings;
 import project.study.ranking.engine.StandingsCalculator;
 import project.study.ranking.engine.StandingsProvider;
-import project.study.ranking.engine.StreakGroup;
 import project.study.ranking.engine.Tiers;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.service.RankingSource;
@@ -89,15 +89,15 @@ class BoardExtras {
     }
 
     /** 같은 일수 묶음 앞 2 · 내 묶음 · 뒤 2 — 내 묶음은 내 순위·이름과 같은 일수 중 몇 번째인지. */
-    List<StreakGroupRow> streakGroups(RankingBoard board, Placement placement) {
+    List<DayGroupRow> streakGroups(RankingBoard board, Placement placement) {
         if (board.type() != RankingBoardType.MAX_STREAK) {
             return null;
         }
         if (!placement.present()) {
             return List.of();
         }
-        List<StreakGroup> groups = StreakGroup.of(placement.merged());
-        int start = Placement.windowStart(groups.size(), StreakGroup.indexContaining(groups, placement.myIndex()));
+        List<DayGroup> groups = DayGroup.of(placement.merged());
+        int start = Placement.windowStart(groups.size(), DayGroup.indexContaining(groups, placement.myIndex()));
         return groups.subList(start, Math.min(groups.size(), start + Placement.WINDOW)).stream()
                 .map(group -> toRow(group, placement))
                 .toList();
@@ -151,10 +151,10 @@ class BoardExtras {
         return perDay <= 0 ? null : (int) Math.ceil(remaining / perDay);
     }
 
-    private static StreakGroupRow toRow(StreakGroup group, Placement placement) {
+    private static DayGroupRow toRow(DayGroup group, Placement placement) {
         if (!group.contains(placement.myIndex())) {
             RankingEntry head = placement.merged().get(group.startIndex());
-            return new StreakGroupRow(
+            return new DayGroupRow(
                     group.days(),
                     group.startIndex() + 1,
                     head.nickname(),
@@ -164,7 +164,7 @@ class BoardExtras {
                     null);
         }
         RankingEntry me = placement.me();
-        return new StreakGroupRow(
+        return new DayGroupRow(
                 group.days(),
                 placement.myRank(),
                 me.nickname(),

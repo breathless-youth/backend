@@ -46,7 +46,7 @@ public record RankingBoardResponse(
         @Schema(description = "연속 공부 일수 판만: 최고 기록과 지금 연속") StreakCard streak,
 
         @Schema(description = "연속 공부 일수 판만: 같은 일수 묶음 앞 2 · 내 묶음 · 뒤 2")
-        List<StreakGroupRow> aroundGroups,
+        List<DayGroupRow> aroundGroups,
 
         @Schema(description = "순공 주간 판에 me가 null일 때만: 지난주 분포의 구간별 필요 순공")
         List<GoalExample> goalExamples) {
@@ -75,7 +75,7 @@ public record RankingBoardResponse(
             boolean currentIsBest,
             Integer nextRankIfContinue) {}
 
-    public record StreakGroupRow(
+    public record DayGroupRow(
             int days,
             int rank,
             String nickname,

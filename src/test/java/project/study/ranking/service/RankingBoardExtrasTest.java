@@ -14,10 +14,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import project.study.ranking.RankingIntegrationTestBase;
 import project.study.ranking.dto.RankingBoardResponse;
 import project.study.ranking.dto.RankingBoardResponse.BoardEntry;
+import project.study.ranking.dto.RankingBoardResponse.DayGroupRow;
 import project.study.ranking.dto.RankingBoardResponse.NextTier;
 import project.study.ranking.dto.RankingBoardResponse.RateEligibility;
 import project.study.ranking.dto.RankingBoardResponse.StreakCard;
-import project.study.ranking.dto.RankingBoardResponse.StreakGroupRow;
 import project.study.studysession.entity.TimeSlot;
 
 /** 판별 추가 필드 — 집중률·시간대·누적 시간·연속 공부 일수 (BY-828). */
@@ -135,9 +135,9 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         assertThat(r.around()).isEmpty();
         assertThat(r.aroundGroups())
                 .containsExactly(
-                        new StreakGroupRow(5, 1, "a", 1, LocalDate.of(2026, 9, 5), false, null),
-                        new StreakGroupRow(4, 4, "me", 1, LocalDate.of(2026, 9, 23), true, 2),
-                        new StreakGroupRow(3, 5, "d", 0, LocalDate.of(2026, 9, 27), false, null));
+                        new DayGroupRow(5, 1, "a", 1, LocalDate.of(2026, 9, 5), false, null),
+                        new DayGroupRow(4, 4, "me", 1, LocalDate.of(2026, 9, 23), true, 2),
+                        new DayGroupRow(3, 5, "d", 0, LocalDate.of(2026, 9, 27), false, null));
         assertThat(r.streak())
                 .isEqualTo(new StreakCard(4, LocalDate.of(2026, 9, 20), LocalDate.of(2026, 9, 23), 0, false, null));
     }
