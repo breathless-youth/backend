@@ -110,6 +110,12 @@ management:
 metrics:
   slack:
     webhook-url: ${SLACK_WEBHOOK_URL:}
+  # Amplitude Export 일 단위 적재 (BY-904, ADR-0030). 키가 없으면 적재가 비활성이고 리포트는 Amplitude 항목을 "미수집"으로 쓴다.
+  # prod 프로젝트 키를 SSM → ECS 태스크 정의로 주입한다
+  amplitude:
+    api-key: ${AMPLITUDE_API_KEY:}
+    secret-key: ${AMPLITUDE_SECRET_KEY:}
+    backfill-days: 60
 
 # 처리되지 않은 예외(4xx+5xx)를 전부 Sentry로 보낸다.
 # 단 /api/ 밖 경로의 봇 스캐닝 404는 BotScanEventFilter가 버린다 (ADR-0024).
