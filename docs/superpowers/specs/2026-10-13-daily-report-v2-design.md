@@ -4,7 +4,8 @@
 - 티켓: [BY-904](https://breathless-youth.atlassian.net/browse/BY-904)
 - 선행: BY-461(현재 리포트), BY-373(Amplitude 트래킹), ADR-0009(스트릭 기준), ADR-0012(헤비유저·지표를 백엔드에)
 - 결정 기록: ADR-0030
-- 상태: 설계 확정(2026-10-13 인터뷰) · 구현 계획 `docs/superpowers/plans/2026-10-13-daily-report-v2.md`
+- 상태: 설계 확정(2026-10-13 인터뷰) · PR ① 구현 계획 `docs/superpowers/plans/2026-10-13-daily-report-v2-pr1-amplitude-ingest.md`
+  · PR ② 계획은 ① 구현 뒤 별도 문서
 
 ## 1. 배경
 
@@ -47,7 +48,9 @@
 - **가입일 D0**: `users.created_at`의 KST 날짜. Dn = D0 + n일.
 - **공부한 날**: 그 `stat_date`에 `focus_sec >= 600`인 세션이 하나 이상. 상수는 `StudySessionThresholds`를 공유한다.
 - **하루 순공**: 그 `stat_date` 세션들의 `focus_sec` 합.
-- **제외 유저**: 랭킹과 같은 기준의 데모·테스트 유저. 탈퇴 유저는 코호트에 남겨 이탈로 센다(빼면 리텐션이 부푼다).
+- **제외 유저**: 설정값 `metrics.report.excluded-user-ids`(팀 내부 계정 등, 기본 빈 목록). 데모·테스트 유저를 빼는 기존 장치는
+  없다(랭킹도 탈퇴 유저만 뺀다, 데모 유저는 dev 전용). 탈퇴(`status = DELETE`)는 아직 경로가 없지만, 생기면 코호트에 남겨 이탈로
+  센다(빼면 리텐션이 부푼다).
 - **비율 표기**: `64% (9/14)`. 분모가 0이면 `—`.
 - **조회 범위**: 원본 사실은 `[A−61, A]` 62일. D30 코호트(가입 `[A−57, A−30]`)와 "연속 Top" 판정(A−2까지 재계산)을 덮는다.
 
@@ -56,7 +59,7 @@
 ### 4.1 🕐 가입
 - 어제 가입 수와 전주 같은 요일(A−7) 대비 증감.
 - 최근 7일(`[A−6, A]`) 가입을 3시간 구간 8개(00–03 … 21–24)로 나눈 텍스트 막대와 피크 구간.
-- 로그인 방식(`provider`) 비율.
+- 공부 분야(`category`: 수능·공시·자격증 등, 미입력 포함) 비율. 로그인 방식은 지금 전원 게스트(`DEVICE`)라 쓰지 않는다.
 - 유입: Amplitude 유저 속성의 광고 클릭 유입 여부(`initial_fbclid`·`initial_gclid` 등 클릭 ID 존재)와 `initial_utm_source` 상위 값.
   Amplitude 속성이 없는 유저는 "미수집"으로 센다.
 - 어제 가입자 중 어제 공부한 날이 된 비율(가입 당일 활성화).
@@ -72,7 +75,7 @@
 - 표시: S1 인원, S1 2주차 리텐션 vs 나머지, %p 차이, 상관.
 - **주로 한 행동**: 규칙 카탈로그(§5)의 행동형 규칙(묶음 D~I)을 행동으로 쓰고, **S1의 30% 이상이 한 행동** 중 S1 사용률 − 나머지
   사용률이 큰 순 5개. S1이 5명 미만이면 "표본 부족".
-- **어떤 사람**: S1과 나머지의 로그인 방식, 목표, 가입 시간대(3시간 구간), OS, 광고 유입 비율을 나란히.
+- **어떤 사람**: S1과 나머지의 공부 분야, 프로필 입력 비율(분야·목표 중 하나라도), 가입 시간대(3시간 구간), OS, 광고 유입 비율을 나란히.
 
 ### 4.4 🔍 자동 탐색
 - 코호트 C에 규칙 카탈로그 40개를 모두 적용한다(행동 = D0~D6, 결과 = 2주차 리텐션).
@@ -93,7 +96,8 @@
 | 정착 | `[A−6, A]` 공부한 날 ≥ 3일 |
 | 가벼운 사용 | 나머지 |
 
-- 한 줄 프로필: `닉네임(#id) · 가입 N일차 · 연속 K일 · 어제 순공 h시간 m분 · 소셜/싱글 위주 · 과목 n개 · 목표 · 최근 7일 앱 실행 n일`.
+- 한 줄 프로필: `닉네임(#id) · 가입 N일차 · 연속 K일 · 어제 순공 h시간 m분 · 소셜/싱글 위주 · 과목 n개 · 분야(목표) · 최근 7일 앱 실행 n일`.
+  목표는 자유 입력이라 입력한 경우만 괄호로 붙인다.
   연속 K일은 A부터 거꾸로 센 연속 공부한 날(62일 상한, 넘으면 "60일+"). 앱 실행 일수는 Amplitude 미수집이면 생략.
 - 단계 안에서 어제 순공 내림차순. 메시지 전체 100줄 상한, 초과분은 "외 N명".
 - 마지막 줄: Amplitude 기준 A에 `app_launched`·`app_foregrounded`가 있지만 공부한 날이 아닌 유저 수("앱만 열고 공부 안 함").
@@ -160,8 +164,12 @@
   선점 후 0행이면 롤백 — 배포 중 태스크 둘이 같은 창을 처리해도 한 번만 센다.
 
 ### 7.3 파싱
-- zip 엔트리를 하나씩 `GZIPInputStream` → 줄 단위로 읽는다. 원본은 저장하지 않는다.
-- `user_id`가 없거나 숫자가 아니면 건너뛰고 건수만 센다.
+- 응답을 임시 파일로 받아 `ZipFile`로 연다(중앙 디렉터리까지 검증 — 순차 읽기로는 항목 경계에서 잘린 zip이 정상 종료처럼
+  보인다). `.gz` 항목을 하나씩 `GZIPInputStream` → 줄 단위로 읽고 파일은 지운다. 원본은 저장하지 않는다.
+- `user_id`가 없으면 익명(가입 전 웹 방문, 평소 약 7%)으로 건너뛴다. 깨진 JSON·`event_type`/`event_time` 없음·형식 다름·
+  숫자가 아닌 `user_id`는 깨진 줄로 건너뛴다. **깨진 줄이 적재한 줄보다 많으면** Export 형식이 바뀐 것으로 보고 창을 실패시킨다.
+- `.gz` 항목이 하나도 없는 zip도 실패다(데이터 없음은 404로 온다).
+- 문자열의 널 문자는 지우고, `event_key` 120자·`utm_source` 200자·`os_name` 50자로 자른다(넘으면 창 전체가 롤백되고 재시도마다 실패).
 - 날짜 = `event_time`(UTC) → KST 날짜. 늦게 수신된 이벤트도 발생일로 들어간다.
 - 키 = `event_type`. 아래 3개는 속성값 키를 추가로 센다.
 
@@ -172,7 +180,8 @@
 | `social_room_camera_toggled` | `event_properties.on == true` | `social_room_camera_toggled:on` |
 
 - 유저 속성: `user_properties.initial_utm_source`, 광고 클릭 ID(`initial_fbclid`·`initial_gclid`·`initial_ttclid` 등 값이
-  비어 있지 않고 `EMPTY`가 아님), `os_name`. 최신 non-null 값으로 upsert, 처음·마지막 확인 시각 갱신.
+  비어 있지 않고 `EMPTY`가 아님), `os_name`. **값마다 그 값을 본 시각을 따로 두고 더 늦게 본 non-null이 이긴다**(같은 시각이면
+  먼저 있던 값). 창 안(Java 병합)과 창 사이(SQL upsert)가 같은 규칙이다. 광고 클릭은 한 번이라도 보이면 남는다.
 - 다운로드 크기 상한 200MB(설정값). 넘으면 그 창을 중단하고 예외 → Sentry.
 
 ### 7.4 테이블 (V28)
@@ -194,8 +203,10 @@ CREATE INDEX idx_amplitude_daily_event_date ON amplitude_daily_event (event_date
 CREATE TABLE amplitude_user_attribute (
     user_id       BIGINT       PRIMARY KEY,
     utm_source    VARCHAR(200),
+    utm_seen_at   TIMESTAMPTZ,
     ad_click      BOOLEAN      NOT NULL DEFAULT false,
     os_name       VARCHAR(50),
+    os_seen_at    TIMESTAMPTZ,
     first_seen_at TIMESTAMPTZ  NOT NULL,
     last_seen_at  TIMESTAMPTZ  NOT NULL
 );
@@ -226,8 +237,9 @@ metrics/
   slack/      SlackNotifier(post → ts, reply(ts, text)), SlackBotNotifier(chat.postMessage)
 ```
 
-- **도메인 조회**: metrics는 다른 도메인 테이블을 읽지 않는다. user·studysession·room·subject·dday·ranking 서비스에 "기간 내
-  사실"을 돌려주는 메서드를 하나씩 추가한다(계획 참조).
+- **도메인 조회**: metrics는 다른 도메인 테이블을 읽지 않는다. user·studysession·room·subject·dday 서비스에 "기간 내
+  사실"을 돌려주는 메서드를 하나씩 추가한다(계획 참조). 세션의 소셜 여부는 기존 `findQualifyingSessions`와 같은 방식(같은
+  시간대에 확정된 방 참여가 있었나)으로 studysession 쿼리가 판정한다.
 - **실행기**: `TaskScheduler`·`Executor` 타입 빈을 새로 만들지 않는다. 만들면 Boot의 기본 스케줄러·실행기 자동 구성이 물러나
   다른 스케줄러까지 그 빈으로 돈다. `MetricsJobRunner`가 내부에 단일 스레드 `ExecutorService`를 갖고, 스케줄 메서드는 제출만
   하고 바로 반환한다(prod 스케줄러 풀 2개를 붙잡지 않음).
@@ -250,7 +262,9 @@ metrics/
 | 상황 | 처리 |
 |---|---|
 | Export 실패(타임아웃·5xx·깨진 zip) | 창 롤백, 예외 → Sentry. 다음 실행이 재시도 |
-| Export 404 | 0건으로 처리 기록 |
+| Export 404 | 0건으로 처리 기록 + WARN·Sentry 경고(prod에서 404는 설정 오류일 수 있다) |
+| 200인데 zip이 아님·잘린 zip·`.gz` 없음·깨진 줄 과반 | 창 실패(처리 기록 없음), 다음 실행 재시도 |
+| 다운로드 마감(`download-timeout`, 기본 10분) 초과 | 창 실패. 마감은 요청 시작부터의 전체 시간이다(Spring 7 동작) |
 | 크기 상한 초과 | 창 중단, Sentry("배치 분리 검토 신호") |
 | 어제 창 미수집 | Amplitude 항목 "미수집", 탐색에서 Amplitude 규칙 제외 |
 | 분석기 예외 | 그 섹션만 "계산 실패", Sentry. 나머지 발송 |
@@ -265,12 +279,15 @@ metrics:
     bot-token: ${SLACK_BOT_TOKEN:}
     channel-id: ${SLACK_CHANNEL_ID:}
     thread-delay-ms: 1000
+  report:
+    excluded-user-ids: ${REPORT_EXCLUDED_USER_IDS:}
   amplitude:
     api-key: ${AMPLITUDE_API_KEY:}
     secret-key: ${AMPLITUDE_SECRET_KEY:}
     base-url: https://amplitude.com
     backfill-days: 60
     max-download-bytes: 209715200
+    download-timeout: PT10M   # 첫 바이트 + 전송 + 파싱 전체 마감
 app:
   report:
     enabled: true        # prod만. 스케줄 잡 두 개를 함께 켠다
