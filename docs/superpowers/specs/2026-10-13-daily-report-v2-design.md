@@ -210,9 +210,22 @@
 ### 7.1 실측 사실 (2026-10-13 브라우저 확인)
 - 조직 `long-mode-988791`, US 데이터센터, Free 플랜(월 2M). 프로젝트 prod/dev 분리 → prod 키 사용.
 - prod 10/1~13 33.3k건, 최근 하루 4~6천 건. user_id = 우리 DB userId, 이벤트의 약 93%에 붙어 있다.
-- `acquisition_channel` 속성은 prod에 없다. `initial_utm_*`·`initial_fbclid`(10/7~)는 있으나 값 채움 여부 미확인(스파이크에서 확인).
+- `acquisition_channel` 속성은 prod에 없다. `initial_utm_*`·광고 클릭 ID 키는 있지만 **값은 전부 `EMPTY`**다(아래 스파이크).
 - Export API: `GET https://amplitude.com/api/2/export?start=YYYYMMDDTHH&end=YYYYMMDDTHH`, Basic(api_key:secret_key).
   **기간은 server_upload_time 기준**, 수신 후 최대 2시간 지연, 응답은 zip(시간별 gzip JSON 줄 파일), 404 = 데이터 없음, 4GB·365일 상한.
+
+**스파이크 (2026-10-13, prod 키, 받은 파일은 집계 뒤 삭제)**
+- 10/12(KST) 창 하나: 200, zip 1.2MB, `.gz` 20개(UTC `YYYY-MM-DD_H` 시간별, 데이터 없는 시간은 파일 없음), 이벤트 6,558건,
+  `user_id` 없음 437건(6.7%), 깨진 줄 0, `user_id`는 숫자 문자열, `event_time`은 `YYYY-MM-DD HH:MM:SS.ffffff`(파서 그대로 통과).
+- **받는 시간: 하루 306초, 이틀 249초(첫 바이트까지 247초).** 기간 길이와 상관없이 서버 준비 대기 4~5분이 거의 전부다.
+  첫 배포 백필 60창은 창마다 4~5분이라 약 4~5시간 걸린다 — PR ①을 먼저 배포해 백필을 끝낸 뒤 PR ②를 배포한다(§13, 옛 리포트는
+  다른 스레드라 영향 없음). 다운로드 마감은 15분으로 둔다(10분이면 여유가 2배뿐). 백필이 다시 문제가 되면 여러 창을 한 요청으로
+  받아 파일 이름의 시간으로 창을 나누는 방식이 답이다(대기가 요청당이라).
+- 유입: 그날 활동한 47명 모두 `initial_utm_source`·광고 클릭 ID가 `EMPTY` — 앱 설치 경로가 웹 UTM을 앱으로 넘기지 않는다. 유입 항목은
+  당분간 "표시 없음"이다(§14, FE 연결 필요).
+- OS: 앱이 웹뷰라 `os_name`은 브라우저 이름(`Mobile Safari`·`Chrome Mobile WebView`·`Apple Mail`)이고 운영체제는 `device_family`
+  (`iOS`·`Android`·`Mac OS X`)에 있다 → 적재가 `device_family`를 쓴다(없으면 `os_name`).
+- 리포트 키: `ranking_board_viewed` 0건(출시 전), `push_notification_opened` 1건, 나머지는 모두 들어온다.
 
 ### 7.2 창(window)
 - 창 = KST 하루에 해당하는 수신 시각 24시간. KST 날짜 W의 창은 `start = (W−1)T15`, `end = WT14`(UTC 시 단위, 양끝 포함).
@@ -238,7 +251,7 @@
 | `social_room_camera_toggled` | `event_properties.on == true` | `social_room_camera_toggled:on` |
 
 - 유저 속성: `user_properties.initial_utm_source`, 광고 클릭 ID(`initial_fbclid`·`initial_gclid`·`initial_ttclid` 등 값이
-  비어 있지 않고 `EMPTY`가 아님), `os_name`. **값마다 그 값을 본 시각을 따로 두고 더 늦게 본 non-null이 이긴다**(같은 시각이면
+  비어 있지 않고 `EMPTY`가 아님), 운영체제(`device_family`, 없으면 `os_name` — 웹뷰라 `os_name`은 브라우저다). **값마다 그 값을 본 시각을 따로 두고 더 늦게 본 non-null이 이긴다**(같은 시각이면
   먼저 있던 값). 창 안(Java 병합)과 창 사이(SQL upsert)가 같은 규칙이다. 광고 클릭은 한 번이라도 보이면 남는다.
 - 다운로드 크기 상한 200MB(설정값). 넘으면 그 창을 중단하고 예외 → Sentry.
 
@@ -322,7 +335,7 @@ metrics/
 | Export 실패(타임아웃·5xx·깨진 zip) | 창 롤백, 예외 → Sentry. 다음 실행이 재시도 |
 | Export 404 | 0건으로 처리 기록 + WARN·Sentry 경고(prod에서 404는 설정 오류일 수 있다) |
 | 200인데 zip이 아님·잘린 zip·`.gz` 없음·깨진 줄 과반 | 창 실패(처리 기록 없음), 다음 실행 재시도 |
-| 다운로드 마감(`download-timeout`, 기본 10분) 초과 | 창 실패. 마감은 요청 시작부터의 전체 시간이다(Spring 7 동작) |
+| 다운로드 마감(`download-timeout`, 기본 15분) 초과 | 창 실패. 마감은 요청 시작부터의 전체 시간이다(Spring 7 동작) |
 | 크기 상한 초과 | 창 중단, Sentry("배치 분리 검토 신호") |
 | 어제 창 미수집 | Amplitude 항목 "미수집", 탐색에서 Amplitude 규칙 제외 |
 | 분석기 예외 | 그 섹션만 "계산 실패", Sentry. 나머지 발송 |
@@ -345,7 +358,7 @@ metrics:
     base-url: https://amplitude.com
     backfill-days: 60
     max-download-bytes: 209715200
-    download-timeout: PT10M   # 첫 바이트 + 전송 + 파싱 전체 마감
+    download-timeout: PT15M   # 첫 바이트 + 전송 + 파싱 전체 마감 (실측 첫 바이트 4~5분)
 app:
   report:
     enabled: true        # prod만. 스케줄 잡 두 개를 함께 켠다

@@ -42,7 +42,7 @@ public class HttpAmplitudeExportSource implements AmplitudeExportSource {
             @Value("${metrics.amplitude.api-key:}") String apiKey,
             @Value("${metrics.amplitude.secret-key:}") String secretKey,
             @Value("${metrics.amplitude.max-download-bytes:209715200}") long maxDownloadBytes,
-            @Value("${metrics.amplitude.download-timeout:PT10M}") Duration downloadTimeout) {
+            @Value("${metrics.amplitude.download-timeout:PT15M}") Duration downloadTimeout) {
         // 공유 싱글턴 빌더를 clone()해 이 소스 전용 타임아웃만 얹는다 (SlackWebhookNotifier와 같은 이유).
         // readTimeout은 "응답이 멈춘 시간"이 아니라 요청 시작부터의 전체 마감이다 — Spring 7 JdkClientHttpRequest는
         // 마감이 지나면 받는 중이어도 본문을 닫는다. 첫 바이트(Amplitude가 zip을 조립하는 시간) + 전송 + 파싱이 모두
