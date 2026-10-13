@@ -42,10 +42,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
 
-    // 기간별 가입 수 — Between은 양끝 포함이라 하루 경계에서 다음날 00:00:00.000을 삼킨다.
-    // 반개구간 [from, to)로 세어 날짜 간 중복 집계를 막는다
-    long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(Instant from, Instant to);
-
-    // 기간별 가입 유저 목록(가입 시각 오름차순) — 일일 리포트의 신규 가입 상세용. 반개구간 [from, to)
-    List<User> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAt(Instant from, Instant to);
+    // 일일 리포트 v2 — 이 시각 이후 가입자 (BY-904)
+    List<User> findByCreatedAtGreaterThanEqual(Instant from);
 }
