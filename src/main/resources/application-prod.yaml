@@ -17,6 +17,10 @@ spring:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
+  flyway:
+    # 운영에 V28(Amplitude 적재, BY-904)이 랭킹의 V26·V27보다 먼저 나갔다(v2.2.0). 끄면 랭킹 릴리즈 때 Flyway가
+    # "적용된 V28보다 낮은 미적용 V26·V27"을 검증 오류로 보고 기동을 막는다. 세 마이그레이션은 서로 다른 테이블이라 순서와 무관하다
+    out-of-order: true
   jpa:
     open-in-view: false
     hibernate:
