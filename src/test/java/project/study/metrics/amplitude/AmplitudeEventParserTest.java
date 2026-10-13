@@ -229,6 +229,26 @@ class AmplitudeEventParserTest {
     }
 
     @Test
+    void OS는_브라우저_이름인_os_name이_아니라_device_family로_본다() throws IOException {
+        // 앱이 웹뷰라 웹 SDK의 os_name은 "Mobile Safari"·"Chrome Mobile WebView" 같은 브라우저다 (2026-10-13 prod 실측)
+        String iphone = """
+                {"user_id":"7","event_type":"app_launched","event_time":"2026-10-12 01:00:00",\
+                "os_name":"Mobile Safari","device_family":"iOS","user_properties":{}}""";
+        String android = """
+                {"user_id":"8","event_type":"app_launched","event_time":"2026-10-12 01:00:00",\
+                "os_name":"Chrome Mobile WebView","device_family":"Android","user_properties":{}}""";
+        String noFamily = """
+                {"user_id":"9","event_type":"app_launched","event_time":"2026-10-12 01:00:00",\
+                "os_name":"ios","user_properties":{}}""";
+
+        WindowAggregate result = parse(List.of(iphone, android, noFamily));
+
+        assertThat(result.attributes().get(7L).osName()).isEqualTo("iOS");
+        assertThat(result.attributes().get(8L).osName()).isEqualTo("Android");
+        assertThat(result.attributes().get(9L).osName()).isEqualTo("ios");
+    }
+
+    @Test
     void 긴_UTM_소스와_OS는_컬럼_길이로_자른다() throws IOException {
         String longUtm = "u".repeat(250);
         String longOs = "o".repeat(80);
