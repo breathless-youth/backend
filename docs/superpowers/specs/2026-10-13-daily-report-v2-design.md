@@ -5,7 +5,7 @@
 - 선행: BY-461(현재 리포트), BY-373(Amplitude 트래킹), ADR-0009(스트릭 기준), ADR-0012(헤비유저·지표를 백엔드에)
 - 결정 기록: ADR-0030
 - 상태: 설계 확정(2026-10-13 인터뷰) · PR ① 구현 계획 `docs/superpowers/plans/2026-10-13-daily-report-v2-pr1-amplitude-ingest.md`
-  · PR ② 계획은 ① 구현 뒤 별도 문서
+  · PR ② 계획 `docs/superpowers/plans/2026-10-13-daily-report-v2-pr2-report.md`
 
 ## 1. 배경
 
