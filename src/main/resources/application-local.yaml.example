@@ -75,12 +75,17 @@ refresh-token:
   expiration: 2592000000 # 한달 (opaque UUID, DB 저장)
 
 # 일일 리포트·Amplitude 적재를 로컬에서 한 번 돌려 보려면 키를 넣고 run-once를 켠다 (BY-904).
-# 키는 이 파일(gitignore)에만 둔다
+# 키·토큰은 이 파일(gitignore)에만 둔다. 리포트는 테스트 채널로 보낸다
 # metrics:
 #   amplitude:
 #     api-key:
 #     secret-key:
 #     backfill-days: 3
+#   slack:
+#     bot-token:
+#     channel-id:
+#   report:
+#     excluded-user-ids:
 # app:
 #   report:
 #     run-once: true
