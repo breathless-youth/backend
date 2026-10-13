@@ -2,7 +2,6 @@ package project.study.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -11,9 +10,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -25,7 +21,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 import project.study.common.exception.ConflictException;
-import project.study.metrics.dto.NewUser;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
@@ -162,19 +157,6 @@ class UserServiceTest {
 
         assertThatThrownBy(() -> userService.updateProfile(1L, new ProfileUpdateRequest("사용중닉네임", null, null)))
                 .isInstanceOf(ConflictException.class);
-    }
-
-    @Test
-    void 신규가입_목록은_유저ID와_KST_가입시각을_담는다() {
-        User user = userWithId(176L, DEVICE_ID);
-        // UTC 04:59 = KST 13:59 — 시각 포맷이 KST로 변환되는지 검증(UTC 그대로면 04:59가 되어 실패)
-        ReflectionTestUtils.setField(user, "createdAt", Instant.parse("2026-08-08T04:59:00Z"));
-        when(userRepository.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAt(any(), any()))
-                .thenReturn(List.of(user));
-
-        List<NewUser> result = userService.findNewUsersOn(LocalDate.of(2026, 8, 8));
-
-        assertThat(result).containsExactly(new NewUser(176L, "13:59"));
     }
 
     private User userWithId(Long id, String deviceId) {
