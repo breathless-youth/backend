@@ -2,9 +2,6 @@ package project.study.user.service;
 
 import java.security.SecureRandom;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.ConflictException;
 import project.study.common.exception.ErrorCode;
 import project.study.common.exception.NotFoundException;
-import project.study.metrics.dto.NewUser;
 import project.study.metrics.report.fact.UserFact;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
@@ -32,9 +28,6 @@ import project.study.user.repository.UserRepository;
 @RequiredArgsConstructor
 public class UserService {
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final DateTimeFormatter HOUR_MINUTE =
-            DateTimeFormatter.ofPattern("HH:mm").withZone(KST);
     private static final SecureRandom RANDOM = new SecureRandom();
     // 자동 닉네임 공간이 10만 개(5자리)라 자동 닉네임 유저가 수만 명을 넘으면 재시도 횟수보다 공간이 병목이 된다
     private static final int AUTO_NICKNAME_MAX_ATTEMPTS = 10;
@@ -106,34 +99,6 @@ public class UserService {
     private static ProfileResponse toProfileResponse(User user) {
         return new ProfileResponse(
                 user.getNickname(), user.getGoal(), user.getCategory(), user.getInitial(), user.getColorIndex());
-    }
-
-    @Transactional(readOnly = true)
-    public long countTotal() {
-        return userRepository.count();
-    }
-
-    /**
-     * 해당 날짜(KST)에 가입한 유저 수.
-     */
-    @Transactional(readOnly = true)
-    public long countRegisteredOn(LocalDate date) {
-        Instant from = date.atStartOfDay(KST).toInstant();
-        Instant to = date.plusDays(1).atStartOfDay(KST).toInstant();
-        return userRepository.countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to);
-    }
-
-    /**
-     * 해당 날짜(KST)에 가입한 유저 목록 — 일일 리포트의 신규 가입 상세용. 가입 시각 오름차순,
-     * 시각은 KST "HH:mm"으로 포맷한다.
-     */
-    @Transactional(readOnly = true)
-    public List<NewUser> findNewUsersOn(LocalDate date) {
-        Instant from = date.atStartOfDay(KST).toInstant();
-        Instant to = date.plusDays(1).atStartOfDay(KST).toInstant();
-        return userRepository.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAt(from, to).stream()
-                .map(user -> new NewUser(user.getId(), HOUR_MINUTE.format(user.getCreatedAt())))
-                .toList();
     }
 
     /**
