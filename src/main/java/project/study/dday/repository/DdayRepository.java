@@ -1,6 +1,8 @@
 package project.study.dday.repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -27,4 +29,6 @@ public interface DdayRepository extends JpaRepository<Dday, Long> {
     void upsert(@Param("userId") Long userId, @Param("title") String title, @Param("targetDate") LocalDate targetDate);
 
     long deleteByUserId(Long userId);
+
+    List<Dday> findByUserIdIn(Collection<Long> userIds);
 }

@@ -48,4 +48,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // 기간별 가입 유저 목록(가입 시각 오름차순) — 일일 리포트의 신규 가입 상세용. 반개구간 [from, to)
     List<User> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAt(Instant from, Instant to);
+
+    List<User> findByCreatedAtGreaterThanEqual(Instant from);
 }

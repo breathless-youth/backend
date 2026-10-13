@@ -5,8 +5,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -16,6 +19,7 @@ import project.study.common.exception.ConflictException;
 import project.study.common.exception.ErrorCode;
 import project.study.common.exception.NotFoundException;
 import project.study.metrics.dto.NewUser;
+import project.study.metrics.report.fact.UserFact;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
@@ -129,6 +133,26 @@ public class UserService {
         Instant to = date.plusDays(1).atStartOfDay(KST).toInstant();
         return userRepository.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAt(from, to).stream()
                 .map(user -> new NewUser(user.getId(), HOUR_MINUTE.format(user.getCreatedAt())))
+                .toList();
+    }
+
+    /**
+     * 일일 리포트 v2 대상 유저 — {@code signedUpFrom} 이후 가입자와, 그 전에 가입했지만 {@code alsoUserIds}에 든 유저(기간 안에
+     * 공부한 사람). 가입 시각이 없는 옛 행은 날짜를 매길 수 없어 뺀다 (BY-904).
+     */
+    @Transactional(readOnly = true)
+    public List<UserFact> findReportUsers(Instant signedUpFrom, Collection<Long> alsoUserIds) {
+        Map<Long, User> users = new LinkedHashMap<>();
+        userRepository.findByCreatedAtGreaterThanEqual(signedUpFrom).forEach(user -> users.put(user.getId(), user));
+        List<Long> rest = alsoUserIds.stream()
+                .filter(id -> !users.containsKey(id))
+                .distinct()
+                .toList();
+        userRepository.findAllById(rest).forEach(user -> users.put(user.getId(), user));
+        return users.values().stream()
+                .filter(user -> user.getCreatedAt() != null)
+                .map(user -> new UserFact(
+                        user.getId(), user.getNickname(), user.getCreatedAt(), user.getCategory(), user.getGoal()))
                 .toList();
     }
 }

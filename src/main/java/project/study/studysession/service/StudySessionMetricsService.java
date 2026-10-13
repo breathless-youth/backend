@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.metrics.dto.CohortFirstWeek;
 import project.study.metrics.dto.HeavyUser;
 import project.study.metrics.dto.QualifyingSession;
+import project.study.metrics.report.fact.SessionFact;
+import project.study.studysession.repository.SessionFactQueries;
 import project.study.studysession.repository.StudySessionMetricsRepository;
 
 /**
@@ -28,6 +30,13 @@ public class StudySessionMetricsService {
     private static final long MIN_ACTIVE_DAYS = 3;
 
     private final StudySessionMetricsRepository studySessionMetricsRepository;
+    private final SessionFactQueries sessionFactQueries;
+
+    /** 일일 리포트 v2 — 기간(양끝 포함) 안 모든 세션을 일시정지 수·소셜 여부와 함께 (BY-904). */
+    @Transactional(readOnly = true)
+    public List<SessionFact> findSessionFacts(LocalDate from, LocalDate to) {
+        return sessionFactQueries.findBetween(from, to);
+    }
 
     /**
      * 헤비유저 조회 — {@code anchorDate}를 포함한 최근 {@value #WINDOW_DAYS}일 구간에서, 스트릭 인정
