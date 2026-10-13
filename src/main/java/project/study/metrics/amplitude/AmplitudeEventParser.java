@@ -160,7 +160,9 @@ public final class AmplitudeEventParser {
         JsonNode userProperties = event.path("user_properties");
         boolean adClick = AD_CLICK_IDS.stream().anyMatch(key -> present(text(userProperties, key)));
         String utmSource = text(userProperties, "initial_utm_source");
-        String osName = text(event, "os_name");
+        // 앱이 웹뷰라 웹 SDK의 os_name은 브라우저("Mobile Safari" 등)다 — 운영체제는 device_family(iOS·Android)에 있다
+        String deviceFamily = text(event, "device_family");
+        String osName = present(deviceFamily) ? deviceFamily : text(event, "os_name");
         return UserAttributeObservation.observed(
                 eventTime,
                 present(utmSource) ? truncate(utmSource, MAX_UTM_SOURCE_LENGTH) : null,
