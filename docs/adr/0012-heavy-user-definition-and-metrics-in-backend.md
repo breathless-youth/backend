@@ -86,3 +86,6 @@ ADR을 개정해야 한다.
   한다 — `HeavyUserQueryIntegrationTest`가 그 전까지 회귀를 막는다.
 - 상세 산출 방식(SQL 형태, 임계값 상수의 소속 클래스 등)은
   `docs/superpowers/specs/2026-08-09-daily-metrics-slack-report-design.md`에 있다.
+- **개정(2026-10-13, BY-904):** 헤비유저·코호트 첫주 조회는 일일 리포트 v2(ADR-0030)로 대체돼 지웠다. 자정 분할 조각을 병합하지
+  않는 규칙(결정 3)은 `UserTimelineTest.자정_분할로_조각난_세션은_각_조각이_10분_미만이면_공부한_날이_아니다`가 이어받는다 —
+  이 테스트를 고칠 일이 생기면 먼저 이 ADR을 개정한다.

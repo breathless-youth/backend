@@ -2,12 +2,14 @@ package project.study.user.service;
 
 import java.security.SecureRandom;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -15,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.ConflictException;
 import project.study.common.exception.ErrorCode;
 import project.study.common.exception.NotFoundException;
-import project.study.metrics.dto.NewUser;
+import project.study.metrics.report.fact.UserFact;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
@@ -28,9 +30,6 @@ import project.study.user.repository.UserRepository;
 @RequiredArgsConstructor
 public class UserService {
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final DateTimeFormatter HOUR_MINUTE =
-            DateTimeFormatter.ofPattern("HH:mm").withZone(KST);
     private static final SecureRandom RANDOM = new SecureRandom();
     // 자동 닉네임 공간이 10만 개(5자리)라 자동 닉네임 유저가 수만 명을 넘으면 재시도 횟수보다 공간이 병목이 된다
     private static final int AUTO_NICKNAME_MAX_ATTEMPTS = 10;
@@ -104,31 +103,32 @@ public class UserService {
                 user.getNickname(), user.getGoal(), user.getCategory(), user.getInitial(), user.getColorIndex());
     }
 
+    /** 회원번호 중 users에 있는 것 — Amplitude에만 있는 id(타 환경·지운 행)를 리포트에서 거른다 (스펙 §7.4, BY-904). */
     @Transactional(readOnly = true)
-    public long countTotal() {
-        return userRepository.count();
+    public Set<Long> findExistingUserIds(Collection<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Set.of();
+        }
+        return userRepository.findAllById(userIds).stream().map(User::getId).collect(Collectors.toUnmodifiableSet());
     }
 
     /**
-     * 해당 날짜(KST)에 가입한 유저 수.
+     * 일일 리포트 v2 대상 유저 — {@code signedUpFrom} 이후 가입자와, 그 전에 가입했지만 {@code alsoUserIds}에 든 유저(기간 안에
+     * 공부한 사람). 가입 시각이 없는 옛 행은 날짜를 매길 수 없어 뺀다 (BY-904).
      */
     @Transactional(readOnly = true)
-    public long countRegisteredOn(LocalDate date) {
-        Instant from = date.atStartOfDay(KST).toInstant();
-        Instant to = date.plusDays(1).atStartOfDay(KST).toInstant();
-        return userRepository.countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to);
-    }
-
-    /**
-     * 해당 날짜(KST)에 가입한 유저 목록 — 일일 리포트의 신규 가입 상세용. 가입 시각 오름차순,
-     * 시각은 KST "HH:mm"으로 포맷한다.
-     */
-    @Transactional(readOnly = true)
-    public List<NewUser> findNewUsersOn(LocalDate date) {
-        Instant from = date.atStartOfDay(KST).toInstant();
-        Instant to = date.plusDays(1).atStartOfDay(KST).toInstant();
-        return userRepository.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAt(from, to).stream()
-                .map(user -> new NewUser(user.getId(), HOUR_MINUTE.format(user.getCreatedAt())))
+    public List<UserFact> findReportUsers(Instant signedUpFrom, Collection<Long> alsoUserIds) {
+        Map<Long, User> users = new LinkedHashMap<>();
+        userRepository.findByCreatedAtGreaterThanEqual(signedUpFrom).forEach(user -> users.put(user.getId(), user));
+        List<Long> rest = alsoUserIds.stream()
+                .filter(id -> !users.containsKey(id))
+                .distinct()
+                .toList();
+        userRepository.findAllById(rest).forEach(user -> users.put(user.getId(), user));
+        return users.values().stream()
+                .filter(user -> user.getCreatedAt() != null)
+                .map(user -> new UserFact(
+                        user.getId(), user.getNickname(), user.getCreatedAt(), user.getCategory(), user.getGoal()))
                 .toList();
     }
 }
