@@ -2,7 +2,6 @@ package project.study.metrics.report;
 
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toSet;
-import static java.util.stream.Collectors.toUnmodifiableSet;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -116,13 +115,15 @@ public class ReportDataLoader {
         }
     }
 
+    // Amplitude에는 타 환경·지운 행의 id가 섞일 수 있어 users에 있는 회원만 센다 (스펙 §7.4)
     private Set<Long> appOpened(List<AmplitudeDailyCount> counts, LocalDate anchor) {
-        return counts.stream()
+        Set<Long> opened = counts.stream()
                 .filter(count -> count.date().equals(anchor) && count.count() > 0)
                 .filter(count -> AmplitudeKeys.APP_OPEN.contains(count.key()))
                 .map(AmplitudeDailyCount::userId)
                 .filter(userId -> !excludedUserIds.contains(userId))
-                .collect(toUnmodifiableSet());
+                .collect(toSet());
+        return opened.isEmpty() ? Set.of() : Set.copyOf(userService.findExistingUserIds(opened));
     }
 
     private <T> List<T> kept(List<T> facts, Function<T, Long> userId) {

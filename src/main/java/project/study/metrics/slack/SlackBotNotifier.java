@@ -4,6 +4,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -28,8 +29,12 @@ public class SlackBotNotifier implements SlackNotifier {
     // 응답이 안 오는 연결에 지표 스레드가 묶이지 않게 (옛 웹훅 발송기와 같은 값)
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
-    private static final long MAX_RETRY_AFTER_SEC = 30;
+    // 한 번 기다림의 상한 — 지표 스레드를 몇 분 넘게 붙잡지 않게. Slack은 보통 몇 초를 준다
+    private static final long MAX_RETRY_AFTER_SEC = 120;
+    private static final int MAX_RATE_LIMIT_WAITS = 3;
     private static final int TOO_MANY_REQUESTS = 429;
+    // 토큰·채널 ID는 보이는 ASCII뿐이다 — 개행 등이 섞이면 JDK가 헤더 값 째로 예외 메시지에 넣어 토큰이 새므로 미리 거른다
+    private static final Pattern CREDENTIAL = Pattern.compile("[\\x21-\\x7E]+");
 
     private final RestClient restClient;
     private final String token;
@@ -59,11 +64,17 @@ public class SlackBotNotifier implements SlackNotifier {
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
                 .build();
-        this.token = token == null ? "" : token.strip();
-        this.channel = channel == null ? "" : channel.strip();
+        this.token = credential(token);
+        this.channel = credential(channel);
         if (!isEnabled()) {
-            log.warn("metrics.slack.bot-token·channel-id 중 빈 값이 있어 일일 지표 리포트를 보내지 않는다");
+            log.warn("metrics.slack.bot-token·channel-id 중 비었거나 형식이 잘못된 값이 있어 일일 지표 리포트를 보내지 않는다");
         }
+    }
+
+    // 값은 로그에 남기지 않는다 — 형식이 틀리면 빈 값과 같이 비활성으로 본다
+    private static String credential(String value) {
+        String stripped = value == null ? "" : value.strip();
+        return CREDENTIAL.matcher(stripped).matches() ? stripped : "";
     }
 
     @Override
@@ -88,7 +99,7 @@ public class SlackBotNotifier implements SlackNotifier {
     private Map<String, Object> body(String text, String threadTs) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("channel", channel);
-        body.put("text", text);
+        body.put("text", escape(text));
         if (threadTs != null) {
             body.put("thread_ts", threadTs);
         }
@@ -97,18 +108,19 @@ public class SlackBotNotifier implements SlackNotifier {
         return body;
     }
 
-    // 429는 Retry-After초 뒤 한 번 더 — 그래도 막히면 @Retryable이 짧은 간격으로 두 번 더 시도한다
+    // 429는 응답마다 Retry-After초를 기다렸다 다시 보낸다(최대 3번). 그래도 막히면 @Retryable에서 빠지는 예외로 끝낸다
     private String call(Map<String, Object> body) {
         if (!isEnabled()) {
             throw new SlackNotificationException("Slack 봇 설정이 없다");
         }
         SlackReply reply = exchange(body);
-        if (reply.limited()) {
+        for (int waits = 0; reply.limited() && waits < MAX_RATE_LIMIT_WAITS; waits++) {
             sleep(reply.retryAfterSec());
             reply = exchange(body);
         }
         if (reply.limited()) {
-            throw new SlackNotificationException("Slack 요청 한도 초과 (HTTP 429)");
+            throw new SlackRateLimitException(
+                    "Slack 요청 한도 초과 (HTTP 429, %d번 기다려도 풀리지 않음)".formatted(MAX_RATE_LIMIT_WAITS));
         }
         if (!reply.ok()) {
             throw new SlackNotificationException("Slack API 오류 (%s)".formatted(reply.error()));
@@ -125,10 +137,16 @@ public class SlackBotNotifier implements SlackNotifier {
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .exchange((request, response) -> read(response));
-        } catch (RestClientException e) {
+        } catch (RestClientException | IllegalArgumentException e) {
+            // 원인 예외 메시지에 요청 헤더(토큰)가 들어갈 수 있어 타입 이름만 남긴다
             throw new SlackNotificationException(
                     "Slack API 호출 실패 (%s)".formatted(e.getClass().getSimpleName()));
         }
+    }
+
+    /** Slack 제어 문자(`&`·`<`·`>`)를 이스케이프한다 — 목표·UTM 같은 사용자 입력이 멘션(`<!channel>`)이나 위장 링크가 되지 않게. */
+    static String escape(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private static SlackReply read(ConvertibleClientHttpResponse response) throws java.io.IOException {
