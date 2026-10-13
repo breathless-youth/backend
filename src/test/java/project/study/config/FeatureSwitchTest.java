@@ -7,6 +7,10 @@ import io.swagger.v3.oas.models.OpenAPI;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import project.study.metrics.amplitude.AmplitudeIngestJob;
+import project.study.metrics.amplitude.AmplitudeIngestService;
+import project.study.metrics.job.MetricsJobRunner;
+import project.study.metrics.job.MetricsRunOnce;
 import project.study.metrics.scheduler.DailyReportScheduler;
 import project.study.metrics.service.DailyReportService;
 import project.study.studysession.repository.StudySessionRepository;
@@ -31,6 +35,11 @@ class FeatureSwitchTest {
     private final ApplicationContextRunner report = new ApplicationContextRunner()
             .withBean(DailyReportService.class, () -> mock(DailyReportService.class))
             .withUserConfiguration(DailyReportScheduler.class);
+
+    private final ApplicationContextRunner amplitudeIngest = new ApplicationContextRunner()
+            .withBean(MetricsJobRunner.class, () -> mock(MetricsJobRunner.class))
+            .withBean(AmplitudeIngestService.class, () -> mock(AmplitudeIngestService.class))
+            .withUserConfiguration(AmplitudeIngestJob.class, MetricsRunOnce.class);
 
     private final ApplicationContextRunner openApi =
             new ApplicationContextRunner().withUserConfiguration(OpenApiConfig.class);
@@ -64,6 +73,32 @@ class FeatureSwitchTest {
     void 일일_리포트_스케줄러는_스위치를_켜면_뜬다() {
         report.withPropertyValues("app.report.enabled=true")
                 .run(context -> assertThat(context).hasSingleBean(DailyReportScheduler.class));
+    }
+
+    @Test
+    void Amplitude_적재_잡은_리포트_스위치가_없으면_뜨지_않는다() {
+        amplitudeIngest.run(context -> assertThat(context).doesNotHaveBean(AmplitudeIngestJob.class));
+    }
+
+    @Test
+    void Amplitude_적재_잡은_리포트_스위치를_켜면_뜬다() {
+        amplitudeIngest
+                .withPropertyValues("app.report.enabled=true")
+                .run(context -> assertThat(context).hasSingleBean(AmplitudeIngestJob.class));
+    }
+
+    @Test
+    void 한_번_실행은_값이_없으면_꺼져_있다() {
+        amplitudeIngest
+                .withPropertyValues("app.report.enabled=true")
+                .run(context -> assertThat(context).doesNotHaveBean(MetricsRunOnce.class));
+    }
+
+    @Test
+    void 한_번_실행은_켜면_뜬다() {
+        amplitudeIngest
+                .withPropertyValues("app.report.run-once=true")
+                .run(context -> assertThat(context).hasSingleBean(MetricsRunOnce.class));
     }
 
     // Spring의 boolean 변환은 "on"/"1"도 true지만 @ConditionalOnProperty는 "true"만 인정한다 — 두 곳이
