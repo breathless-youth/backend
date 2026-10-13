@@ -11,8 +11,8 @@ import project.study.metrics.amplitude.AmplitudeIngestJob;
 import project.study.metrics.amplitude.AmplitudeIngestService;
 import project.study.metrics.job.MetricsJobRunner;
 import project.study.metrics.job.MetricsRunOnce;
-import project.study.metrics.scheduler.DailyReportScheduler;
-import project.study.metrics.service.DailyReportService;
+import project.study.metrics.report.DailyReportJob;
+import project.study.metrics.report.DailyReportService;
 import project.study.studysession.repository.StudySessionRepository;
 import project.study.studysession.service.StudySessionService;
 import project.study.subject.service.StudySubjectService;
@@ -33,12 +33,14 @@ class FeatureSwitchTest {
             .withUserConfiguration(DevDataSeeder.class);
 
     private final ApplicationContextRunner report = new ApplicationContextRunner()
+            .withBean(MetricsJobRunner.class, () -> mock(MetricsJobRunner.class))
             .withBean(DailyReportService.class, () -> mock(DailyReportService.class))
-            .withUserConfiguration(DailyReportScheduler.class);
+            .withUserConfiguration(DailyReportJob.class);
 
     private final ApplicationContextRunner amplitudeIngest = new ApplicationContextRunner()
             .withBean(MetricsJobRunner.class, () -> mock(MetricsJobRunner.class))
             .withBean(AmplitudeIngestService.class, () -> mock(AmplitudeIngestService.class))
+            .withBean(DailyReportService.class, () -> mock(DailyReportService.class))
             .withUserConfiguration(AmplitudeIngestJob.class, MetricsRunOnce.class);
 
     private final ApplicationContextRunner openApi =
@@ -65,14 +67,14 @@ class FeatureSwitchTest {
     }
 
     @Test
-    void 일일_리포트_스케줄러는_스위치가_없으면_뜨지_않는다() {
-        report.run(context -> assertThat(context).doesNotHaveBean(DailyReportScheduler.class));
+    void 일일_리포트_잡은_스위치가_없으면_뜨지_않는다() {
+        report.run(context -> assertThat(context).doesNotHaveBean(DailyReportJob.class));
     }
 
     @Test
-    void 일일_리포트_스케줄러는_스위치를_켜면_뜬다() {
+    void 일일_리포트_잡은_스위치를_켜면_뜬다() {
         report.withPropertyValues("app.report.enabled=true")
-                .run(context -> assertThat(context).hasSingleBean(DailyReportScheduler.class));
+                .run(context -> assertThat(context).hasSingleBean(DailyReportJob.class));
     }
 
     @Test
