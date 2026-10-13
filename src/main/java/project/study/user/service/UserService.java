@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -99,6 +101,15 @@ public class UserService {
     private static ProfileResponse toProfileResponse(User user) {
         return new ProfileResponse(
                 user.getNickname(), user.getGoal(), user.getCategory(), user.getInitial(), user.getColorIndex());
+    }
+
+    /** 회원번호 중 users에 있는 것 — Amplitude에만 있는 id(타 환경·지운 행)를 리포트에서 거른다 (스펙 §7.4, BY-904). */
+    @Transactional(readOnly = true)
+    public Set<Long> findExistingUserIds(Collection<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Set.of();
+        }
+        return userRepository.findAllById(userIds).stream().map(User::getId).collect(Collectors.toUnmodifiableSet());
     }
 
     /**

@@ -34,4 +34,17 @@ class DailyReportTest {
         assertThat(failed.value()).isEmpty();
         assertThat(SectionResult.compute("테스트", () -> "ok").value()).contains("ok");
     }
+
+    @Test
+    void 빈_데이터도_모든_섹션이_계산_실패_없이_없음으로_나온다() {
+        for (boolean amplitude : new boolean[] {true, false}) {
+            var rendered = project.study.metrics.report.render.ReportRenderer.render(
+                    DailyReport.analyze(ReportDataFixture.data(A, amplitude)));
+
+            assertThat(rendered.summary()).doesNotContain("계산 실패", "NaN");
+            assertThat(rendered.threads())
+                    .hasSize(6)
+                    .allSatisfy(text -> assertThat(text).doesNotContain("계산 실패", "NaN"));
+        }
+    }
 }

@@ -85,7 +85,8 @@ public final class SignupRenderer {
             return "미수집 %d명".formatted(attribution.missing());
         }
         List<String> parts = new ArrayList<>();
-        parts.add("광고 클릭 " + Fmt.rate(Rate.of(attribution.adClicks(), attribution.total())));
+        // 유입 정보가 있는 사람 중 비율 — 미수집은 끝에 따로 센다
+        parts.add("광고 클릭 " + Fmt.rate(Rate.of(attribution.adClicks(), attribution.total() - attribution.missing())));
         if (!attribution.topUtm().isEmpty()) {
             parts.add("UTM 상위 "
                     + attribution.topUtm().stream()

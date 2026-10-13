@@ -150,13 +150,56 @@ class SlackBotNotifierTest {
     }
 
     @Test
-    void 요청_한도가_이어지면_실패한다() {
-        replies.add(new Reply(429, "0", ""));
-        replies.add(new Reply(429, "0", ""));
+    void 요청_한도가_이어지면_매번_Retry_After를_지키며_기다린다() {
+        replies.add(new Reply(429, "1", ""));
+        replies.add(new Reply(429, "1", ""));
+        reply(200, "{\"ok\":true,\"ts\":\"3.3\"}");
+        long started = System.nanoTime();
 
-        assertThatThrownBy(() -> notifier().post("x"))
-                .isInstanceOf(SlackNotificationException.class)
-                .hasMessageContaining("429");
+        assertThat(notifier().post("x")).isEqualTo("3.3");
+
+        assertThat(bodies).hasSize(3);
+        assertThat(java.time.Duration.ofNanos(System.nanoTime() - started))
+                .isGreaterThanOrEqualTo(java.time.Duration.ofSeconds(2));
+    }
+
+    @Test
+    void 요청_한도가_끝까지_풀리지_않으면_재시도_프록시도_더_보내지_않는다() {
+        for (int i = 0; i < 4; i++) {
+            replies.add(new Reply(429, "0", ""));
+        }
+
+        try (AnnotationConfigApplicationContext context = retryingContext()) {
+            SlackNotifier notifier = context.getBean(SlackNotifier.class);
+            assertThatThrownBy(() -> notifier.post("x"))
+                    .isInstanceOf(SlackRateLimitException.class)
+                    .hasMessageContaining("429");
+        }
+        // 한도 초과에 짧은 간격 재시도를 얹으면 한도를 더 오래 끈다 — 기다림은 Retry-After로만 한다
+        assertThat(bodies).hasSize(4);
+    }
+
+    @Test
+    void 토큰에_공백이나_제어_문자가_섞이면_꺼지고_토큰을_남기지_않는다() {
+        SlackBotNotifier broken = new SlackBotNotifier(RestClient.builder(), baseUrl(), "xoxb-FAKE\nSENTINEL", CHANNEL);
+
+        Throwable thrown = catchThrowable(() -> broken.post("x"));
+
+        assertThat(broken.isEnabled()).isFalse();
+        assertThat(thrown).isInstanceOf(SlackNotificationException.class).hasNoCause();
+        assertThat(thrown.getMessage()).doesNotContain("SENTINEL");
+        assertThat(bodies).isEmpty();
+    }
+
+    @Test
+    void 사용자_입력이_멘션이나_링크가_되지_않게_Slack_제어_문자를_이스케이프한다() {
+        reply(200, "{\"ok\":true,\"ts\":\"1.1\"}");
+
+        notifier().post("수능(<!channel> 합격) · 유입: <https://evil.example|공식> & <@U012AB3CD>");
+
+        assertThat(bodies.getFirst())
+                .contains("수능(&lt;!channel&gt; 합격) · 유입: &lt;https://evil.example|공식&gt; &amp; &lt;@U012AB3CD&gt;")
+                .doesNotContain("<!channel>");
     }
 
     @Test

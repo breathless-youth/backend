@@ -86,6 +86,7 @@ class ReportDataLoaderTest {
                         new AmplitudeDailyCount(5, A.minusDays(1), "app_launched", 1)));
         when(amplitudeQueryService.findAttributes(Set.of(1L)))
                 .thenReturn(Map.of(1L, new AmplitudeAttribute("instagram", true, "ios")));
+        when(userService.findExistingUserIds(Set.of(1L, 5L))).thenReturn(Set.of(1L, 5L));
         stubEmptyExtras(Set.of(1L));
 
         ReportData data = loader(Set.of()).load(A);
@@ -124,5 +125,25 @@ class ReportDataLoaderTest {
         assertThat(data.users()).extracting(UserTimeline::userId).containsExactly(1L);
         assertThat(data.appOpenedOnAnchor()).isEmpty();
         verify(userService).findReportUsers(Kst.startOf(A.minusDays(68)), Set.of(1L));
+    }
+
+    @Test
+    void 앱을_연_사람은_users에_있는_회원만_센다() {
+        when(sessionMetricsService.findSessionFacts(A.minusDays(61), A.plusDays(1)))
+                .thenReturn(List.of());
+        when(userService.findReportUsers(Kst.startOf(A.minusDays(68)), Set.of()))
+                .thenReturn(List.of());
+        when(roomMetricsService.findJoins(FACT_FROM, FACT_TO)).thenReturn(List.of());
+        when(amplitudeQueryService.findCounts(any(), any(), any()))
+                .thenReturn(List.of(
+                        new AmplitudeDailyCount(5, A, "app_launched", 1),
+                        new AmplitudeDailyCount(99, A, "app_launched", 1))); // Amplitude에만 있는 id
+        when(amplitudeQueryService.findAttributes(Set.of())).thenReturn(Map.of());
+        when(userService.findExistingUserIds(Set.of(5L, 99L))).thenReturn(Set.of(5L));
+        stubEmptyExtras(Set.of());
+
+        ReportData data = loader(Set.of()).load(A);
+
+        assertThat(data.appOpenedOnAnchor()).containsExactly(5L);
     }
 }

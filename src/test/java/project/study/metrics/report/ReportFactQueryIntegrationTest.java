@@ -115,6 +115,15 @@ class ReportFactQueryIntegrationTest {
     }
 
     @Test
+    void 있는_회원번호만_돌려준다() {
+        long userId = insertUser(T0);
+
+        assertThat(userService.findExistingUserIds(Set.of(userId, Long.MAX_VALUE)))
+                .containsExactly(userId);
+        assertThat(userService.findExistingUserIds(Set.of())).isEmpty();
+    }
+
+    @Test
     void 가입_시각이_없는_유저는_날짜를_매길_수_없어_뺀다() {
         long noCreatedAt = insertUser(null);
 

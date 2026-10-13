@@ -119,4 +119,20 @@ class SegmentRosterTest {
         assertThat(section.retained().omitted()).isEqualTo(1);
         assertThat(section.retained().omittedSignupOnOrBefore()).isEqualTo(A.minusDays(40));
     }
+
+    @Test
+    void 닉네임과_분야가_비어_있으면_대체_문구를_쓴다() {
+        UserTimeline blank =
+                user(7, FRESH).profile(null, null, null).studyOnDays(0, 1, 2).build();
+
+        RosterCard card = SegmentRoster.analyze(ReportDataFixture.data(A, false, blank))
+                .dropped()
+                .cards()
+                .getFirst();
+
+        assertThat(card.nickname()).isEqualTo("닉네임 없음");
+        assertThat(card.profile()).isEqualTo("분야 미입력");
+        assertThat(card.os()).isNull();
+        assertThat(card.attribution()).isEqualTo("유입 미수집");
+    }
 }

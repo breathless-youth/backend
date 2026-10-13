@@ -81,6 +81,10 @@ class SegmentAnalyzerTest {
         assertThat(section.profile()).isEqualTo(new BehaviorRow("프로필(분야·목표) 입력", Rate.of(5, 6), Rate.of(0, 15)));
         assertThat(section.who().getFirst().title()).isEqualTo("분야");
         assertThat(section.who().getFirst().rows()).extracting(ShareRow::label).containsExactly("수능", "공무원", "미입력");
+        // 유입 정보(Amplitude 속성)가 아무에게도 없으면 광고 유입은 0%가 아니라 모른다
+        ShareRow ads = section.who().getLast().rows().getFirst();
+        assertThat(ads.segment().defined()).isFalse();
+        assertThat(ads.rest().defined()).isFalse();
     }
 
     @Test

@@ -16,6 +16,7 @@ import project.study.metrics.report.Attributions;
 import project.study.metrics.report.Categories;
 import project.study.metrics.report.Kst;
 import project.study.metrics.report.OsLabels;
+import project.study.metrics.report.Rate;
 import project.study.metrics.report.UserTimeline;
 import project.study.metrics.report.analyzer.SegmentSection.Comparison;
 import project.study.metrics.report.analyzer.SegmentSection.ShareRow;
@@ -36,7 +37,7 @@ final class SegmentProfiles {
                 categories(segment, rest),
                 bands(segment, rest),
                 os(segment, rest),
-                new Comparison("광고 유입", List.of(row("", segment, rest, Attributions::adClick))));
+                new Comparison("광고 유입", List.of(new ShareRow("", adRate(segment), adRate(rest)))));
     }
 
     // 3일 이상에서 많은 분야 3개 + 미입력
@@ -95,6 +96,13 @@ final class SegmentProfiles {
             return OsLabels.MISSING;
         }
         return OS_ORDER.contains(os) ? os : OTHER_OS;
+    }
+
+    // 유입 정보(Amplitude 속성)가 있는 사람 중 비율 — 미수집을 "광고 아님"으로 세면 수집 장애가 유입 특성처럼 보인다
+    private static Rate adRate(List<UserTimeline> users) {
+        List<UserTimeline> known =
+                users.stream().filter(user -> user.attribute().isPresent()).toList();
+        return SegmentAnalyzer.rate(known, Attributions::adClick);
     }
 
     private static ShareRow row(
