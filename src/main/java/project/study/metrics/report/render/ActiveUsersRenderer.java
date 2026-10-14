@@ -13,13 +13,13 @@ public final class ActiveUsersRenderer {
     static final int ROW_LIMIT = 100;
 
     private static final Map<Stage, String> ICONS =
-            Map.of(Stage.NEW, "🌱", Stage.STEADY, "🔥", Stage.RETURNING, "🔄", Stage.OCCASIONAL, "🌙");
+            Map.of(Stage.NEW, "🌱", Stage.LOVERS, "🔥", Stage.COMEBACK, "🔄", Stage.SOMETIMES, "🌙");
     private static final List<String> CRITERIA = List.of(
-            "단계 기준 (새로 온 사람이 먼저)",
-            "• 새로 온 사람: 어제가 가입 첫 주(가입일 포함 7일) 안",
-            "• 꾸준한 사람: 최근 7일(어제 포함) 중 3일 이상 공부",
-            "• 돌아온 사람: 첫 주가 지났고, 어제 전 14일 동안 공부 안 하다가 어제 공부 (가입 뒤 처음 공부한 사람 포함)",
-            "• 가끔 오는 사람: 나머지 — 최근 7일 중 1~2일 공부");
+            "단계 기준 (New가 먼저)",
+            "• New: 어제가 가입 첫 주(가입일 포함 7일) 안",
+            "• Lovers: 최근 7일(어제 포함) 중 3일 이상 공부",
+            "• Comeback: 첫 주가 지났고, 어제 전 7일 동안 공부 안 하다가 어제 공부 (가입 뒤 처음 공부한 사람 포함)",
+            "• Sometimes: 나머지 — 최근 7일 중 1~2일 공부");
 
     private ActiveUsersRenderer() {}
 

@@ -194,10 +194,9 @@ public final class ReportSamples {
     public static ActiveUsersSection active() {
         Map<Stage, List<ActiveUserRow>> byStage = new EnumMap<>(Stage.class);
         byStage.put(Stage.NEW, rows(morningRow(), 6));
-        byStage.put(Stage.STEADY, rows(new ActiveUserRow(418, "공부하는곰", 13, 3, 210 * 60, true, 4, "공무원(7급 합격)", 6), 5));
-        byStage.put(
-                Stage.RETURNING, rows(new ActiveUserRow(212, "다시시작", 31, 1, 50 * 60, false, 1, "어학(토익 900)", 2), 2));
-        byStage.put(Stage.OCCASIONAL, rows(new ActiveUserRow(300, "가끔이", 20, 1, 20 * 60, false, 1, "분야 미입력", 2), 2));
+        byStage.put(Stage.LOVERS, rows(new ActiveUserRow(418, "공부하는곰", 13, 3, 210 * 60, true, 4, "공무원(7급 합격)", 6), 5));
+        byStage.put(Stage.COMEBACK, rows(new ActiveUserRow(212, "다시시작", 31, 1, 50 * 60, false, 1, "어학(토익 900)", 2), 2));
+        byStage.put(Stage.SOMETIMES, rows(new ActiveUserRow(300, "가끔이", 20, 1, 20 * 60, false, 1, "분야 미입력", 2), 2));
         return new ActiveUsersSection(15, byStage, 9);
     }
 

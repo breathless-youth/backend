@@ -98,13 +98,13 @@ public final class SummaryRenderer {
         if (section.total() == 0) {
             return "어제 공부한 사람 없음";
         }
-        return ("어제 공부한 %d명: 새로 온 사람 %d (가입 첫 주) · 꾸준한 사람 %d (최근 7일 중 3일+) · 돌아온 사람 %d (2주 쉬다 옴)"
-                        + " · 가끔 오는 사람 %d (최근 7일 중 1~2일)")
+        return ("어제 공부한 %d명: New %d (가입 첫 주) · Lovers %d (최근 7일 중 3일+) · Comeback %d (1주 쉬다 옴)"
+                        + " · Sometimes %d (최근 7일 중 1~2일)")
                 .formatted(
                         section.total(),
                         section.count(Stage.NEW),
-                        section.count(Stage.STEADY),
-                        section.count(Stage.RETURNING),
-                        section.count(Stage.OCCASIONAL));
+                        section.count(Stage.LOVERS),
+                        section.count(Stage.COMEBACK),
+                        section.count(Stage.SOMETIMES));
     }
 }
