@@ -41,10 +41,10 @@ class DailyReportTest {
             var rendered = project.study.metrics.report.render.ReportRenderer.render(
                     DailyReport.analyze(ReportDataFixture.data(A, amplitude)));
 
-            assertThat(rendered.summary()).doesNotContain("계산 실패", "NaN");
+            assertThat(rendered.summary().text()).doesNotContain("계산 실패", "NaN");
             assertThat(rendered.threads())
                     .hasSize(6)
-                    .allSatisfy(text -> assertThat(text).doesNotContain("계산 실패", "NaN"));
+                    .allSatisfy(thread -> assertThat(thread.text()).doesNotContain("계산 실패", "NaN"));
         }
     }
 }

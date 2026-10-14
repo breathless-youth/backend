@@ -1,8 +1,11 @@
 package project.study.metrics.report.render;
 
+import static project.study.metrics.slack.SlackMessage.bold;
+
 import io.sentry.Sentry;
 import java.util.List;
-import java.util.function.Function;
+import java.util.Map;
+import java.util.function.BiConsumer;
 import lombok.extern.slf4j.Slf4j;
 import project.study.metrics.report.DailyReport;
 import project.study.metrics.report.Kst;
@@ -12,99 +15,108 @@ import project.study.metrics.report.analyzer.ActiveUsersSection.Stage;
 import project.study.metrics.report.analyzer.ExplorerSection;
 import project.study.metrics.report.analyzer.ExplorerSection.RankedRule;
 import project.study.metrics.report.analyzer.RetentionSection;
+import project.study.metrics.report.analyzer.RetentionSection.RetentionRow;
 import project.study.metrics.report.analyzer.SegmentSection;
 import project.study.metrics.report.analyzer.SegmentSection.GroupRow;
 import project.study.metrics.report.analyzer.SignupSection;
+import project.study.metrics.slack.SlackMessage;
+import project.study.metrics.slack.SlackMessage.Builder;
 
 /**
- * 📊 본 메시지(요약) — 매일 훑어보는 줄이라 용어 없이 풀어 쓴다(스펙 §4.7). 정의·분모·코호트 기간은 스레드에 둔다.
+ * 📊 본 메시지(요약) — "가입"·"리텐션" 묶음 아래 항목과 하위 항목으로 쓴다(BY-910). 용어 없이 풀어 쓰고, 정의·분모·코호트 기간은 스레드에 둔다
+ * (스펙 §4.7).
  */
 @Slf4j
 public final class SummaryRenderer {
 
+    private static final List<String> RETENTION_LABELS = List.of("가입 다음 날", "7~13일 뒤", "28~34일 뒤");
+    private static final Map<Stage, String> STAGE_HINTS = Map.of(
+            Stage.NEW, "가입 첫 주",
+            Stage.LOVERS, "최근 7일 중 3일+",
+            Stage.COMEBACK, "1주 쉬다 옴",
+            Stage.SOMETIMES, "최근 7일 중 1~2일");
+
     private SummaryRenderer() {}
 
-    public static String render(DailyReport report) {
-        return String.join(
-                "\n",
-                List.of(
-                        "📊 " + Fmt.monthDayWeekday(report.anchor()) + " 일일 지표",
-                        line(report.signup(), "가입", SummaryRenderer::signup),
-                        line(report.retention(), "다시 와서 공부한 비율", SummaryRenderer::retention),
-                        line(report.segment(), "첫 주 3일 이상 공부한 사람", SummaryRenderer::segment),
-                        line(report.explorer(), "남는 사람과 관련 깊은 행동", SummaryRenderer::explorer),
-                        line(report.active(), "어제 공부한 사람", SummaryRenderer::active)));
+    public static SlackMessage render(DailyReport report) {
+        Builder out = SlackMessage.builder("📊 " + Fmt.monthDayWeekday(report.anchor()) + " 일일 지표");
+        out.heading("가입");
+        part(out, report.signup(), "가입자 수", SummaryRenderer::signup);
+        part(out, report.retention(), "다시 와서 공부한 비율", SummaryRenderer::retention);
+        out.blank().heading("리텐션");
+        part(out, report.segment(), "첫 주에 공부한 날별로 둘째 주에도 공부한 비율", SummaryRenderer::segment);
+        part(out, report.active(), "어제 공부한 사람", SummaryRenderer::active);
+        part(out, report.explorer(), "남는 사람과 가장 관련 깊은 행동", SummaryRenderer::explorer);
+        return out.build();
     }
 
-    private static <T> String line(SectionResult<T> result, String label, Function<T, String> renderer) {
-        String failed = "• " + label + ": 계산 실패";
+    // 묶음 하나를 따로 그려 붙인다 — 계산이나 그리기가 실패하면 그 항목만 "계산 실패"
+    private static <T> void part(Builder out, SectionResult<T> result, String label, BiConsumer<Builder, T> writer) {
         try {
-            return result.value().map(value -> "• " + renderer.apply(value)).orElse(failed);
+            T value = result.value().orElse(null);
+            if (value == null) {
+                out.item(label + " = 계산 실패");
+                return;
+            }
+            out.addAll(SlackMessage.lines(lines -> writer.accept(lines, value)));
         } catch (RuntimeException e) {
-            log.error("일일 리포트 요약 줄 렌더링 실패 (줄={})", label, e);
+            log.error("일일 리포트 요약 렌더링 실패 (항목={})", label, e);
             Sentry.captureException(e);
-            return failed;
+            out.item(label + " = 계산 실패");
         }
     }
 
-    private static String signup(SignupSection section) {
-        String count = "가입 %d명".formatted(section.yesterdayCount());
-        return section.peak()
-                .map(band -> count + " · 가장 많이 가입한 시간 " + Kst.bandLabel(band.startHour()))
-                .orElse(count);
+    private static void signup(Builder out, SignupSection section) {
+        out.item("가입자 수 = ", bold(section.yesterdayCount()), "명");
+        section.peak().ifPresent(band -> out.item("가장 많이 가입한 시간 = ", bold(Kst.bandLabel(band.startHour()))));
     }
 
-    private static String retention(RetentionSection section) {
-        var rows = section.rows();
-        return "다시 와서 공부한 비율: 가입 다음 날 %s · 7~13일 뒤 %s · 28~34일 뒤 %s  (지난주 %s · %s · %s)"
-                .formatted(
-                        Fmt.percent(rows.get(0).current()),
-                        Fmt.percent(rows.get(1).current()),
-                        Fmt.percent(rows.get(2).current()),
-                        Fmt.percent(rows.get(0).lastWeek()),
-                        Fmt.percent(rows.get(1).lastWeek()),
-                        Fmt.percent(rows.get(2).lastWeek()));
-    }
-
-    private static String segment(SegmentSection section) {
-        GroupRow three = section.groups().get(0);
-        if (three.size() == 0) {
-            return "첫 주에 3일 이상 공부한 사람 없음 (가입 %s %d명 중)"
-                    .formatted(Fmt.range(section.cohortFrom(), section.cohortTo()), section.cohortSize());
+    private static void retention(Builder out, RetentionSection section) {
+        out.item("다시 와서 공부한 비율");
+        List<RetentionRow> rows = section.rows();
+        for (int i = 0; i < rows.size(); i++) {
+            out.sub(bold(Fmt.percent(rows.get(i).current())), " (" + RETENTION_LABELS.get(i) + ")");
         }
-        return "첫 주에 3일 이상 공부한 %d명 중 %d명(%s)이 둘째 주에도 공부 — 1~2일 공부한 사람은 %s, 안 한 사람은 %s (명단은 스레드)"
-                .formatted(
-                        three.size(),
-                        three.retained().numerator(),
-                        Fmt.percent(three.retained()),
-                        Fmt.percent(section.groups().get(1).retained()),
-                        Fmt.percent(section.groups().get(2).retained()));
+        out.quote("지난주 "
+                + String.join(
+                        " · ",
+                        rows.stream().map(row -> Fmt.percent(row.lastWeek())).toList()));
     }
 
-    private static String explorer(ExplorerSection section) {
+    private static void segment(Builder out, SegmentSection section) {
+        if (section.groups().getFirst().size() == 0) {
+            out.item("첫 주에 3일 이상 공부한 사람 없음 (가입 %s %d명 중)"
+                    .formatted(Fmt.range(section.cohortFrom(), section.cohortTo()), section.cohortSize()));
+            return;
+        }
+        out.item("첫 주에 공부한 날별로 둘째 주에도 공부한 비율");
+        for (GroupRow group : section.groups()) {
+            out.sub(group.label() + " = ", bold(Fmt.percent(group.retained())), Fmt.fraction(group.retained()));
+        }
+        out.quote("명단은 스레드 참고");
+    }
+
+    private static void active(Builder out, ActiveUsersSection section) {
+        if (section.total() == 0) {
+            out.item("어제 공부한 사람 없음");
+            return;
+        }
+        out.item("어제 공부한 ", bold(section.total()), "명 구성");
+        for (Stage stage : Stage.values()) {
+            out.sub(stage.label() + " (" + STAGE_HINTS.get(stage) + ") = ", bold(section.count(stage)));
+        }
+    }
+
+    private static void explorer(Builder out, ExplorerSection section) {
         if (section.top().isEmpty()) {
-            return "남는 사람과 관련 깊은 행동: 오늘은 조건을 통과한 규칙 없음 (표본 부족)";
+            out.item("남는 사람과 가장 관련 깊은 행동 = 오늘은 조건을 통과한 규칙 없음 (표본 부족)");
+            return;
         }
         RankedRule first = section.top().getFirst();
-        return "남는 사람과 가장 관련 깊은 행동: %s%s (연관 %s, %s)"
-                .formatted(
-                        first.rule().name(),
-                        first.fixed() ? " (고정 세그먼트)" : "",
-                        first.strength().label(),
-                        Fmt.trend(first));
-    }
-
-    private static String active(ActiveUsersSection section) {
-        if (section.total() == 0) {
-            return "어제 공부한 사람 없음";
-        }
-        return ("어제 공부한 %d명: New %d (가입 첫 주) · Lovers %d (최근 7일 중 3일+) · Comeback %d (1주 쉬다 옴)"
-                        + " · Sometimes %d (최근 7일 중 1~2일)")
-                .formatted(
-                        section.total(),
-                        section.count(Stage.NEW),
-                        section.count(Stage.LOVERS),
-                        section.count(Stage.COMEBACK),
-                        section.count(Stage.SOMETIMES));
+        out.item(
+                "남는 사람과 가장 관련 깊은 행동 = ",
+                bold(first.rule().name()),
+                first.fixed() ? " (고정 세그먼트)" : "",
+                " (연관 %s, %s)".formatted(first.strength().label(), Fmt.trend(first)));
     }
 }

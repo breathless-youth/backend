@@ -19,8 +19,10 @@ class FmtTest {
     void 비율은_분모가_0이면_줄표다() {
         assertThat(Fmt.rate(Rate.of(8, 14))).isEqualTo("57% (8/14)");
         assertThat(Fmt.percent(Rate.of(8, 14))).isEqualTo("57%");
+        assertThat(Fmt.fraction(Rate.of(8, 14))).isEqualTo(" (8/14)");
         assertThat(Fmt.rate(Rate.of(0, 0))).isEqualTo("—");
         assertThat(Fmt.percent(Rate.of(0, 0))).isEqualTo("—");
+        assertThat(Fmt.fraction(Rate.of(0, 0))).isEmpty();
     }
 
     @Test
@@ -38,13 +40,6 @@ class FmtTest {
         assertThat(Fmt.bar(2, 26)).isEqualTo("█░░░░░░░░░");
         assertThat(Fmt.bar(0, 26)).isEqualTo("░░░░░░░░░░");
         assertThat(Fmt.bar(0, 0)).isEqualTo("░░░░░░░░░░");
-    }
-
-    @Test
-    void 한글은_두_칸으로_세어_맞춘다() {
-        assertThat(Fmt.width("가입 다음 날")).isEqualTo(12);
-        assertThat(Fmt.padRight("0일", 6)).isEqualTo("0일   ");
-        assertThat(Fmt.padLeft("5%", 4)).isEqualTo("  5%");
     }
 
     @Test
