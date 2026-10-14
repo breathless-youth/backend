@@ -1,5 +1,7 @@
 package project.study.metrics.report.render;
 
+import static project.study.metrics.slack.SlackMessage.bold;
+
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -10,46 +12,47 @@ import project.study.metrics.report.analyzer.RosterCard.Habits;
 import project.study.metrics.report.analyzer.RosterCard.StudyFlow;
 import project.study.metrics.report.analyzer.RosterSection;
 import project.study.metrics.report.analyzer.RosterSection.RosterGroup;
+import project.study.metrics.slack.SlackMessage;
+import project.study.metrics.slack.SlackMessage.Builder;
 
-/** 🙋 명단 스레드 (부록 A 스레드 4). */
+/** 🙋 명단 스레드 (부록 A 스레드 4). 사람은 항목, 공부·한 일·습관은 하위 항목이다. */
 public final class RosterRenderer {
 
     private RosterRenderer() {}
 
-    public static String render(RosterSection section) {
+    public static SlackMessage render(RosterSection section) {
         String range = Fmt.range(section.cohortFrom(), section.cohortTo());
         if (section.total() == 0) {
-            return "🙋 첫 주에 3일 이상 공부한 사람 없음 (가입 %s)".formatted(range);
+            return SlackMessage.builder("🙋 첫 주에 3일 이상 공부한 사람 없음")
+                    .item("대상 = 가입 " + range)
+                    .build();
         }
-        List<String> lines = new ArrayList<>();
-        lines.add("🙋 첫 주에 3일 이상 공부한 %d명 (가입 %s)".formatted(section.total(), range));
-        lines.add("🆕 = 어제로 둘째 주가 끝나 새로 들어온 사람(%s 가입) · \"한 일\"은 첫 주 기준".formatted(Fmt.monthDay(section.cohortTo())));
-        lines.add("");
-        group(lines, "✅ 둘째 주에도 공부한 %d명", section.retained(), section.anchor());
-        lines.add("");
-        group(lines, "❌ 둘째 주에 안 온 %d명", section.dropped(), section.anchor());
-        return String.join("\n", lines);
+        Builder out = SlackMessage.builder("🙋 첫 주에 3일 이상 공부한 %d명".formatted(section.total()))
+                .item("대상 = 가입 " + range)
+                .sub("🆕 = 어제로 둘째 주가 끝나 새로 들어온 사람(%s 가입)".formatted(Fmt.monthDay(section.cohortTo())))
+                .sub("\"한 일\"은 첫 주 기준");
+        group(out, "✅ 둘째 주에도 공부한 %d명", section.retained(), section.anchor());
+        group(out, "❌ 둘째 주에 안 온 %d명", section.dropped(), section.anchor());
+        return out.build();
     }
 
-    static List<String> card(RosterCard card, LocalDate anchor) {
-        return List.of(
-                who(card),
-                "   공부: " + flow(card.flow(), anchor),
-                "   첫 주에 한 일: " + actions(card),
-                "   습관: " + habits(card.habits()));
-    }
-
-    private static void group(List<String> lines, String title, RosterGroup group, LocalDate anchor) {
-        lines.add(title.formatted(group.total()));
-        group.cards().forEach(card -> lines.addAll(card(card, anchor)));
+    private static void group(Builder out, String title, RosterGroup group, LocalDate anchor) {
+        out.blank().heading(title.formatted(group.total()));
+        for (RosterCard card : group.cards()) {
+            out.item(card.fresh() ? "🆕 " : "", bold(card.nickname()), who(card))
+                    .sub("공부 = " + flow(card.flow(), anchor))
+                    .sub("첫 주에 한 일 = " + actions(card))
+                    .sub("습관 = " + habits(card.habits()));
+        }
         if (group.omitted() > 0) {
-            lines.add("⋯ 외 %d명 (가입 %s 이전)".formatted(group.omitted(), Fmt.monthDay(group.omittedSignupOnOrBefore())));
+            out.item("⋯ 외 %d명 (가입 %s 이전)".formatted(group.omitted(), Fmt.monthDay(group.omittedSignupOnOrBefore())));
         }
     }
 
+    // 닉네임(굵게) 뒤에 붙는 부분 — " (#418) · 9/29(화) 22시 가입 · …"
     private static String who(RosterCard card) {
         List<String> parts = new ArrayList<>();
-        parts.add((card.fresh() ? "🆕 " : "") + card.nickname() + "(#" + card.userId() + ")");
+        parts.add(" (#" + card.userId() + ")");
         parts.add(Fmt.monthDayWeekday(Kst.date(card.signupAt())) + " " + Kst.hour(card.signupAt()) + "시 가입");
         parts.add(card.profile());
         if (card.os() != null) {

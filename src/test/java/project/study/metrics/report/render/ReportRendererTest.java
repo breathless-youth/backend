@@ -2,9 +2,16 @@ package project.study.metrics.report.render;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import project.study.metrics.report.DailyReport;
 import project.study.metrics.report.SectionResult;
+import project.study.metrics.report.analyzer.ActiveUsersSection;
+import project.study.metrics.report.analyzer.ActiveUsersSection.ActiveUserRow;
+import project.study.metrics.report.analyzer.ActiveUsersSection.Stage;
+import project.study.metrics.slack.SlackMessage;
 
 class ReportRendererTest {
 
@@ -12,16 +19,16 @@ class ReportRendererTest {
     void 요약_하나와_스레드_여섯_개를_정해진_순서로_만든다() {
         RenderedReport rendered = ReportRenderer.render(ReportSamples.report());
 
-        assertThat(rendered.summary()).startsWith("📊 10/12(월) 일일 지표");
+        assertThat(rendered.summary().title()).isEqualTo("📊 10/12(월) 일일 지표");
         assertThat(rendered.threads())
-                .hasSize(6)
-                .satisfiesExactly(
-                        text -> assertThat(text).startsWith("🕐 가입"),
-                        text -> assertThat(text).startsWith("📈 다시 와서 공부한 비율"),
-                        text -> assertThat(text).startsWith("👥 첫 주에 며칠 공부했나"),
-                        text -> assertThat(text).startsWith("🙋 첫 주에 3일 이상 공부한"),
-                        text -> assertThat(text).startsWith("🔍 남는 사람과 관련 깊은 첫 주 행동 Top 3"),
-                        text -> assertThat(text).startsWith("🧑‍🎓 어제 공부한"));
+                .extracting(SlackMessage::title)
+                .containsExactly(
+                        "🕐 가입",
+                        "📈 다시 와서 공부한 비율",
+                        "👥 첫 주에 며칠 공부했나 → 둘째 주에도 공부했나",
+                        "🙋 첫 주에 3일 이상 공부한 2명",
+                        "🔍 남는 사람과 관련 깊은 첫 주 행동 Top 3",
+                        "🧑‍🎓 어제 공부한 15명");
     }
 
     @Test
@@ -36,14 +43,34 @@ class ReportRendererTest {
                 base.explorer(),
                 base.active());
 
-        assertThat(ReportRenderer.render(report).threads().getFirst()).isEqualTo("🕐 가입\n계산 실패 — Sentry 확인");
+        assertThat(ReportRenderer.render(report).threads().getFirst().text()).isEqualTo("🕐 가입\n• 계산 실패 — Sentry 확인");
     }
 
     @Test
-    void 사만_자를_넘는_메시지는_잘라_알린다() {
-        String capped = ReportRenderer.cap("가".repeat(50_000));
+    void 긴_스레드는_Slack_블록_한도_아래로_여러_댓글에_나눠_담는다() {
+        List<ActiveUserRow> rows = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            rows.add(new ActiveUserRow(i, "닉네임이조금긴유저" + i, 3, 2, 3600, true, 4, "공무원(7급 합격을 목표로)", 5));
+        }
+        DailyReport base = ReportSamples.report();
+        DailyReport report = new DailyReport(
+                base.anchor(),
+                base.signup(),
+                base.retention(),
+                base.segment(),
+                base.roster(),
+                base.explorer(),
+                SectionResult.of(new ActiveUsersSection(100, Map.of(Stage.NEW, rows), 0)));
 
-        assertThat(capped).hasSize(ReportRenderer.MAX_CHARS).endsWith("…(길이 상한 40,000자로 잘림)");
-        assertThat(ReportRenderer.cap("짧은 글")).isEqualTo("짧은 글");
+        List<SlackMessage> threads = ReportRenderer.render(report).threads();
+
+        assertThat(threads)
+                .hasSizeGreaterThan(6)
+                .allSatisfy(thread -> assertThat(thread.text().length()).isLessThanOrEqualTo(ReportRenderer.MAX_CHARS));
+        assertThat(threads.subList(5, threads.size()))
+                .extracting(SlackMessage::title)
+                .startsWith("🧑‍🎓 어제 공부한 100명")
+                .contains("🧑‍🎓 어제 공부한 100명 (이어서)");
+        assertThat(threads.getLast().text()).endsWith("• 앱만 열고 공부 안 함 = 0명");
     }
 }

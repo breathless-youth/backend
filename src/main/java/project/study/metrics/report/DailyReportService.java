@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import project.study.metrics.report.render.RenderedReport;
 import project.study.metrics.report.render.ReportRenderer;
+import project.study.metrics.slack.SlackMessage;
 import project.study.metrics.slack.SlackNotificationException;
 import project.study.metrics.slack.SlackNotifier;
 
@@ -47,7 +48,7 @@ public class DailyReportService {
         RenderedReport rendered = ReportRenderer.render(DailyReport.analyze(loader.load(anchor)));
         String threadTs = slackNotifier.post(rendered.summary());
         int sent = 0;
-        for (String thread : rendered.threads()) {
+        for (SlackMessage thread : rendered.threads()) {
             pause();
             sent += reply(threadTs, thread) ? 1 : 0;
         }
@@ -59,9 +60,9 @@ public class DailyReportService {
     }
 
     // 스레드 하나가 실패해도 나머지는 보낸다 — 재시도(@Retryable)까지 실패한 댓글만 건너뛴다
-    private boolean reply(String threadTs, String text) {
+    private boolean reply(String threadTs, SlackMessage thread) {
         try {
-            slackNotifier.reply(threadTs, text);
+            slackNotifier.reply(threadTs, thread);
             return true;
         } catch (SlackNotificationException e) {
             log.error("일일 리포트 스레드 댓글 발송 실패 — 건너뛴다", e);
