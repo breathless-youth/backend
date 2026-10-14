@@ -1,9 +1,10 @@
 package project.study.metrics.report;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import project.study.metrics.slack.SlackMessage;
 import project.study.metrics.slack.SlackNotificationException;
 import project.study.metrics.slack.SlackNotifier;
 
@@ -40,6 +42,10 @@ class DailyReportServiceTest {
         return new DailyReportService(loader, slackNotifier, CLOCK, 0);
     }
 
+    private static SlackMessage titled(String prefix) {
+        return argThat(message -> message != null && message.title().startsWith(prefix));
+    }
+
     @Test
     void 발송기가_꺼져_있으면_계산도_하지_않는다() {
         when(slackNotifier.isEnabled()).thenReturn(false);
@@ -47,46 +53,46 @@ class DailyReportServiceTest {
         service().send();
 
         verifyNoInteractions(loader);
-        verify(slackNotifier, never()).post(anyString());
+        verify(slackNotifier, never()).post(any());
     }
 
     @Test
     void 어제_기준으로_요약을_보내고_그_ts에_스레드_여섯_개를_단다() {
         when(slackNotifier.isEnabled()).thenReturn(true);
         when(loader.load(A)).thenReturn(ReportDataFixture.data(A, true));
-        when(slackNotifier.post(startsWith("📊 10/12(월) 일일 지표"))).thenReturn("ts-1");
+        when(slackNotifier.post(titled("📊 10/12(월) 일일 지표"))).thenReturn("ts-1");
 
         service().send();
 
-        verify(slackNotifier, times(6)).reply(eq("ts-1"), anyString());
-        verify(slackNotifier).reply(eq("ts-1"), startsWith("🕐 가입"));
-        verify(slackNotifier).reply(eq("ts-1"), startsWith("🧑‍🎓 어제 공부한"));
+        verify(slackNotifier, times(6)).reply(eq("ts-1"), any());
+        verify(slackNotifier).reply(eq("ts-1"), titled("🕐 가입"));
+        verify(slackNotifier).reply(eq("ts-1"), titled("🧑‍🎓 어제 공부한"));
     }
 
     @Test
     void 스레드_하나가_실패해도_나머지를_보낸다() {
         when(slackNotifier.isEnabled()).thenReturn(true);
         when(loader.load(A)).thenReturn(ReportDataFixture.data(A, true));
-        when(slackNotifier.post(anyString())).thenReturn("ts-1");
+        when(slackNotifier.post(any())).thenReturn("ts-1");
         doThrow(new SlackNotificationException("Slack API 응답 실패 (HTTP 500)"))
                 .when(slackNotifier)
-                .reply(eq("ts-1"), startsWith("🕐 가입"));
+                .reply(eq("ts-1"), titled("🕐 가입"));
         doNothing()
                 .when(slackNotifier)
-                .reply(eq("ts-1"), org.mockito.ArgumentMatchers.argThat(text -> !text.startsWith("🕐 가입")));
+                .reply(eq("ts-1"), argThat(message -> !message.title().startsWith("🕐 가입")));
 
         service().send();
 
-        verify(slackNotifier, times(6)).reply(eq("ts-1"), anyString());
+        verify(slackNotifier, times(6)).reply(eq("ts-1"), any());
     }
 
     @Test
     void 본_메시지가_실패하면_스레드를_달지_않는다() {
         when(slackNotifier.isEnabled()).thenReturn(true);
         when(loader.load(A)).thenReturn(ReportDataFixture.data(A, true));
-        when(slackNotifier.post(anyString())).thenThrow(new SlackNotificationException("Slack API 호출 실패"));
+        when(slackNotifier.post(any())).thenThrow(new SlackNotificationException("Slack API 호출 실패"));
 
         assertThatThrownBy(() -> service().send()).isInstanceOf(SlackNotificationException.class);
-        verify(slackNotifier, never()).reply(anyString(), anyString());
+        verify(slackNotifier, never()).reply(anyString(), any());
     }
 }

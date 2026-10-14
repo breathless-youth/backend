@@ -72,6 +72,10 @@ class SlackBotNotifierTest {
         replies.add(new Reply(status, null, body));
     }
 
+    private static SlackMessage message(String title) {
+        return SlackMessage.builder(title).item("a").build();
+    }
+
     @Test
     void 토큰과_채널이_모두_있어야_켜진다() {
         assertThat(notifier().isEnabled()).isTrue();
@@ -85,12 +89,15 @@ class SlackBotNotifierTest {
     void 본_메시지를_봇_토큰으로_보내고_ts를_돌려준다() {
         reply(200, "{\"ok\":true,\"channel\":\"C0123456\",\"ts\":\"1700000000.000100\"}");
 
-        assertThat(notifier().post("📊 요약")).isEqualTo("1700000000.000100");
+        assertThat(notifier().post(message("📊 요약"))).isEqualTo("1700000000.000100");
         assertThat(authorizations).containsExactly("Bearer " + TOKEN);
         assertThat(bodies.getFirst())
                 .contains(
                         "\"channel\":\"C0123456\"",
-                        "\"text\":\"📊 요약\"",
+                        "\"text\":\"📊 요약\\n• a\"",
+                        "\"blocks\":[{\"type\":\"header\"",
+                        "{\"type\":\"rich_text_list\",\"style\":\"bullet\",\"indent\":0",
+                        "\"parse\":\"none\"",
                         "\"unfurl_links\":false",
                         "\"unfurl_media\":false")
                 .doesNotContain("thread_ts");
@@ -100,7 +107,7 @@ class SlackBotNotifierTest {
     void 스레드_댓글은_본_메시지_ts에_단다() {
         reply(200, "{\"ok\":true,\"ts\":\"1700000000.000200\"}");
 
-        notifier().reply("1700000000.000100", "🕐 가입");
+        notifier().reply("1700000000.000100", message("🕐 가입"));
 
         assertThat(bodies.getFirst()).contains("\"thread_ts\":\"1700000000.000100\"");
     }
@@ -109,7 +116,7 @@ class SlackBotNotifierTest {
     void ok가_false면_Slack_오류_코드로_실패한다() {
         reply(200, "{\"ok\":false,\"error\":\"not_in_channel\"}");
 
-        assertThatThrownBy(() -> notifier().post("x"))
+        assertThatThrownBy(() -> notifier().post(message("x")))
                 .isInstanceOf(SlackNotificationException.class)
                 .hasMessageContaining("not_in_channel")
                 .hasNoCause();
@@ -120,16 +127,16 @@ class SlackBotNotifierTest {
         reply(200, "{\"ok\":true}");
 
         // ts 없이 스레드를 달면 댓글이 채널 본문에 흩어진다
-        assertThatThrownBy(() -> notifier().post("x")).isInstanceOf(SlackNotificationException.class);
+        assertThatThrownBy(() -> notifier().post(message("x"))).isInstanceOf(SlackNotificationException.class);
     }
 
     @Test
     void 실패_메시지에_토큰을_남기지_않는다() {
         reply(500, "");
 
-        Throwable serverError = catchThrowable(() -> notifier().post("x"));
-        Throwable refused = catchThrowable(
-                () -> new SlackBotNotifier(RestClient.builder(), "http://127.0.0.1:1", TOKEN, CHANNEL).post("x"));
+        Throwable serverError = catchThrowable(() -> notifier().post(message("x")));
+        Throwable refused = catchThrowable(() ->
+                new SlackBotNotifier(RestClient.builder(), "http://127.0.0.1:1", TOKEN, CHANNEL).post(message("x")));
 
         assertThat(serverError)
                 .isInstanceOf(SlackNotificationException.class)
@@ -145,7 +152,7 @@ class SlackBotNotifierTest {
         replies.add(new Reply(429, "0", ""));
         reply(200, "{\"ok\":true,\"ts\":\"1.2\"}");
 
-        assertThat(notifier().post("x")).isEqualTo("1.2");
+        assertThat(notifier().post(message("x"))).isEqualTo("1.2");
         assertThat(bodies).hasSize(2);
     }
 
@@ -156,7 +163,7 @@ class SlackBotNotifierTest {
         reply(200, "{\"ok\":true,\"ts\":\"3.3\"}");
         long started = System.nanoTime();
 
-        assertThat(notifier().post("x")).isEqualTo("3.3");
+        assertThat(notifier().post(message("x"))).isEqualTo("3.3");
 
         assertThat(bodies).hasSize(3);
         assertThat(java.time.Duration.ofNanos(System.nanoTime() - started))
@@ -171,7 +178,7 @@ class SlackBotNotifierTest {
 
         try (AnnotationConfigApplicationContext context = retryingContext()) {
             SlackNotifier notifier = context.getBean(SlackNotifier.class);
-            assertThatThrownBy(() -> notifier.post("x"))
+            assertThatThrownBy(() -> notifier.post(message("x")))
                     .isInstanceOf(SlackRateLimitException.class)
                     .hasMessageContaining("429");
         }
@@ -183,7 +190,7 @@ class SlackBotNotifierTest {
     void 토큰에_공백이나_제어_문자가_섞이면_꺼지고_토큰을_남기지_않는다() {
         SlackBotNotifier broken = new SlackBotNotifier(RestClient.builder(), baseUrl(), "xoxb-FAKE\nSENTINEL", CHANNEL);
 
-        Throwable thrown = catchThrowable(() -> broken.post("x"));
+        Throwable thrown = catchThrowable(() -> broken.post(message("x")));
 
         assertThat(broken.isEnabled()).isFalse();
         assertThat(thrown).isInstanceOf(SlackNotificationException.class).hasNoCause();
@@ -192,14 +199,20 @@ class SlackBotNotifierTest {
     }
 
     @Test
-    void 사용자_입력이_멘션이나_링크가_되지_않게_Slack_제어_문자를_이스케이프한다() {
+    void 대체_글은_사용자_입력이_멘션이나_링크가_되지_않게_Slack_제어_문자를_이스케이프한다() {
         reply(200, "{\"ok\":true,\"ts\":\"1.1\"}");
 
-        notifier().post("수능(<!channel> 합격) · 유입: <https://evil.example|공식> & <@U012AB3CD>");
+        notifier()
+                .post(SlackMessage.builder("📊")
+                        .item("수능(<!channel> 합격) · 유입: <https://evil.example|공식> & <@U012AB3CD>")
+                        .build());
 
+        // 알림에 쓰이는 text는 mrkdwn으로 해석된다. blocks의 rich_text 글자는 Slack이 해석하지 않아 그대로 보낸다
         assertThat(bodies.getFirst())
-                .contains("수능(&lt;!channel&gt; 합격) · 유입: &lt;https://evil.example|공식&gt; &amp; &lt;@U012AB3CD&gt;")
-                .doesNotContain("<!channel>");
+                .contains(
+                        "\"text\":\"📊\\n• 수능(&lt;!channel&gt; 합격) · 유입: &lt;https://evil.example|공식&gt; &amp; &lt;@U012AB3CD&gt;\"")
+                .contains(
+                        "{\"type\":\"text\",\"text\":\"수능(<!channel> 합격) · 유입: <https://evil.example|공식> & <@U012AB3CD>\"}");
     }
 
     @Test
@@ -209,7 +222,7 @@ class SlackBotNotifierTest {
         reply(200, "{\"ok\":true,\"ts\":\"9.9\"}");
 
         try (AnnotationConfigApplicationContext context = retryingContext()) {
-            assertThat(context.getBean(SlackNotifier.class).post("x")).isEqualTo("9.9");
+            assertThat(context.getBean(SlackNotifier.class).post(message("x"))).isEqualTo("9.9");
         }
         assertThat(bodies).hasSize(3);
     }

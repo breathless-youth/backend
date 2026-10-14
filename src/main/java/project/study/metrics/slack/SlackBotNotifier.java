@@ -83,8 +83,8 @@ public class SlackBotNotifier implements SlackNotifier {
     }
 
     @Override
-    public String post(String text) {
-        String ts = call(body(text, null));
+    public String post(SlackMessage message) {
+        String ts = call(body(message, null));
         if (!StringUtils.hasText(ts)) {
             throw new SlackNotificationException("Slack API 응답에 ts가 없다");
         }
@@ -92,14 +92,18 @@ public class SlackBotNotifier implements SlackNotifier {
     }
 
     @Override
-    public void reply(String threadTs, String text) {
-        call(body(text, threadTs));
+    public void reply(String threadTs, SlackMessage message) {
+        call(body(message, threadTs));
     }
 
-    private Map<String, Object> body(String text, String threadTs) {
+    // 보이는 건 blocks다. text는 알림·검색에 쓰이는 대체 글이라 mrkdwn으로 해석되므로 이스케이프한다
+    private Map<String, Object> body(SlackMessage message, String threadTs) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("channel", channel);
-        body.put("text", escape(text));
+        body.put("text", escape(message.text()));
+        body.put("blocks", SlackBlocks.of(message));
+        // text 속 URL도 자동 링크로 만들지 않는다 — 목표 같은 사용자 입력은 글자 그대로
+        body.put("parse", "none");
         if (threadTs != null) {
             body.put("thread_ts", threadTs);
         }
@@ -144,7 +148,7 @@ public class SlackBotNotifier implements SlackNotifier {
         }
     }
 
-    /** Slack 제어 문자(`&`·`<`·`>`)를 이스케이프한다 — 목표·UTM 같은 사용자 입력이 멘션(`<!channel>`)이나 위장 링크가 되지 않게. */
+    /** 대체 글의 Slack 제어 문자(`&`·`<`·`>`)를 이스케이프한다 — 목표·UTM 같은 사용자 입력이 멘션(`<!channel>`)이나 위장 링크가 되지 않게. */
     static String escape(String text) {
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }

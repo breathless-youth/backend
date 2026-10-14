@@ -23,9 +23,10 @@ import project.study.metrics.report.fact.SessionFact;
 public final class ActiveUserClassifier {
 
     private static final int NEW_DAYS = 6;
-    private static final int QUIET_DAYS = 14;
+    // 어제 전 7일(A−7~A−1) 공부 0일이면 Comeback — 2주였다가 1주로 줄였다(BY-910)
+    private static final int QUIET_DAYS = 7;
     private static final int RECENT_DAYS = 6;
-    private static final int STEADY_STUDY_DAYS = 3;
+    private static final int LOVERS_STUDY_DAYS = 3;
     private static final Comparator<ActiveUserRow> ORDER =
             Comparator.comparingInt(ActiveUserRow::focusSec).reversed().thenComparingLong(ActiveUserRow::userId);
 
@@ -50,18 +51,18 @@ public final class ActiveUserClassifier {
         return new ActiveUsersSection(active.size(), byStage, appOnly);
     }
 
-    /** 위에서 먼저 맞는 하나 — 새로 온 사람 → 돌아온 사람 → 꾸준한 사람 → 가끔 오는 사람. */
+    /** 위에서 먼저 맞는 하나 — New → Comeback → Lovers → Sometimes. Comeback은 최근 7일에 어제 하루뿐이라 Lovers와 겹치지 않는다. */
     static Stage stage(UserTimeline user, LocalDate anchor) {
         if (!user.signupDate().isBefore(anchor.minusDays(NEW_DAYS))) {
             return Stage.NEW;
         }
         if (user.studyDays(anchor.minusDays(QUIET_DAYS), anchor.minusDays(1)) == 0) {
-            return Stage.RETURNING;
+            return Stage.COMEBACK;
         }
-        if (user.studyDays(anchor.minusDays(RECENT_DAYS), anchor) >= STEADY_STUDY_DAYS) {
-            return Stage.STEADY;
+        if (user.studyDays(anchor.minusDays(RECENT_DAYS), anchor) >= LOVERS_STUDY_DAYS) {
+            return Stage.LOVERS;
         }
-        return Stage.OCCASIONAL;
+        return Stage.SOMETIMES;
     }
 
     private static ActiveUserRow row(UserTimeline user, LocalDate anchor, boolean recentApp) {
