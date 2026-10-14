@@ -144,6 +144,11 @@ final class StudySessionSplitter {
             session.attachSubjectSegments(SubjectSegmentSplitter.clip(
                     subjectSegments, weights.segmentEvents().get(i), cuts.get(i), cuts.get(i + 1)));
             session.attachCompletedTasks(completedBySegment.get(i));
+            session.attachSlots(SlotSplitter.split(
+                    cuts.get(i),
+                    cuts.get(i + 1),
+                    (int) segmentFocusSec,
+                    weights.segmentEvents().get(i)));
             sessions.add(session);
             allocatedStudySec += segmentStudySec;
             allocatedFocusSec += segmentFocusSec;
@@ -189,7 +194,7 @@ final class StudySessionSplitter {
     }
 
     /** focusSec 계열의 조각 몫 — 이벤트를 제외한 조각 길이 비율. 그 합이 0(전 구간이 이벤트)이면 studySec 비율로 대체한다. */
-    private static long focusShare(SegmentWeights weights, int segment, long value) {
+    static long focusShare(SegmentWeights weights, int segment, long value) {
         boolean noFocusActiveTime = weights.totalFocusActiveSec() == 0;
         long weight = noFocusActiveTime ? weights.studyActiveSecs()[segment] : weights.focusActiveSecs()[segment];
         long total = noFocusActiveTime ? weights.totalStudyActiveSec() : weights.totalFocusActiveSec();

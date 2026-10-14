@@ -257,7 +257,8 @@ class StudySessionSubjectSegmentApiTest {
     void 나노초_보고_시각으로_닫은_구간도_자동_확정본에_그대로_확정된다() {
         // DB timestamptz는 마이크로초라 reportedAt의 나노초는 버려진다. 구간 끝을 같은 나노초 시각으로 닫아 보내도
         // 요청에서 마이크로초로 절삭되므로 확정 때 "세션 밖"으로 오판되지 않는다 (Codex 리뷰 P2)
-        Instant started = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(7200);
+        // 어제 10:00 KST 고정 — 지금 기준으로 잡으면 00~02시 실행에서 자정을 넘어 구간이 두 조각으로 나뉜다
+        Instant started = today.minusDays(1).atStartOfDay(KST).plusHours(10).toInstant();
         Instant reported = started.plusSeconds(7000).plusNanos(100);
         assertThat(snapshot(started, reported, "[" + segment(subjectId, started, reported) + "]"))
                 .hasStatus(HttpStatus.NO_CONTENT);
