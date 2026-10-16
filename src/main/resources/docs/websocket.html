@@ -252,7 +252,7 @@ sequenceDiagram
 </div>
 <ul>
   <li>퇴장 API를 못 부르고 앱이 종료돼도 소켓 끊김 30초 후 자동 퇴장된다.</li>
-  <li>생성 후 10분 안에 아무도 입장하지 않은 방도 소멸한다.</li>
+  <li>생성 후 1시간 안에 아무도 입장하지 않은 방도 소멸한다.</li>
   <li>퇴장 순서: leave API 먼저, 소켓은 그다음에 끊는다. 소켓을 먼저 끊으면 30초 동안 <code>disconnected</code>로 남는다.</li>
 </ul>
 
@@ -276,7 +276,7 @@ sequenceDiagram
   <tr><td>정원</td><td>6명</td><td>예약 중인 자리도 정원에 포함된다 — SNAPSHOT에 4명이 보여도 예약 2개가 있으면 join은 409. 대기열 없음</td></tr>
   <tr><td>자리 예약</td><td>30초</td><td>join 후 토픽 구독까지</td></tr>
   <tr><td>끊김 유예</td><td>30초</td><td>소켓 끊김 후 자동 퇴장까지</td></tr>
-  <tr><td>빈 방 소멸</td><td>600초</td><td>생성 후 무입장</td></tr>
+  <tr><td>빈 방 소멸</td><td>3600초</td><td>생성 후 무입장</td></tr>
   <tr><td>소멸한 코드의 ROOM_CLOSED 안내</td><td>600초</td><td>이후 INVITE_CODE_NOT_FOUND</td></tr>
   <tr><td>ICE 자격 TTL</td><td>join 응답 <code>iceTtlSeconds</code></td><td>환경마다 다르다</td></tr>
 </table>
@@ -286,6 +286,7 @@ sequenceDiagram
   <tr><th>날짜</th><th>티켓</th><th>내용</th></tr>
   <tr><td>2026-09-17</td><td>BY-667</td><td>첫 판. BY-626(룸 상태 DB 원본화) 이후 계약 기준: <code>focusSec</code>, <code>members[].disconnected</code>, <code>ROOM_UNAVAILABLE</code>, SNAPSHOT 재요청</td></tr>
   <tr><td>2026-09-18</td><td>BY-676</td><td>구 앱(v1.2.x) 병행: CONNECT에 <code>Authorization</code>이 없을 때만 핸드셰이크 <code>?userId=</code> 폴백(§1). 새 앱 계약은 변화 없음. 강제 업데이트 뒤 제거 예정</td></tr>
+  <tr><td>2026-10-16</td><td>BY-925</td><td>빈 방 소멸을 600초에서 3600초로 늘림(§8·§10). 방 생성 응답 <code>emptyTtlSeconds</code>도 3600. 소멸한 코드의 ROOM_CLOSED 안내 600초는 그대로</td></tr>
 </table>
 
 </main>
