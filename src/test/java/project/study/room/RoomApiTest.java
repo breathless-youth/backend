@@ -70,7 +70,7 @@ class RoomApiTest {
                 .bodyJson()
                 .hasPathSatisfying("$.roomId", v -> assertThat(v).isNotNull())
                 .hasPathSatisfying("$.inviteCode", v -> assertThat(v).asString().matches("\\d{4}"))
-                .hasPathSatisfying("$.emptyTtlSeconds", v -> assertThat(v).isEqualTo(600));
+                .hasPathSatisfying("$.emptyTtlSeconds", v -> assertThat(v).isEqualTo(3600));
     }
 
     @Test

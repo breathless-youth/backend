@@ -28,7 +28,7 @@ class RoomServiceTest extends RoomTestBase {
 
         assertThat(response.roomId()).isNotNull();
         assertThat(response.inviteCode()).matches("\\d{4}");
-        assertThat(response.emptyTtlSeconds()).isEqualTo(600);
+        assertThat(response.emptyTtlSeconds()).isEqualTo(3600);
         assertThat(rooms.isOpen(response.roomId())).isTrue();
     }
 

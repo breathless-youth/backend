@@ -14,7 +14,7 @@ import project.study.room.service.AutoLeave;
 import project.study.room.support.RoomTestBase;
 
 /**
- * 만료 정합성. 예약 30초·유예 30초·빈 방 600초. 잘못 만료되면 정상 참가자가 쫓겨나고, 안 만료되면 자리·방이 샌다.
+ * 만료 정합성. 예약 30초·유예 30초·빈 방 3600초. 잘못 만료되면 정상 참가자가 쫓겨나고, 안 만료되면 자리·방이 샌다.
  * (옛 RoomServiceTest의 만료 케이스 + BY-593 RoomServiceExpiryIndexTest를 흡수)
  */
 @SpringBootTest
@@ -51,20 +51,20 @@ class RoomExpiryTest extends RoomTestBase {
     }
 
     @Test
-    void 입장_이력_없는_빈_방은_10분_뒤_소멸한다() {
+    void 입장_이력_없는_빈_방은_1시간_뒤_소멸한다() {
         String code = createRoom();
 
-        cleanupAfter(601);
+        cleanupAfter(3601);
 
         long userId = user();
         assertThatThrownBy(() -> join(userId, code)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
-    void 십분이_지나지_않은_빈_방은_유지된다() {
+    void 한_시간이_지나지_않은_빈_방은_유지된다() {
         String code = createRoom();
 
-        cleanupAfter(599);
+        cleanupAfter(3599);
 
         assertThat(join(user(), code).response().roomId()).isNotNull();
     }
@@ -143,7 +143,7 @@ class RoomExpiryTest extends RoomTestBase {
         long roomId = join(userId, code).response().roomId();
         confirm(roomId, userId, "session-1");
 
-        cleanupAfter(601);
+        cleanupAfter(3601);
 
         assertThat(roomService.roomExists(roomId)).isTrue();
     }

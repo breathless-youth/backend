@@ -98,10 +98,10 @@ class RoomCleanupServiceTest {
     }
 
     @Test
-    void 입장_이력_없는_빈_방은_10분_뒤_EMPTY_EXPIRED로_닫힌다() {
-        long fresh = openRoom(now.minusSeconds(599));
-        long old = openRoom(now.minusSeconds(601));
-        long occupied = openRoom(now.minusSeconds(601));
+    void 입장_이력_없는_빈_방은_1시간_뒤_EMPTY_EXPIRED로_닫힌다() {
+        long fresh = openRoom(now.minusSeconds(3599));
+        long old = openRoom(now.minusSeconds(3601));
+        long occupied = openRoom(now.minusSeconds(3601));
         participations.insertReservation(occupied, userId, PROFILE, now);
         participations.confirm(occupied, userId, "s1", now, "t", now);
 
