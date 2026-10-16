@@ -44,7 +44,7 @@ public class StudySessionService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-    private static final String STARTED_AT_UNIQUE_CONSTRAINT = "uq_study_session_user_started_at";
+    static final String STARTED_AT_UNIQUE_CONSTRAINT = "uq_study_session_user_started_at";
     // V1이 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
     private static final String USER_FK_CONSTRAINT = "study_session_user_id_fkey";
 
@@ -157,10 +157,16 @@ public class StudySessionService {
                 sessions.stream().mapToLong(StudySession::getStudySec).sum();
         long totalFocusSec =
                 sessions.stream().mapToLong(StudySession::getFocusSec).sum();
-        long longestFocusSec = sessions.stream()
+        // 수동 기록은 합계에만 더한다 — 집중률·최대 집중은 측정한 세션만으로 낸다
+        List<StudySession> measured =
+                sessions.stream().filter(session -> !session.isManual()).toList();
+        long longestFocusSec = measured.stream()
                 .mapToLong(StudySessionStatsCalculator::longestFocusStreakSec)
                 .max()
                 .orElse(0);
+        double focusRate = StudySessionStatsCalculator.focusRate(
+                measured.stream().mapToLong(StudySession::getFocusSec).sum(),
+                measured.stream().mapToLong(StudySession::getStudySec).sum());
 
         SubjectLookup lookup = includeNames ? lookupFor(sessions) : SubjectLookup.EMPTY;
         // 세션과 따로 조회한다 — 그날 공부하지 않은 과목과 세션에 붙지 않은 할 일도 실린다 (ADR-0026)
@@ -184,7 +190,7 @@ public class StudySessionService {
                 totalStudySec,
                 totalFocusSec,
                 longestFocusSec,
-                StudySessionStatsCalculator.focusRate(totalFocusSec, totalStudySec),
+                focusRate,
                 totalEventCounts,
                 studiedDatesInMonth,
                 subjects);
@@ -205,7 +211,7 @@ public class StudySessionService {
         return subjectLookupProvider.lookup(subjectIds, taskIds);
     }
 
-    private List<StudySessionResponse> toResponses(List<StudySession> sessions) {
+    List<StudySessionResponse> toResponses(List<StudySession> sessions) {
         SubjectLookup lookup = lookupFor(sessions);
         return sessions.stream().map(session -> toResponse(session, lookup)).toList();
     }
@@ -303,7 +309,7 @@ public class StudySessionService {
 
         List<LocalDate> studiedDatesInRange = from == null
                 ? List.of()
-                : studySessionRepository.findDistinctStatDatesBetween(userId, from, to, MIN_STREAK_FOCUS_SEC);
+                : studySessionRepository.findDistinctMeasuredStatDatesBetween(userId, from, to, MIN_STREAK_FOCUS_SEC);
         return new StudySessionStreakResponse(
                 currentStreak(statDates, today), maxStreak(statDates), studiedDatesInRange);
     }

@@ -129,7 +129,7 @@ class StudySessionStreakServiceTest {
         LocalDate to = TODAY;
         List<LocalDate> inRange = List.of(TODAY.minusDays(8), TODAY.minusDays(3));
         when(studySessionRepository.findDistinctStatDates(1L, 600)).thenReturn(List.of());
-        when(studySessionRepository.findDistinctStatDatesBetween(1L, from, to, 600))
+        when(studySessionRepository.findDistinctMeasuredStatDatesBetween(1L, from, to, 600))
                 .thenReturn(inRange);
 
         StudySessionStreakResponse response = service.streak(1L, from, to);

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.entity.StudySessionSource;
 
 public record StudySessionSummaryResponse(
         @Schema(description = "세션 ID", example = "10") Long id,
@@ -43,7 +44,12 @@ public record StudySessionSummaryResponse(
         List<SubjectSegmentResponse> subjectSegments,
 
         @Schema(description = "이 세션에서 완료한 할 일 — 이름 포함, id 오름차순, 지운 할 일도 남는다. 없으면 []")
-        List<CompletedTaskResponse> completedTasks) {
+        List<CompletedTaskResponse> completedTasks,
+
+        @Schema(
+                description = "기록 출처 — MEASURED(측정)·MANUAL(직접 입력). 수동 기록은 studySec = focusSec이고 이벤트가 없다",
+                example = "MEASURED")
+        StudySessionSource source) {
     // focusRate/eventCounts 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다. 과목 이름·색은 목록 응답의 subjects[]에 한 번 실린다
     public static StudySessionSummaryResponse from(
             StudySession session, double focusRate, Map<EventStatus, Long> eventCounts, SubjectLookup lookup) {
@@ -60,6 +66,7 @@ public record StudySessionSummaryResponse(
                 session.getSubjectSegments().stream()
                         .map(SubjectSegmentResponse::from)
                         .toList(),
-                lookup.tasksFor(session.getCompletedTaskIds()));
+                lookup.tasksFor(session.getCompletedTaskIds()),
+                session.getSource());
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.studysession.dto.DailyStudyStat;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.entity.StudySessionSource;
 
 public interface StudySessionRepository extends JpaRepository<StudySession, Long> {
 
@@ -27,26 +28,45 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             @Param("minFocusSec") int minFocusSec);
 
     // 멱등 재제출 판별·응답용 — 루트 제출 시각이 같은 조각 세션들(자정 분할 포함). 분할 조각의
-    // started_at(자정)은 루트가 아니므로 별개 제출의 멱등 키와 혼동되지 않는다
-    List<StudySession> findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(Long userId, Instant submissionStartedAt);
+    // started_at(자정)은 루트가 아니므로 별개 제출의 멱등 키와 혼동되지 않는다.
+    // 측정 세션만 본다. 수동 묶음 키는 첫 조각의 시작이라 측정 키와 겹치지 않지만, 출처가 섞이지 않게 방어로 건다
+    @Query("""
+            select s from StudySession s
+            where s.userId = :userId and s.submissionStartedAt = :submissionStartedAt and s.source = project.study.studysession.entity.StudySessionSource.MEASURED
+            order by s.startedAt""")
+    List<StudySession> findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
+            @Param("userId") Long userId, @Param("submissionStartedAt") Instant submissionStartedAt);
+
+    // 수동 기록 묶음: 첫 조각의 시작 시각을 공유하는 조각 전부
+    List<StudySession> findByUserIdAndSubmissionStartedAtAndSourceOrderByStartedAtAsc(
+            Long userId, Instant submissionStartedAt, StudySessionSource source);
+
+    // 수동 기록의 겹침 계산 — [from, to)와 조금이라도 겹치는 세션(출처 무관).
+    // 단, 끝이 닿는 것은 겹침이 아니다
+    @Query("""
+            select s from StudySession s
+            where s.userId = :userId and s.startedAt < :to and s.endedAt > :from
+            order by s.startedAt""")
+    List<StudySession> findOverlapping(
+            @Param("userId") Long userId, @Param("from") Instant from, @Param("to") Instant to);
 
     // dev 목데이터 시더가 재시작마다 데모 유저의 세션을 갈아끼울 때 사용
     void deleteByUserId(Long userId);
 
-    // 스트릭 계산용 — 세션 하나라도 focusSec이 minFocusSec 이상인 날짜 목록 (중복 없음, 최신순)
+    // 스트릭 계산용 — 측정 세션 하나라도 focusSec이 minFocusSec 이상인 날짜 목록 (중복 없음, 최신순)
     @Query("""
             select distinct s.statDate
             from StudySession s
-            where s.userId = :userId and s.focusSec >= :minFocusSec
+            where s.userId = :userId and s.focusSec >= :minFocusSec and s.source = project.study.studysession.entity.StudySessionSource.MEASURED
             order by s.statDate desc""")
     List<LocalDate> findDistinctStatDates(@Param("userId") Long userId, @Param("minFocusSec") int minFocusSec);
 
-    // 누적 공부일 — 세션 하나라도 focusSec이 minFocusSec 이상인 날짜 수(today까지). 자정을 걸친 세션은
+    // 누적 공부일 — 측정 세션 하나라도 focusSec이 minFocusSec 이상인 날짜 수(today까지). 자정을 걸친 세션은
     // 분할 저장되어 stat_date가 둘이므로 distinct가 그대로 이틀로 센다 (BY-645)
     @Query("""
             select count(distinct s.statDate)
             from StudySession s
-            where s.userId = :userId and s.focusSec >= :minFocusSec and s.statDate <= :today""")
+            where s.userId = :userId and s.focusSec >= :minFocusSec and s.statDate <= :today and s.source = project.study.studysession.entity.StudySessionSource.MEASURED""")
     long countDistinctStatDates(
             @Param("userId") Long userId, @Param("minFocusSec") int minFocusSec, @Param("today") LocalDate today);
 
@@ -58,6 +78,18 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             where s.userId = :userId and s.statDate between :from and :to and s.focusSec >= :minFocusSec
             order by s.statDate""")
     List<LocalDate> findDistinctStatDatesBetween(
+            @Param("userId") Long userId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("minFocusSec") int minFocusSec);
+
+    // findDistinctStatDatesBetween의 측정 전용판 — 스트릭 기간 조회와 랭킹 누적 일수 페이스가 쓴다
+    @Query("""
+            select distinct s.statDate
+            from StudySession s
+            where s.userId = :userId and s.statDate between :from and :to and s.focusSec >= :minFocusSec and s.source = project.study.studysession.entity.StudySessionSource.MEASURED
+            order by s.statDate""")
+    List<LocalDate> findDistinctMeasuredStatDatesBetween(
             @Param("userId") Long userId,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to,
@@ -81,7 +113,7 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
     Optional<StudySession> findByIdAndUserId(Long id, Long userId);
 
     // 복구 판별용(BY-455) — 유저의 가장 최근 세션 1건(시작 시각 기준). 자정 분할이면 마지막 조각이 잡힌다
-    Optional<StudySession> findFirstByUserIdOrderByStartedAtDesc(Long userId);
+    Optional<StudySession> findFirstByUserIdAndSourceOrderByStartedAtDesc(Long userId, StudySessionSource source);
 
     // 복구 확인 처리(BY-455) — 한 제출(submissionStartedAt)의 미확인 자동 확정본 조각에만 확인 시각을 찍는다.
     // IS NULL 조건이라 동시 복구 요청 중 실제로 갱신한(반환>0) 쪽만 세션을 노출한다 — 한 번만 노출 보장.
@@ -99,10 +131,11 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             @Param("at") Instant at);
 
     // 인터뷰 대상 판정(ADR-0027) — 자동 종료 세션도 시작한 세션으로 센다
-    boolean existsByUserId(Long userId);
+    boolean existsByUserIdAndSource(Long userId, StudySessionSource source);
 
     // 인터뷰 대상 판정(ADR-0027) — 자동 종료 포함 가장 늦은 종료 시각, 세션이 없으면 null
-    @Query("select max(s.endedAt) from StudySession s where s.userId = :userId")
+    @Query(
+            "select max(s.endedAt) from StudySession s where s.userId = :userId and s.source = project.study.studysession.entity.StudySessionSource.MEASURED")
     Instant findLastEndedAt(@Param("userId") Long userId);
 
     // 인터뷰 3번 그룹(ADR-0027) — since 이후 끝난 완료 세션 수. 자정 분할 조각은 루트 제출 시각으로 묶어 1건으로 세고
@@ -112,7 +145,7 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             select count(*) from (
                 select 1
                 from study_session s
-                where s.user_id = :userId and s.started_at > :scanFrom
+                where s.user_id = :userId and s.started_at > :scanFrom and s.source = 'MEASURED'
                 group by coalesce(s.submission_started_at, s.started_at)
                 having bool_and(not s.auto_finalized)
                    and sum(s.focus_sec) >= :minFocusSec
@@ -127,6 +160,7 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
     // BY-828 백필 — 시간대 행이 없는 최근 세션. 순공 0·종료 시각 없는(레거시) 세션은 행이 생길 수 없어 뺀다
     @Query("""
             select s from StudySession s
-            where s.statDate >= :from and s.focusSec > 0 and s.endedAt is not null and s.slots is empty""")
+            where s.statDate >= :from and s.focusSec > 0 and s.endedAt is not null and s.slots is empty
+              and s.source = project.study.studysession.entity.StudySessionSource.MEASURED""")
     List<StudySession> findSlotlessSince(@Param("from") LocalDate from);
 }
