@@ -47,7 +47,7 @@ class RoomInviteCodeErrorTest extends RoomTestBase {
     void 입장_없이_만료돼_소멸한_빈_방의_코드도_ROOM_CLOSED다() {
         String code = createRoom();
 
-        cleanupAfter(601);
+        cleanupAfter(3601);
 
         long userId = user();
         assertNotFoundWithCode(() -> join(userId, code), ErrorCode.ROOM_CLOSED);

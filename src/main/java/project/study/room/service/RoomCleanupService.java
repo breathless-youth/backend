@@ -41,7 +41,7 @@ public class RoomCleanupService {
 
     public static final int RESERVATION_TTL_SECONDS = 30;
     public static final int GRACE_PERIOD_SECONDS = 30;
-    public static final int EMPTY_ROOM_TTL_SECONDS = 600;
+    public static final int EMPTY_ROOM_TTL_SECONDS = 3600;
     public static final int RECLAIMED_LEASE_TTL_SECONDS = 600;
 
     private final RoomRepository rooms;

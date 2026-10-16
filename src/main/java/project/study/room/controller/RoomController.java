@@ -48,7 +48,7 @@ public class RoomController {
     @Operation(summary = "방 생성", description = """
                     일회성 공부방을 만들고 초대코드(숫자 4자리)를 발급받는다. 요청 본문은 없다 — 만드는 사람은 토큰으로 식별한다. \
                     **생성만으로는 입장 상태가 아니다** — 생성자도 join으로만 입장한다. \
-                    생성 후 10분 내 아무도 입장하지 않으면 방과 코드가 자동 소멸한다.""")
+                    생성 후 1시간 내 아무도 입장하지 않으면 방과 코드가 자동 소멸한다.""")
     @ApiResponse(responseCode = "201", description = "생성 성공 — 방 ID와 초대코드")
     @ApiResponse(
             responseCode = "404",
