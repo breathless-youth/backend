@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.entity.StudySessionSource;
 
 public record StudySessionResponse(
         @Schema(description = "세션 ID", example = "10") Long id,
@@ -40,7 +41,12 @@ public record StudySessionResponse(
         List<CompletedTaskResponse> completedTasks,
 
         @Schema(description = "이 세션이 참조한 과목(구간·완료 할 일의 과목)의 이름·색 — id 오름차순, 지운 과목 포함. 없으면 []")
-        List<SubjectRef> subjects) {
+        List<SubjectRef> subjects,
+
+        @Schema(
+                description = "기록 출처 — MEASURED(측정)·MANUAL(직접 입력). 수동 기록은 studySec = focusSec이고 이벤트가 없다",
+                example = "MEASURED")
+        StudySessionSource source) {
     // focusRate 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다. 이름·색은 서비스가 과목 도메인에서 받아온 lookup으로 붙인다 (BY-734)
     public static StudySessionResponse from(StudySession session, double focusRate, SubjectLookup lookup) {
         return new StudySessionResponse(
@@ -57,6 +63,7 @@ public record StudySessionResponse(
                         .map(SubjectSegmentResponse::from)
                         .toList(),
                 lookup.tasksFor(session.getCompletedTaskIds()),
-                lookup.subjectsReferencedBy(session));
+                lookup.subjectsReferencedBy(session),
+                session.getSource());
     }
 }

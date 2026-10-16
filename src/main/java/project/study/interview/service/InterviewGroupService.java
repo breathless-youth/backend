@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.interview.InterviewGroup;
 import project.study.studysession.StudySessionThresholds;
+import project.study.studysession.entity.StudySessionSource;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
 
@@ -34,7 +35,8 @@ public class InterviewGroupService {
         // 지금 공부 중인 사람에게 '시작 안 한 이유'·'안 돌아온 이유'를 묻지 않는다 — 1·2번 모두에서 뺀다
         boolean inProgress = activeStudySessionRepository.existsByUserId(userId);
 
-        if (!studySessionRepository.existsByUserId(userId)) {
+        // 수동 기록은 앱을 써 본 기록이 아니라서 세 판정 모두 측정 세션만 본다
+        if (!studySessionRepository.existsByUserIdAndSource(userId, StudySessionSource.MEASURED)) {
             return inProgress ? InterviewGroup.NONE : InterviewGroup.G1_NOT_STARTED;
         }
 

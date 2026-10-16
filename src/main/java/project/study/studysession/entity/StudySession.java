@@ -5,6 +5,8 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -96,6 +98,10 @@ public class StudySession {
     @Column(name = "recovery_acknowledged_at")
     private Instant recoveryAcknowledgedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false)
+    private StudySessionSource source = StudySessionSource.MEASURED;
+
     // 검증·계산은 StudySessionService.validateAndBuildSessions가 담당한다 — 엔티티는 저장 데이터만 보관
     public StudySession(
             Long userId,
@@ -133,6 +139,15 @@ public class StudySession {
     /** 조각의 구간별 순공을 붙인다 — 분할 직후 서비스(또는 백필)만 호출한다. */
     public void attachSlots(Collection<SessionSlot> slots) {
         this.slots = new HashSet<>(slots);
+    }
+
+    /** 사용자가 직접 넣은 기록임을 표시한다 — 저장 직전 수동 기록 서비스만 호출한다. */
+    public void markManual() {
+        this.source = StudySessionSource.MANUAL;
+    }
+
+    public boolean isManual() {
+        return source == StudySessionSource.MANUAL;
     }
 
     /** 확정 스케줄러가 만든 세션임을 표시한다 — 저장 직전 서비스만 호출한다. */
