@@ -102,6 +102,12 @@ class ManualStudySessionStatsApiTest {
                 .hasPathSatisfying("$.sessions[0].source", v -> assertThat(v).isEqualTo("MANUAL"))
                 .hasPathSatisfying("$.sessions[1].source", v -> assertThat(v).isEqualTo("MEASURED"))
                 .hasPathSatisfying(
+                        "$.sessions[0].submissionStartedAt",
+                        v -> assertThat(v).isEqualTo(at(13, 0).toString()))
+                .hasPathSatisfying(
+                        "$.sessions[1].submissionStartedAt",
+                        v -> assertThat(v).isEqualTo(at(10, 0).toString()))
+                .hasPathSatisfying(
                         "$.studiedDatesInMonth", v -> assertThat(v).asArray().contains(day.toString()));
     }
 

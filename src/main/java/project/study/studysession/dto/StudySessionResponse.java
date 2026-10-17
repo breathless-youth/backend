@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import project.study.studysession.entity.StudySession;
 import project.study.studysession.entity.StudySessionSource;
 
@@ -46,7 +47,13 @@ public record StudySessionResponse(
         @Schema(
                 description = "기록 출처 — MEASURED(측정)·MANUAL(직접 입력). 수동 기록은 studySec = focusSec이고 이벤트가 없다",
                 example = "MEASURED")
-        StudySessionSource source) {
+        StudySessionSource source,
+
+        @Schema(
+                description = "묶음 키 — 자정 분할·겹침 자르기로 나뉜 조각이 공유하는 시각(UTC, ISO-8601). 같은 값이면 한 번의 제출·수동 기록이다. "
+                        + "이전 데이터로 값이 없는 세션은 자기 시작 시각이다",
+                example = "2026-07-24T01:00:00Z")
+        Instant submissionStartedAt) {
     // focusRate 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다. 이름·색은 서비스가 과목 도메인에서 받아온 lookup으로 붙인다 (BY-734)
     public static StudySessionResponse from(StudySession session, double focusRate, SubjectLookup lookup) {
         return new StudySessionResponse(
@@ -64,6 +71,8 @@ public record StudySessionResponse(
                         .toList(),
                 lookup.tasksFor(session.getCompletedTaskIds()),
                 lookup.subjectsReferencedBy(session),
-                session.getSource());
+                session.getSource(),
+                // 묶음 키가 없는 옛 세션끼리 null 하나로 묶이지 않게 각자 단독 묶음으로 내린다
+                Objects.requireNonNullElse(session.getSubmissionStartedAt(), session.getStartedAt()));
     }
 }

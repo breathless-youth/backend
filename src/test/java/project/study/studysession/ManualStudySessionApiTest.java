@@ -174,7 +174,14 @@ class ManualStudySessionApiTest {
                 .hasPathSatisfying("$[0].statDate", v -> assertThat(v).isEqualTo(day.toString()))
                 .hasPathSatisfying(
                         "$[1].statDate",
-                        v -> assertThat(v).isEqualTo(day.plusDays(1).toString()));
+                        v -> assertThat(v).isEqualTo(day.plusDays(1).toString()))
+                .hasPathSatisfying(
+                        "$[0].startedAt", v -> assertThat(v).isEqualTo(at(23, 0).toString()))
+                .hasPathSatisfying(
+                        "$[*].submissionStartedAt",
+                        v -> assertThat(v)
+                                .asList()
+                                .containsExactly(at(23, 0).toString(), at(23, 0).toString()));
         assertThat(manualSubmissionKeys()).containsExactly(at(23, 0));
     }
 
@@ -336,8 +343,18 @@ class ManualStudySessionApiTest {
     @Test
     void 앞이_잘린_두_요청은_서로_다른_묶음이라_하나를_지워도_다른_하나는_남는다() {
         measured(at(14, 0), at(14, 30), 1800);
-        assertThat(post(at(14, 0), at(16, 0))).hasStatus(HttpStatus.CREATED);
-        assertThat(post(at(14, 0), at(17, 0))).hasStatus(HttpStatus.CREATED);
+        assertThat(post(at(14, 0), at(16, 0)))
+                .hasStatus(HttpStatus.CREATED)
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$[0].submissionStartedAt",
+                        v -> assertThat(v).isEqualTo(at(14, 30).toString()));
+        assertThat(post(at(14, 0), at(17, 0)))
+                .hasStatus(HttpStatus.CREATED)
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$[0].submissionStartedAt",
+                        v -> assertThat(v).isEqualTo(at(16, 0).toString()));
         assertThat(manualSubmissionKeys()).containsExactlyInAnyOrder(at(14, 30), at(16, 0));
 
         assertThat(delete(userId, manualIds().getFirst())).hasStatus(HttpStatus.NO_CONTENT);
