@@ -5,8 +5,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.entity.StudySessionSource;
 
 public record StudySessionSummaryResponse(
         @Schema(description = "세션 ID", example = "10") Long id,
@@ -43,7 +45,18 @@ public record StudySessionSummaryResponse(
         List<SubjectSegmentResponse> subjectSegments,
 
         @Schema(description = "이 세션에서 완료한 할 일 — 이름 포함, id 오름차순, 지운 할 일도 남는다. 없으면 []")
-        List<CompletedTaskResponse> completedTasks) {
+        List<CompletedTaskResponse> completedTasks,
+
+        @Schema(
+                description = "기록 출처 — MEASURED(측정)·MANUAL(직접 입력). 수동 기록은 studySec = focusSec이고 이벤트가 없다",
+                example = "MEASURED")
+        StudySessionSource source,
+
+        @Schema(
+                description = "묶음 키 — 자정 분할·겹침 자르기로 나뉜 조각이 공유하는 시각(UTC, ISO-8601). 같은 값이면 한 번의 제출·수동 기록이다. "
+                        + "이전 데이터로 값이 없는 세션은 자기 시작 시각이다",
+                example = "2026-07-24T01:00:00Z")
+        Instant submissionStartedAt) {
     // focusRate/eventCounts 계산은 서비스가 담당한다 — DTO는 값을 옮겨 담기만 한다. 과목 이름·색은 목록 응답의 subjects[]에 한 번 실린다
     public static StudySessionSummaryResponse from(
             StudySession session, double focusRate, Map<EventStatus, Long> eventCounts, SubjectLookup lookup) {
@@ -60,6 +73,9 @@ public record StudySessionSummaryResponse(
                 session.getSubjectSegments().stream()
                         .map(SubjectSegmentResponse::from)
                         .toList(),
-                lookup.tasksFor(session.getCompletedTaskIds()));
+                lookup.tasksFor(session.getCompletedTaskIds()),
+                session.getSource(),
+                // 묶음 키가 없는 옛 세션끼리 null 하나로 묶이지 않게 각자 단독 묶음으로 내린다
+                Objects.requireNonNullElse(session.getSubmissionStartedAt(), session.getStartedAt()));
     }
 }

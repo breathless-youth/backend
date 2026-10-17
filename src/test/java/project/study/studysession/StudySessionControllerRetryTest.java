@@ -20,6 +20,7 @@ import project.study.studysession.controller.StudySessionController;
 import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
+import project.study.studysession.entity.StudySessionSource;
 import project.study.studysession.service.DuplicateSessionException;
 import project.study.studysession.service.StudySessionService;
 import project.study.subject.service.StudySubjectService;
@@ -85,7 +86,9 @@ class StudySessionControllerRetryTest {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of()));
+                List.of(),
+                StudySessionSource.MEASURED,
+                STARTED_AT));
         when(studySessionService.create(USER_ID, request, COMPLETED, false))
                 .thenThrow(new DuplicateSessionException("첫 실패"))
                 .thenThrow(new DuplicateSessionException("재시도도 실패"));

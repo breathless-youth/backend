@@ -30,7 +30,7 @@ public class SessionFactQueries {
                                   AND s.started_at < coalesce(rp.left_at, now())
                             ) AS social
                         FROM study_session s
-                        WHERE s.stat_date BETWEEN :from AND :to
+                        WHERE s.stat_date BETWEEN :from AND :to AND s.source = 'MEASURED'
                         ORDER BY s.user_id, s.started_at""")
                 .param("from", from)
                 .param("to", to)

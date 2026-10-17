@@ -152,17 +152,19 @@ class StudySessionApiTest {
                         "$.sessions[0].eventCounts.AWAY", v -> assertThat(v).isEqualTo(1));
     }
 
-    private void submitCrossMidnightSession() {
+    private MvcTestResult submitCrossMidnightSession() {
         Instant midnight = today.minusDays(1).atStartOfDay(KST).toInstant();
         String phoneEvent = eventJson("PHONE", midnight.minusSeconds(600), midnight.plusSeconds(600));
         String body = """
                 {"startedAt": "%s", "endedAt": "%s", "studySec": 7200, "focusSec": 6000, "events": [%s]}""".formatted(midnight.minusSeconds(3600), midnight.plusSeconds(3600), phoneEvent);
 
-        assertThat(mvc.post()
-                        .uri("/api/study-sessions")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-                        .with(asUser(userId)))
+        MvcTestResult result = mvc.post()
+                .uri("/api/study-sessions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(asUser(userId))
+                .exchange();
+        assertThat(result)
                 .hasStatus(HttpStatus.CREATED)
                 .bodyJson()
                 .hasPathSatisfying("$.length()", length -> assertThat(length).isEqualTo(2))
@@ -177,11 +179,12 @@ class StudySessionApiTest {
                         d -> assertThat(d).isEqualTo(today.minusDays(1).toString()))
                 .hasPathSatisfying("$[1].studySec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying("$[1].focusSec", v -> assertThat(v).isEqualTo(3000));
+        return result;
     }
 
     @Test
     void 자정을_넘는_세션은_두_개로_분할_저장된다() {
-        submitCrossMidnightSession();
+        MvcTestResult result = submitCrossMidnightSession();
         Integer sessionRows = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM study_session WHERE user_id = ?", Integer.class, userId);
         Integer eventRows = jdbcTemplate.queryForObject(
@@ -190,6 +193,16 @@ class StudySessionApiTest {
                 userId);
         assertThat(sessionRows).isEqualTo(2);
         assertThat(eventRows).isEqualTo(2);
+        // 두 조각이 같은 묶음 키를 내려야 화면이 한 번의 제출로 묶어 보여 준다
+        String submitted = today.minusDays(1)
+                .atStartOfDay(KST)
+                .toInstant()
+                .minusSeconds(3600)
+                .toString();
+        assertThat(result)
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$[*].submissionStartedAt", v -> assertThat(v).asList().containsExactly(submitted, submitted));
     }
 
     @Test
