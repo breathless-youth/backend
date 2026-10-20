@@ -278,7 +278,7 @@ CREATE TABLE ranking_best (
 
 ### 7.3 PR ③ — 노출용
 
-- `GET /api/rankings/home?since=` — 홈 한 줄 카드(5b)와 첫 접속 추월(5a)
+- `GET /api/rankings/home?since=` — 홈 한 줄 카드(5b)와 첫 접속 추월(5a). **BY-943(2026-10-20)에서 삭제** — 홈 추월 시트를 안 쓰게 됐다
   ```jsonc
   { "card": { "rank": 1205, "value": 41200, "above": { "nickname": "커피세잔", "gap": 1320 } },  // 이번 주 기록 없으면 null
     "overtaken": { "fromRank": 1201, "toRank": 1205, "count": 4,
@@ -339,7 +339,7 @@ CREATE TABLE ranking_best (
 | 메달 버튼·시트·기록 없음 (5q·5s) | `records/summary` |
 | 모두 보기 (5r) | `records/summary`(요약 카드) + `records` |
 | 마감 모달 (5t~5w) | `records/unseen` → `records/seen` |
-| 홈 한 줄 카드·첫 접속 팝업 (5b·5a) | `home?since=` |
+| 홈 한 줄 카드·첫 접속 팝업 (5b·5a) | `home?since=` (BY-943에서 삭제) |
 | 공부 결과 오른 랭킹 (5i) | `session-gains` |
 
 ## 10. 오류·경계

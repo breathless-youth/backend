@@ -36,8 +36,8 @@
 
    | 측정만 | 수동 포함 |
    |---|---|
-   | 랭킹 집계 5종(`periodTotals`·`slotTotals`·`periodTotalsAt`·`studyDays`·`maxStreaks`) | 일간 조회 `sessions`·`sessionCount`·`totalStudySec`·`totalFocusSec`·`studiedDatesInMonth` |
-   | 랭킹 누적 일수 페이스(`RankingSource.studiedDays`), 세션 뒤 오른 랭킹·추월 팝업 | 기간 통계(`GET /api/stats/period`) |
+   | 랭킹 집계 4종(`periodTotals`·`slotTotals`·`studyDays`·`maxStreaks`) | 일간 조회 `sessions`·`sessionCount`·`totalStudySec`·`totalFocusSec`·`studiedDatesInMonth` |
+   | 랭킹 누적 일수 페이스(`RankingSource.studiedDays`), 세션 뒤 오른 랭킹 | 기간 통계(`GET /api/stats/period`) |
    | 연속 공부(`GET /api/stats/streak`), 누적 공부일(`GET /api/stats/study-days`) | 과목 누적 시간(`GET /api/subjects`) |
    | 일간 조회의 `focusRate`·`longestFocusSec` | |
    | 세션 복구 판정, 인터뷰 모집 판정, 일일 Slack 리포트, 시간대 구간 백필 | |

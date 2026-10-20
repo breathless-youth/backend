@@ -224,9 +224,7 @@ public class ActiveStudySessionService {
                     i == sessions.size() - 1,
                     focusing,
                     achievedAt,
-                    draft.getId(),
-                    piece.getStartedAt(),
-                    piece.getEndedAt()));
+                    draft.getId()));
         }
         return pieces;
     }
