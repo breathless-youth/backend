@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.studysession.StudySessionThresholds;
 import project.study.studysession.dto.LivePiece;
 import project.study.studysession.dto.RankingDaysRow;
-import project.study.studysession.dto.RankingPastRow;
 import project.study.studysession.dto.RankingStreakRow;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.entity.StudySession;
@@ -86,11 +85,6 @@ public class RankingSource {
         return studySessionRepository
                 .findDistinctMeasuredStatDatesBetween(userId, from, to, StudySessionThresholds.MIN_LIST_FOCUS_SEC)
                 .size();
-    }
-
-    /** 기간 순공을 since 시점으로 되돌린 합 — 첫 접속 추월. */
-    public List<RankingPastRow> periodTotalsAt(LocalDate from, LocalDate to, Instant since) {
-        return queries.periodTotalsAt(from, to, since);
     }
 
     public List<RankingTotalRow> periodTotals(LocalDate from, LocalDate to, Long userId, Instant excludeSubmission) {
