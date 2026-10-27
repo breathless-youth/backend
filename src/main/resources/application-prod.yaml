@@ -64,6 +64,11 @@ app:
   report:
     enabled: true
   # 데모 데이터 시딩(app.seed.enabled)은 운영에서 절대 켜지 않는다 — 고정 deviceId가 곧 자격증명이다
+  # 서버 FCM 발송 (BY-1029, ADR-0033). ECS 태스크 정의가 SSM fcm/service-account-json(focusmakers-prod 서비스 계정)을 주입한다.
+  # 값이 없으면 발송만 꺼진 채 기동한다. 테스트 발송(app.push.test-send.enabled)은 운영에서 켜지 않는다
+  push:
+    fcm:
+      service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
   ws:
     stats-logging-period-ms: 1800000   # 30분 (기본)
   cors:
