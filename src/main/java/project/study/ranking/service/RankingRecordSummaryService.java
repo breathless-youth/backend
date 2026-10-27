@@ -58,7 +58,7 @@ public class RankingRecordSummaryService {
     }
 
     /**
-     * 순공 일·주·월과 시간대 일·주 × 5구간의 지금 기간 중 메달까지 남은 양이 가장 작은 판 — 같으면 closable() 순서상 앞 판. 지금부터
+     * 순공 일·주·월과 시간대 일·주 × 4구간의 지금 기간 중 메달까지 남은 양이 가장 작은 판 — 같으면 closable() 순서상 앞 판. 지금부터
      * 더 쌓을 수 있는 판만 본다: 오늘 이미 지난 구간의 일간판은 메달권(gap 0)일 때만 후보다.
      */
     private Closest closest(long userId, Instant now) {

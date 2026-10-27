@@ -42,9 +42,9 @@ class CanStillAccrueTest {
     }
 
     @Test
-    void 심야_일간판은_마감이_다음날_04시라_저녁에도_쌓을_수_있다() {
+    void 심야_일간판은_오후엔_이미_지나_더_쌓을_수_없다() {
         assertThat(canAccrue(slot(RankingPeriod.DAILY, TimeSlot.NIGHT), SAT_AFTERNOON))
-                .isTrue();
+                .isFalse();
     }
 
     @Test

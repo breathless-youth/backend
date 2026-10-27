@@ -64,16 +64,16 @@ class SessionSlotPersistTest {
 
     @Test
     void 세션을_저장하면_구간별_순공도_저장된다() {
-        submit(at(20, 6, 30), at(20, 7, 30), 3600, false);
+        submit(at(20, 5, 30), at(20, 6, 30), 3600, false);
 
-        assertThat(slotRows()).containsExactly("DAWN 2026-09-20 1800", "MORNING 2026-09-20 1800");
+        assertThat(slotRows()).containsExactly("MORNING 2026-09-20 1800", "NIGHT 2026-09-20 1800");
     }
 
     @Test
-    void 자정을_넘는_세션은_두_조각_모두_시작한_날의_심야다() {
+    void 자정을_넘는_세션은_그날_저녁과_다음날_심야로_나뉜다() {
         submit(at(20, 23, 0), at(21, 1, 0), 7200, false);
 
-        assertThat(slotRows()).containsExactly("NIGHT 2026-09-20 3600", "NIGHT 2026-09-20 3600");
+        assertThat(slotRows()).containsExactly("EVENING 2026-09-20 3600", "NIGHT 2026-09-21 3600");
     }
 
     @Test

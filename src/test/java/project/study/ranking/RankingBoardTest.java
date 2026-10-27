@@ -54,8 +54,14 @@ class RankingBoardTest {
     }
 
     @Test
-    void 마감하는_판은_15개이고_순공_집중률_시간대_순이다() {
-        assertThat(RankingBoard.closable()).hasSize(15);
+    void DAWN_판은_없다() {
+        assertThatThrownBy(() -> RankingBoard.of(TIME_SLOT, DAILY, TimeSlot.DAWN, 0))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void 마감하는_판은_13개이고_순공_집중률_시간대_순이다() {
+        assertThat(RankingBoard.closable()).hasSize(13);
         assertThat(RankingBoard.closable().subList(0, 6))
                 .containsExactly(
                         new RankingBoard(FOCUS_TIME, DAILY, null),
@@ -63,8 +69,8 @@ class RankingBoardTest {
                         new RankingBoard(FOCUS_TIME, MONTHLY, null),
                         new RankingBoard(FOCUS_RATE, WEEKLY, null),
                         new RankingBoard(FOCUS_RATE, MONTHLY, null),
-                        new RankingBoard(TIME_SLOT, DAILY, TimeSlot.DAWN));
-        assertThat(RankingBoard.closable().getLast()).isEqualTo(new RankingBoard(TIME_SLOT, WEEKLY, TimeSlot.NIGHT));
+                        new RankingBoard(TIME_SLOT, DAILY, TimeSlot.NIGHT));
+        assertThat(RankingBoard.closable().getLast()).isEqualTo(new RankingBoard(TIME_SLOT, WEEKLY, TimeSlot.EVENING));
     }
 
     @Test
@@ -73,5 +79,7 @@ class RankingBoardTest {
             assertThat(RankingBoard.fromKey(board.key())).isEqualTo(board);
         }
         assertThat(RankingBoard.fromKey("TOTAL_TIME")).isEqualTo(new RankingBoard(TOTAL_TIME, null, null));
+        assertThat(RankingBoard.fromKey("TIME_SLOT:DAILY:DAWN"))
+                .isEqualTo(new RankingBoard(TIME_SLOT, DAILY, TimeSlot.DAWN));
     }
 }

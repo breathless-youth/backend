@@ -29,7 +29,7 @@ public class RankingCloser {
     /** 마감 뒤 이만큼 기다렸다 확정한다 — 자정 뒤 첫 스냅샷(하트비트 30초 + flush 5초 + 네트워크)이 들어오는 시간. */
     public static final Duration SETTLE_DELAY = Duration.ofMinutes(1);
 
-    /** 이보다 늦으면 확정하지 않고 건너뛴다 — 첫 배포 때 지난 기간에 메달이 소급되지 않고, 04시 보류가 영영 막히지 않게. */
+    /** 이보다 늦으면 확정하지 않고 건너뛴다 — 첫 배포 때 지난 기간에 메달이 소급되지 않게. */
     public static final Duration CATCH_UP_LIMIT = Duration.ofHours(1);
 
     private final StandingsCalculator calculator;

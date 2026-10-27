@@ -58,12 +58,9 @@ public class RankingRecordQueries {
     }
 
     /** 안 본 기록 중 closedUpTo까지(포함) 마감한 것. 순서는 서비스가 정한다. */
-    public List<RankingRecordRow> unseen(long userId, Instant closedUpTo) {
-        return jdbc.sql(
-                        "SELECT " + COLUMNS
-                                + " FROM ranking_record WHERE user_id = :userId AND seen_at IS NULL AND closes_at <= :closedUpTo")
+    public List<RankingRecordRow> unseen(long userId) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM ranking_record WHERE user_id = :userId AND seen_at IS NULL")
                 .param("userId", userId)
-                .param("closedUpTo", closedUpTo.atOffset(ZoneOffset.UTC))
                 .query(ROW)
                 .list();
     }

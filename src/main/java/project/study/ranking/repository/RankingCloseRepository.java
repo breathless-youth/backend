@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -57,15 +56,6 @@ public class RankingCloseRepository {
                 .param("boardKey", boardKey)
                 .param("periodStart", periodStart)
                 .query(Boolean.class)
-                .single();
-    }
-
-    /** closesAt에 마감한 판 중 boardKeys에 든 것의 수 — 건너뛴 마감도 센다. */
-    public int countClosedAt(Collection<String> boardKeys, Instant closesAt) {
-        return jdbc.sql("SELECT count(*) FROM ranking_close WHERE board_key IN (:boardKeys) AND closes_at = :closesAt")
-                .param("boardKeys", boardKeys)
-                .param("closesAt", utc(closesAt))
-                .query(Integer.class)
                 .single();
     }
 
