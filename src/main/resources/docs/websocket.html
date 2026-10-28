@@ -154,12 +154,13 @@ sequenceDiagram
 <h3>예시</h3>
 <pre><code>{ "type": "SNAPSHOT", "members": [
   { "userId": 12, "nickname": "상재", "goal": "정보처리기사", "category": "자격증",
+    "profileImageUrl": "/avatars/12/3f2a9c1e-7b4d-4e8a-9c2f-1a2b3c4d5e6f.jpg",
     "cameraOn": true, "focusState": "FOCUS", "focusSec": 1520, "disconnected": false },
-  { "userId": 34, "nickname": "원일", "goal": "졸업 프로젝트", "category": "학업",
+  { "userId": 34, "nickname": "원일", "goal": "졸업 프로젝트", "category": "학업", "profileImageUrl": null,
     "cameraOn": false, "focusState": "DISTRACTED", "focusSec": 300, "disconnected": true }
 ] }
 { "type": "MEMBER_JOINED", "member": { "userId": 56, "nickname": "선규", "goal": null, "category": null,
-    "cameraOn": false, "focusState": "FOCUS", "focusSec": 0, "disconnected": false } }
+    "profileImageUrl": null, "cameraOn": false, "focusState": "FOCUS", "focusSec": 0, "disconnected": false } }
 { "type": "MEMBER_LEFT", "userId": 34 }
 { "type": "CAMERA_CHANGED", "userId": 12, "cameraOn": false }
 { "type": "FOCUS_CHANGED", "userId": 12, "focusState": "DISTRACTED" }
@@ -173,6 +174,7 @@ sequenceDiagram
   <tr><td><code>userId</code></td><td>long</td><td></td></tr>
   <tr><td><code>nickname</code></td><td>string</td><td>입장 시점 프로필. 이후 프로필을 바꿔도 방 안에서는 갱신되지 않는다</td></tr>
   <tr><td><code>goal</code>, <code>category</code></td><td>string | null</td><td>공부 목표·카테고리</td></tr>
+  <tr><td><code>profileImageUrl</code></td><td>string | null</td><td>입장 시점 프로필 사진 경로(지금은 웹과 같은 출처의 상대 경로 <code>/avatars/...</code>). 없으면 null — 이니셜로 표시. 방에 있는 동안 사진을 바꾸면 다음 입장부터 반영된다. 바꾸면 이전 파일을 바로 지우므로 엣지 캐시가 끝난 뒤(최대 1시간) 다음 입장 전까지는 이미지를 못 불러온다 — 로드 실패도 이니셜로 표시한다</td></tr>
   <tr><td><code>cameraOn</code></td><td>boolean</td><td>마지막 state 보고 값. 입장 직후 <code>false</code></td></tr>
   <tr><td><code>focusState</code></td><td><code>"FOCUS"</code> | <code>"DISTRACTED"</code></td><td>입장 직후 <code>"FOCUS"</code></td></tr>
   <tr><td><code>focusSec</code></td><td>int</td><td>마지막 보고된 순공 초. 입장 직후 0</td></tr>
@@ -287,6 +289,7 @@ sequenceDiagram
   <tr><td>2026-09-17</td><td>BY-667</td><td>첫 판. BY-626(룸 상태 DB 원본화) 이후 계약 기준: <code>focusSec</code>, <code>members[].disconnected</code>, <code>ROOM_UNAVAILABLE</code>, SNAPSHOT 재요청</td></tr>
   <tr><td>2026-09-18</td><td>BY-676</td><td>구 앱(v1.2.x) 병행: CONNECT에 <code>Authorization</code>이 없을 때만 핸드셰이크 <code>?userId=</code> 폴백(§1). 새 앱 계약은 변화 없음. 강제 업데이트 뒤 제거 예정</td></tr>
   <tr><td>2026-10-16</td><td>BY-925</td><td>빈 방 소멸을 600초에서 3600초로 늘림(§8·§10). 방 생성 응답 <code>emptyTtlSeconds</code>도 3600. 소멸한 코드의 ROOM_CLOSED 안내 600초는 그대로</td></tr>
+  <tr><td>2026-10-28</td><td>BY-1035</td><td>멤버 객체에 <code>profileImageUrl</code>(string | null) 추가(§5). 입장 시점 값이라 방 안에서 사진을 바꿔도 다음 입장부터 반영</td></tr>
 </table>
 
 </main>

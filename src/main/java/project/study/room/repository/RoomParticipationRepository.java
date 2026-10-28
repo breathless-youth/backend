@@ -3,6 +3,8 @@ package project.study.room.repository;
 import static project.study.room.repository.RoomRepository.instant;
 import static project.study.room.repository.RoomRepository.ts;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -14,6 +16,7 @@ import org.springframework.jdbc.core.simple.JdbcClient.StatementSpec;
 import org.springframework.stereotype.Repository;
 import project.study.room.dto.RoomMember;
 import project.study.room.entity.LeaveReason;
+import project.study.user.image.ProfileImageUrls;
 
 /**
  * room_participations의 쓰기·락·조건부 갱신 경로. 모든 갱신은 갱신 건수를 돌려주고 호출자가 0건을
@@ -62,8 +65,12 @@ public class RoomParticipationRepository {
             "((NOT stomp_confirmed AND reserved_at < :reservationDeadline) " + "OR disconnected_at < :graceDeadline)";
 
     private static final String MEMBER_COLUMNS =
-            "user_id, nickname, goal, category, camera_on, focus_state, focus_sec, "
+            "user_id, nickname, goal, category, profile_image, camera_on, focus_state, focus_sec, "
                     + "(disconnected_at IS NOT NULL) AS disconnected";
+
+    // 사진 키는 프로필 응답에 경로로만 실리므로 입장하는 같은 문장에서 users에서 복사한다
+    private static final String CURRENT_PROFILE_IMAGE =
+            "(SELECT u.profile_image FROM users u WHERE u.id = room_participations.user_id)";
 
     private static final RowMapper<Row> ROW = (rs, n) -> new Row(
             rs.getLong("id"),
@@ -85,16 +92,6 @@ public class RoomParticipationRepository {
             instant(rs, "left_at"),
             rs.getString("leave_reason"));
 
-    private static final RowMapper<RoomMember> MEMBER = (rs, n) -> new RoomMember(
-            rs.getLong("user_id"),
-            rs.getString("nickname"),
-            rs.getString("goal"),
-            rs.getString("category"),
-            rs.getBoolean("camera_on"),
-            rs.getString("focus_state"),
-            rs.getInt("focus_sec"),
-            rs.getBoolean("disconnected"));
-
     private static final RowMapper<Candidate> CANDIDATE =
             (rs, n) -> new Candidate(rs.getLong("id"), rs.getLong("room_id"), rs.getLong("user_id"));
 
@@ -102,6 +99,20 @@ public class RoomParticipationRepository {
             (rs, n) -> new LiveSession(rs.getLong("id"), rs.getString("stomp_session_id"));
 
     private final JdbcClient jdbc;
+    private final ProfileImageUrls profileImageUrls;
+
+    private RoomMember toMember(ResultSet rs, int rowNum) throws SQLException {
+        return new RoomMember(
+                rs.getLong("user_id"),
+                rs.getString("nickname"),
+                rs.getString("goal"),
+                rs.getString("category"),
+                profileImageUrls.of(rs.getString("profile_image")),
+                rs.getBoolean("camera_on"),
+                rs.getString("focus_state"),
+                rs.getInt("focus_sec"),
+                rs.getBoolean("disconnected"));
+    }
 
     public Optional<Long> findLiveRoomIdOfUser(Long userId) {
         return jdbc.sql("SELECT room_id FROM room_participations WHERE user_id = :userId AND left_at IS NULL")
@@ -135,8 +146,10 @@ public class RoomParticipationRepository {
     }
 
     public long insertReservation(Long roomId, Long userId, Profile profile, Instant now) {
-        return jdbc.sql("INSERT INTO room_participations (room_id, user_id, nickname, goal, category, reserved_at) "
-                        + "VALUES (:roomId, :userId, :nickname, :goal, :category, :now) RETURNING id")
+        return jdbc.sql("INSERT INTO room_participations "
+                        + "(room_id, user_id, nickname, goal, category, profile_image, reserved_at) "
+                        + "VALUES (:roomId, :userId, :nickname, :goal, :category, "
+                        + "(SELECT u.profile_image FROM users u WHERE u.id = :userId), :now) RETURNING id")
                 .param("roomId", roomId)
                 .param("userId", userId)
                 .param("nickname", profile.nickname())
@@ -152,7 +165,7 @@ public class RoomParticipationRepository {
         return withProfile(
                         jdbc.sql("UPDATE room_participations SET disconnected_at = NULL, stomp_confirmed = false, "
                                 + "stomp_session_id = NULL, task_id = NULL, reserved_at = :now, nickname = :nickname, "
-                                + "goal = :goal, category = :category "
+                                + "goal = :goal, category = :category, profile_image = " + CURRENT_PROFILE_IMAGE + " "
                                 + "WHERE id = :id AND left_at IS NULL AND disconnected_at IS NOT NULL"),
                         profile)
                 .param("now", ts(now))
@@ -164,7 +177,8 @@ public class RoomParticipationRepository {
     public int refreshReservation(Long id, Profile profile, Instant now) {
         return withProfile(
                         jdbc.sql("UPDATE room_participations SET reserved_at = :now, nickname = :nickname, "
-                                + "goal = :goal, category = :category WHERE id = :id AND left_at IS NULL"),
+                                + "goal = :goal, category = :category, profile_image = " + CURRENT_PROFILE_IMAGE + " "
+                                + "WHERE id = :id AND left_at IS NULL"),
                         profile)
                 .param("now", ts(now))
                 .param("id", id)
@@ -251,7 +265,7 @@ public class RoomParticipationRepository {
         return jdbc.sql("SELECT " + MEMBER_COLUMNS + " FROM room_participations "
                         + "WHERE room_id = :roomId AND left_at IS NULL AND stomp_confirmed ORDER BY id")
                 .param("roomId", roomId)
-                .query(MEMBER)
+                .query(this::toMember)
                 .list();
     }
 
@@ -265,7 +279,7 @@ public class RoomParticipationRepository {
                 .param("roomId", roomId)
                 .param("userId", userId)
                 .param("sessionId", sessionId)
-                .query(MEMBER)
+                .query(this::toMember)
                 .list();
     }
 
