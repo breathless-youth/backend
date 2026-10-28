@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import project.study.TestcontainersConfiguration;
 import project.study.studysession.dto.RankingDaysRow;
+import project.study.studysession.dto.RankingProfile;
 import project.study.studysession.dto.RankingStreakRow;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.entity.TimeSlot;
@@ -162,7 +163,7 @@ class StudySessionRankingQueriesTest {
         long gone = user();
         jdbc.update("UPDATE users SET status = 'DELETE' WHERE id = ?", gone);
 
-        assertThat(source.activeNicknames(List.of(a, gone))).containsOnlyKeys(a);
+        assertThat(source.activeProfiles(List.of(a, gone))).containsOnlyKeys(a);
     }
 
     @Test
@@ -173,6 +174,25 @@ class StudySessionRankingQueriesTest {
                 Long.class,
                 UUID.randomUUID().toString());
 
-        assertThat(source.activeNicknames(List.of(a, noNickname))).containsOnlyKeys(a);
+        assertThat(source.activeProfiles(List.of(a, noNickname))).containsOnlyKeys(a);
+    }
+
+    @Test
+    void 집계_줄과_진행_중_프로필에_사진_키가_실린다() {
+        long a = user();
+        String key = "avatars/" + a + "/p.jpg";
+        jdbc.update("UPDATE users SET profile_image = ? WHERE id = ?", key, a);
+        session(a, FROM.plusDays(1), 9, 60, 3000);
+
+        assertThat(source.periodTotals(FROM, TO, a))
+                .extracting(RankingTotalRow::profileImage)
+                .containsExactly(key);
+        assertThat(source.studyDays(TODAY, a))
+                .extracting(RankingDaysRow::profileImage)
+                .containsExactly(key);
+        assertThat(source.maxStreaks(TODAY, a))
+                .extracting(RankingStreakRow::profileImage)
+                .containsExactly(key);
+        assertThat(source.activeProfiles(List.of(a))).containsEntry(a, new RankingProfile(nickname(a), key));
     }
 }

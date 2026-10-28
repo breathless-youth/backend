@@ -6,6 +6,7 @@ public record RoomMember(
         String nickname,
         String goal,
         String category,
+        String profileImageUrl,
         boolean cameraOn,
         String focusState,
         int focusSec,

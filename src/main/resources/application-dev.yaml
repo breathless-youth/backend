@@ -86,6 +86,13 @@ app:
       - http://127.0.0.1:[*]
       - https://web-dev.focusmakers.app
 
+  # 프로필 사진 버킷(스테이징). 자격 증명은 EC2 인스턴스 역할이고, 운영 태스크 역할과 같은 권한이 필요하다.
+  # GetObject와 ListBucket까지 있어야 등록 확인이 된다 (ADR-0033)
+  profile-image:
+    bucket: ${APP_PROFILE_IMAGE_BUCKET:focus-makers-staging-avatars-821365066487}
+    region: ap-northeast-2
+    base-url: ${APP_PROFILE_IMAGE_BASE_URL:}
+
   # 실시간 룸 WebRTC의 TURN 서버 접속 정보.
   # BY-578: coturn을 Oracle Cloud로 이전 (egress 10TB/월 무료) — AWS coturn은 폐기.
   room:

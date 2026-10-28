@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -26,6 +27,7 @@ import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.entity.Provider;
 import project.study.user.entity.User;
+import project.study.user.image.ProfileImageUrls;
 import project.study.user.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,6 +37,9 @@ class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Spy
+    private ProfileImageUrls profileImageUrls = new ProfileImageUrls("");
 
     @InjectMocks
     private UserService userService;
@@ -157,6 +162,20 @@ class UserServiceTest {
 
         assertThatThrownBy(() -> userService.updateProfile(1L, new ProfileUpdateRequest("사용중닉네임", null, null)))
                 .isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    void 사진_키를_바꾸면_이전_키와_새_사진_경로를_돌려준다() {
+        User user = userWithId(1L, DEVICE_ID);
+        user.replaceProfileImage("avatars/1/old.jpg");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        UserService.ProfileImageChange change = userService.replaceProfileImage(1L, "avatars/1/new.jpg");
+
+        assertThat(change.previousKey()).isEqualTo("avatars/1/old.jpg");
+        assertThat(change.profile().profileImageUrl()).isEqualTo("/avatars/1/new.jpg");
+        assertThat(userService.replaceProfileImage(1L, null).profile().profileImageUrl())
+                .isNull();
     }
 
     private User userWithId(Long id, String deviceId) {

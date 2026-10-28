@@ -23,6 +23,7 @@ import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.entity.Provider;
 import project.study.user.entity.User;
+import project.study.user.image.ProfileImageUrls;
 import project.study.user.nickname.Nicknames;
 import project.study.user.repository.UserRepository;
 
@@ -36,6 +37,7 @@ public class UserService {
     private static final int COLOR_COUNT = 8;
 
     private final UserRepository userRepository;
+    private final ProfileImageUrls profileImageUrls;
 
     // @Modifying 네이티브 쿼리는 트랜잭션 안에서만 실행할 수 있다
     @Transactional
@@ -92,15 +94,30 @@ public class UserService {
         return toProfileResponse(user);
     }
 
+    /** 사진 키를 바꾼 뒤의 프로필과 바뀌기 전 키. */
+    public record ProfileImageChange(ProfileResponse profile, String previousKey) {}
+
+    @Transactional
+    public ProfileImageChange replaceProfileImage(Long userId, String key) {
+        User user = findUser(userId);
+        String previous = user.replaceProfileImage(key);
+        return new ProfileImageChange(toProfileResponse(user), previous);
+    }
+
     private User findUser(Long userId) {
         return userRepository
                 .findById(userId)
                 .orElseThrow(() -> new NotFoundException(ErrorCode.USER_NOT_FOUND, "존재하지 않는 사용자입니다"));
     }
 
-    private static ProfileResponse toProfileResponse(User user) {
+    private ProfileResponse toProfileResponse(User user) {
         return new ProfileResponse(
-                user.getNickname(), user.getGoal(), user.getCategory(), user.getInitial(), user.getColorIndex());
+                user.getNickname(),
+                user.getGoal(),
+                user.getCategory(),
+                user.getInitial(),
+                user.getColorIndex(),
+                profileImageUrls.of(user.getProfileImage()));
     }
 
     /** 회원번호 중 users에 있는 것 — Amplitude에만 있는 id(타 환경·지운 행)를 리포트에서 거른다 (스펙 §7.4, BY-904). */

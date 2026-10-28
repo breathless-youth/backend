@@ -62,11 +62,13 @@ public record RankingBoardResponse(
         @Schema(description = "순공 주간 판에 me가 null일 때만: 지난주 분포의 구간별 필요 순공")
         List<GoalExample> goalExamples) {
 
-    public record BoardEntry(int rank, String nickname, Number value, boolean focusing, boolean me) {}
+    public record BoardEntry(
+            int rank, String nickname, String profileImageUrl, Number value, boolean focusing, boolean me) {}
 
     public record BoardMe(int rank, Number value, boolean focusing, int topPercent) {}
 
-    public record BoardNeighbor(String nickname, Number gap, boolean focusing, Long catchUpFocusSec) {}
+    public record BoardNeighbor(
+            String nickname, String profileImageUrl, Number gap, boolean focusing, Long catchUpFocusSec) {}
 
     public record RateEligibility(
             boolean eligible,
@@ -87,13 +89,15 @@ public record RankingBoardResponse(
             Integer nextRankIfContinue) {}
 
     /**
-     * 일수 판 묶음 한 줄 — rank는 공동 순위, nickname은 대표(내가 있으면 나, 없으면 먼저 달성한 사람), othersCount는 묶음 인원 − 1,
-     * achievedDate는 대표가 그 일수에 도달한 날. myOrder는 내 묶음에서만 같은 일수 중 몇 번째로 달성했는지.
+     * 일수 판 묶음 한 줄 — rank는 공동 순위, nickname은 대표(내가 있으면 나, 없으면 먼저 달성한 사람), profileImageUrl은
+     * 그 대표의 사진 경로, othersCount는 묶음 인원 − 1, achievedDate는 대표가 그 일수에 도달한 날. myOrder는 내 묶음에서만
+     * 같은 일수 중 몇 번째로 달성했는지.
      */
     public record DayGroupRow(
             int days,
             int rank,
             String nickname,
+            String profileImageUrl,
             int othersCount,
             LocalDate achievedDate,
             boolean me,

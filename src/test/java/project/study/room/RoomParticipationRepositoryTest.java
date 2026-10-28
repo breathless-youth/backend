@@ -2,6 +2,7 @@ package project.study.room;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.Types;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -55,6 +56,34 @@ class RoomParticipationRepositoryTest {
 
     private long reserve(long user, Instant at) {
         return participations.insertReservation(roomId, user, PROFILE, at);
+    }
+
+    private void setProfileImage(long user, String key) {
+        jdbc.sql("UPDATE users SET profile_image = :key WHERE id = :id")
+                .param("key", key, Types.VARCHAR)
+                .param("id", user)
+                .update();
+    }
+
+    @Test
+    void 입장_경로마다_유저의_사진_키를_복사하고_멤버에는_사진_경로로_싣는다() {
+        setProfileImage(userId, "avatars/1/a.jpg");
+        long id = reserve(userId, NOW);
+        participations.confirm(roomId, userId, "s1", NOW, "task-A", NOW);
+        assertThat(participations.findConfirmedMembers(roomId).getFirst().profileImageUrl())
+                .isEqualTo("/avatars/1/a.jpg");
+
+        setProfileImage(userId, "avatars/1/b.jpg");
+        assertThat(participations.refreshReservation(id, PROFILE, NOW)).isEqualTo(1);
+        assertThat(participations.findConfirmedMembers(roomId).getFirst().profileImageUrl())
+                .isEqualTo("/avatars/1/b.jpg");
+
+        participations.markDisconnected("s1", NOW);
+        setProfileImage(userId, null);
+        assertThat(participations.restoreFromGrace(id, PROFILE, NOW)).isEqualTo(1);
+        participations.confirm(roomId, userId, "s2", NOW.plusSeconds(1), "task-A", NOW);
+        assertThat(participations.findConfirmedMembers(roomId).getFirst().profileImageUrl())
+                .isNull();
     }
 
     @Test

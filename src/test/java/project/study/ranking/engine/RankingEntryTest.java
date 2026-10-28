@@ -10,7 +10,7 @@ class RankingEntryTest {
     private static final Instant T0 = Instant.parse("2026-10-10T14:59:50Z");
 
     private static RankingEntry focusing(double value) {
-        return new RankingEntry(1, "u1", value, T0, true, 600, 700);
+        return new RankingEntry(1, "u1", null, value, T0, true, 600, 700);
     }
 
     @Test
@@ -28,7 +28,7 @@ class RankingEntryTest {
     void 기준_시각이_이미_마감_뒤면_값은_그대로고_집중_중_표시만_꺼진다() {
         RankingEntry settled = focusing(100).settledAt(T0.plusSeconds(10), T0.plusSeconds(4));
 
-        assertThat(settled).isEqualTo(new RankingEntry(1, "u1", 100, T0, false, 600, 700));
+        assertThat(settled).isEqualTo(new RankingEntry(1, "u1", null, 100, T0, false, 600, 700));
     }
 
     @Test

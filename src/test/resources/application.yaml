@@ -30,3 +30,8 @@ app:
   ranking:
     close:
       enabled: false
+  # 테스트는 S3를 부르지 않는다. 서명 테스트는 고정 자격 증명, API 테스트는 ProfileImageStorage 목을 쓴다
+  profile-image:
+    bucket: test-avatars
+    region: ap-northeast-2
+    base-url: ""

@@ -30,6 +30,7 @@ import project.study.ranking.engine.StandingsProvider;
 import project.study.ranking.engine.Tiers;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.service.RankingSource;
+import project.study.user.image.ProfileImageUrls;
 
 /** 판별 추가 필드 (BY-828) — 해당하지 않는 판이면 null을 준다. */
 @Component
@@ -41,6 +42,7 @@ class BoardExtras {
     private final StandingsCalculator calculator;
     private final StandingsProvider provider;
     private final RankingSource source;
+    private final ProfileImageUrls profileImageUrls;
 
     /** 집중률 참가 진행도 — 기간에 세션이 없으면 null, 미달이면 지금 집중률로 참가할 때의 예상 순위를 붙인다. */
     RateEligibility eligibility(RankingBoard board, Window window, BoardView view, long userId, Instant now) {
@@ -141,7 +143,7 @@ class BoardExtras {
         // 나를 끼운 배치라 상위 %의 분모는 나를 포함한 참가자 수다 — 참가했을 때의 me.topPercent와 같은 식
         Placement expected = standings.place(
                 userId,
-                new RankingEntry(userId, null, totals.rate(), now, false, totals.focusSec(), totals.studySec()));
+                new RankingEntry(userId, null, null, totals.rate(), now, false, totals.focusSec(), totals.studySec()));
         return new RateEligibility(false, totals.focusSec(), required, rate, expected.myRank(), expected.topPercent());
     }
 
@@ -168,13 +170,14 @@ class BoardExtras {
     }
 
     /** 묶음 순위는 공동 순위(첫 자리 + 1). 대표는 내가 있으면 나, 없으면 먼저 달성한 사람. */
-    private static DayGroupRow toRow(DayGroup group, Placement placement) {
+    private DayGroupRow toRow(DayGroup group, Placement placement) {
         if (!group.contains(placement.myIndex())) {
             RankingEntry head = placement.merged().get(group.startIndex());
             return new DayGroupRow(
                     group.days(),
                     group.startIndex() + 1,
                     head.nickname(),
+                    profileImageUrls.of(head.profileImage()),
                     group.count() - 1,
                     head.achievedDate(),
                     false,
@@ -185,6 +188,7 @@ class BoardExtras {
                 group.days(),
                 group.startIndex() + 1,
                 me.nickname(),
+                profileImageUrls.of(me.profileImage()),
                 group.count() - 1,
                 me.achievedDate(),
                 true,
