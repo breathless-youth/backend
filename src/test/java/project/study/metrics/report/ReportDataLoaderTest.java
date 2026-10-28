@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +20,7 @@ import project.study.metrics.amplitude.AmplitudeAttribute;
 import project.study.metrics.amplitude.AmplitudeDailyCount;
 import project.study.metrics.amplitude.AmplitudeQueryService;
 import project.study.metrics.report.UserTimeline.Activity;
+import project.study.metrics.report.fact.ExperimentData;
 import project.study.metrics.report.fact.SessionFact;
 import project.study.metrics.report.fact.UserEventFact;
 import project.study.metrics.report.fact.UserFact;
@@ -89,7 +91,7 @@ class ReportDataLoaderTest {
         when(userService.findExistingUserIds(Set.of(1L, 5L))).thenReturn(Set.of(1L, 5L));
         stubEmptyExtras(Set.of(1L));
 
-        ReportData data = loader(Set.of()).load(A);
+        ReportData data = loader(Set.of()).load(A, new ExperimentData(Duration.ofHours(2), List.of()));
 
         assertThat(data.anchor()).isEqualTo(A);
         assertThat(data.amplitudeDates()).containsExactly(A);
@@ -120,7 +122,7 @@ class ReportDataLoaderTest {
         when(amplitudeQueryService.findAttributes(Set.of(1L))).thenReturn(Map.of());
         stubEmptyExtras(Set.of(1L));
 
-        ReportData data = loader(Set.of(7L)).load(A);
+        ReportData data = loader(Set.of(7L)).load(A, new ExperimentData(Duration.ofHours(2), List.of()));
 
         assertThat(data.users()).extracting(UserTimeline::userId).containsExactly(1L);
         assertThat(data.appOpenedOnAnchor()).isEmpty();
@@ -142,7 +144,7 @@ class ReportDataLoaderTest {
         when(userService.findExistingUserIds(Set.of(5L, 99L))).thenReturn(Set.of(5L));
         stubEmptyExtras(Set.of());
 
-        ReportData data = loader(Set.of()).load(A);
+        ReportData data = loader(Set.of()).load(A, new ExperimentData(Duration.ofHours(2), List.of()));
 
         assertThat(data.appOpenedOnAnchor()).containsExactly(5L);
     }

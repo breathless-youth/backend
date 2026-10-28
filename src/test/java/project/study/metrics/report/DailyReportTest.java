@@ -43,7 +43,7 @@ class DailyReportTest {
 
             assertThat(rendered.summary().text()).doesNotContain("계산 실패", "NaN");
             assertThat(rendered.threads())
-                    .hasSize(6)
+                    .hasSize(7)
                     .allSatisfy(thread -> assertThat(thread.text()).doesNotContain("계산 실패", "NaN"));
         }
     }

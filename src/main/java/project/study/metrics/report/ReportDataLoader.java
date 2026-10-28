@@ -19,6 +19,8 @@ import project.study.metrics.amplitude.AmplitudeAttribute;
 import project.study.metrics.amplitude.AmplitudeDailyCount;
 import project.study.metrics.amplitude.AmplitudeQueryService;
 import project.study.metrics.report.UserTimeline.Activity;
+import project.study.metrics.report.fact.ExperimentData;
+import project.study.metrics.report.fact.ExperimentFact;
 import project.study.metrics.report.fact.SessionFact;
 import project.study.metrics.report.fact.SubjectFact;
 import project.study.metrics.report.fact.UserEventFact;
@@ -64,7 +66,8 @@ public class ReportDataLoader {
         this.excludedUserIds = Set.copyOf(excludedUserIds);
     }
 
-    public ReportData load(LocalDate anchor) {
+    /** @param experiment 첫 세션 푸시 실험 배정자 — 제외 유저를 여기서 거른다. 읽기에 실패했으면 null을 그대로 넘긴다 */
+    public ReportData load(LocalDate anchor, ExperimentData experiment) {
         LocalDate factFrom = anchor.minusDays(FACT_DAYS_BACK);
         // 어제 늦게 가입한 사람의 "가입 3시간 안 공부"가 오늘(A+1) 새벽으로 넘어가서 세션만 하루 더 읽는다
         List<SessionFact> sessions =
@@ -95,7 +98,13 @@ public class ReportDataLoader {
                         attributes.get(user.userId())))
                 .toList();
         return new ReportData(
-                anchor, timelines, amplitudeQueryService.collectedDates(factFrom, anchor), appOpened(counts, anchor));
+                anchor,
+                timelines,
+                amplitudeQueryService.collectedDates(factFrom, anchor),
+                appOpened(counts, anchor),
+                experiment == null
+                        ? null
+                        : new ExperimentData(experiment.d0Delay(), kept(experiment.facts(), ExperimentFact::userId)));
     }
 
     private Map<Long, Map<Activity, List<Instant>>> activities(Instant from, Instant to, Set<Long> userIds) {

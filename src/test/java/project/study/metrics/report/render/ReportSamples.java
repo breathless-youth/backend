@@ -1,5 +1,6 @@
 package project.study.metrics.report.render;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -14,6 +15,8 @@ import project.study.metrics.report.SectionResult;
 import project.study.metrics.report.analyzer.ActiveUsersSection;
 import project.study.metrics.report.analyzer.ActiveUsersSection.ActiveUserRow;
 import project.study.metrics.report.analyzer.ActiveUsersSection.Stage;
+import project.study.metrics.report.analyzer.ExperimentSection;
+import project.study.metrics.report.analyzer.ExperimentSection.ArmStats;
 import project.study.metrics.report.analyzer.ExplorerSection;
 import project.study.metrics.report.analyzer.ExplorerSection.RankedRule;
 import project.study.metrics.report.analyzer.RetentionAnalyzer.Window;
@@ -218,6 +221,15 @@ public final class ReportSamples {
                 SectionResult.of(segment()),
                 SectionResult.of(roster()),
                 SectionResult.of(explorer()),
-                SectionResult.of(active()));
+                SectionResult.of(active()),
+                SectionResult.of(experiment()));
+    }
+
+    public static ExperimentSection experiment() {
+        return new ExperimentSection(
+                Duration.ofHours(2),
+                new ArmStats(40, Rate.of(30, 40), Rate.of(18, 40), Rate.of(6, 25), Rate.of(4, 37), 3),
+                new ArmStats(38, Rate.of(24, 38), Rate.of(11, 38), Rate.of(3, 24), Rate.of(2, 38), 0),
+                680);
     }
 }
