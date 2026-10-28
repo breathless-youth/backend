@@ -202,10 +202,11 @@ Table user_notification {
 Table push_token {
   id bigint [primary key, increment]
   user_id bigint [ref: > users.id, not null]
-  token varchar [not null]     // FCM registration token / APNs device token
+  token varchar [not null]     // FCM 등록 토큰 (ADR-0035)
   platform varchar              // IOS, ANDROID
+  notifications_enabled boolean [not null] // 마지막 등록 때 OS 알림 권한이 켜져 있었는지 (V30)
   created_at timestamptz
-  updated_at timestamptz          // 토큰은 주기적으로 갱신되므로 갱신 시각
+  updated_at timestamptz          // 앱이 마지막으로 재등록한 시각 = 마지막 사용 시각
 
   indexes {
     (token) [unique]

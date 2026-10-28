@@ -77,6 +77,14 @@ app:
   # FE용 계약 문서(/docs/websocket.html) 서빙. 값이 없으면 꺼짐 — prod에는 넣지 않는다 (BY-667)
   docs:
     enabled: true
+  # 서버 FCM 발송 (BY-1029, ADR-0035). 키는 focusmakers-dev 서비스 계정 JSON을 .env에 한 줄로 — 운영 키를 넣으면
+  # dev 빌드 앱 토큰으로 보낼 때 전부 SENDER_ID_MISMATCH가 난다(기동 로그의 project_id로 확인). 키가 없으면 발송만 꺼진다.
+  # 테스트 발송(POST /api/push-tokens/test)은 dev 전용 — prod에는 넣지 않는다
+  push:
+    fcm:
+      service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
+    test-send:
+      enabled: true
   ws:
     stats-logging-period-ms: 30000   # 30초
   cors:
