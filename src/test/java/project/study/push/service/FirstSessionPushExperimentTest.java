@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -18,6 +19,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -40,6 +42,11 @@ class FirstSessionPushExperimentTest {
     @Mock
     private PushSender pushSender;
 
+    @BeforeEach
+    void fcmEnabled() {
+        lenient().when(pushSender.isEnabled()).thenReturn(true);
+    }
+
     private FirstSessionPushExperiment experiment(Duration delay) {
         return new FirstSessionPushExperiment(queries, pushSender, delay);
     }
@@ -55,6 +62,18 @@ class FirstSessionPushExperimentTest {
         experiment(DELAY).tick(at(7, 50));
 
         verifyNoInteractions(queries, pushSender);
+    }
+
+    @Test
+    void FCM_키가_없으면_대상_조회도_배정도_하지_않는다() {
+        when(pushSender.isEnabled()).thenReturn(false);
+
+        FirstSessionPushExperiment experiment = experiment(DELAY);
+        experiment.tick(at(15, 0));
+        experiment.tick(at(20, 0));
+
+        verifyNoInteractions(queries);
+        verify(pushSender, never()).send(any(), any());
     }
 
     @Test
@@ -141,7 +160,7 @@ class FirstSessionPushExperimentTest {
 
         experiment(DELAY).tick(at(15, 0));
 
-        verifyNoInteractions(pushSender);
+        verify(pushSender, never()).send(any(), any());
     }
 
     @Test
