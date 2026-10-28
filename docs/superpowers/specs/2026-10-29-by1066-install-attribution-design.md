@@ -140,9 +140,10 @@ POST /api/users/me/acquisition        API-Version: 1, 토큰 인증 필요
 - `controller/AcquisitionController` — Swagger 설명 포함.
 - `dto/AcquisitionRequest`, `dto/AcquisitionResponse`(+ `MetaAd`) — record.
 - `entity/UserAcquisition`, `entity/AcquisitionSource`, `entity/InstallPlatform` — 플랫폼 enum은 `push`의 것을 가져다 쓰지 않고 따로 둔다(도메인 간 직접 참조 최소화).
-- `repository/UserAcquisitionRepository` — 네이티브 `insertIfAbsent`.
+- `repository/UserAcquisitionRepository` — `JpaRepository`에 `UserAcquisitionInsert` 조각을 합친 인터페이스. `UserAcquisitionInsertImpl`이 `JdbcClient`로 `ON CONFLICT DO NOTHING` 삽입을 하고, 넘기는 값은 `NewAcquisition` record에 담는다.
 - `service/AcquisitionService` — 판별·복호화를 묶어 저장하고 응답을 만든다.
-- `referrer/InstallReferrerParser` — 쿼리 문자열과 `utm_content` JSON을 읽어 판별에 쓸 값을 꺼낸다(Jackson 3).
+- `referrer/InstallReferrerClassifier` — 쿼리 문자열과 `utm_content` JSON을 읽어 판별 순서대로 `Attribution`을 만든다(Jackson 3).
+- `referrer/Attribution`, `referrer/Utm`, `referrer/MetaAdDetail` — 판별 결과와 그 안의 값을 담는 record.
 - `referrer/MetaReferrerDecryptor` — 키를 쥐고 AES-GCM으로 푼다. 키 검증과 기동 WARN도 여기서 한다.
 
 ## 10. 테스트
