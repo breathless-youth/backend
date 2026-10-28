@@ -85,6 +85,9 @@ app:
       service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
     test-send:
       enabled: true
+  # 메타 설치 정보 복호화 키 (BY-1066, ADR-0036). 값이 없으면 복호화만 꺼진 채 기동한다 — dev는 서버 .env에 넣는다
+  acquisition:
+    meta-install-referrer-key: ${META_INSTALL_REFERRER_KEY:}
   ws:
     stats-logging-period-ms: 30000   # 30초
   cors:
