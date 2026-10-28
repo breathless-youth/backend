@@ -204,7 +204,7 @@ Table push_token {
   user_id bigint [ref: > users.id, not null]
   token varchar [not null]     // FCM 등록 토큰 (ADR-0035)
   platform varchar              // IOS, ANDROID
-  notifications_enabled boolean [not null] // 마지막 등록 때 OS 알림 권한이 켜져 있었는지 (V30)
+  notifications_enabled boolean [not null] // 마지막 등록 때 OS 알림 권한이 켜져 있었는지 (V32)
   created_at timestamptz
   updated_at timestamptz          // 앱이 마지막으로 재등록한 시각 = 마지막 사용 시각
 
@@ -233,6 +233,34 @@ Table user_acquisition {
   meta_payload jsonb      // 복호화한 평문 JSON 원문
   captured_at timestamptz // 앱이 설치 정보를 읽은 시각
   created_at timestamptz  // 서버 저장 시각
+}
+
+Table push_experiment_assignment {
+  experiment varchar [not null]   // 실험 키 — first_session_5min (V34, ADR-0037)
+  user_id bigint [ref: > users.id, not null]
+  arm varchar [not null]          // PUSH, CONTROL — 처음 배정에서 바뀌지 않는다
+  assigned_at timestamptz [not null]
+  first_session_id bigint         // 첫 측정 세션 묶음의 첫 조각, 한 번 채우면 그대로
+  first_session_at timestamptz    // 첫 측정 세션 묶음 키(submission_started_at)
+  first_focus_sec int             // 첫 측정 세션 묶음 순공 합(자정 분할 조각 합)
+  day7_returned boolean           // 가입 7일 뒤 그날 study_session_started가 있었는지, 집계 전 null
+
+  indexes {
+    (experiment, user_id) [pk]
+  }
+}
+
+Table push_send {
+  push_id uuid [primary key]      // FCM data push_id — 앱 열림 이벤트와 잇는다 (V34, ADR-0037)
+  user_id bigint [ref: > users.id, not null]
+  type varchar [not null]         // 알림 종류 = FCM analytics_label
+  send_date date [not null]       // 발송일(KST)
+  sent_at timestamptz [not null]
+  fcm_accepted int                // FCM이 접수한 토큰 수
+
+  indexes {
+    (user_id, send_date) [unique] // 사람당 하루 1회 상한 — 보내기 전에 자리를 잡는다
+  }
 }
 
 // ---------------------------------------------------------
