@@ -107,4 +107,15 @@ class RankingRecordListApiTest extends RankingRecordTestBase {
         assertThat(mvc.get().uri(RECORDS).header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION))
                 .hasStatus(HttpStatus.UNAUTHORIZED);
     }
+
+    @Test
+    void 지난_새벽_구간_기록도_그대로_준다() {
+        long me = user("me");
+        record(me, "TIME_SLOT:DAILY:DAWN", THU, kst(10, 9, 0, 0), 1, "3000.0");
+
+        assertThat(get(RECORDS, me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.items[0].slot", v -> assertThat(v).isEqualTo("DAWN"));
+    }
 }

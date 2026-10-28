@@ -25,14 +25,22 @@ public record RankingBoard(RankingBoardType type, RankingPeriod period, TimeSlot
         if (period == null || !type.supports(period)) {
             throw new BadRequestException(type + " 랭킹판에 " + period + " 기간은 없습니다");
         }
-        if ((type == RankingBoardType.TIME_SLOT) != (slot != null)) {
-            throw new BadRequestException("slot은 시간대 랭킹판에만, 반드시 줍니다");
-        }
+        requireSlot(type, slot);
         return new RankingBoard(type, period, slot);
     }
 
+    /** 시간대 판만 slot을 받고, 지난 기록에만 있는 구간(DAWN)은 판이 없다. */
+    private static void requireSlot(RankingBoardType type, TimeSlot slot) {
+        if ((type == RankingBoardType.TIME_SLOT) != (slot != null)) {
+            throw new BadRequestException("slot은 시간대 랭킹판에만, 반드시 줍니다");
+        }
+        if (slot != null && !TimeSlot.LIVE.contains(slot)) {
+            throw new BadRequestException(slot + " 구간은 지난 기록에만 있습니다");
+        }
+    }
+
     /**
-     * 마감을 기록하는 기간 판 15개 — 순공 일·주·월, 집중률 주·월, 시간대 일·주 × 5구간. 마감 배치와 기록 요약이 이 순서로 돈다.
+     * 마감을 기록하는 기간 판 13개 — 순공 일·주·월, 집중률 주·월, 시간대 일·주 × 4구간. 마감 배치와 기록 요약이 이 순서로 돈다.
      */
     public static List<RankingBoard> closable() {
         return CLOSABLE;
@@ -77,7 +85,7 @@ public record RankingBoard(RankingBoardType type, RankingPeriod period, TimeSlot
             boards.add(new RankingBoard(type, period, null));
             return;
         }
-        for (TimeSlot slot : TimeSlot.values()) {
+        for (TimeSlot slot : TimeSlot.LIVE) {
             boards.add(new RankingBoard(type, period, slot));
         }
     }

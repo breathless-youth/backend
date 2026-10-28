@@ -62,7 +62,7 @@ class StompEventListenerTest {
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
     }
 
-    private static final RoomMember ME = new RoomMember(7L, "포메", null, null, false, "FOCUS", 0, false);
+    private static final RoomMember ME = new RoomMember(7L, "포메", null, null, null, false, "FOCUS", 0, false);
 
     // CONNECT/CONNECTED는 로그만 남기고 룸 상태에는 관여하지 않는다 — 부수효과 없음을 고정한다
     @Test

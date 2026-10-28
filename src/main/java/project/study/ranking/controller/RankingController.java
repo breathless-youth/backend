@@ -34,7 +34,7 @@ public class RankingController {
 
                     - 종목·기간: 순공(FOCUS_TIME) 일·주·월, 집중률(FOCUS_RATE) 주·월(참가 조건 주 10시간·월 30시간), \
                     시간대(TIME_SLOT) 일·주(slot 생략 시 지금 구간), 명예의 전당(TOTAL_TIME·TOTAL_DAYS·MAX_STREAK, period 없음)
-                    - 기간은 KST — 일간 00시, 주간 월요일 00시, 월간 1일 00시 마감. 심야(NIGHT)판만 04시 마감이고 시작한 날 기준이다
+                    - 기간은 KST — 일간 00시, 주간 월요일 00시, 월간 1일 00시 마감
                     - 값·차이 단위: 시간 판 초, 일수 판 일, 집중률 %p(소수 1자리)
                     - 순위: 값이 같으면 먼저 달성한 사람이 앞. 단 일수 판(누적 일수·연속 일수)은 같은 일수면 공동 순위(1, 1, 3)이고 \
                     above·below는 일수가 다른 가장 가까운 사람이다. 상위 % = max(1, ceil(순위 × 100 ÷ 참가자 수))
@@ -50,7 +50,12 @@ public class RankingController {
             @Parameter(description = "종목", example = "FOCUS_TIME") @RequestParam RankingBoardType type,
             @Parameter(description = "기간 — 기간 판만", example = "WEEKLY") @RequestParam(required = false)
                     RankingPeriod period,
-            @Parameter(description = "시간대 구간 — 시간대 판만, 생략하면 지금 구간") @RequestParam(required = false) TimeSlot slot,
+            @Parameter(
+                            description =
+                                    "시간대 구간 — 시간대 판만, 생략하면 지금 구간. KST NIGHT 0–6·MORNING 6–12·AFTERNOON 12–18·EVENING 18–24시. "
+                                            + "DAWN은 지난 마감 기록에만 있어 400")
+                    @RequestParam(required = false)
+                    TimeSlot slot,
             @Parameter(description = "0=지금 기간, -1=직전 기간(기간 판만)", example = "0") @RequestParam(defaultValue = "0")
                     int offset) {
         return rankingBoardService.board(userId, type, period, slot, offset);

@@ -36,7 +36,7 @@ public class RankingRecordController {
                     누적 메달 수, 순위별 개수, 최근 기록 6개를 준다.
 
                     - 기록이 없을 때만(total 0) best(역대 마감 최고 순위, 없으면 null)와 closest(메달까지 남은 양이 가장 작은 진행 중 시간 판)를 준다
-                    - closest.gap = max(0, 3위 값 − 내 값, 1800 − 내 값) 초. 대상은 순공 일·주·월과 시간대 일·주 × 5구간이다
+                    - closest.gap = max(0, 3위 값 − 내 값, 1800 − 내 값) 초. 대상은 순공 일·주·월과 시간대 일·주 × 4구간이다
                     - 지금부터 더 쌓을 수 있는 판만 본다 — 오늘 이미 지난 구간의 일간판은 메달권(gap 0)일 때만 후보다""")
     @ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping(value = "/summary", version = "1")
@@ -63,10 +63,8 @@ public class RankingRecordController {
     }
 
     @Operation(summary = "안 본 마감 기록 (마감 모달)", description = """
-                    아직 보지 않은 메달을 순위 → 일·주·월 → 순공·집중률·시간대 순으로 준다. total은 누적 메달 수(본 것 포함)다.
+                    아직 보지 않은 메달을 순위 → 일·주·월 → 순공·집중률·시간대 → 구간(새벽·아침·점심·저녁) 순으로 준다. total은 누적 메달 수(본 것 포함)다.
 
-                    - 04시 보류: 그날 04:00 심야 마감(월요일이면 심야 주간까지)이 확정되기 전(00:00~04:01)에는 그날 00시 마감분을 주지 \
-                    않는다 — 04시 이후 처음 앱을 열 때 그날 메달을 한 번에 보여준다
                     - records는 최대 100개다 — seen으로 표시한 뒤 다시 부르면 나머지를 준다
                     - 모달을 띄운 뒤 records/seen으로 본 것으로 표시한다""")
     @ApiResponse(responseCode = "200", description = "조회 성공")

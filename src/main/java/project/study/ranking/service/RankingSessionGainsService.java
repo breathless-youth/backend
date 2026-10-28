@@ -69,7 +69,7 @@ public class RankingSessionGainsService {
         boards.add(new RankingBoard(RankingBoardType.FOCUS_RATE, RankingPeriod.WEEKLY, null));
         boards.add(new RankingBoard(RankingBoardType.FOCUS_RATE, RankingPeriod.MONTHLY, null));
         for (RankingPeriod period : List.of(RankingPeriod.DAILY, RankingPeriod.WEEKLY)) {
-            for (TimeSlot slot : TimeSlot.values()) {
+            for (TimeSlot slot : TimeSlot.LIVE) {
                 if (slots.contains(slot)) {
                     boards.add(new RankingBoard(RankingBoardType.TIME_SLOT, period, slot));
                 }

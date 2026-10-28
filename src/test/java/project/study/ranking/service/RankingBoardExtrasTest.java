@@ -1,6 +1,7 @@
 package project.study.ranking.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static project.study.ranking.RankingBoardType.FOCUS_RATE;
 import static project.study.ranking.RankingBoardType.MAX_STREAK;
 import static project.study.ranking.RankingBoardType.TIME_SLOT;
@@ -134,9 +135,9 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         RankingBoardResponse r = service.board(me, MAX_STREAK, null, null, 0);
 
         List<DayGroupRow> groups = List.of(
-                new DayGroupRow(5, 1, "a", 1, LocalDate.of(2026, 9, 5), false, null),
-                new DayGroupRow(4, 3, "me", 1, LocalDate.of(2026, 9, 23), true, 2),
-                new DayGroupRow(3, 5, "d", 0, LocalDate.of(2026, 9, 27), false, null));
+                new DayGroupRow(5, 1, "a", null, 1, LocalDate.of(2026, 9, 5), false, null),
+                new DayGroupRow(4, 3, "me", null, 1, LocalDate.of(2026, 9, 23), true, 2),
+                new DayGroupRow(3, 5, "d", null, 0, LocalDate.of(2026, 9, 27), false, null));
         assertThat(r.me().rank()).isEqualTo(3);
         assertThat(r.me().topPercent()).isEqualTo(60);
         assertThat(r.podium()).isEmpty();
@@ -181,10 +182,10 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         assertThat(r.around()).isEmpty();
         assertThat(r.aroundGroups())
                 .containsExactly(
-                        new DayGroupRow(5, 1, "a", 1, LocalDate.of(2026, 9, 5), false, null),
-                        new DayGroupRow(4, 3, "me", 1, LocalDate.of(2026, 9, 23), true, 2),
-                        new DayGroupRow(3, 5, "d", 0, LocalDate.of(2026, 9, 27), false, null),
-                        new DayGroupRow(1, 6, "e", 0, LocalDate.of(2026, 10, 1), false, null));
+                        new DayGroupRow(5, 1, "a", null, 1, LocalDate.of(2026, 9, 5), false, null),
+                        new DayGroupRow(4, 3, "me", null, 1, LocalDate.of(2026, 9, 23), true, 2),
+                        new DayGroupRow(3, 5, "d", null, 0, LocalDate.of(2026, 9, 27), false, null),
+                        new DayGroupRow(1, 6, "e", null, 0, LocalDate.of(2026, 10, 1), false, null));
         assertThat(r.podiumGroups()).extracting(DayGroupRow::rank).containsExactly(1, 3, 5);
         assertThat(r.above()).extracting("nickname", "gap").containsExactly("b", 1L);
         // 상위 30% 컷(1위)의 5일과 같아지기만 하면 공동 1위라 +1이 붙지 않는다
@@ -205,7 +206,22 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         assertThat(r.aroundGroups()).isEmpty();
         assertThat(r.podiumGroups())
                 .containsExactly(
-                        new DayGroupRow(3, 1, "a", 0, LocalDate.of(2026, 9, 3), false, null),
-                        new DayGroupRow(1, 2, "b", 1, LocalDate.of(2026, 9, 10), false, null));
+                        new DayGroupRow(3, 1, "a", null, 0, LocalDate.of(2026, 9, 3), false, null),
+                        new DayGroupRow(1, 2, "b", null, 1, LocalDate.of(2026, 9, 10), false, null));
+    }
+
+    @Test
+    void 일수_판_묶음_대표에_사진_경로가_실린다() {
+        long a = user("a");
+        streak(a, LocalDate.of(2026, 9, 1), 3);
+        jdbc.update("UPDATE users SET profile_image = ? WHERE id = ?", "avatars/" + a + "/a.jpg", a);
+        long me = user("me");
+        streak(me, LocalDate.of(2026, 9, 10), 1);
+
+        RankingBoardResponse r = service.board(me, TOTAL_DAYS, null, null, 0);
+
+        assertThat(r.podiumGroups())
+                .extracting(DayGroupRow::nickname, DayGroupRow::profileImageUrl)
+                .containsExactly(tuple("a", "/avatars/" + a + "/a.jpg"), tuple("me", null));
     }
 }
