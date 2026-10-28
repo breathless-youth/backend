@@ -10,6 +10,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -52,6 +53,7 @@ public class FirstSessionPushExperiment {
     private final PushExperimentQueries queries;
     private final PushSender pushSender;
     private final Duration d0Delay;
+    private final AtomicBoolean warnedDisabled = new AtomicBoolean();
 
     public FirstSessionPushExperiment(
             PushExperimentQueries queries,
@@ -69,6 +71,13 @@ public class FirstSessionPushExperiment {
         ZonedDateTime kst = slot.atZone(KST);
         LocalTime time = kst.toLocalTime();
         if (!time.isBefore(QUIET_FROM) || time.isBefore(QUIET_UNTIL)) {
+            return;
+        }
+        // 키가 없으면 발송은 0건인데 배정과 발송 기록만 남아, 알림을 못 받은 사람이 발송 집단에 섞인다
+        if (!pushSender.isEnabled()) {
+            if (warnedDisabled.compareAndSet(false, true)) {
+                log.warn("FCM 자격증명이 없어 첫 세션 푸시 실험을 멈춘다. 배정과 발송 기록을 남기지 않는다");
+            }
             return;
         }
         LocalDate today = kst.toLocalDate();

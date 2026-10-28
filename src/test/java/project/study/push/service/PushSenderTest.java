@@ -206,4 +206,10 @@ class PushSenderTest {
                                            "errorCode": "%s"}]}}""".formatted(status, grpcStatus, fcmCode));
         }
     }
+
+    @Test
+    void 자격증명이_있을_때만_보낼_수_있다고_답한다() {
+        assertThat(sender.isEnabled()).isTrue();
+        assertThat(new PushSender(pushTokenRepository, null).isEnabled()).isFalse();
+    }
 }

@@ -43,6 +43,11 @@ public class PushSender {
         this.messaging = messaging;
     }
 
+    /** 자격증명이 있어 실제로 보낼 수 있는지. 없으면 send는 아무것도 보내지 않고 NONE을 돌려준다. */
+    public boolean isEnabled() {
+        return messaging != null;
+    }
+
     /** 끝날 때까지 기다린다. 결과의 sent는 FCM 접수 수일 뿐 기기 도착 수가 아니다. */
     public PushResult send(Collection<Long> userIds, PushMessage message) {
         if (messaging == null || userIds.isEmpty()) {
