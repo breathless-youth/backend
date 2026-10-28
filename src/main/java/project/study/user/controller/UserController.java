@@ -153,7 +153,7 @@ public class UserController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
-    @PostMapping(value = "/me/profile-image/upload-url", version = "2")
+    @PostMapping(value = "/me/profile-image/upload-url", version = "1")
     public ProfileImageUploadUrlResponse issueProfileImageUploadUrl(
             @AuthenticationPrincipal Long userId, @Valid @RequestBody ProfileImageUploadUrlRequest request) {
         return profileImageService.issueUploadUrl(userId, request.contentLength());
@@ -170,7 +170,7 @@ public class UserController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
-    @PutMapping(value = "/me/profile-image", version = "2")
+    @PutMapping(value = "/me/profile-image", version = "1")
     public ProfileResponse updateProfileImage(
             @AuthenticationPrincipal Long userId, @RequestBody ProfileImageUpdateRequest request) {
         return profileImageService.updateProfileImage(userId, request.key());
@@ -178,7 +178,7 @@ public class UserController {
 
     @Operation(summary = "프로필 사진 되돌리기", description = "사진을 지우고 이니셜 아바타로 되돌린다. 사진이 없어도 200이다.")
     @ApiResponse(responseCode = "200", description = "성공 — 바뀐 전체 프로필 반환(profileImageUrl은 null)")
-    @DeleteMapping(value = "/me/profile-image", version = "2")
+    @DeleteMapping(value = "/me/profile-image", version = "1")
     public ProfileResponse deleteProfileImage(@AuthenticationPrincipal Long userId) {
         return profileImageService.deleteProfileImage(userId);
     }

@@ -21,7 +21,7 @@
 
 ## API
 
-세 경로 모두 `API-Version: 2`이고 인증이 필요하다.
+세 경로 모두 새 엔드포인트라 기본 버전 `API-Version: 1`이고(ADR-0015 2026-09-22 갱신), 인증이 필요하다.
 
 ### `POST /api/users/me/profile-image/upload-url`
 

@@ -17,7 +17,7 @@
 ## Global Constraints
 
 - 새 의존성은 `software.amazon.awssdk:bom`(platform) + `software.amazon.awssdk:s3` 둘만이다(사용자 승인됨). 다른 AWS 모듈을 직접 추가하지 않는다.
-- 세 경로 모두 `API-Version: 2`, 인증 필요: `POST /api/users/me/profile-image/upload-url`, `PUT /api/users/me/profile-image`, `DELETE /api/users/me/profile-image`. `SecurityConfig` 변경 없음(`anyRequest().authenticated()`에 걸린다).
+- 세 경로 모두 `API-Version: 1`(새 엔드포인트 기본 버전, ADR-0015), 인증 필요: `POST /api/users/me/profile-image/upload-url`, `PUT /api/users/me/profile-image`, `DELETE /api/users/me/profile-image`. `SecurityConfig` 변경 없음(`anyRequest().authenticated()`에 걸린다).
 - `contentLength`가 1 미만이거나 1,048,576(1MB)을 넘으면 400 `VALIDATION_FAILED`.
 - 키는 `avatars/{userId}/{UUID}.jpg`로 서버가 만든다. 서명에 `Content-Type: image/jpeg`와 요청한 `Content-Length`를 넣는다. URL 유효 시간 5분.
 - `PUT`의 400 `BAD_REQUEST`: 키 형식이 아니거나 남의 키 / S3에 파일 없음 / 크기 1MB 초과 또는 `Content-Type`이 `image/jpeg`가 아님(이때는 그 파일을 지우고 400).
@@ -642,7 +642,7 @@ public class ProfileImageService {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
-    @PostMapping(value = "/me/profile-image/upload-url", version = "2")
+    @PostMapping(value = "/me/profile-image/upload-url", version = "1")
     public ProfileImageUploadUrlResponse issueProfileImageUploadUrl(
             @AuthenticationPrincipal Long userId, @Valid @RequestBody ProfileImageUploadUrlRequest request) {
         return profileImageService.issueUploadUrl(userId, request.contentLength());
@@ -1087,7 +1087,7 @@ public record ProfileImageUpdateRequest(
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
-    @PutMapping(value = "/me/profile-image", version = "2")
+    @PutMapping(value = "/me/profile-image", version = "1")
     public ProfileResponse updateProfileImage(
             @AuthenticationPrincipal Long userId, @RequestBody ProfileImageUpdateRequest request) {
         return profileImageService.updateProfileImage(userId, request.key());
@@ -1095,7 +1095,7 @@ public record ProfileImageUpdateRequest(
 
     @Operation(summary = "프로필 사진 되돌리기", description = "사진을 지우고 이니셜 아바타로 되돌린다. 사진이 없어도 200이다.")
     @ApiResponse(responseCode = "200", description = "성공 — 바뀐 전체 프로필 반환(profileImageUrl은 null)")
-    @DeleteMapping(value = "/me/profile-image", version = "2")
+    @DeleteMapping(value = "/me/profile-image", version = "1")
     public ProfileResponse deleteProfileImage(@AuthenticationPrincipal Long userId) {
         return profileImageService.deleteProfileImage(userId);
     }

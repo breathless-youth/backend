@@ -30,6 +30,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import project.study.TestcontainersConfiguration;
+import project.study.config.ApiVersionConfig;
 import project.study.user.image.ProfileImageStorage;
 import project.study.user.image.ProfileImageStorage.PresignedUpload;
 import project.study.user.image.ProfileImageStorage.StoredObject;
@@ -76,6 +77,7 @@ class ProfileImageApiTest {
     private MockMvcTester.MockMvcRequestBuilder uploadUrl(long userId, String body) {
         return mvc.post()
                 .uri("/api/users/me/profile-image/upload-url")
+                .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
                 .with(asUser(userId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body);
@@ -125,6 +127,7 @@ class ProfileImageApiTest {
     private MockMvcTester.MockMvcRequestBuilder putImage(long userId, String key) {
         return mvc.put()
                 .uri("/api/users/me/profile-image")
+                .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
                 .with(asUser(userId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"key\": \"" + key + "\"}");
@@ -203,7 +206,10 @@ class ProfileImageApiTest {
         jpegExists();
         assertThat(putImage(userId, key)).hasStatusOk();
 
-        assertThat(mvc.delete().uri("/api/users/me/profile-image").with(asUser(userId)))
+        assertThat(mvc.delete()
+                        .uri("/api/users/me/profile-image")
+                        .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
+                        .with(asUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.profileImageUrl", v -> assertThat(v).isNull());
@@ -215,7 +221,10 @@ class ProfileImageApiTest {
     void 사진이_없어도_되돌리기는_200이다() {
         long userId = user();
 
-        assertThat(mvc.delete().uri("/api/users/me/profile-image").with(asUser(userId)))
+        assertThat(mvc.delete()
+                        .uri("/api/users/me/profile-image")
+                        .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
+                        .with(asUser(userId)))
                 .hasStatusOk();
         verify(storage, never()).delete(any());
     }
