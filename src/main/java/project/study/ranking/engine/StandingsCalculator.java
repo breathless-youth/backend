@@ -21,6 +21,7 @@ import project.study.ranking.RankingCalendar;
 import project.study.ranking.RankingCalendar.Window;
 import project.study.ranking.RankingPeriod;
 import project.study.studysession.dto.LivePiece;
+import project.study.studysession.dto.RankingProfile;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.entity.SessionSlot;
 import project.study.studysession.entity.TimeSlot;
@@ -83,15 +84,16 @@ public class StandingsCalculator {
                 source
                         .periodTotals(RankingCalendar.ALL_TIME_START, window.end(), onlyUserId, excludeSubmission)
                         .stream()
-                        .map(r -> RankingEntry.of(r.userId(), r.nickname(), r.focusSec(), r.achievedAt()))
+                        .map(r -> RankingEntry.of(
+                                r.userId(), r.nickname(), r.profileImage(), r.focusSec(), r.achievedAt()))
                         .toList();
             case TOTAL_DAYS ->
                 source.studyDays(window.end(), onlyUserId, excludeSubmission).stream()
-                        .map(r -> RankingEntry.of(r.userId(), r.nickname(), r.days(), r.achievedAt()))
+                        .map(r -> RankingEntry.of(r.userId(), r.nickname(), r.profileImage(), r.days(), r.achievedAt()))
                         .toList();
             case MAX_STREAK ->
                 source.maxStreaks(window.end(), onlyUserId, excludeSubmission).stream()
-                        .map(r -> RankingEntry.of(r.userId(), r.nickname(), r.days(), r.achievedAt()))
+                        .map(r -> RankingEntry.of(r.userId(), r.nickname(), r.profileImage(), r.days(), r.achievedAt()))
                         .toList();
         };
     }
@@ -131,17 +133,19 @@ public class StandingsCalculator {
             Instant excludeSubmission) {
         Map<Long, Totals> totals = new HashMap<>();
         for (RankingTotalRow row : finalizedRows(board, window, onlyUserId, excludeSubmission)) {
-            totals.put(row.userId(), new Totals(row.nickname(), row.focusSec(), row.studySec(), row.achievedAt()));
+            totals.put(
+                    row.userId(),
+                    new Totals(row.nickname(), row.profileImage(), row.focusSec(), row.studySec(), row.achievedAt()));
         }
         for (LivePiece piece : stillOpen(piecesOf(live, onlyUserId))) {
             Contribution contribution =
                     piece.focusSec() >= MIN_LIST_FOCUS_SEC ? contribution(board, window, asOf, piece) : null;
             if (contribution != null) {
-                totals.computeIfAbsent(piece.userId(), id -> new Totals(null, 0, 0, Instant.EPOCH))
+                totals.computeIfAbsent(piece.userId(), id -> new Totals(null, null, 0, 0, Instant.EPOCH))
                         .add(contribution);
             }
         }
-        fillLiveOnlyNicknames(totals);
+        fillLiveOnlyProfiles(totals);
         return totals;
     }
 
@@ -193,8 +197,8 @@ public class StandingsCalculator {
         return new Contribution(piece.focusSec(), piece.studySec(), piece.achievedAt(), focusing);
     }
 
-    /** 진행 중 조각만 있는 사용자는 확정 집계 줄이 없어 닉네임을 따로 읽는다 — 탈퇴자는 여기서 빠진다. */
-    private void fillLiveOnlyNicknames(Map<Long, Totals> totals) {
+    /** 진행 중 조각만 있는 사용자는 확정 집계 줄이 없어 닉네임·사진 키를 따로 읽는다 — 탈퇴자는 여기서 빠진다. */
+    private void fillLiveOnlyProfiles(Map<Long, Totals> totals) {
         List<Long> missing = totals.entrySet().stream()
                 .filter(e -> e.getValue().nickname == null)
                 .map(Map.Entry::getKey)
@@ -202,13 +206,14 @@ public class StandingsCalculator {
         if (missing.isEmpty()) {
             return;
         }
-        Map<Long, String> nicknames = source.activeNicknames(missing);
+        Map<Long, RankingProfile> profiles = source.activeProfiles(missing);
         for (Long userId : missing) {
-            String nickname = nicknames.get(userId);
-            if (nickname == null) {
+            RankingProfile profile = profiles.get(userId);
+            if (profile == null) {
                 totals.remove(userId);
             } else {
-                totals.get(userId).nickname = nickname;
+                totals.get(userId).nickname = profile.nickname();
+                totals.get(userId).profileImage = profile.profileImage();
             }
         }
     }
@@ -222,13 +227,15 @@ public class StandingsCalculator {
     private static final class Totals {
 
         private String nickname;
+        private String profileImage;
         private long focusSec;
         private long studySec;
         private Instant achievedAt;
         private boolean focusing;
 
-        private Totals(String nickname, long focusSec, long studySec, Instant achievedAt) {
+        private Totals(String nickname, String profileImage, long focusSec, long studySec, Instant achievedAt) {
             this.nickname = nickname;
+            this.profileImage = profileImage;
             this.focusSec = focusSec;
             this.studySec = studySec;
             this.achievedAt = achievedAt;
@@ -248,7 +255,7 @@ public class StandingsCalculator {
         }
 
         private RankingEntry toEntry(long userId, double value) {
-            return new RankingEntry(userId, nickname, value, achievedAt, focusing, focusSec, studySec);
+            return new RankingEntry(userId, nickname, profileImage, value, achievedAt, focusing, focusSec, studySec);
         }
     }
 }

@@ -53,8 +53,8 @@ class RankingBoardServiceTest extends RankingIntegrationTestBase {
                 .filteredOn(BoardEntry::me)
                 .extracting(BoardEntry::nickname)
                 .containsExactly("u4");
-        assertThat(r.above()).isEqualTo(new BoardNeighbor("u3", 600L, false, null));
-        assertThat(r.below()).isEqualTo(new BoardNeighbor("u5", 600L, false, null));
+        assertThat(r.above()).isEqualTo(new BoardNeighbor("u3", null, 600L, false, null));
+        assertThat(r.below()).isEqualTo(new BoardNeighbor("u5", null, 600L, false, null));
         assertThat(r.startNowRank()).isNull();
         assertThat(r.goalExamples()).isNull();
     }
@@ -70,7 +70,7 @@ class RankingBoardServiceTest extends RankingIntegrationTestBase {
 
         assertThat(r.around()).extracting(BoardEntry::rank).containsExactly(1, 2, 3, 4, 5);
         assertThat(r.above()).isNull();
-        assertThat(r.below()).isEqualTo(new BoardNeighbor("u2", 600L, false, null));
+        assertThat(r.below()).isEqualTo(new BoardNeighbor("u2", null, 600L, false, null));
     }
 
     @Test
@@ -166,5 +166,21 @@ class RankingBoardServiceTest extends RankingIntegrationTestBase {
         RankingBoardResponse closed = service.board(me, FOCUS_TIME, DAILY, null, -1);
         assertThat(closed.me()).isNull();
         assertThat(closed.startNowRank()).isNull();
+    }
+
+    @Test
+    void 시상대와_앞뒤_줄에_사진_경로가_실린다() {
+        long u1 = weekly("u1", 70);
+        long u2 = weekly("u2", 60);
+        weekly("u3", 50);
+        jdbc.update("UPDATE users SET profile_image = ? WHERE id = ?", "avatars/" + u1 + "/a.jpg", u1);
+
+        RankingBoardResponse r = weeklyBoard(u2);
+
+        assertThat(r.podium())
+                .extracting(BoardEntry::profileImageUrl)
+                .containsExactly("/avatars/" + u1 + "/a.jpg", null, null);
+        assertThat(r.above().profileImageUrl()).isEqualTo("/avatars/" + u1 + "/a.jpg");
+        assertThat(r.below().profileImageUrl()).isNull();
     }
 }

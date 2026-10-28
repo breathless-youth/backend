@@ -164,4 +164,15 @@ class StandingsCalculatorTest extends RankingIntegrationTestBase {
                 .extracting(RankingEntry::value)
                 .containsExactly(3.0);
     }
+
+    @Test
+    void 진행_중_조각만_있는_사람도_사진_키를_가진다() {
+        long live = user("live");
+        jdbc.update("UPDATE users SET profile_image = ? WHERE id = ?", "avatars/" + live + "/l.jpg", live);
+        draft(live, NOW.minusSeconds(600), NOW.minusSeconds(10), 590, "[]");
+
+        assertThat(compute(new RankingBoard(FOCUS_TIME, WEEKLY, null), null))
+                .extracting(RankingEntry::nickname, RankingEntry::profileImage)
+                .containsExactly(tuple("live", "avatars/" + live + "/l.jpg"));
+    }
 }
