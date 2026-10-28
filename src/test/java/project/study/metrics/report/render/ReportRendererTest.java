@@ -16,7 +16,7 @@ import project.study.metrics.slack.SlackMessage;
 class ReportRendererTest {
 
     @Test
-    void 요약_하나와_스레드_여섯_개를_정해진_순서로_만든다() {
+    void 요약_하나와_스레드_일곱_개를_정해진_순서로_만든다() {
         RenderedReport rendered = ReportRenderer.render(ReportSamples.report());
 
         assertThat(rendered.summary().title()).isEqualTo("📊 10/12(월) 일일 지표");
@@ -28,7 +28,8 @@ class ReportRendererTest {
                         "👥 첫 주에 며칠 공부했나 → 둘째 주에도 공부했나",
                         "🙋 첫 주에 3일 이상 공부한 2명",
                         "🔍 남는 사람과 관련 깊은 첫 주 행동 Top 3",
-                        "🧑‍🎓 어제 공부한 15명");
+                        "🧑‍🎓 어제 공부한 15명",
+                        "🔔 첫 세션 5분 이상 유도 Push 알림 A/B 테스트");
     }
 
     @Test
@@ -41,7 +42,8 @@ class ReportRendererTest {
                 base.segment(),
                 base.roster(),
                 base.explorer(),
-                base.active());
+                base.active(),
+                base.experiment());
 
         assertThat(ReportRenderer.render(report).threads().getFirst().text()).isEqualTo("🕐 가입\n• 계산 실패 — Sentry 확인");
     }
@@ -60,17 +62,20 @@ class ReportRendererTest {
                 base.segment(),
                 base.roster(),
                 base.explorer(),
-                SectionResult.of(new ActiveUsersSection(100, Map.of(Stage.NEW, rows), 0)));
+                SectionResult.of(new ActiveUsersSection(100, Map.of(Stage.NEW, rows), 0)),
+                base.experiment());
 
         List<SlackMessage> threads = ReportRenderer.render(report).threads();
 
         assertThat(threads)
                 .hasSizeGreaterThan(6)
                 .allSatisfy(thread -> assertThat(thread.text().length()).isLessThanOrEqualTo(ReportRenderer.MAX_CHARS));
-        assertThat(threads.subList(5, threads.size()))
+        List<SlackMessage> active = threads.subList(5, threads.size() - 1);
+        assertThat(active)
                 .extracting(SlackMessage::title)
                 .startsWith("🧑‍🎓 어제 공부한 100명")
                 .contains("🧑‍🎓 어제 공부한 100명 (이어서)");
-        assertThat(threads.getLast().text()).endsWith("• 앱만 열고 공부 안 함 = 0명");
+        assertThat(active.getLast().text()).endsWith("• 앱만 열고 공부 안 함 = 0명");
+        assertThat(threads.getLast().title()).isEqualTo("🔔 첫 세션 5분 이상 유도 Push 알림 A/B 테스트");
     }
 }

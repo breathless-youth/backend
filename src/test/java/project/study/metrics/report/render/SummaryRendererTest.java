@@ -45,7 +45,8 @@ class SummaryRendererTest {
                 base.segment(),
                 base.roster(),
                 base.explorer(),
-                base.active());
+                base.active(),
+                base.experiment());
 
         assertThat(SummaryRenderer.render(report).text().lines())
                 .contains("• 다시 와서 공부한 비율 = 계산 실패", "• 가입자 수 = *38*명")

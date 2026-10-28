@@ -91,8 +91,11 @@ public class PushSender {
     }
 
     private static MulticastMessage toMulticast(List<String> tokens, PushMessage message) {
-        return MulticastMessage.builder()
-                .addAllTokens(tokens)
+        MulticastMessage.Builder builder = MulticastMessage.builder();
+        if (message.pushId() != null) {
+            builder.putData("push_id", message.pushId().toString());
+        }
+        return builder.addAllTokens(tokens)
                 .setNotification(Notification.builder()
                         .setTitle(message.title())
                         .setBody(message.body())

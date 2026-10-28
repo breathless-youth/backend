@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import project.study.metrics.report.fact.ExperimentData;
 
 /**
  * 리포트 한 번에 쓰는 사실 전체.
@@ -11,9 +12,14 @@ import java.util.Set;
  * @param anchor 기준일 A(발송일 KST 어제)
  * @param amplitudeDates Amplitude 창 처리 기록이 있는 날
  * @param appOpenedOnAnchor A에 앱을 연(`app_launched`·`app_foregrounded`) 유저 — 제외 유저는 뺀 값
+ * @param experiment 첫 세션 5분 푸시 실험 배정자 — 제외 유저는 뺀 값. 읽기에 실패했으면 null이고 실험 섹션만 계산 실패가 된다
  */
 public record ReportData(
-        LocalDate anchor, List<UserTimeline> users, Set<LocalDate> amplitudeDates, Set<Long> appOpenedOnAnchor) {
+        LocalDate anchor,
+        List<UserTimeline> users,
+        Set<LocalDate> amplitudeDates,
+        Set<Long> appOpenedOnAnchor,
+        ExperimentData experiment) {
 
     private static final Comparator<UserTimeline> SIGNUP_ORDER =
             Comparator.comparing(UserTimeline::signupAt).thenComparing(UserTimeline::userId);
