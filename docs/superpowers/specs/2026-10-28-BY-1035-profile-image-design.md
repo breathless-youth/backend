@@ -96,7 +96,7 @@ sequenceDiagram
 
 ### 소셜룸
 
-- V30 마이그레이션으로 `room_participations.profile_image varchar`를 추가한다.
+- V31 마이그레이션으로 `room_participations.profile_image varchar`를 추가한다.
 - 입장 경로 세 곳(`insertReservation`, `restoreFromGrace`, `refreshReservation`)에서 닉네임과 함께 사진 키를 복사한다.
 - `RoomMember`에 `profileImageUrl`을 추가한다. 값은 입장할 때 복사한 키로 만든다. 방에 있는 동안 사진을 바꾸면 다음 입장부터 반영된다.
 - 이전 파일을 바로 삭제하므로, 이미 방에 있는 사람들 화면에서는 엣지 캐시가 끝난 뒤(최대 1시간) 다음 입장 전까지 이니셜로 보인다.
@@ -142,7 +142,7 @@ sequenceDiagram
 
 ## ADR
 
-ADR-0033에 같은 출처 경로로 서빙하는 이유, presigned PUT, 크기를 서명과 `HeadObject`로 두 번 확인하는 이유, 운영자 삭제를 런북으로 둔 이유를 남긴다.
+ADR-0034에 같은 출처 경로로 서빙하는 이유, presigned PUT, 크기를 서명과 `HeadObject`로 두 번 확인하는 이유, 운영자 삭제를 런북으로 둔 이유를 남긴다.
 
 ## 범위 밖
 
