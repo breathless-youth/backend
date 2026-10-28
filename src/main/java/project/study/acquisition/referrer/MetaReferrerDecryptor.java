@@ -30,12 +30,15 @@ public class MetaReferrerDecryptor {
     private final SecretKeySpec key;
 
     public MetaReferrerDecryptor(@Value("${app.acquisition.meta-install-referrer-key:}") String keyHex) {
-        if (keyHex == null || !KEY_HEX.matcher(keyHex).matches()) {
+        // .env·SSM에 붙여 넣은 값 끝의 개행·공백 때문에 복호화가 조용히 꺼지지 않게 한다.
+        String trimmed = keyHex == null ? null : keyHex.strip();
+        if (trimmed == null || !KEY_HEX.matcher(trimmed).matches()) {
             log.warn("app.acquisition.meta-install-referrer-key가 비어 있거나 hex 64자가 아니어서 메타 설치 정보를 풀지 않는다");
             this.key = null;
             return;
         }
-        this.key = new SecretKeySpec(HexFormat.of().parseHex(keyHex), "AES");
+        this.key = new SecretKeySpec(HexFormat.of().parseHex(trimmed), "AES");
+        log.info("메타 설치 정보 복호화 켜짐"); // 배포 뒤 키가 읽혔는지 확인하는 용도. 키는 남기지 않는다.
     }
 
     public boolean enabled() {

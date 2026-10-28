@@ -14,9 +14,13 @@ import static project.study.acquisition.entity.AcquisitionSource.OTHER_LINK;
 import static project.study.acquisition.entity.AcquisitionSource.UNKNOWN;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
+@ExtendWith(OutputCaptureExtension.class)
 class InstallReferrerClassifierTest {
 
     private final InstallReferrerClassifier classifier = new InstallReferrerClassifier(new MetaReferrerDecryptor(KEY));
@@ -49,6 +53,21 @@ class InstallReferrerClassifierTest {
                 .classify(metaReferrer(CIPHER, NONCE), null);
         assertThat(a.source()).isEqualTo(META_AD);
         assertThat(a.metaAd()).isNull();
+    }
+
+    @Test
+    void 평문이_JSON_객체가_아니면_메타이고_상세는_없고_WARN을_남긴다(CapturedOutput output) {
+        Attribution a = classifier.classify(metaReferrer(encrypt("[1]"), NONCE), null);
+        assertThat(a.source()).isEqualTo(META_AD);
+        assertThat(a.metaAd()).isNull();
+        assertThat(output).contains("메타 설치 정보 평문이 JSON 객체가 아니다");
+    }
+
+    @Test
+    void 메타_암호문이_유효한_초대코드보다_먼저다() {
+        Attribution a = classifier.classify(metaReferrer(CIPHER, NONCE) + "&code=1234", null);
+        assertThat(a.source()).isEqualTo(META_AD);
+        assertThat(a.inviteCode()).isNull();
     }
 
     @Test

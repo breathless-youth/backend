@@ -51,4 +51,17 @@ class MetaReferrerDecryptorTest {
     void 키가_맞으면_켜진다() {
         assertThat(new MetaReferrerDecryptor(KEY).enabled()).isTrue();
     }
+
+    @Test
+    void 키_앞뒤_공백과_개행은_떼고_켜진다() {
+        MetaReferrerDecryptor decryptor = new MetaReferrerDecryptor("  " + KEY + "\n");
+        assertThat(decryptor.enabled()).isTrue();
+        assertThat(decryptor.decrypt(CIPHER, NONCE)).contains(PLAIN);
+    }
+
+    @Test
+    void 켜지면_INFO_한_줄을_남기고_키는_남기지_않는다(CapturedOutput output) {
+        new MetaReferrerDecryptor(KEY);
+        assertThat(output).contains("메타 설치 정보 복호화 켜짐").doesNotContain(KEY);
+    }
 }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.acquisition.MetaReferrerFixture.CIPHER;
 import static project.study.acquisition.MetaReferrerFixture.KEY;
 import static project.study.acquisition.MetaReferrerFixture.NONCE;
+import static project.study.acquisition.MetaReferrerFixture.PLAIN;
 import static project.study.acquisition.MetaReferrerFixture.metaReferrer;
 import static project.study.support.AuthTestSupport.asUser;
 
@@ -14,6 +15,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -101,9 +103,10 @@ class AcquisitionApiTest {
                     assertThat(json).extractingPath("$.metaAd.label").isEqualTo("aos_v3");
                     assertThat(json).extractingPath("$.firstTouchAt").isEqualTo("2026-10-29T01:12:00Z");
                 });
-        assertThat(row(userId))
-                .containsEntry("meta_ad_name", "Adams Test Ad Group")
-                .containsEntry("utm_campaign", "fb4a");
+        Map<String, Object> saved = row(userId);
+        assertThat(saved).containsEntry("meta_ad_name", "Adams Test Ad Group").containsEntry("utm_campaign", "fb4a");
+        // jsonb는 키 순서·공백을 바꿔 저장하므로 문자열이 아니라 JSON 값으로 비교한다.
+        assertThat(JSON.readTree(saved.get("meta_payload").toString())).isEqualTo(JSON.readTree(PLAIN));
         assertThat(output).doesNotContain(KEY);
     }
 
@@ -153,6 +156,7 @@ class AcquisitionApiTest {
                     assertThat(json).extractingPath("$.metaAd.label").isEqualTo("ios_v2");
                     assertThat(json).extractingPath("$.metaAd.adId").isNull();
                 });
+        assertThat(row(userId)).containsEntry("platform", "IOS");
     }
 
     @Test
@@ -204,8 +208,8 @@ class AcquisitionApiTest {
             });
             start.countDown();
 
-            MvcTestResult ra = a.get();
-            MvcTestResult rb = b.get();
+            MvcTestResult ra = a.get(10, TimeUnit.SECONDS);
+            MvcTestResult rb = b.get(10, TimeUnit.SECONDS);
             assertThat(ra).hasStatusOk();
             assertThat(rb).hasStatusOk();
             Object codeA = JSON.readTree(ra.getResponse().getContentAsString())
@@ -214,7 +218,8 @@ class AcquisitionApiTest {
             Object codeB = JSON.readTree(rb.getResponse().getContentAsString())
                     .get("inviteCode")
                     .asString();
-            assertThat(codeA).isEqualTo(codeB);
+            assertThat(codeA).isEqualTo(codeB).isIn("1111", "2222");
+            assertThat(row(userId)).containsEntry("invite_code", codeA);
         }
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM user_acquisition WHERE user_id = ?", Long.class, userId))
@@ -235,6 +240,11 @@ class AcquisitionApiTest {
     @Test
     void installReferrer가_4096자를_넘으면_400() {
         assertThat(post(userId, body("ANDROID", "a".repeat(4097), null))).hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void deepLinkAd가_64자를_넘으면_400() {
+        assertThat(post(userId, body("ANDROID", null, "a".repeat(65)))).hasStatus(HttpStatus.BAD_REQUEST);
     }
 
     @Test

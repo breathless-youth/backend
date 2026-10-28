@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import project.study.acquisition.entity.AcquisitionSource;
 import tools.jackson.core.JacksonException;
@@ -20,7 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
  * <ol>
  *   <li>utm_content 안에 메타 암호문(source.data·nonce)이 있다 → META_AD. utm_source는 보지 않는다. 메타 문서가 utm_source를
  *       보장하지 않는다고 밝혔기 때문이다.
- *   <li>code가 숫자 4자리 → INVITE. 딥링크보다 앞에 두는 이유는 친구 초대가 광고보다 구체적인 의도이기 때문이다.
+ *   <li>code가 숫자 4자리 → INVITE. 딥링크보다 앞에 두는 이유는 Play 리퍼러가 스토어에 들어가기 직전에 누른 링크(마지막 클릭)이고, 메타 딥링크는 메타가 자기 기여 기간 안에서 붙여 주는 값이기 때문이다.
  *   <li>딥링크 광고 값이 있다 → META_AD (상세 없음).
  *   <li>utm_source=google-play, utm_medium=organic → ORGANIC.
  *   <li>그 밖에 비어 있지 않은 설치 정보 → OTHER_LINK.
@@ -29,6 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * 입력은 서비스가 공백을 null로 정리해 넘긴다(공백도 없는 값으로 취급한다).
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class InstallReferrerClassifier {
@@ -90,11 +92,12 @@ public class InstallReferrerClassifier {
         return decryptor.decrypt(cipher[0], cipher[1]).map(this::toDetail).orElse(null);
     }
 
-    /** 평문이 JSON 객체가 아니면 null. 필드명이 한 단계씩 어긋난 매핑은 MetaAdDetail 설명 참고. */
+    /** 평문이 JSON 객체가 아니면 null(평문은 로그에 남기지 않는다). 필드명이 한 단계씩 어긋난 매핑은 MetaAdDetail 설명 참고. */
     private MetaAdDetail toDetail(String plain) {
         try {
             JsonNode root = MAPPER.readTree(plain);
             if (!root.isObject()) {
+                log.warn("메타 설치 정보 평문이 JSON 객체가 아니다");
                 return null;
             }
             return new MetaAdDetail(
@@ -106,6 +109,7 @@ public class InstallReferrerClassifier {
                     text(root, "adgroup_name"),
                     plain);
         } catch (JacksonException e) {
+            log.warn("메타 설치 정보 평문이 JSON 객체가 아니다");
             return null;
         }
     }
