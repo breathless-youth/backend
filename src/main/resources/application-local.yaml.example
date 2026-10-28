@@ -49,6 +49,9 @@ app:
     bucket: local-avatars
     region: ap-northeast-2
     base-url: ""
+  # 메타 설치 정보 복호화 키 (BY-1066). 값이 없으면 복호화만 꺼진다 — 키는 메타 앱 대시보드에서 확인
+  # acquisition:
+  #   meta-install-referrer-key: <메타 앱 대시보드 > 기본 설정 > Android의 Install Referrer Decryption Key>
   room:
     turn:
       # coturn static-auth-secret 방식 임시 자격 발급용. 운영에서는 coturn 서버의 시크릿과 일치시킬 것.

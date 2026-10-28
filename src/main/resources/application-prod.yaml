@@ -64,6 +64,18 @@ app:
   report:
     enabled: true
   # 데모 데이터 시딩(app.seed.enabled)은 운영에서 절대 켜지 않는다 — 고정 deviceId가 곧 자격증명이다
+  # 서버 FCM 발송 (BY-1029, ADR-0035). ECS 태스크 정의가 SSM fcm/service-account-json(focusmakers-prod 서비스 계정)을 주입한다.
+  # 값이 없으면 발송만 꺼진 채 기동한다. 테스트 발송(app.push.test-send.enabled)은 운영에서 켜지 않는다
+  push:
+    fcm:
+      service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
+    # 첫 세션 5분 푸시 실험 (BY-1070, ADR-0037). 실제 사용자에게 보내므로 실험을 시작할 때 true로 바꾼다 —
+    # 이 앱 버전(푸시 토큰 등록)이 스토어에 나간 뒤에 켠다. d0-delay는 가입→첫 세션 간격 분포로 정한다(기본 PT2H)
+    first-session-experiment:
+      enabled: false
+  # 메타 설치 정보 복호화 키 (BY-1066, ADR-0036). 값이 없으면 복호화만 꺼진 채 기동한다 — 운영은 ECS가 SSM meta/install-referrer-key를 주입
+  acquisition:
+    meta-install-referrer-key: ${META_INSTALL_REFERRER_KEY:}
   ws:
     stats-logging-period-ms: 1800000   # 30분 (기본)
   cors:

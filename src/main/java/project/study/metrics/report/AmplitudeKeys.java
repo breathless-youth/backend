@@ -19,6 +19,8 @@ public final class AmplitudeKeys {
     public static final String INVITE_OPENED = "invite_deep_link_opened";
     public static final String RECORDS_DATE = "records_date_selected";
     public static final String PUSH_OPENED = "push_notification_opened";
+    /** 세션 시작 — 첫 세션 실험의 D7 판정(가입 7일 뒤 그날 돌아왔나)에 쓴다. */
+    public static final String STUDY_SESSION_STARTED = "study_session_started";
 
     /** "앱을 열었다"로 보는 키 — 어제 앱만 열고 공부 안 한 사람 수에 쓴다. */
     public static final Set<String> APP_OPEN = Set.of(APP_LAUNCHED, APP_FOREGROUNDED);
@@ -37,7 +39,8 @@ public final class AmplitudeKeys {
             CAMERA_ON,
             INVITE_OPENED,
             RECORDS_DATE,
-            PUSH_OPENED);
+            PUSH_OPENED,
+            STUDY_SESSION_STARTED);
 
     private AmplitudeKeys() {}
 }

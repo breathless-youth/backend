@@ -8,7 +8,7 @@ import project.study.metrics.report.DailyReport;
 import project.study.metrics.report.SectionResult;
 import project.study.metrics.slack.SlackMessage;
 
-/** 섹션 결과 → 본 메시지 + 스레드 6개. 렌더링 버그도 그 스레드만 "계산 실패"로 막는다 (스펙 §10). */
+/** 섹션 결과 → 본 메시지 + 스레드 7개. 렌더링 버그도 그 스레드만 "계산 실패"로 막는다 (스펙 §10). */
 @Slf4j
 public final class ReportRenderer {
 
@@ -29,7 +29,8 @@ public final class ReportRenderer {
                 thread(report.segment(), "👥 첫 주에 며칠 공부했나 → 둘째 주에도 공부했나", SegmentRenderer::render),
                 thread(report.roster(), "🙋 첫 주에 3일 이상 공부한 사람", RosterRenderer::render),
                 thread(report.explorer(), "🔍 남는 사람과 관련 깊은 첫 주 행동 Top 3", ExplorerRenderer::render),
-                thread(report.active(), "🧑‍🎓 어제 공부한 사람", ActiveUsersRenderer::render));
+                thread(report.active(), "🧑‍🎓 어제 공부한 사람", ActiveUsersRenderer::render),
+                thread(report.experiment(), ExperimentRenderer.TITLE, ExperimentRenderer::render));
         // 본 메시지는 스레드를 달 하나여야 해서 자르고, 스레드는 나눠서 빠짐없이 보낸다
         return new RenderedReport(
                 SummaryRenderer.render(report).cap(MAX_CHARS),
