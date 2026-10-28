@@ -44,6 +44,11 @@ app:
     allowed-origins:
       - http://localhost:[*]
       - http://127.0.0.1:[*]
+  # 프로필 사진. 자격 증명은 AWS_PROFILE로 읽는다. 실제 업로드를 시험할 때만 스테이징 버킷 이름을 넣는다
+  profile-image:
+    bucket: local-avatars
+    region: ap-northeast-2
+    base-url: ""
   room:
     turn:
       # coturn static-auth-secret 방식 임시 자격 발급용. 운영에서는 coturn 서버의 시크릿과 일치시킬 것.

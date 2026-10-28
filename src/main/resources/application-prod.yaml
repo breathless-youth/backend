@@ -70,6 +70,14 @@ app:
     allowed-origins:
       - https://web.sunqstudio.kr
       - https://web.focusmakers.app
+  # 프로필 사진 버킷. ECS 태스크 정의가 환경 변수로 넣는다(infra 저장소). 버킷에는 기본값을 두지 않아
+  # 누락되면 기동이 실패한다. 자격 증명은 태스크 역할이다. avatars/*에 s3:PutObject·GetObject·DeleteObject,
+  # 버킷에 s3:ListBucket이 있어야 없는 파일을 HeadObject가 403이 아닌 404로 받는다 (ADR-0033)
+  profile-image:
+    bucket: ${APP_PROFILE_IMAGE_BUCKET}
+    region: ap-northeast-2
+    # 비우면 웹과 같은 출처의 /avatars/... 상대 경로로 응답한다(CloudFront /avatars/*). 끝에 /를 붙이지 않는다
+    base-url: ${APP_PROFILE_IMAGE_BASE_URL:}
   room:
     turn:
       # coturn(EC2)과 공유하는 static-auth-secret — ECS 태스크 정의가 SSM
