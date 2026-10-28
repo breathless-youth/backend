@@ -85,6 +85,9 @@ app:
       service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
     test-send:
       enabled: true
+    # 첫 세션 5분 푸시 실험 (BY-1070, ADR-0037). dev는 실기기 확인용으로 켠다. 짧은 지연으로 확인하려면 d0-delay를 PT10M처럼 준다
+    first-session-experiment:
+      enabled: true
   # 메타 설치 정보 복호화 키 (BY-1066, ADR-0036). 값이 없으면 복호화만 꺼진 채 기동한다 — dev는 서버 .env에 넣는다
   acquisition:
     meta-install-referrer-key: ${META_INSTALL_REFERRER_KEY:}
