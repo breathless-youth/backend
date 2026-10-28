@@ -88,13 +88,10 @@ class RankingCloserTest extends RankingIntegrationTestBase {
     }
 
     @Test
-    void 심야판은_다음날_04시_1분에_확정하고_그_전에는_열어_둔다() {
-        session(user("a"), kst(10, 9, 23, 0), 60, 3000); // 금요일 심야(22시~다음날 04시)
+    void 심야판도_다음날_00시_1분에_확정한다() {
+        session(user("a"), kst(10, 9, 2, 0), 60, 3000); // 금요일 심야(0시~6시)
 
         closer.closeDue(kst(10, 10, 0, 1));
-        assertThat(skipped("TIME_SLOT:DAILY:NIGHT", FRI)).isNull();
-
-        closer.closeDue(kst(10, 10, 4, 1));
 
         assertThat(skipped("TIME_SLOT:DAILY:NIGHT", FRI)).isFalse();
         assertThat(jdbc.queryForObject(
@@ -103,7 +100,7 @@ class RankingCloserTest extends RankingIntegrationTestBase {
                                 "TIME_SLOT:DAILY:NIGHT",
                                 FRI)
                         .toInstant())
-                .isEqualTo(kst(10, 10, 4, 0));
+                .isEqualTo(kst(10, 10, 0, 0));
         assertThat(records()).contains("TIME_SLOT:DAILY:NIGHT a 1 3000.0");
     }
 
@@ -123,7 +120,7 @@ class RankingCloserTest extends RankingIntegrationTestBase {
 
         closer.closeDue(kst(10, 10, 0, 1));
 
-        assertThat(records()).containsExactly("FOCUS_TIME:DAILY a 1 3570.0");
+        assertThat(records()).containsExactly("FOCUS_TIME:DAILY a 1 3570.0", "TIME_SLOT:DAILY:EVENING a 1 3570.0");
     }
 
     @Test

@@ -33,20 +33,20 @@ class SlotSplitterTest {
 
     @Test
     void 경계를_넘으면_길이_비율로_나눈다() {
-        assertThat(SlotSplitter.split(at(10, 6, 30), at(10, 7, 30), 3600, List.of()))
+        assertThat(SlotSplitter.split(at(10, 5, 30), at(10, 6, 30), 3600, List.of()))
                 .containsExactly(
-                        new SessionSlot(TimeSlot.DAWN, date(10), 1800),
+                        new SessionSlot(TimeSlot.NIGHT, date(10), 1800),
                         new SessionSlot(TimeSlot.MORNING, date(10), 1800));
     }
 
     @Test
     void 비공부_이벤트_시간은_배분_가중치에서_빠진다() {
-        // 06:30~07:30 중 07:00~07:20 PHONE → 이벤트를 뺀 길이는 새벽 1800초 · 오전 600초
-        List<StatusEvent> events = List.of(new StatusEvent(EventStatus.PHONE, at(10, 7, 0), at(10, 7, 20)));
+        // 05:30~06:30 중 06:00~06:20 PHONE → 이벤트를 뺀 길이는 심야 1800초 · 아침 600초
+        List<StatusEvent> events = List.of(new StatusEvent(EventStatus.PHONE, at(10, 6, 0), at(10, 6, 20)));
 
-        assertThat(SlotSplitter.split(at(10, 6, 30), at(10, 7, 30), 2400, events))
+        assertThat(SlotSplitter.split(at(10, 5, 30), at(10, 6, 30), 2400, events))
                 .containsExactly(
-                        new SessionSlot(TimeSlot.DAWN, date(10), 1800),
+                        new SessionSlot(TimeSlot.NIGHT, date(10), 1800),
                         new SessionSlot(TimeSlot.MORNING, date(10), 600));
     }
 
@@ -56,23 +56,24 @@ class SlotSplitterTest {
 
         assertThat(slots)
                 .extracting(SessionSlot::getSlot)
-                .containsExactly(TimeSlot.DAWN, TimeSlot.MORNING, TimeSlot.AFTERNOON);
+                .containsExactly(TimeSlot.NIGHT, TimeSlot.MORNING, TimeSlot.AFTERNOON);
         assertThat(slots.stream().mapToInt(SessionSlot::getFocusSec).sum()).isEqualTo(10_001);
     }
 
     @Test
-    void 새벽_4시_전의_심야는_전날에_귀속된다() {
-        assertThat(SlotSplitter.split(at(10, 2, 0), at(10, 5, 0), 10_800, List.of()))
+    void 자정_뒤의_심야는_그날에_귀속된다() {
+        assertThat(SlotSplitter.split(at(10, 2, 0), at(10, 7, 0), 18_000, List.of()))
                 .containsExactly(
-                        new SessionSlot(TimeSlot.NIGHT, date(9), 7200), new SessionSlot(TimeSlot.DAWN, date(10), 3600));
+                        new SessionSlot(TimeSlot.NIGHT, date(10), 14_400),
+                        new SessionSlot(TimeSlot.MORNING, date(10), 3600));
     }
 
     @Test
-    void 밤_10시_뒤의_심야는_그날에_귀속된다() {
-        assertThat(SlotSplitter.split(at(10, 21, 0), at(11, 0, 0), 10_800, List.of()))
+    void 저녁은_자정까지다() {
+        assertThat(SlotSplitter.split(at(10, 17, 0), at(11, 0, 0), 25_200, List.of()))
                 .containsExactly(
-                        new SessionSlot(TimeSlot.EVENING, date(10), 3600),
-                        new SessionSlot(TimeSlot.NIGHT, date(10), 7200));
+                        new SessionSlot(TimeSlot.AFTERNOON, date(10), 3600),
+                        new SessionSlot(TimeSlot.EVENING, date(10), 21_600));
     }
 
     @Test

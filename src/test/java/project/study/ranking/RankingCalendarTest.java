@@ -57,19 +57,13 @@ class RankingCalendarTest {
     }
 
     @Test
-    void 심야_일간은_자정_뒤에도_전날_판이고_4시에_마감한다() {
+    void 심야판도_그날이고_다음날_0시에_마감한다() {
         RankingBoard night = new RankingBoard(TIME_SLOT, DAILY, TimeSlot.NIGHT);
 
         assertThat(RankingCalendar.window(night, at(10, 11, 2), 0))
-                .isEqualTo(new Window(date(10, 10), date(10, 10), at(10, 11, 4)));
-        assertThat(RankingCalendar.window(night, at(10, 11, 5), 0))
-                .isEqualTo(new Window(date(10, 11), date(10, 11), at(10, 12, 4)));
-    }
-
-    @Test
-    void 심야_주간은_월요일_4시에_마감한다() {
+                .isEqualTo(new Window(date(10, 11), date(10, 11), at(10, 12, 0)));
         assertThat(RankingCalendar.window(new RankingBoard(TIME_SLOT, WEEKLY, TimeSlot.NIGHT), at(10, 12, 2), 0))
-                .isEqualTo(new Window(date(10, 5), date(10, 11), at(10, 12, 4)));
+                .isEqualTo(new Window(date(10, 12), date(10, 18), at(10, 19, 0)));
     }
 
     @Test

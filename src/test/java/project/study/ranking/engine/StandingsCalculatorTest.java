@@ -86,7 +86,7 @@ class StandingsCalculatorTest extends RankingIntegrationTestBase {
     @Test
     void 시간대는_그_구간_순공만_더하고_지금_그_구간에서_집중_중인_사람만_집중_중이다() {
         long early = user("early");
-        session(early, kst(10, 10, 6, 30), 60, 3600);
+        session(early, kst(10, 10, 5, 30), 60, 3600);
         long now = user("now");
         draft(now, NOW.minusSeconds(600), NOW.minusSeconds(10), 590, "[]");
 

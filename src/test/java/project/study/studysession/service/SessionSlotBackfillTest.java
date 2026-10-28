@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import project.study.TestcontainersConfiguration;
 
-/** 기동 때 지난 주 월요일부터의 세션 중 구간 행이 없는 것을 채운다 — 멱등이고 그 이전은 건드리지 않는다 (BY-828). */
+/** 기동 때 지난 주 월요일부터의 세션 중 구간 행이 없는 것을 채운다 — 멱등이고 그 이전은 건드리지 않는다 (BY-828, BY-1046). */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
 class SessionSlotBackfillTest {
@@ -45,21 +45,26 @@ class SessionSlotBackfillTest {
                 "backfill-" + UUID.randomUUID());
     }
 
-    /** 구간 행 없이 세션 행만 넣는다 — V26 이전에 저장된 세션과 같은 모양 */
+    /** 구간 행 없이 세션 행만 넣는다 — V26 이전에 저장된 세션, V30이 구간 행을 비운 세션과 같은 모양 */
     private long legacySession(LocalDate date) {
         Instant start = date.atTime(9, 0).atZone(KST).toInstant();
-        Instant end = start.plusSeconds(1800);
+        return legacySession(start, start.plusSeconds(1800), 1800);
+    }
+
+    private long legacySession(Instant start, Instant end, int focusSec) {
         return jdbc.queryForObject(
                 """
                 INSERT INTO study_session
                     (user_id, stat_date, started_at, submission_started_at, ended_at, study_sec, focus_sec, auto_finalized)
-                VALUES (?, ?, ?, ?, ?, 1800, 1800, false) RETURNING id""",
+                VALUES (?, ?, ?, ?, ?, ?, ?, false) RETURNING id""",
                 Long.class,
                 userId,
-                date,
+                start.atZone(KST).toLocalDate(),
                 start.atOffset(ZoneOffset.UTC),
                 start.atOffset(ZoneOffset.UTC),
-                end.atOffset(ZoneOffset.UTC));
+                end.atOffset(ZoneOffset.UTC),
+                focusSec,
+                focusSec);
     }
 
     private int slotCount(long sessionId) {
@@ -90,20 +95,23 @@ class SessionSlotBackfillTest {
     }
 
     @Test
-    void 월요일_새벽엔_아직_일요일_귀속이라_지지난_주_월요일부터_채운다() {
-        // 심야판의 현재 기간은 월요일 04시까지 일요일 귀속 — 주간 offset=-1 판은 9/28~10/4
-        assertThat(SessionSlotBackfill.fromDate(kst(10, 12, 1))).isEqualTo(LocalDate.of(2026, 9, 28));
-        assertThat(SessionSlotBackfill.fromDate(kst(10, 12, 3))).isEqualTo(LocalDate.of(2026, 9, 28));
-    }
-
-    @Test
-    void 월요일_04시부터는_지난_주_월요일부터_채운다() {
-        assertThat(SessionSlotBackfill.fromDate(kst(10, 12, 4))).isEqualTo(LocalDate.of(2026, 10, 5));
-        assertThat(SessionSlotBackfill.fromDate(kst(10, 12, 5))).isEqualTo(LocalDate.of(2026, 10, 5));
-    }
-
-    @Test
-    void 일요일_밤에도_월요일_새벽과_같은_날짜부터_채운다() {
+    void 지난_주_월요일부터_채운다() {
+        assertThat(SessionSlotBackfill.fromDate(kst(10, 12, 1))).isEqualTo(LocalDate.of(2026, 10, 5));
         assertThat(SessionSlotBackfill.fromDate(kst(10, 11, 23))).isEqualTo(LocalDate.of(2026, 9, 28));
+    }
+
+    @Test
+    void 구간_행이_없는_세션은_새_경계로_나눠_채운다() {
+        LocalDate today = clock.instant().atZone(KST).toLocalDate();
+        Instant start = today.atTime(5, 30).atZone(KST).toInstant();
+        long id = legacySession(start, start.plusSeconds(3600), 3600);
+
+        backfill.run(new DefaultApplicationArguments());
+
+        assertThat(jdbc.queryForList(
+                        "SELECT slot || ' ' || focus_sec FROM study_session_slot WHERE session_id = ? ORDER BY slot",
+                        String.class,
+                        id))
+                .containsExactly("MORNING 1800", "NIGHT 1800");
     }
 }

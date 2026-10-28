@@ -96,4 +96,15 @@ class RankingRecordSummaryApiTest extends RankingRecordTestBase {
         assertThat(mvc.get().uri(SUMMARY).header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION))
                 .hasStatus(HttpStatus.UNAUTHORIZED);
     }
+
+    @Test
+    void 역대_최고가_지난_새벽_구간이어도_준다() {
+        long me = user("me");
+        best(me, 1, "TIME_SLOT:DAILY:DAWN", LocalDate.of(2026, 10, 8));
+
+        assertThat(get(SUMMARY, me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.best.slot", v -> assertThat(v).isEqualTo("DAWN"));
+    }
 }
