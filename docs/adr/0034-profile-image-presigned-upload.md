@@ -1,4 +1,4 @@
-# ADR-0033: 프로필 사진은 presigned PUT으로 S3에 바로 올리고, 웹과 같은 출처의 `/avatars/*` 경로로 서빙한다
+# ADR-0034: 프로필 사진은 presigned PUT으로 S3에 바로 올리고, 웹과 같은 출처의 `/avatars/*` 경로로 서빙한다
 
 - 상태: 승인
 - 날짜: 2026-10-28
@@ -36,7 +36,7 @@
    같은 키를 다시 보내면 아무것도 지우지 않는다.
 7. **운영자 삭제는 관리 API 없이 런북으로 한다**(`docs/runbooks/profile-image-removal.md`). 관리자 인증 체계가 없고, 새 엔드포인트는
    공격 지점을 늘린다. 신고가 잦아지면 BY-1039에서 다시 본다.
-8. **소셜룸은 입장 시점 사진, 랭킹은 조회 때 사진을 싣는다.** 룸은 닉네임처럼 입장 때 사진 키를 `room_participations.profile_image`(V30)에
+8. **소셜룸은 입장 시점 사진, 랭킹은 조회 때 사진을 싣는다.** 룸은 닉네임처럼 입장 때 사진 키를 `room_participations.profile_image`(V31)에
    복사한다. 랭킹은 닉네임 조인 쿼리에서 `users.profile_image`를 같이 읽는다.
 
 ## 결과

@@ -72,7 +72,7 @@ app:
       - https://web.focusmakers.app
   # 프로필 사진 버킷. ECS 태스크 정의가 환경 변수로 넣는다(infra 저장소). 버킷에는 기본값을 두지 않아
   # 누락되면 기동이 실패한다. 자격 증명은 태스크 역할이다. avatars/*에 s3:PutObject·GetObject·DeleteObject,
-  # 버킷에 s3:ListBucket이 있어야 없는 파일을 HeadObject가 403이 아닌 404로 받는다 (ADR-0033)
+  # 버킷에 s3:ListBucket이 있어야 없는 파일을 HeadObject가 403이 아닌 404로 받는다 (ADR-0034)
   profile-image:
     bucket: ${APP_PROFILE_IMAGE_BUCKET}
     region: ap-northeast-2
