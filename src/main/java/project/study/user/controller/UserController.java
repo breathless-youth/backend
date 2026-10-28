@@ -20,11 +20,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
+import project.study.user.dto.ProfileImageUploadUrlRequest;
+import project.study.user.dto.ProfileImageUploadUrlResponse;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
 import project.study.user.service.AuthService;
+import project.study.user.service.ProfileImageService;
 import project.study.user.service.UserService;
 
 @Tag(name = "User", description = "유저 등록·프로필 API 모음 — 로그인 없이 기기 UUID로 유저를 만들고, 발급된 토큰으로 식별한다 (ADR-0019)")
@@ -36,6 +39,7 @@ public class UserController {
 
     private final UserService userService;
     private final AuthService authService;
+    private final ProfileImageService profileImageService;
 
     @Operation(summary = "익명 기기 유저 등록 (토큰 발급)", description = """
                     앱은 첫 실행 때 **UUID**를 하나 생성해 기기 보안 저장소에 보관하고, \
@@ -133,5 +137,22 @@ public class UserController {
     public ProfileResponse updateProfile(
             @AuthenticationPrincipal Long userId, @Valid @RequestBody ProfileUpdateRequest request) {
         return userService.updateProfile(userId, request);
+    }
+
+    @Operation(summary = "프로필 사진 업로드 URL 발급", description = """
+                    S3에 바로 올릴 5분짜리 presigned PUT URL과 키를 준다. 브라우저는 요청한 크기와 같은 JPEG를 \
+                    `Content-Type: image/jpeg`로 그 URL에 PUT한 뒤, 받은 `key`로 PUT /api/users/me/profile-image를 부른다.""")
+    @ApiResponse(responseCode = "200", description = "발급 성공")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_FAILED — contentLength가 없거나 1 미만이거나 1,048,576(1MB) 초과",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    @PostMapping(value = "/me/profile-image/upload-url", version = "2")
+    public ProfileImageUploadUrlResponse issueProfileImageUploadUrl(
+            @AuthenticationPrincipal Long userId, @Valid @RequestBody ProfileImageUploadUrlRequest request) {
+        return profileImageService.issueUploadUrl(userId, request.contentLength());
     }
 }
