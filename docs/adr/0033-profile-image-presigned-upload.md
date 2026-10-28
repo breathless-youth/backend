@@ -49,7 +49,7 @@
 - 운영 태스크 역할과 개발 서버 EC2 인스턴스 역할 모두 결정 4의 권한(`PutObject`·`GetObject`·`DeleteObject`, `ListBucket`)이 필요하다.
 - 버킷 이름이 틀려도 `HeadObject`가 404를 받아 "업로드된 사진이 없습니다" 400으로 보인다. 모든 등록이 이 400으로 실패하면
   `app.profile-image.bucket`부터 확인한다.
-- `base-url`은 끝에 `/`를 붙이지 않는다. 코드가 `base-url + "/" + key`로 이어 붙여 `//avatars/...`가 된다.
+- `base-url` 끝의 `/`는 코드가 떼어 낸다. 남겨 두면 `//avatars/...`가 되어 브라우저가 `avatars`를 호스트 이름으로 읽기 때문이다.
 - 탈퇴 시 사진 삭제는 탈퇴 기능이 생길 때 다룬다.
 
 ## 고려한 대안

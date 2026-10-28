@@ -76,7 +76,7 @@ app:
   profile-image:
     bucket: ${APP_PROFILE_IMAGE_BUCKET}
     region: ap-northeast-2
-    # 비우면 웹과 같은 출처의 /avatars/... 상대 경로로 응답한다(CloudFront /avatars/*). 끝에 /를 붙이지 않는다
+    # 비우면 웹과 같은 출처의 /avatars/... 상대 경로로 응답한다(CloudFront /avatars/*)
     base-url: ${APP_PROFILE_IMAGE_BASE_URL:}
   room:
     turn:
