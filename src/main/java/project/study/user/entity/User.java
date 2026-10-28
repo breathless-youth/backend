@@ -82,4 +82,11 @@ public class User extends BaseTimeEntity {
             this.category = category;
         }
     }
+
+    // 이전 키를 돌려준다 — 호출자가 커밋 뒤 그 파일을 지운다
+    public String replaceProfileImage(String key) {
+        String previous = this.profileImage;
+        this.profileImage = key;
+        return previous;
+    }
 }

@@ -1,17 +1,20 @@
 package project.study.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static project.study.support.AuthTestSupport.asUser;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +32,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import project.study.TestcontainersConfiguration;
 import project.study.user.image.ProfileImageStorage;
 import project.study.user.image.ProfileImageStorage.PresignedUpload;
+import project.study.user.image.ProfileImageStorage.StoredObject;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -112,5 +116,107 @@ class ProfileImageApiTest {
                 .thenReturn(new PresignedUpload("https://s3.example/upload", Instant.parse("2026-10-28T10:05:00Z")));
 
         assertThat(uploadUrl(userId, "{\"contentLength\": 1048576}")).hasStatusOk();
+    }
+
+    private void jpegExists() {
+        when(storage.head(anyString())).thenReturn(Optional.of(new StoredObject(1000, "image/jpeg")));
+    }
+
+    private MockMvcTester.MockMvcRequestBuilder putImage(long userId, String key) {
+        return mvc.put()
+                .uri("/api/users/me/profile-image")
+                .with(asUser(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"key\": \"" + key + "\"}");
+    }
+
+    private String storedKey(long userId) {
+        return jdbc.queryForObject("SELECT profile_image FROM users WHERE id = ?", String.class, userId);
+    }
+
+    @Test
+    void 내_키를_등록하면_프로필에_사진_경로가_실린다() {
+        long userId = user();
+        String key = keyOf(userId);
+        jpegExists();
+
+        assertThat(putImage(userId, key))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.profileImageUrl", v -> assertThat(v).isEqualTo("/" + key));
+        assertThat(mvc.get().uri("/api/users/me/profile").with(asUser(userId)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.profileImageUrl", v -> assertThat(v).isEqualTo("/" + key));
+        verify(storage, never()).delete(any());
+    }
+
+    @Test
+    void 사진을_바꾸면_새_키를_저장하고_이전_파일을_지운다() {
+        long userId = user();
+        String first = keyOf(userId);
+        String second = keyOf(userId);
+        jpegExists();
+
+        assertThat(putImage(userId, first)).hasStatusOk();
+        assertThat(putImage(userId, second)).hasStatusOk();
+
+        assertThat(storedKey(userId)).isEqualTo(second);
+        verify(storage).delete(first);
+    }
+
+    @Test
+    void 남의_키는_400_BAD_REQUEST이고_S3를_보지_않는다() {
+        long userId = user();
+
+        assertThat(putImage(userId, keyOf(userId + 1)))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("BAD_REQUEST"));
+        verify(storage, never()).head(any());
+    }
+
+    @Test
+    void S3에_파일이_없으면_400이다() {
+        long userId = user();
+        when(storage.head(anyString())).thenReturn(Optional.empty());
+
+        assertThat(putImage(userId, keyOf(userId))).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(storedKey(userId)).isNull();
+    }
+
+    @Test
+    void 크기가_1MB를_넘는_파일은_지우고_400이다() {
+        long userId = user();
+        String key = keyOf(userId);
+        when(storage.head(key)).thenReturn(Optional.of(new StoredObject(1_048_577, "image/jpeg")));
+
+        assertThat(putImage(userId, key)).hasStatus(HttpStatus.BAD_REQUEST);
+        verify(storage).delete(key);
+        assertThat(storedKey(userId)).isNull();
+    }
+
+    @Test
+    void 되돌리면_사진_경로가_null이고_이전_파일을_지운다() {
+        long userId = user();
+        String key = keyOf(userId);
+        jpegExists();
+        assertThat(putImage(userId, key)).hasStatusOk();
+
+        assertThat(mvc.delete().uri("/api/users/me/profile-image").with(asUser(userId)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.profileImageUrl", v -> assertThat(v).isNull());
+        verify(storage).delete(key);
+        assertThat(storedKey(userId)).isNull();
+    }
+
+    @Test
+    void 사진이_없어도_되돌리기는_200이다() {
+        long userId = user();
+
+        assertThat(mvc.delete().uri("/api/users/me/profile-image").with(asUser(userId)))
+                .hasStatusOk();
+        verify(storage, never()).delete(any());
     }
 }

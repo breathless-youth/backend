@@ -13,13 +13,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
+import project.study.user.dto.ProfileImageUpdateRequest;
 import project.study.user.dto.ProfileImageUploadUrlRequest;
 import project.study.user.dto.ProfileImageUploadUrlResponse;
 import project.study.user.dto.ProfileResponse;
@@ -154,5 +157,29 @@ public class UserController {
     public ProfileImageUploadUrlResponse issueProfileImageUploadUrl(
             @AuthenticationPrincipal Long userId, @Valid @RequestBody ProfileImageUploadUrlRequest request) {
         return profileImageService.issueUploadUrl(userId, request.contentLength());
+    }
+
+    @Operation(summary = "프로필 사진 등록", description = """
+                    업로드를 마친 키를 프로필 사진으로 등록하고 바뀐 프로필을 준다. 서버가 S3에서 파일의 존재·크기(1MB 이하)·형식\
+                    (`image/jpeg`)을 확인한다. 이전 사진 파일은 지운다. 같은 키를 다시 보내면 아무것도 지우지 않고 200이다.""")
+    @ApiResponse(responseCode = "200", description = "등록 성공 — 바뀐 전체 프로필 반환")
+    @ApiResponse(
+            responseCode = "400",
+            description = "BAD_REQUEST — 내 키 형식이 아님, S3에 파일 없음, 1MB 초과 또는 JPEG가 아님(이때 파일은 지워진다)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    @PutMapping(value = "/me/profile-image", version = "2")
+    public ProfileResponse updateProfileImage(
+            @AuthenticationPrincipal Long userId, @RequestBody ProfileImageUpdateRequest request) {
+        return profileImageService.updateProfileImage(userId, request.key());
+    }
+
+    @Operation(summary = "프로필 사진 되돌리기", description = "사진을 지우고 이니셜 아바타로 되돌린다. 사진이 없어도 200이다.")
+    @ApiResponse(responseCode = "200", description = "성공 — 바뀐 전체 프로필 반환(profileImageUrl은 null)")
+    @DeleteMapping(value = "/me/profile-image", version = "2")
+    public ProfileResponse deleteProfileImage(@AuthenticationPrincipal Long userId) {
+        return profileImageService.deleteProfileImage(userId);
     }
 }
