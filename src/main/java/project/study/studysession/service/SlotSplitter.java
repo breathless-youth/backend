@@ -9,7 +9,7 @@ import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.TimeSlot;
 
 /**
- * 자정 분할 조각 하나를 시간대 구간 경계(KST 04·07·12·18·22시)로 다시 잘라 조각 순공을 구간별로 배분하는 순수 로직 (BY-828).
+ * 자정 분할 조각 하나를 시간대 구간 경계(KST 0·6·12·18시)로 다시 잘라 조각 순공을 구간별로 배분하는 순수 로직 (BY-828).
  * 배분은 자정 분할과 같은 규칙이다 — 이벤트를 뺀 길이 비율로 나누고 마지막 구간이 나머지를 가져가 합이 조각 순공과 같다.
  * 0초 몫은 행을 만들지 않는다.
  */

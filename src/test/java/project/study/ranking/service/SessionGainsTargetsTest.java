@@ -29,10 +29,10 @@ class SessionGainsTargetsTest {
                         new RankingBoard(FOCUS_TIME, MONTHLY, null),
                         new RankingBoard(FOCUS_RATE, WEEKLY, null),
                         new RankingBoard(FOCUS_RATE, MONTHLY, null),
-                        new RankingBoard(TIME_SLOT, DAILY, MORNING),
                         new RankingBoard(TIME_SLOT, DAILY, NIGHT),
-                        new RankingBoard(TIME_SLOT, WEEKLY, MORNING),
+                        new RankingBoard(TIME_SLOT, DAILY, MORNING),
                         new RankingBoard(TIME_SLOT, WEEKLY, NIGHT),
+                        new RankingBoard(TIME_SLOT, WEEKLY, MORNING),
                         new RankingBoard(TOTAL_TIME, null, null),
                         new RankingBoard(TOTAL_DAYS, null, null),
                         new RankingBoard(MAX_STREAK, null, null));

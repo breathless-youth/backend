@@ -8,11 +8,12 @@ import java.util.Comparator;
 
 /**
  * 순위표 한 줄 (BY-828). value는 정렬 값 — 시간 판은 초, 일수 판은 일, 집중률은 % 원값. focusSec·studySec는 집중률·순공 판에서만
- * 채운다(따라잡기 계산용). nickname은 가정한 줄(예상 순위 계산)이면 null일 수 있다.
+ * 채운다(따라잡기 계산용). nickname·profileImage(사진 키)는 가정한 줄(예상 순위 계산)이면 null일 수 있다.
  */
 public record RankingEntry(
         long userId,
         String nickname,
+        String profileImage,
         double value,
         Instant achievedAt,
         boolean focusing,
@@ -28,7 +29,11 @@ public record RankingEntry(
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     public static RankingEntry of(long userId, String nickname, double value, Instant achievedAt) {
-        return new RankingEntry(userId, nickname, value, achievedAt, false, 0, 0);
+        return of(userId, nickname, null, value, achievedAt);
+    }
+
+    public static RankingEntry of(long userId, String nickname, String profileImage, double value, Instant achievedAt) {
+        return new RankingEntry(userId, nickname, profileImage, value, achievedAt, false, 0, 0);
     }
 
     /** 집중 중이면 from부터 to까지 흐른 초만큼 값을 올린다 — 캐시된 값을 요청 시각으로 맞춘다. */
@@ -37,7 +42,8 @@ public record RankingEntry(
         if (!focusing || seconds <= 0) {
             return this;
         }
-        return new RankingEntry(userId, nickname, value + seconds, to, true, focusSec + seconds, studySec + seconds);
+        return new RankingEntry(
+                userId, nickname, profileImage, value + seconds, to, true, focusSec + seconds, studySec + seconds);
     }
 
     /**
@@ -50,7 +56,14 @@ public record RankingEntry(
             return advanced;
         }
         return new RankingEntry(
-                userId, nickname, advanced.value, advanced.achievedAt, false, advanced.focusSec, advanced.studySec);
+                userId,
+                nickname,
+                profileImage,
+                advanced.value,
+                advanced.achievedAt,
+                false,
+                advanced.focusSec,
+                advanced.studySec);
     }
 
     /** 도달 시각의 KST 날짜 — 조각 종료는 반개구간의 끝이라 자정에 끝난 조각은 그 전날의 기록이다. */

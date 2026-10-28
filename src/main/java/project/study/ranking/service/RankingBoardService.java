@@ -22,6 +22,7 @@ import project.study.ranking.engine.RankedEntry;
 import project.study.ranking.engine.RankingEntry;
 import project.study.ranking.engine.StandingsProvider;
 import project.study.studysession.entity.TimeSlot;
+import project.study.user.image.ProfileImageUrls;
 
 /** 랭킹판 조회 (BY-828, ADR-0028) — 캐시된 순위표에 새로 읽은 내 줄을 끼워 응답을 조립한다. */
 @Service
@@ -31,6 +32,7 @@ public class RankingBoardService {
     private final StandingsProvider provider;
     private final BoardExtras extras;
     private final Clock clock;
+    private final ProfileImageUrls profileImageUrls;
 
     public RankingBoardResponse board(
             long userId, RankingBoardType type, RankingPeriod period, TimeSlot slot, int offset) {
@@ -85,7 +87,7 @@ public class RankingBoardService {
                 placement.myRank(), BoardValues.value(type, me.value()), me.focusing(), placement.topPercent());
     }
 
-    private static List<BoardEntry> around(
+    private List<BoardEntry> around(
             Placement placement, RateEligibility eligibility, long userId, RankingBoardType type) {
         if (type.tiedRanks()) {
             return List.of();
@@ -108,23 +110,28 @@ public class RankingBoardService {
         return type.tiedRanks() ? placement.tiedRankOf(1) : placement.size() + 1;
     }
 
-    private static List<BoardEntry> entries(List<RankedEntry> ranked, long userId, RankingBoardType type) {
+    private List<BoardEntry> entries(List<RankedEntry> ranked, long userId, RankingBoardType type) {
         return ranked.stream()
                 .map(row -> new BoardEntry(
                         row.rank(),
                         row.entry().nickname(),
+                        profileImageUrls.of(row.entry().profileImage()),
                         BoardValues.value(type, row.entry().value()),
                         row.entry().focusing(),
                         row.entry().userId() == userId))
                 .toList();
     }
 
-    private static BoardNeighbor neighbor(RankingEntry other, RankingEntry me, RankingBoardType type, boolean above) {
+    private BoardNeighbor neighbor(RankingEntry other, RankingEntry me, RankingBoardType type, boolean above) {
         if (other == null || me == null) {
             return null;
         }
         Long catchUp = above && type == RankingBoardType.FOCUS_RATE ? catchUpFocusSec(other, me) : null;
         return new BoardNeighbor(
-                other.nickname(), BoardValues.gap(type, other.value(), me.value()), other.focusing(), catchUp);
+                other.nickname(),
+                profileImageUrls.of(other.profileImage()),
+                BoardValues.gap(type, other.value(), me.value()),
+                other.focusing(),
+                catchUp);
     }
 }

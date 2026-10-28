@@ -32,20 +32,6 @@ class RankingCloseRepositoryTest extends RankingIntegrationTestBase {
     }
 
     @Test
-    void 마감_시각으로_세면_건너뛴_마감도_센다() {
-        Instant mondayNight = kst(10, 12, 4, 0);
-        repository.insertClose(
-                "TIME_SLOT:DAILY:NIGHT", LocalDate.of(2026, 10, 11), mondayNight, mondayNight.plusSeconds(65), false);
-        repository.insertClose(
-                "TIME_SLOT:WEEKLY:NIGHT", LocalDate.of(2026, 10, 5), mondayNight, mondayNight.plusSeconds(7200), true);
-
-        assertThat(repository.countClosedAt(List.of("TIME_SLOT:DAILY:NIGHT", "TIME_SLOT:WEEKLY:NIGHT"), mondayNight))
-                .isEqualTo(2);
-        assertThat(repository.countClosedAt(List.of("TIME_SLOT:DAILY:NIGHT"), mondayNight.minusSeconds(86_400)))
-                .isZero();
-    }
-
-    @Test
     void 같은_판_기간의_같은_순위는_하나만_기록한다() {
         long a = user("a");
         long b = user("b");

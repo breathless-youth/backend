@@ -18,25 +18,33 @@ class TimeSlotTest {
 
     @Test
     void 구간은_시작을_포함하고_끝을_포함하지_않는다() {
-        assertThat(TimeSlot.at(at(10, 4, 0))).isEqualTo(TimeSlot.DAWN);
-        assertThat(TimeSlot.at(at(10, 3, 59))).isEqualTo(TimeSlot.NIGHT);
-        assertThat(TimeSlot.at(at(10, 7, 0))).isEqualTo(TimeSlot.MORNING);
+        assertThat(TimeSlot.at(at(10, 0, 0))).isEqualTo(TimeSlot.NIGHT);
+        assertThat(TimeSlot.at(at(10, 5, 59))).isEqualTo(TimeSlot.NIGHT);
+        assertThat(TimeSlot.at(at(10, 6, 0))).isEqualTo(TimeSlot.MORNING);
         assertThat(TimeSlot.at(at(10, 12, 0))).isEqualTo(TimeSlot.AFTERNOON);
         assertThat(TimeSlot.at(at(10, 18, 0))).isEqualTo(TimeSlot.EVENING);
-        assertThat(TimeSlot.at(at(10, 22, 0))).isEqualTo(TimeSlot.NIGHT);
+        assertThat(TimeSlot.at(at(10, 23, 59))).isEqualTo(TimeSlot.EVENING);
     }
 
     @Test
-    void 자정_뒤_4시_전은_전날_심야다() {
-        assertThat(TimeSlot.slotDateOf(at(11, 3, 59))).isEqualTo(LocalDate.of(2026, 10, 10));
-        assertThat(TimeSlot.slotDateOf(at(11, 4, 0))).isEqualTo(LocalDate.of(2026, 10, 11));
-        assertThat(TimeSlot.slotDateOf(at(10, 23, 0))).isEqualTo(LocalDate.of(2026, 10, 10));
+    void 귀속_날짜는_KST_달력_날짜다() {
+        assertThat(TimeSlot.slotDateOf(at(11, 0, 0))).isEqualTo(LocalDate.of(2026, 10, 11));
+        assertThat(TimeSlot.slotDateOf(at(10, 23, 59))).isEqualTo(LocalDate.of(2026, 10, 10));
     }
 
     @Test
-    void 다음_경계는_밤_10시_뒤면_다음날_4시다() {
-        assertThat(TimeSlot.nextBoundary(at(10, 23, 0))).isEqualTo(at(11, 4, 0));
+    void 다음_경계는_6시간_단위이고_18시_뒤면_다음날_0시다() {
+        assertThat(TimeSlot.nextBoundary(at(10, 0, 0))).isEqualTo(at(10, 6, 0));
         assertThat(TimeSlot.nextBoundary(at(10, 7, 0))).isEqualTo(at(10, 12, 0));
-        assertThat(TimeSlot.nextBoundary(at(10, 0, 0))).isEqualTo(at(10, 4, 0));
+        assertThat(TimeSlot.nextBoundary(at(10, 23, 0))).isEqualTo(at(11, 0, 0));
+    }
+
+    @Test
+    void 마감하는_구간은_넷이고_DAWN은_어느_시각에도_나오지_않는다() {
+        assertThat(TimeSlot.LIVE)
+                .containsExactly(TimeSlot.NIGHT, TimeSlot.MORNING, TimeSlot.AFTERNOON, TimeSlot.EVENING);
+        for (int hour = 0; hour < 24; hour++) {
+            assertThat(TimeSlot.at(at(10, hour, 0))).isNotEqualTo(TimeSlot.DAWN);
+        }
     }
 }

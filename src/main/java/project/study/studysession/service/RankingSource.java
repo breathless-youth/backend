@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.studysession.StudySessionThresholds;
 import project.study.studysession.dto.LivePiece;
 import project.study.studysession.dto.RankingDaysRow;
+import project.study.studysession.dto.RankingProfile;
 import project.study.studysession.dto.RankingStreakRow;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.entity.StudySession;
@@ -52,8 +53,8 @@ public class RankingSource {
         return queries.maxStreaks(today, userId);
     }
 
-    public Map<Long, String> activeNicknames(Collection<Long> userIds) {
-        return queries.activeNicknames(userIds);
+    public Map<Long, RankingProfile> activeProfiles(Collection<Long> userIds) {
+        return queries.activeProfiles(userIds);
     }
 
     public List<LivePiece> livePieces(Instant asOf) {

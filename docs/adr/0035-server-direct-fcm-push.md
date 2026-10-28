@@ -1,4 +1,4 @@
-# ADR-0033: 서버가 기기 토큰을 저장해 FCM으로 직접 보내고, 토큰은 UNREGISTERED일 때만 지운다
+# ADR-0035: 서버가 기기 토큰을 저장해 FCM으로 직접 보내고, 토큰은 UNREGISTERED일 때만 지운다
 
 - 상태: 승인
 - 날짜: 2026-10-27
@@ -17,7 +17,7 @@ ADR-0010이 "1:1 알림이 필요해지면 서버 저장 + Admin SDK"로 미뤄 
 1. **토큰은 V1의 `push_token`에 저장하고 사용자당 개수를 제한하지 않는다.** 소셜 로그인이 들어오면 한 계정이 여러 기기를 쓴다.
    등록(`PUT /api/push-tokens`)은 `ON CONFLICT (token)` 업서트 한 문장이다. 같은 토큰이면 갱신 시각만 바뀌고, 다른 사용자에게 붙어
    있던 토큰이면 지금 사용자로 옮긴다. 엔티티 저장은 값이 같으면 UPDATE를 건너뛰어 `updated_at`(마지막 사용 시각)이 멈춘다.
-2. **등록 때 OS 알림 권한 상태(`notifications_enabled`, V30)를 같이 받는다.** 서버는 iOS 기기 도착을 알 수 없어서, 클릭률의 분모를
+2. **등록 때 OS 알림 권한 상태(`notifications_enabled`, V32)를 같이 받는다.** 서버는 iOS 기기 도착을 알 수 없어서, 클릭률의 분모를
    "권한이 켜진 기기로 보낸 수"로 근사한다.
 3. **발송은 firebase-admin `sendEachForMulticast`로 500개씩 한다.** 서버 키 방식은 2024년에 종료돼 서비스 계정 OAuth만 된다.
    인증 갱신과 오류 코드 해석을 손으로 짜는 것보다 공식 SDK가 안전하다. Firestore·Storage가 딸려 오지만 빼면 `FirebaseOptions`의

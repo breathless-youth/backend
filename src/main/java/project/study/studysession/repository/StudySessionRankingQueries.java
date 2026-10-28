@@ -19,6 +19,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.studysession.dto.RankingDaysRow;
+import project.study.studysession.dto.RankingProfile;
 import project.study.studysession.dto.RankingStreakRow;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.entity.TimeSlot;
@@ -38,6 +39,7 @@ public class StudySessionRankingQueries {
     private static final RowMapper<RankingTotalRow> TOTAL_ROW = (rs, i) -> new RankingTotalRow(
             rs.getLong("user_id"),
             rs.getString("nickname"),
+            rs.getString("profile_image"),
             rs.getLong("focus_sec"),
             rs.getLong("study_sec"),
             instant(rs, "achieved_at"));
@@ -52,7 +54,7 @@ public class StudySessionRankingQueries {
     /** excludeSubmission을 주면 그 제출(submission_started_at)의 조각을 뺀다 — 세션 뒤 오른 랭킹의 "이번 세션 전" 값. */
     public List<RankingTotalRow> periodTotals(LocalDate from, LocalDate to, Long userId, Instant excludeSubmission) {
         String sql = """
-                SELECT s.user_id, u.nickname,
+                SELECT s.user_id, u.nickname, u.profile_image,
                        SUM(s.focus_sec) AS focus_sec,
                        COALESCE(SUM(s.study_sec), 0) AS study_sec,
                        COALESCE(MAX(s.ended_at), MAX(s.started_at)) AS achieved_at
@@ -62,7 +64,7 @@ public class StudySessionRankingQueries {
                   AND s.focus_sec >= :minFocusSec
                   AND s.source = 'MEASURED'
                   AND %s%s
-                GROUP BY s.user_id, u.nickname""".formatted(NOT_WITHDRAWN, userFilter(userId) + excludeFilter(excludeSubmission));
+                GROUP BY s.user_id, u.nickname, u.profile_image""".formatted(NOT_WITHDRAWN, userFilter(userId) + excludeFilter(excludeSubmission));
         return jdbc.sql(sql)
                 .paramSource(exclude(range(userId, from, to), excludeSubmission))
                 .query(TOTAL_ROW)
@@ -77,7 +79,7 @@ public class StudySessionRankingQueries {
     public List<RankingTotalRow> slotTotals(
             TimeSlot slot, LocalDate from, LocalDate to, Long userId, Instant excludeSubmission) {
         String sql = """
-                SELECT s.user_id, u.nickname,
+                SELECT s.user_id, u.nickname, u.profile_image,
                        SUM(sl.focus_sec) AS focus_sec,
                        0 AS study_sec,
                        COALESCE(MAX(s.ended_at), MAX(s.started_at)) AS achieved_at
@@ -89,7 +91,7 @@ public class StudySessionRankingQueries {
                   AND s.focus_sec >= :minFocusSec
                   AND s.source = 'MEASURED'
                   AND %s%s
-                GROUP BY s.user_id, u.nickname""".formatted(NOT_WITHDRAWN, userFilter(userId) + excludeFilter(excludeSubmission));
+                GROUP BY s.user_id, u.nickname, u.profile_image""".formatted(NOT_WITHDRAWN, userFilter(userId) + excludeFilter(excludeSubmission));
         return jdbc.sql(sql)
                 .paramSource(exclude(range(userId, from, to).addValue("slot", slot.name()), excludeSubmission))
                 .query(TOTAL_ROW)
@@ -109,18 +111,22 @@ public class StudySessionRankingQueries {
                     WHERE s.focus_sec >= :minFocusSec AND s.source = 'MEASURED' AND s.stat_date <= :today%s
                     GROUP BY s.user_id, s.stat_date
                 )
-                SELECT d.user_id, u.nickname, COUNT(*) AS days,
+                SELECT d.user_id, u.nickname, u.profile_image, COUNT(*) AS days,
                        (ARRAY_AGG(d.first_done ORDER BY d.stat_date DESC))[1] AS achieved_at
                 FROM days d
                 JOIN users u ON u.id = d.user_id
                 WHERE %s
-                GROUP BY d.user_id, u.nickname""".formatted(userFilter(userId) + excludeFilter(excludeSubmission), NOT_WITHDRAWN);
+                GROUP BY d.user_id, u.nickname, u.profile_image""".formatted(userFilter(userId) + excludeFilter(excludeSubmission), NOT_WITHDRAWN);
         MapSqlParameterSource params =
                 params(userId).addValue("today", today).addValue("minFocusSec", MIN_LIST_FOCUS_SEC);
         return jdbc.sql(sql)
                 .paramSource(exclude(params, excludeSubmission))
                 .query((rs, i) -> new RankingDaysRow(
-                        rs.getLong("user_id"), rs.getString("nickname"), rs.getInt("days"), instant(rs, "achieved_at")))
+                        rs.getLong("user_id"),
+                        rs.getString("nickname"),
+                        rs.getString("profile_image"),
+                        rs.getInt("days"),
+                        instant(rs, "achieved_at")))
                 .list();
     }
 
@@ -152,7 +158,7 @@ public class StudySessionRankingQueries {
                     FROM islands
                     ORDER BY user_id, len DESC, end_date ASC
                 )
-                SELECT b.user_id, u.nickname, b.len AS days, b.start_date, b.end_date, r.first_done AS achieved_at
+                SELECT b.user_id, u.nickname, u.profile_image, b.len AS days, b.start_date, b.end_date, r.first_done AS achieved_at
                 FROM best b
                 JOIN runs r ON r.user_id = b.user_id AND r.stat_date = b.end_date
                 JOIN users u ON u.id = b.user_id
@@ -164,6 +170,7 @@ public class StudySessionRankingQueries {
                 .query((rs, i) -> new RankingStreakRow(
                         rs.getLong("user_id"),
                         rs.getString("nickname"),
+                        rs.getString("profile_image"),
                         rs.getInt("days"),
                         rs.getObject("start_date", LocalDate.class),
                         rs.getObject("end_date", LocalDate.class),
@@ -171,17 +178,18 @@ public class StudySessionRankingQueries {
                 .list();
     }
 
-    /** 진행 중 조각만 있는 사용자의 닉네임 — 탈퇴자와 닉네임을 아직 안 정한 사용자는 빠진다. */
-    public Map<Long, String> activeNicknames(Collection<Long> userIds) {
+    /** 진행 중 조각만 있는 사용자의 닉네임·사진 키 — 탈퇴자와 닉네임을 아직 안 정한 사용자는 빠진다. */
+    public Map<Long, RankingProfile> activeProfiles(Collection<Long> userIds) {
         if (userIds.isEmpty()) {
             return Map.of();
         }
-        String sql = "SELECT u.id, u.nickname FROM users u WHERE u.id IN (:ids) AND u.nickname IS NOT NULL AND "
-                + NOT_WITHDRAWN;
+        String sql = "SELECT u.id, u.nickname, u.profile_image FROM users u WHERE u.id IN (:ids) "
+                + "AND u.nickname IS NOT NULL AND " + NOT_WITHDRAWN;
         return jdbc
                 .sql(sql)
                 .paramSource(new MapSqlParameterSource("ids", userIds))
-                .query((rs, i) -> Map.entry(rs.getLong("id"), rs.getString("nickname")))
+                .query((rs, i) -> Map.entry(
+                        rs.getLong("id"), new RankingProfile(rs.getString("nickname"), rs.getString("profile_image"))))
                 .list()
                 .stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));

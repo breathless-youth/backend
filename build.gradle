@@ -43,10 +43,15 @@ dependencies {
 	implementation 'io.sentry:sentry-spring-boot-4:8.51.0'
 
 	// --- 푸시 ---
-	// 서버 직접 FCM 발송 (ADR-0033). Jackson 3(tools.jackson)와는 패키지가 달라 부딪히지 않는다.
+	// 서버 직접 FCM 발송 (ADR-0035). Jackson 3(tools.jackson)와는 패키지가 달라 부딪히지 않는다.
 	// 메시징만 쓰지만 Firestore·Cloud Storage를 빼면 FirebaseOptions가 기본으로 쓰는 jackson2 JsonFactory까지 빠져
 	// 초기화에서 NoClassDefFoundError가 난다 — 그래서 통째로 받는다.
 	implementation 'com.google.firebase:firebase-admin:9.11.0'
+
+	// --- 파일 저장 (S3) ---
+	// 프로필 사진 업로드 URL 발급·확인·삭제. Boot BOM이 AWS SDK를 관리하지 않아 SDK BOM으로 버전을 맞춘다
+	implementation platform('software.amazon.awssdk:bom:2.56.0')
+	implementation 'software.amazon.awssdk:s3'
 
 	// --- 데이터 / DB ---
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'

@@ -137,14 +137,14 @@ class ActiveSessionLivePiecesTest {
 
     @Test
     void 늘린_시간이_구간_경계를_넘으면_새_구간에_들어간다() {
-        // 06:43:00 시작, 06:59:40 보고(순공 1000초) → 07:00:20에 40초를 늘리면 오전에 20초
-        draft(userId, at(15, 6, 43, 0), at(15, 6, 59, 40), 1000, "[]");
+        // 05:43:00 시작, 05:59:40 보고(순공 1000초) → 06:00:20에 40초를 늘리면 아침에 20초
+        draft(userId, at(15, 5, 43, 0), at(15, 5, 59, 40), 1000, "[]");
 
-        assertThat(mine(at(15, 7, 0, 20), userId))
+        assertThat(mine(at(15, 6, 0, 20), userId))
                 .singleElement()
                 .satisfies(p -> assertThat(p.slots())
                         .containsExactlyInAnyOrder(
-                                new SessionSlot(TimeSlot.DAWN, LocalDate.of(2026, 9, 15), 1020),
+                                new SessionSlot(TimeSlot.NIGHT, LocalDate.of(2026, 9, 15), 1020),
                                 new SessionSlot(TimeSlot.MORNING, LocalDate.of(2026, 9, 15), 20)));
     }
 

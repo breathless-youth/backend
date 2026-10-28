@@ -16,7 +16,7 @@ import project.study.push.dto.PushTokenRequest;
 import project.study.push.service.PushTokenService;
 
 @Tag(name = "Push", description = """
-                서버 발송 푸시용 기기 토큰 (ADR-0033). 앱은 실행·토큰 갱신·사용자 변경 때마다 등록한다.
+                서버 발송 푸시용 기기 토큰 (ADR-0035). 앱은 실행·토큰 갱신·사용자 변경 때마다 등록한다.
 
                 구 앱 대응이 없는 새 경로라 `API-Version: 1`(기본버전)이고, 인증은 토큰이 필요하다 (ADR-0015).""")
 @RestController

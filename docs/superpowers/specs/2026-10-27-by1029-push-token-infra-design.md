@@ -29,7 +29,7 @@
 
 ## 3. 저장
 
-V1부터 있는 `push_token` 테이블을 쓰고, 알림 권한 컬럼 하나만 더한다(`V30__push_token_notifications_enabled.sql`).
+V1부터 있는 `push_token` 테이블을 쓰고, 알림 권한 컬럼 하나만 더한다(`V32__push_token_notifications_enabled.sql`).
 
 | 컬럼 | 쓰임 |
 |---|---|
@@ -123,7 +123,7 @@ app:
 
 ## 8. 문서
 
-- ADR-0033 "서버 직접 FCM 발송": 콘솔 캠페인(ADR-0010)과 나란히 쓰는 이유, 토큰 삭제 규칙(정리 잡을 두지 않는 이유), 데이터 계약(`link`·`type`, 나중의 `push_id`).
+- ADR-0035 "서버 직접 FCM 발송": 콘솔 캠페인(ADR-0010)과 나란히 쓰는 이유, 토큰 삭제 규칙(정리 잡을 두지 않는 이유), 데이터 계약(`link`·`type`, 나중의 `push_id`).
 - Swagger에 두 엔드포인트 설명. `docs/erd.dbml`의 `push_token`에 새 컬럼을 적는다.
 
 ## 9. 테스트

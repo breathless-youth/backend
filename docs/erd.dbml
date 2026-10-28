@@ -202,7 +202,7 @@ Table user_notification {
 Table push_token {
   id bigint [primary key, increment]
   user_id bigint [ref: > users.id, not null]
-  token varchar [not null]     // FCM 등록 토큰 (ADR-0033)
+  token varchar [not null]     // FCM 등록 토큰 (ADR-0035)
   platform varchar              // IOS, ANDROID
   notifications_enabled boolean [not null] // 마지막 등록 때 OS 알림 권한이 켜져 있었는지 (V30)
   created_at timestamptz
