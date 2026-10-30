@@ -21,7 +21,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import project.study.TestcontainersConfiguration;
 
 /**
- * 세션은 길이와 무관하게 저장되지만, 조회(순공시간 1분 미만 제외)와 스트릭(순공시간 10분 이상인 세션이
+ * 세션은 길이와 무관하게 저장되지만, 조회(순공시간 1분 미만 제외)와 스트릭(순공시간 5분 이상인 세션이
  * 그 날 하나라도 있어야 인정 — 세션 단위 기준, 하루 합계가 아니다)은 서로 다른 기준으로 걸러낸다.
  */
 @SpringBootTest
@@ -86,8 +86,8 @@ class StudySessionMinDurationApiTest {
     }
 
     @Test
-    void 순공시간_1분_이상_10분_미만_세션은_목록엔_잡히지만_스트릭엔_반영되지_않는다() {
-        assertThat(submitRequest(sessionStart, 599)).hasStatus(HttpStatus.CREATED);
+    void 순공시간_1분_이상_5분_미만_세션은_목록엔_잡히지만_스트릭엔_반영되지_않는다() {
+        assertThat(submitRequest(sessionStart, 299)).hasStatus(HttpStatus.CREATED);
 
         assertThat(mvc.get().uri("/api/stats").with(asUser(userId)).param("date", yesterday.toString()))
                 .hasStatusOk()
@@ -101,9 +101,9 @@ class StudySessionMinDurationApiTest {
     }
 
     @Test
-    void 순공시간_10분_이상_세션_하나만_있어도_그날_스트릭에_잡힌다() {
-        assertThat(submitRequest(sessionStart, 599)).hasStatus(HttpStatus.CREATED);
-        assertThat(submitRequest(sessionStart.plusSeconds(3600), 600)).hasStatus(HttpStatus.CREATED);
+    void 순공시간_5분_이상_세션_하나만_있어도_그날_스트릭에_잡힌다() {
+        assertThat(submitRequest(sessionStart, 299)).hasStatus(HttpStatus.CREATED);
+        assertThat(submitRequest(sessionStart.plusSeconds(3600), 300)).hasStatus(HttpStatus.CREATED);
 
         assertThat(mvc.get().uri("/api/stats/streak").with(asUser(userId)))
                 .hasStatusOk()
@@ -113,7 +113,7 @@ class StudySessionMinDurationApiTest {
 
     @Test
     void from_to_기간을_주면_스트릭_인정_기준을_만족한_날짜만_studiedDatesInRange에_담긴다() {
-        assertThat(submitRequest(sessionStart, 600)).hasStatus(HttpStatus.CREATED);
+        assertThat(submitRequest(sessionStart, 300)).hasStatus(HttpStatus.CREATED);
 
         assertThat(mvc.get()
                         .uri("/api/stats/streak")
