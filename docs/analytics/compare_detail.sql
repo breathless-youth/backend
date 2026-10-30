@@ -1,5 +1,5 @@
 -- ① 사람별 상세 — 최근 2주(KST, 오늘 포함) 한 번이라도 공부한 사람 한 줄씩
--- 핵심 = 2주 중 10분+ 세션 있는 날 6일 이상 또는 1주 중 3일 이상, 비교 = 나머지
+-- 핵심 = 2주 중 5분+ 세션 있는 날 6일 이상 또는 1주 중 3일 이상, 비교 = 나머지
 -- 기능 횟수 중 Amplitude 기반(앱 연 날·기록·랭킹·배경음·타임랩스·수동기록·간단 모드)은 어제까지만 적재돼 있다
 WITH params AS (
     SELECT (now() AT TIME ZONE 'Asia/Seoul')::date AS today,
@@ -16,14 +16,14 @@ sess AS (   -- 최근 2주 측정 세션, 화면과 같은 기준(순공 1분 �
       AND s.focus_sec >= 60
 ),
 days AS (
-    SELECT user_id, stat_date, MAX(focus_sec) >= 600 AS has_10min   -- 스트릭 기준
+    SELECT user_id, stat_date, MAX(focus_sec) >= 300 AS has_5min   -- 스트릭 기준
     FROM sess
     GROUP BY user_id, stat_date
 ),
 study AS (
     SELECT d.user_id,
-           COUNT(*) FILTER (WHERE d.has_10min)                                AS days_10min_2w,
-           COUNT(*) FILTER (WHERE d.has_10min AND d.stat_date >= p.today - 6) AS days_10min_1w,
+           COUNT(*) FILTER (WHERE d.has_5min)                                AS days_5min_2w,
+           COUNT(*) FILTER (WHERE d.has_5min AND d.stat_date >= p.today - 6) AS days_5min_1w,
            COUNT(*)                                                           AS study_days_2w
     FROM days d
     CROSS JOIN params p
@@ -70,12 +70,12 @@ room AS (   -- 그룹(소셜 방) 참여
     GROUP BY rp.user_id
 ),
 detail AS (
-    SELECT CASE WHEN st.days_10min_2w >= 6 OR st.days_10min_1w >= 3 THEN '핵심' ELSE '비교' END AS grp,
+    SELECT CASE WHEN st.days_5min_2w >= 6 OR st.days_5min_1w >= 3 THEN '핵심' ELSE '비교' END AS grp,
            u.id                                          AS user_id,
            u.nickname,
            (u.created_at AT TIME ZONE 'Asia/Seoul')::date AS signup_date,
-           st.days_10min_2w,
-           st.days_10min_1w,
+           st.days_5min_2w,
+           st.days_5min_1w,
            st.study_days_2w,
            COALESCE(am.app_open_days, 0)                 AS app_open_days,
            ROUND(h.focus_sec / 3600.0, 1)                AS focus_hours_2w,
@@ -116,8 +116,8 @@ SELECT grp                   AS "그룹",
        user_id,
        nickname              AS "닉네임",
        signup_date           AS "가입일",
-       days_10min_2w         AS "2주 10분+ 일수",
-       days_10min_1w         AS "1주 10분+ 일수",
+       days_5min_2w         AS "2주 5분+ 일수",
+       days_5min_1w         AS "1주 5분+ 일수",
        study_days_2w         AS "2주 공부일",
        app_open_days         AS "2주 앱 연 날",
        focus_hours_2w        AS "2주 순공(시간)",
@@ -138,4 +138,4 @@ SELECT grp                   AS "그룹",
        timelapse_shared      AS "타임랩스 공유",
        manual_adds           AS "수동기록 추가"
 FROM detail
-ORDER BY grp = '핵심' DESC, days_10min_2w DESC, focus_hours_2w DESC;
+ORDER BY grp = '핵심' DESC, days_5min_2w DESC, focus_hours_2w DESC;
