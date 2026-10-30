@@ -78,7 +78,7 @@ public class StudySessionStatsController {
     }
 
     @Operation(summary = "연속 공부일(스트릭) 조회", description = """
-                    통계 날짜(`statDate`) 기준으로 그 날 세션 중 하나라도 순공시간(`focusSec`)이 10분 이상이면 \
+                    통계 날짜(`statDate`) 기준으로 그 날 세션 중 하나라도 순공시간(`focusSec`)이 5분 이상이면 \
                     그날은 공부한 날로 친다 (하루 합계가 아니라 세션 단위 기준). 유저에 저장된 값이 아니라 세션 \
                     이력에서 매번 계산한다.
 
@@ -109,7 +109,7 @@ public class StudySessionStatsController {
     @Operation(summary = "누적 공부일 조회", description = """
                     가입 이후 공부한 날이 총 며칠인지 반환한다. 그날(KST) 순공시간(focusSec)이 1분 이상인 세션이 \
                     하나라도 있으면 공부한 날로 센다 — 일별 목록 조회에 세션이 보이는 날과 같은 기준이며, \
-                    스트릭 기준(10분)과는 다르다. 자정을 걸친 세션은 날짜별 조각으로 나뉘어 저장되며 각 조각의 순공시간이 \
+                    스트릭 기준(5분)과는 다르다. 자정을 걸친 세션은 날짜별 조각으로 나뉘어 저장되며 각 조각의 순공시간이 \
                     1분 이상일 때 그 날짜가 각각 인정된다. 오늘(KST)까지만 센다.
 
                     기록이 없거나 존재하지 않는 userId면 totalDays는 0이다 (다른 통계 조회와 같은 계약).""")
