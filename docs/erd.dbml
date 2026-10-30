@@ -117,6 +117,20 @@ Table study_session_subject_segment {
   }
 }
 
+Table daily_completion {
+  id bigint [primary key, increment]
+  user_id bigint [ref: > users.id, not null]
+  target_type varchar(16) [not null]   // SUBJECT (할 일 반복이 생기면 TASK) — 대상 표가 달라 target_id에 FK 없음 (ADR-0038)
+  target_id bigint [not null]          // SUBJECT면 study_subject.id
+  completed_date date [not null]       // 홈 날짜 줄의 달력 날짜 — 하루는 05시~다음 날 05시(KST)
+  completed_at timestamptz [not null]
+  Note: '"무엇을 어느 날짜에 완료했다" 한 건 (BY-1053, ADR-0038). 완료 취소는 행 삭제'
+
+  indexes {
+    (user_id, completed_date, target_type, target_id) [unique, name: 'uq_daily_completion']
+  }
+}
+
 Table study_session_task_done {
   session_id bigint [ref: > study_session.id, not null]   // ON DELETE CASCADE — 세션과 함께 사라진다
   task_id bigint [ref: > study_task.id, not null]         // 지운 할 일의 기록도 남는다(CASCADE 없음)
