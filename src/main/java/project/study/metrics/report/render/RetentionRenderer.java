@@ -16,7 +16,7 @@ public final class RetentionRenderer {
     public static SlackMessage render(RetentionSection section) {
         Builder out = SlackMessage.builder("📈 다시 와서 공부한 비율")
                 .item("기준")
-                .sub("공부 = 그날 10분 이상 공부한 날")
+                .sub("공부 = 그날 5분 이상 공부한 날")
                 .sub("구간이 다 끝난 최근 28일치 가입자만 셈");
         for (RetentionRow row : section.rows()) {
             out.item(label(row.window()) + " = ", bold(Fmt.percent(row.current())), Fmt.fraction(row.current()));

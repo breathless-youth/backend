@@ -139,34 +139,34 @@ class InterviewGroupServiceTest {
 
     @Test
     void 최근_168시간_완료_세션이_3건이면_3번이다() {
-        session(hoursAgo(1), 600, false);
-        session(hoursAgo(2), 600, false);
-        session(hoursAgo(3), 600, false);
+        session(hoursAgo(1), 300, false);
+        session(hoursAgo(2), 300, false);
+        session(hoursAgo(3), 300, false);
 
         assertThat(service.judge(userId)).isEqualTo(InterviewGroup.G3_ACTIVE);
     }
 
     @Test
     void 완료_세션이_2건이면_3번이_아니다() {
-        session(hoursAgo(1), 600, false);
-        session(hoursAgo(2), 600, false);
+        session(hoursAgo(1), 300, false);
+        session(hoursAgo(2), 300, false);
 
         assertThat(service.judge(userId)).isEqualTo(InterviewGroup.NONE);
     }
 
     @Test
-    void 순공_599초_세션은_완료로_세지_않는다() {
-        session(hoursAgo(1), 600, false);
-        session(hoursAgo(2), 600, false);
-        session(hoursAgo(3), 599, false);
+    void 순공_299초_세션은_완료로_세지_않는다() {
+        session(hoursAgo(1), 300, false);
+        session(hoursAgo(2), 300, false);
+        session(hoursAgo(3), 299, false);
 
         assertThat(service.judge(userId)).isEqualTo(InterviewGroup.NONE);
     }
 
     @Test
     void 자동_종료_세션은_완료로_세지_않는다() {
-        session(hoursAgo(1), 600, false);
-        session(hoursAgo(2), 600, false);
+        session(hoursAgo(1), 300, false);
+        session(hoursAgo(2), 300, false);
         session(hoursAgo(3), 3600, true);
 
         assertThat(service.judge(userId)).isEqualTo(InterviewGroup.NONE);
@@ -174,33 +174,33 @@ class InterviewGroupServiceTest {
 
     @Test
     void 정확히_168시간_전에_끝난_세션은_최근_완료에_들지_않는다() {
-        session(hoursAgo(1), 600, false);
-        session(hoursAgo(2), 600, false);
-        session(SINCE, 600, false);
+        session(hoursAgo(1), 300, false);
+        session(hoursAgo(2), 300, false);
+        session(SINCE, 300, false);
 
         assertThat(service.judge(userId)).isEqualTo(InterviewGroup.NONE);
     }
 
     @Test
     void 자정_분할_세션은_순공을_합쳐_1건으로_센다() {
-        // 두 조각 각각은 10분 미만이지만 합치면 10분이다
+        // 두 조각 각각은 5분 미만이지만 합치면 5분이다
         Instant root = hoursAgo(5);
         Instant midnight = hoursAgo(4);
-        fragment(root, root, midnight, 300, false);
-        fragment(root, midnight, hoursAgo(3), 300, false);
-        session(hoursAgo(1), 600, false);
-        session(hoursAgo(2), 600, false);
+        fragment(root, root, midnight, 150, false);
+        fragment(root, midnight, hoursAgo(3), 150, false);
+        session(hoursAgo(1), 300, false);
+        session(hoursAgo(2), 300, false);
 
         assertThat(service.judge(userId)).isEqualTo(InterviewGroup.G3_ACTIVE);
     }
 
     @Test
-    void 자정_분할_조각이_각각_10분이어도_2건이_아니다() {
+    void 자정_분할_조각이_각각_5분이어도_2건이_아니다() {
         Instant root = hoursAgo(5);
         Instant midnight = hoursAgo(4);
-        fragment(root, root, midnight, 600, false);
-        fragment(root, midnight, hoursAgo(3), 600, false);
-        session(hoursAgo(1), 600, false);
+        fragment(root, root, midnight, 300, false);
+        fragment(root, midnight, hoursAgo(3), 300, false);
+        session(hoursAgo(1), 300, false);
 
         assertThat(service.judge(userId)).isEqualTo(InterviewGroup.NONE);
     }
@@ -210,10 +210,10 @@ class InterviewGroupServiceTest {
         // 앞 조각은 168시간 전에 끝났지만 뒤 조각이 창 안에서 끝났다 — 묶음 전체가 최근 완료 1건이다
         Instant root = SINCE.minus(Duration.ofHours(2));
         Instant midnight = SINCE.minus(Duration.ofHours(1));
-        fragment(root, root, midnight, 300, false);
-        fragment(root, midnight, SINCE.plus(Duration.ofHours(1)), 300, false);
-        session(hoursAgo(1), 600, false);
-        session(hoursAgo(2), 600, false);
+        fragment(root, root, midnight, 150, false);
+        fragment(root, midnight, SINCE.plus(Duration.ofHours(1)), 150, false);
+        session(hoursAgo(1), 300, false);
+        session(hoursAgo(2), 300, false);
 
         assertThat(service.judge(userId)).isEqualTo(InterviewGroup.G3_ACTIVE);
     }

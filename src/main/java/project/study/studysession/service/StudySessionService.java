@@ -290,7 +290,7 @@ public class StudySessionService {
     /**
      * 연속 공부일(스트릭) 조회 — 유저에 상태로 저장하지 않고 세션 이력(statDate)에서 매번 계산한다.
      * 그 날 세션 중 하나라도 순공시간이
-     * {@value project.study.studysession.StudySessionThresholds#MIN_STREAK_FOCUS_SEC}초(10분) 이상이면 그 날은 스트릭에 잡힌다
+     * {@value project.study.studysession.StudySessionThresholds#MIN_STREAK_FOCUS_SEC}초(5분) 이상이면 그 날은 스트릭에 잡힌다
      * (하루 합계가 아니라 세션 단위 기준). 기록이 없거나 존재하지 않는 userId면 0/0 — 목록 조회와 같은 계약이다.
      * from/to를 함께 주면 그 기간 중 스트릭 인정 기준을 만족한 날짜 목록(studiedDatesInRange)도 계산한다 — 선택 파라미터.
      */

@@ -18,7 +18,7 @@ import project.study.TestcontainersConfiguration;
 import project.study.metrics.report.fact.SessionFact;
 import project.study.studysession.service.StudySessionMetricsService;
 
-/** 리포트 v2 세션 사실 조회 — 10분 미만 포함, 일시정지 수, 소셜(방 참여 겹침) 판정 (BY-904). */
+/** 리포트 v2 세션 사실 조회 — 5분 미만 포함, 일시정지 수, 소셜(방 참여 겹침) 판정 (BY-904). */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
 @Transactional
@@ -102,16 +102,16 @@ class SessionFactQueryIntegrationTest {
     }
 
     @Test
-    void 기간_안_세션을_10분_미만까지_시작_시각과_함께_돌려준다() {
+    void 기간_안_세션을_5분_미만까지_시작_시각과_함께_돌려준다() {
         long userId = insertUser();
-        insertSession(userId, DAY, at(1), at(2), 599);
+        insertSession(userId, DAY, at(1), at(2), 299);
         insertSession(userId, DAY, at(3), at(4), 1200);
         insertSession(userId, DAY.plusDays(1), at(25), at(26), 900);
 
         assertThat(factsOf(userId))
                 .extracting(SessionFact::statDate, SessionFact::startedAt, SessionFact::focusSec)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(DAY, at(1), 599),
+                        org.assertj.core.groups.Tuple.tuple(DAY, at(1), 299),
                         org.assertj.core.groups.Tuple.tuple(DAY, at(3), 1200));
     }
 

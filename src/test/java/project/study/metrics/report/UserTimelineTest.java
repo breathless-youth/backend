@@ -25,22 +25,22 @@ class UserTimelineTest {
     }
 
     @Test
-    void 공부한_날은_10분_이상_세션이_있는_날이고_하루_순공은_모든_세션의_합이다() {
+    void 공부한_날은_5분_이상_세션이_있는_날이고_하루_순공은_모든_세션의_합이다() {
         UserTimeline timeline =
-                user(1, D0).studyOnDay(0, 9).studyOnDay(0, 5).studyOnDay(1, 10).build();
+                user(1, D0).studyOnDay(0, 4).studyOnDay(0, 3).studyOnDay(1, 5).build();
 
         assertThat(timeline.studied(D0)).isFalse();
-        assertThat(timeline.focusSec(D0)).isEqualTo(14 * 60);
+        assertThat(timeline.focusSec(D0)).isEqualTo(7 * 60);
         assertThat(timeline.studied(D0.plusDays(1))).isTrue();
         assertThat(timeline.studyDays(D0, D0.plusDays(6))).isEqualTo(1);
     }
 
     @Test
-    void 자정_분할로_조각난_세션은_각_조각이_10분_미만이면_공부한_날이_아니다() {
-        // ADR-0012 결정 3 — 23:54~00:06 12분 세션이 6분·6분 두 조각이면 어느 날도 공부한 날이 아니다
+    void 자정_분할로_조각난_세션은_각_조각이_5분_미만이면_공부한_날이_아니다() {
+        // ADR-0012 결정 3 — 23:56~00:04 8분 세션이 4분·4분 두 조각이면 어느 날도 공부한 날이 아니다
         UserTimeline timeline = user(1, D0)
-                .sessionAt(at(D0, 23).plusSeconds(54 * 60), D0, 360)
-                .sessionAt(at(D0.plusDays(1), 0), D0.plusDays(1), 360)
+                .sessionAt(at(D0, 23).plusSeconds(56 * 60), D0, 240)
+                .sessionAt(at(D0.plusDays(1), 0), D0.plusDays(1), 240)
                 .build();
 
         assertThat(timeline.studyDays(D0, D0.plusDays(1))).isZero();

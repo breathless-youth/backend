@@ -137,12 +137,12 @@ class StudySessionRankingQueriesTest {
     }
 
     @Test
-    void 최장_연속은_가장_먼저_찍은_최장_구간이고_십분_미만_날은_끊는다() {
+    void 최장_연속은_가장_먼저_찍은_최장_구간이고_오분_미만_날은_끊는다() {
         long c = user();
         for (int day : new int[] {1, 2, 3, 5, 6, 7}) {
             session(c, LocalDate.of(2031, 3, day), 9, 15, 900);
         }
-        session(c, LocalDate.of(2031, 3, 4), 9, 15, 500);
+        session(c, LocalDate.of(2031, 3, 4), 9, 15, 299);
 
         assertThat(source.maxStreaks(TODAY, c))
                 .extracting(

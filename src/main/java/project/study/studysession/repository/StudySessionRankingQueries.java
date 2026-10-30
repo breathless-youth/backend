@@ -27,7 +27,7 @@ import project.study.studysession.entity.TimeSlot;
 /**
  * 랭킹 집계 전용 읽기 쿼리 (BY-828) — 전체 사용자의 기간·구간·누적 값을 사용자별 한 줄로 낸다.
  * userId를 주면 그 사용자 한 줄만 계산한다(내 값은 캐시와 상관없이 매번 새로 읽는다). 탈퇴(DELETE) 사용자는 뺀다.
- * 기준은 다른 화면과 같다 — 순공 1분 미만 조각 제외(ADR-0009), 연속 일수는 세션 10분 기준.
+ * 기준은 다른 화면과 같다 — 순공 1분 미만 조각 제외(ADR-0009), 연속 일수는 세션 5분 기준.
  * 측정한 세션만 센다 — 수동 기록은 개인 기록에만 더한다(ADR-0031).
  */
 @Repository
@@ -131,7 +131,7 @@ public class StudySessionRankingQueries {
     }
 
     /**
-     * 최장 연속 공부일 — 세션 10분 기준 날짜를 연속 구간으로 묶어(gaps-and-islands) 가장 긴 구간을, 같으면 먼저 끝난 구간을
+     * 최장 연속 공부일 — 세션 5분 기준 날짜를 연속 구간으로 묶어(gaps-and-islands) 가장 긴 구간을, 같으면 먼저 끝난 구간을
      * 고른다. 스트릭 API의 maxStreak와 같은 숫자다.
      */
     public List<RankingStreakRow> maxStreaks(LocalDate today, Long userId) {

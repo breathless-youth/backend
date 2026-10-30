@@ -21,7 +21,7 @@ import project.study.studysession.StudySessionThresholds;
 /**
  * 유저 한 명의 리포트 기간 사실(일별 순공·공부한 날·세션·활동·Amplitude 횟수·속성). 분석기는 이 객체에만 묻는다.
  *
- * <p>공부한 날은 세션 단위로 판정한다 — 자정 분할 조각은 각각 10분을 넘어야 한다(ADR-0012 결정 3, 앱 스트릭과 같은 잣대).
+ * <p>공부한 날은 세션 단위로 판정한다 — 자정 분할 조각은 각각 5분을 넘어야 한다(ADR-0012 결정 3, 앱 스트릭과 같은 잣대).
  */
 public final class UserTimeline {
 

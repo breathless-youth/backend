@@ -54,7 +54,7 @@ class RuleCatalogTest {
                 RuleCatalog.all().stream().collect(Collectors.toMap(SegmentRule::key, SegmentRule::name));
 
         assertThat(names)
-                .containsEntry("streak-2-10", "첫 주에 2일 연속 공부")
+                .containsEntry("streak-2-5", "첫 주에 2일 연속 공부")
                 .containsEntry("streak-3-60", "첫 주에 3일 연속 하루 순공 1시간 이상")
                 .containsEntry("streak-4-120", "첫 주에 4일 연속 하루 순공 2시간 이상")
                 .containsEntry("study-days-3", "첫 주에 공부한 날 3일 이상")
@@ -73,7 +73,7 @@ class RuleCatalogTest {
 
         assertThat(matches("streak-2-60", twoHourDays)).isTrue();
         assertThat(matches("streak-2-60", broken)).isFalse();
-        assertThat(matches("streak-2-10", broken)).isTrue();
+        assertThat(matches("streak-2-5", broken)).isTrue();
     }
 
     @Test
