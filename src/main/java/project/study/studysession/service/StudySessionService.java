@@ -1,5 +1,7 @@
 package project.study.studysession.service;
 
+import static project.study.studysession.StudySessionThresholds.MIN_LIST_FOCUS_SEC;
+import static project.study.studysession.StudySessionThresholds.MIN_STREAK_FOCUS_SEC;
 import static project.study.studysession.service.StudySessionSplitter.*;
 import static project.study.studysession.service.StudySessionSplitter.computeCuts;
 import static project.study.studysession.service.StudySessionValidator.*;
@@ -47,11 +49,6 @@ public class StudySessionService {
     static final String STARTED_AT_UNIQUE_CONSTRAINT = "uq_study_session_user_started_at";
     // V1이 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
     private static final String USER_FK_CONSTRAINT = "study_session_user_id_fkey";
-
-    /** 1분 — 조회에 보이는 최소 순공시간. */
-    public static final int MIN_LIST_FOCUS_SEC = 60;
-    /** 10분 — 스트릭 인정 최소 순공시간(세션 단위). */
-    public static final int MIN_STREAK_FOCUS_SEC = 600;
 
     private final StudySessionRepository studySessionRepository;
     private final ActiveStudySessionRepository activeStudySessionRepository;
