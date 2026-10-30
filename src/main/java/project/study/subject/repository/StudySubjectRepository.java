@@ -13,6 +13,9 @@ public interface StudySubjectRepository extends JpaRepository<StudySubject, Long
 
     Optional<StudySubject> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
 
+    // 날짜별 완료 표시용 — 지난 날짜 홈에는 지운 과목도 보여서 삭제 여부를 보지 않는다 (ADR-0038)
+    Optional<StudySubject> findByIdAndUserId(Long id, Long userId);
+
     // 과목을 만들 때 지운 과목을 본다 — 같은 이름이면 되살리고, 기록에 남아 있는 색은 피해서 고른다
     // 지운 과목용 인덱스는 두지 않았다 — 과목 테이블이 커져 생성이 느려지면 user_id 부분 인덱스를 추가한다
     List<StudySubject> findByUserIdAndDeletedAtIsNotNull(Long userId);
