@@ -11,7 +11,7 @@ class RetentionRendererTest {
         assertThat(RetentionRenderer.render(ReportSamples.retention()).text()).isEqualTo("""
                         📈 다시 와서 공부한 비율
                         • 기준
-                            • 공부 = 그날 10분 이상 공부한 날
+                            • 공부 = 그날 5분 이상 공부한 날
                             • 구간이 다 끝난 최근 28일치 가입자만 셈
                         • 가입 다음 날 = *10%* (27/268)
                             • 지난주 11% · 가입 9/14~10/11

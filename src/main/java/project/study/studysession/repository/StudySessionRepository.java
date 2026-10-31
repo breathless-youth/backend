@@ -71,7 +71,7 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             @Param("userId") Long userId, @Param("minFocusSec") int minFocusSec, @Param("today") LocalDate today);
 
     // 특정 기간 동안 세션 하나라도 focusSec이 minFocusSec 이상인 날짜 목록 (중복 없음, 오름차순).
-    // 일간 조회의 달력 표시(1분 기준)와 스트릭 기간 조회(10분 기준) 양쪽에서 임계값만 다르게 재사용한다
+    // 일간 조회의 달력 표시(1분 기준)와 스트릭 기간 조회(5분 기준) 양쪽에서 임계값만 다르게 재사용한다
     @Query("""
             select distinct s.statDate
             from StudySession s

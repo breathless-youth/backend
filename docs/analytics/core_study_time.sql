@@ -10,7 +10,7 @@ core AS (
           FROM study_session s
           CROSS JOIN params p
           WHERE s.source = 'MEASURED'
-            AND s.focus_sec >= 600
+            AND s.focus_sec >= 300
             AND s.stat_date BETWEEN p.today - 13 AND p.today) d
     CROSS JOIN params p
     JOIN users u ON u.id = d.user_id

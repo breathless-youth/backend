@@ -15,14 +15,14 @@ sess AS (   -- 최근 2주 측정 세션, 화면과 같은 기준(순공 1분 �
       AND s.focus_sec >= 60
 ),
 days AS (
-    SELECT user_id, stat_date, MAX(focus_sec) >= 600 AS has_10min   -- 스트릭 기준
+    SELECT user_id, stat_date, MAX(focus_sec) >= 300 AS has_5min   -- 스트릭 기준
     FROM sess
     GROUP BY user_id, stat_date
 ),
 study AS (
     SELECT d.user_id,
-           COUNT(*) FILTER (WHERE d.has_10min)                                AS days_10min_2w,
-           COUNT(*) FILTER (WHERE d.has_10min AND d.stat_date >= p.today - 6) AS days_10min_1w,
+           COUNT(*) FILTER (WHERE d.has_5min)                                AS days_5min_2w,
+           COUNT(*) FILTER (WHERE d.has_5min AND d.stat_date >= p.today - 6) AS days_5min_1w,
            COUNT(*)                                                           AS study_days_2w
     FROM days d
     CROSS JOIN params p
@@ -69,12 +69,12 @@ room AS (   -- 그룹(소셜 방) 참여
     GROUP BY rp.user_id
 ),
 detail AS (
-    SELECT CASE WHEN st.days_10min_2w >= 6 OR st.days_10min_1w >= 3 THEN '핵심' ELSE '비교' END AS grp,
+    SELECT CASE WHEN st.days_5min_2w >= 6 OR st.days_5min_1w >= 3 THEN '핵심' ELSE '비교' END AS grp,
            u.id                                          AS user_id,
            u.nickname,
            (u.created_at AT TIME ZONE 'Asia/Seoul')::date AS signup_date,
-           st.days_10min_2w,
-           st.days_10min_1w,
+           st.days_5min_2w,
+           st.days_5min_1w,
            st.study_days_2w,
            COALESCE(am.app_open_days, 0)                 AS app_open_days,
            ROUND(h.focus_sec / 3600.0, 1)                AS focus_hours_2w,

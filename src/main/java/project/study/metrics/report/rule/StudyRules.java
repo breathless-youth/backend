@@ -9,15 +9,16 @@ import static project.study.metrics.report.rule.SegmentRule.Period.SIGNUP_DAY;
 
 import java.util.ArrayList;
 import java.util.List;
+import project.study.studysession.StudySessionThresholds;
 
 /** 묶음 A(연속 공부) · B(공부한 날 수) · C(첫날) — 서버 세션으로 판정한다. */
 final class StudyRules {
 
+    private static final int STUDY_DAY_MINUTES = StudySessionThresholds.MIN_STREAK_FOCUS_SEC / 60;
     private static final int[] RUN_DAYS = {2, 3, 4};
-    private static final int[] RUN_MINUTES = {10, 30, 60, 120};
+    private static final int[] RUN_MINUTES = {STUDY_DAY_MINUTES, 30, 60, 120};
     private static final int[] STUDY_DAYS_AT_LEAST = {2, 3, 4, 5};
     private static final int[] FIRST_DAY_MINUTES = {30, 60};
-    private static final int STUDY_DAY_MINUTES = 10;
 
     private StudyRules() {}
 
@@ -31,7 +32,7 @@ final class StudyRules {
         return rules;
     }
 
-    // 하루 순공 10분은 "공부한 날" 정의와 같아 "N일 연속 공부"로 줄여 쓴다
+    // 하루 순공 하한이 "공부한 날" 기준과 같으면 "N일 연속 공부"로 줄여 쓴다
     private static SegmentRule streak(int days, int minutes) {
         String phrase = minutes == STUDY_DAY_MINUTES
                 ? "%d일 연속 공부".formatted(days)

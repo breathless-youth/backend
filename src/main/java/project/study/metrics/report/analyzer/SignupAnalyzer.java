@@ -24,7 +24,7 @@ import project.study.studysession.StudySessionThresholds;
 public final class SignupAnalyzer {
 
     /**
-     * 바로 공부 = 가입 시각부터 3시간 안에 시작한 세션 순공 합 10분 이상. "가입한 날 공부"로 세면 23시 가입자는 기회가 1시간이라
+     * 바로 공부 = 가입 시각부터 3시간 안에 시작한 세션 순공 합 5분 이상. "가입한 날 공부"로 세면 23시 가입자는 기회가 1시간이라
      * 시간대 비교가 기울고, 3시간 창은 어제 가입자도 리포트(10:00) 전에 모두 닫힌다.
      */
     static final Duration QUICK_WINDOW = Duration.ofHours(3);

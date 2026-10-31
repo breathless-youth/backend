@@ -1,5 +1,7 @@
 package project.study.studysession.service;
 
+import static project.study.studysession.StudySessionThresholds.MIN_LIST_FOCUS_SEC;
+import static project.study.studysession.StudySessionThresholds.MIN_STREAK_FOCUS_SEC;
 import static project.study.studysession.service.StudySessionSplitter.*;
 import static project.study.studysession.service.StudySessionSplitter.computeCuts;
 import static project.study.studysession.service.StudySessionValidator.*;
@@ -47,11 +49,6 @@ public class StudySessionService {
     static final String STARTED_AT_UNIQUE_CONSTRAINT = "uq_study_session_user_started_at";
     // V1이 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
     private static final String USER_FK_CONSTRAINT = "study_session_user_id_fkey";
-
-    /** 1분 — 조회에 보이는 최소 순공시간. */
-    public static final int MIN_LIST_FOCUS_SEC = 60;
-    /** 10분 — 스트릭 인정 최소 순공시간(세션 단위). */
-    public static final int MIN_STREAK_FOCUS_SEC = 600;
 
     private final StudySessionRepository studySessionRepository;
     private final ActiveStudySessionRepository activeStudySessionRepository;
@@ -293,7 +290,7 @@ public class StudySessionService {
     /**
      * 연속 공부일(스트릭) 조회 — 유저에 상태로 저장하지 않고 세션 이력(statDate)에서 매번 계산한다.
      * 그 날 세션 중 하나라도 순공시간이
-     * {@value project.study.studysession.StudySessionThresholds#MIN_STREAK_FOCUS_SEC}초(10분) 이상이면 그 날은 스트릭에 잡힌다
+     * {@value project.study.studysession.StudySessionThresholds#MIN_STREAK_FOCUS_SEC}초(5분) 이상이면 그 날은 스트릭에 잡힌다
      * (하루 합계가 아니라 세션 단위 기준). 기록이 없거나 존재하지 않는 userId면 0/0 — 목록 조회와 같은 계약이다.
      * from/to를 함께 주면 그 기간 중 스트릭 인정 기준을 만족한 날짜 목록(studiedDatesInRange)도 계산한다 — 선택 파라미터.
      */

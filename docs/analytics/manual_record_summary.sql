@@ -37,7 +37,7 @@ core AS (   -- 지금 핵심인지 — ①과 같은 기준
            COUNT(*) >= 6 OR COUNT(*) FILTER (WHERE d.stat_date >= p.today - 6) >= 3 AS is_core
     FROM (SELECT DISTINCT s.user_id, s.stat_date
           FROM study_session s CROSS JOIN params p
-          WHERE s.source = 'MEASURED' AND s.focus_sec >= 600
+          WHERE s.source = 'MEASURED' AND s.focus_sec >= 300
             AND s.stat_date BETWEEN p.today - 13 AND p.today) d
     CROSS JOIN params p
     GROUP BY d.user_id, p.today

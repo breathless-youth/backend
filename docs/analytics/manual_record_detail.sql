@@ -36,12 +36,12 @@ db_manual AS (   -- DB에 남아 있는 수동 기록(지운 것은 빠짐)
     WHERE s.source = 'MANUAL'
     GROUP BY s.user_id
 ),
-core AS (   -- 지금 핵심인지 — ①과 같은 기준(최근 2주 중 10분 세션 있는 날 6일+ 또는 최근 1주 3일+)
+core AS (   -- 지금 핵심인지 — ①과 같은 기준(최근 2주 중 5분 세션 있는 날 6일+ 또는 최근 1주 3일+)
     SELECT d.user_id,
            COUNT(*) >= 6 OR COUNT(*) FILTER (WHERE d.stat_date >= p.today - 6) >= 3 AS is_core
     FROM (SELECT DISTINCT s.user_id, s.stat_date
           FROM study_session s CROSS JOIN params p
-          WHERE s.source = 'MEASURED' AND s.focus_sec >= 600
+          WHERE s.source = 'MEASURED' AND s.focus_sec >= 300
             AND s.stat_date BETWEEN p.today - 13 AND p.today) d
     CROSS JOIN params p
     GROUP BY d.user_id, p.today
