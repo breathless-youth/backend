@@ -7,10 +7,13 @@ import static project.study.ranking.RankingBoardType.FOCUS_RATE;
 import static project.study.ranking.RankingBoardType.FOCUS_TIME;
 import static project.study.ranking.RankingBoardType.MAX_STREAK;
 import static project.study.ranking.RankingBoardType.TIME_SLOT;
+import static project.study.ranking.RankingBoardType.TOTAL_DAYS;
+import static project.study.ranking.RankingBoardType.TOTAL_TIME;
 import static project.study.ranking.RankingPeriod.DAILY;
 import static project.study.ranking.RankingPeriod.WEEKLY;
 
 import java.time.Instant;
+import java.time.ZonedDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -163,6 +166,48 @@ class StandingsCalculatorTest extends RankingIntegrationTestBase {
         assertThat(compute(new RankingBoard(MAX_STREAK, null, null), null))
                 .extracting(RankingEntry::value)
                 .containsExactly(3.0);
+    }
+
+    @Test
+    void 누적_일수의_보조_값은_누적_시간_판의_값이다() {
+        long a = user("a");
+        session(a, kst(10, 1, 9, 0), 30, 1000);
+        session(a, kst(10, 3, 9, 0), 30, 1500);
+        session(a, kst(10, 3, 14, 0), 1, 59);
+
+        double totalTime =
+                compute(new RankingBoard(TOTAL_TIME, null, null), a).getFirst().value();
+        assertThat(compute(new RankingBoard(TOTAL_DAYS, null, null), a))
+                .extracting(RankingEntry::value, RankingEntry::tiebreak)
+                .containsExactly(tuple(2.0, (long) totalTime));
+        assertThat(totalTime).isEqualTo(2500);
+    }
+
+    @Test
+    void 누적_일수의_보조_값은_2000년_이전_세션을_빼고_누적_시간_판의_값과_같다() {
+        long a = user("a");
+        session(a, ZonedDateTime.of(1999, 12, 31, 9, 0, 0, 0, KST).toInstant(), 30, 700);
+        session(a, kst(10, 3, 9, 0), 30, 1500);
+
+        double totalTime =
+                compute(new RankingBoard(TOTAL_TIME, null, null), a).getFirst().value();
+        assertThat(compute(new RankingBoard(TOTAL_DAYS, null, null), a))
+                .extracting(RankingEntry::value, RankingEntry::tiebreak)
+                .containsExactly(tuple(2.0, (long) totalTime));
+        assertThat(totalTime).isEqualTo(1500);
+    }
+
+    @Test
+    void 연속_공부_일수의_보조_값은_일분_기준_누적_일수다() {
+        long k = user("k");
+        for (int day : new int[] {1, 2, 5}) {
+            session(k, kst(10, day, 9, 0), 15, 900);
+        }
+        session(k, kst(10, 7, 9, 0), 3, 120); // 5분 미만 — 연속에는 안 들지만 누적 일수에는 든다
+
+        assertThat(compute(new RankingBoard(MAX_STREAK, null, null), null))
+                .extracting(RankingEntry::value, RankingEntry::tiebreak)
+                .containsExactly(tuple(2.0, 4L));
     }
 
     @Test

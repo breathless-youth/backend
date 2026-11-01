@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
@@ -21,6 +22,7 @@ import project.study.ranking.RankingCalendar;
 import project.study.ranking.RankingCalendar.Window;
 import project.study.ranking.RankingPeriod;
 import project.study.studysession.dto.LivePiece;
+import project.study.studysession.dto.RankingDaysRow;
 import project.study.studysession.dto.RankingProfile;
 import project.study.studysession.dto.RankingTotalRow;
 import project.study.studysession.entity.SessionSlot;
@@ -88,14 +90,28 @@ public class StandingsCalculator {
                                 r.userId(), r.nickname(), r.profileImage(), r.focusSec(), r.achievedAt()))
                         .toList();
             case TOTAL_DAYS ->
-                source.studyDays(window.end(), onlyUserId, excludeSubmission).stream()
-                        .map(r -> RankingEntry.of(r.userId(), r.nickname(), r.profileImage(), r.days(), r.achievedAt()))
+                source.studyDays(window.start(), window.end(), onlyUserId, excludeSubmission).stream()
+                        .map(r -> RankingEntry.of(
+                                r.userId(), r.nickname(), r.profileImage(), r.days(), r.focusSec(), r.achievedAt()))
                         .toList();
-            case MAX_STREAK ->
-                source.maxStreaks(window.end(), onlyUserId, excludeSubmission).stream()
-                        .map(r -> RankingEntry.of(r.userId(), r.nickname(), r.profileImage(), r.days(), r.achievedAt()))
-                        .toList();
+            case MAX_STREAK -> maxStreaks(window, onlyUserId, excludeSubmission);
         };
+    }
+
+    /** 같은 연속 일수면 누적 일수(1분 기준, 누적 일수 판에 보이는 값)가 많은 쪽이 앞이다 — 연속 일수의 5분 기준과 다르다. */
+    private List<RankingEntry> maxStreaks(Window window, Long onlyUserId, Instant excludeSubmission) {
+        Map<Long, Integer> studyDays =
+                source.studyDays(window.start(), window.end(), onlyUserId, excludeSubmission).stream()
+                        .collect(Collectors.toMap(RankingDaysRow::userId, RankingDaysRow::days));
+        return source.maxStreaks(window.end(), onlyUserId, excludeSubmission).stream()
+                .map(r -> RankingEntry.of(
+                        r.userId(),
+                        r.nickname(),
+                        r.profileImage(),
+                        r.days(),
+                        studyDays.getOrDefault(r.userId(), 0),
+                        r.achievedAt()))
+                .toList();
     }
 
     /** 집중률 판의 한 사용자 합계 — 참가 조건과 상관없이. 기간에 1분 이상 조각이 없으면 empty. */
@@ -255,7 +271,7 @@ public class StandingsCalculator {
         }
 
         private RankingEntry toEntry(long userId, double value) {
-            return new RankingEntry(userId, nickname, profileImage, value, achievedAt, focusing, focusSec, studySec);
+            return new RankingEntry(userId, nickname, profileImage, value, 0, achievedAt, focusing, focusSec, studySec);
         }
     }
 }

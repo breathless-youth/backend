@@ -74,12 +74,21 @@ class PlacementTest {
         assertThat(placement(3257, 1204).topPercent()).isEqualTo(37);
     }
 
-    /** 공동 순위 배치 — 값은 주어진 순서(내림차순), 같은 값은 앞 사람이 먼저 달성, myIndex 자리가 나다 */
-    private static Placement tied(int myIndex, double... values) {
-        List<RankingEntry> entries = IntStream.range(0, values.length)
+    /** 같은 값 묶음 배치 — 값은 주어진 순서(내림차순), 같은 값은 앞 사람이 먼저 달성, myIndex 자리가 나다 */
+    private static List<RankingEntry> dayEntries(double... values) {
+        return IntStream.range(0, values.length)
                 .mapToObj(i -> RankingEntry.of(i + 1, "u" + (i + 1), values[i], T0.plusSeconds(i)))
                 .toList();
-        return new Placement(entries, myIndex, true);
+    }
+
+    /** 공동 순위 배치(API v1의 일수 판) */
+    private static Placement tied(int myIndex, double... values) {
+        return new Placement(dayEntries(values), myIndex, true, true);
+    }
+
+    /** 순차 순위 배치(API v2의 일수 판) — 같은 값 묶음 기준은 그대로다 */
+    private static Placement sequential(int myIndex, double... values) {
+        return new Placement(dayEntries(values), myIndex, true, false);
     }
 
     @Test
@@ -128,6 +137,31 @@ class PlacementTest {
 
         assertThat(p.tiedRankOf(1)).isEqualTo(3);
         assertThat(p.tiedRankOf(6)).isEqualTo(1);
+    }
+
+    @Test
+    void 순차_순위면_같은_값이어도_자리대로_순위가_붙는다() {
+        Placement p = sequential(3, 5, 5, 4, 4, 4, 2);
+
+        assertThat(ranks(p.windowAround(3))).containsExactly(2, 3, 4, 5, 6);
+        assertThat(ranks(p.podium())).containsExactly(1, 2, 3);
+        assertThat(p.myRank()).isEqualTo(4);
+    }
+
+    @Test
+    void 순차_순위여도_상위_퍼센트는_같은_값_묶음의_첫_자리로_센다() {
+        Placement p = sequential(9, 10, 9, 8, 7, 1, 1, 1, 1, 1, 1);
+
+        assertThat(p.myRank()).isEqualTo(10);
+        assertThat(p.topPercent()).isEqualTo(50);
+    }
+
+    @Test
+    void 순차_순위여도_바로_위_아래는_값이_다른_가장_가까운_사람이다() {
+        Placement p = sequential(3, 5, 5, 4, 4, 4, 2);
+
+        assertThat(p.above().userId()).isEqualTo(2);
+        assertThat(p.below().userId()).isEqualTo(6);
     }
 
     @Test

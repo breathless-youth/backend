@@ -36,11 +36,17 @@ public class RankingBoardService {
 
     public RankingBoardResponse board(
             long userId, RankingBoardType type, RankingPeriod period, TimeSlot slot, int offset) {
+        return board(userId, type, period, slot, offset, false);
+    }
+
+    /** sharedRanks면(API v1) 일수 판을 같은 일수 묶음·공동 순위로 준다. 아니면 일수 판도 개인 단위·순차 순위다. */
+    public RankingBoardResponse board(
+            long userId, RankingBoardType type, RankingPeriod period, TimeSlot slot, int offset, boolean sharedRanks) {
         Instant now = clock.instant();
         RankingBoard board = RankingBoard.of(type, period, resolveSlot(type, slot, now), offset);
         Window window = RankingCalendar.window(board, now, offset);
         BoardView view = provider.view(board, window, userId, now);
-        Placement placement = view.placement();
+        Placement placement = view.placement().withSharedRanks(sharedRanks);
         RankingEntry me = placement.me();
         RateEligibility eligibility = extras.eligibility(board, window, view, userId, now);
         return new RankingBoardResponse(
@@ -50,7 +56,7 @@ public class RankingBoardService {
                 periodStart(board, window),
                 window.closesAt(),
                 now,
-                type.tiedRanks() ? List.of() : entries(placement.podium(), userId, type),
+                placement.sharedRanks() ? List.of() : entries(placement.podium(), userId, type),
                 myRank(placement, type),
                 around(placement, eligibility, userId, type),
                 neighbor(placement.above(), me, type, true),
@@ -58,9 +64,9 @@ public class RankingBoardService {
                 startNowRank(placement, type, offset),
                 eligibility,
                 extras.nextTier(board, placement, userId, now),
-                extras.streakCard(board, view.standings(), userId, now),
-                extras.aroundGroups(board, placement),
-                extras.podiumGroups(board, placement),
+                extras.streakCard(board, view.standings(), placement, userId, now),
+                extras.aroundGroups(placement),
+                extras.podiumGroups(placement),
                 extras.goalExamples(board, offset, placement, now));
     }
 
@@ -89,7 +95,7 @@ public class RankingBoardService {
 
     private List<BoardEntry> around(
             Placement placement, RateEligibility eligibility, long userId, RankingBoardType type) {
-        if (type.tiedRanks()) {
+        if (placement.sharedRanks()) {
             return List.of();
         }
         if (eligibility != null && !eligibility.eligible()) {
@@ -100,14 +106,14 @@ public class RankingBoardService {
 
     /**
      * 지금 기간에 참가하지 않았을 때만 — 지난 기간(offset≠0)에는 "지금 시작하면"이 성립하지 않고, 집중률 판은 eligibility가 맡는다.
-     * 일수 판은 지금 시작하면 1일이 되어 같은 1일끼리 공동 순위다.
+     * v1의 일수 판은 지금 시작하면 1일이 되어 같은 1일끼리 공동 순위다.
      */
     private static Integer startNowRank(Placement placement, RankingBoardType type, int offset) {
         boolean applicable = offset == 0 && type != RankingBoardType.FOCUS_RATE && !placement.present();
         if (!applicable) {
             return null;
         }
-        return type.tiedRanks() ? placement.tiedRankOf(1) : placement.size() + 1;
+        return placement.sharedRanks() ? placement.tiedRankOf(1) : placement.size() + 1;
     }
 
     private List<BoardEntry> entries(List<RankedEntry> ranked, long userId, RankingBoardType type) {

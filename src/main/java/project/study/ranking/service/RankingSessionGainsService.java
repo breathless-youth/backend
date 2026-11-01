@@ -96,10 +96,9 @@ public class RankingSessionGainsService {
         if (before == null) {
             return null;
         }
-        int beforeRank = view.standings()
-                .place(userId, before.advancedTo(asOf, now))
-                .withTies(board.type().tiedRanks())
-                .myRank();
+        // 일수 판도 버전과 상관없이 순차 순위로 비교한다 — 같은 일수 안에서 오른 것도 오른 것이다
+        int beforeRank =
+                view.standings().place(userId, before.advancedTo(asOf, now)).myRank();
         int afterRank = view.placement().myRank();
         return afterRank < beforeRank ? new Gain(beforeRank, afterRank, beforeRank - afterRank) : null;
     }
