@@ -39,7 +39,7 @@ class RankingSessionGainsApiTest extends RankingIntegrationTestBase {
                 .hasPathSatisfying("$.weekly.before", v -> assertThat(v).isEqualTo(3))
                 .hasPathSatisfying("$.weekly.after", v -> assertThat(v).isEqualTo(2))
                 .hasPathSatisfying("$.weekly.delta", v -> assertThat(v).isEqualTo(1))
-                .hasPathSatisfying("$.others.length()", v -> assertThat(v).isEqualTo(3))
+                .hasPathSatisfying("$.others.length()", v -> assertThat(v).isEqualTo(4))
                 .hasPathSatisfying("$.others[0].type", v -> assertThat(v).isEqualTo("FOCUS_TIME"))
                 .hasPathSatisfying("$.others[0].period", v -> assertThat(v).isEqualTo("MONTHLY"))
                 .hasPathSatisfying("$.others[1].type", v -> assertThat(v).isEqualTo("TIME_SLOT"))
@@ -48,7 +48,11 @@ class RankingSessionGainsApiTest extends RankingIntegrationTestBase {
                 .hasPathSatisfying("$.others[1].before", v -> assertThat(v).isEqualTo(3))
                 .hasPathSatisfying("$.others[1].after", v -> assertThat(v).isEqualTo(2))
                 .hasPathSatisfying("$.others[2].type", v -> assertThat(v).isEqualTo("TOTAL_TIME"))
-                .hasPathSatisfying("$.others[2].period", v -> assertThat(v).isNull());
+                .hasPathSatisfying("$.others[2].period", v -> assertThat(v).isNull())
+                // 누적 일수도 순차 순위라 같은 1일 중 순공이 가장 적던 3위에서 2일로 1위가 된다
+                .hasPathSatisfying("$.others[3].type", v -> assertThat(v).isEqualTo("TOTAL_DAYS"))
+                .hasPathSatisfying("$.others[3].before", v -> assertThat(v).isEqualTo(3))
+                .hasPathSatisfying("$.others[3].after", v -> assertThat(v).isEqualTo(1));
     }
 
     @Test
@@ -67,7 +71,7 @@ class RankingSessionGainsApiTest extends RankingIntegrationTestBase {
     }
 
     @Test
-    void 누적_일수는_공동_순위로_비교한다() {
+    void 누적_일수는_순차_순위로_비교하고_같은_일수면_순공이_많은_쪽이_앞이다() {
         for (String name : List.of("a", "b", "c")) {
             long id = user(name);
             for (int day = 1; day <= 3; day++) {
@@ -78,18 +82,36 @@ class RankingSessionGainsApiTest extends RankingIntegrationTestBase {
         session(d, kst(10, 1, 9, 0), 15, 900);
         session(d, kst(10, 2, 9, 0), 15, 900);
         long me = user("me");
-        session(me, kst(10, 4, 9, 0), 15, 900); // 이번 세션 전 2일 — d보다 늦게 달성했어도 공동 4위
+        session(me, kst(10, 4, 9, 0), 15, 900); // 이번 세션 전 2일·1800초 — d(2일·1800초)보다 늦게 달성해 5위
         session(me, kst(10, 5, 9, 0), 15, 900);
-        session(me, kst(10, 10, 9, 0), 15, 900); // 이번 제출 — 3일이 되어 a·b·c와 공동 1위(늦게 달성했어도)
+        session(me, kst(10, 10, 9, 0), 15, 900); // 이번 제출 — 3일·2700초로 a·b·c와 같지만 가장 늦게 달성해 4위
 
         assertThat(gains("?startedAt=2026-10-10T00:00:00Z", me))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying(
                         "$.others[?(@.type == 'TOTAL_DAYS')].before",
-                        v -> assertThat(v).asArray().containsExactly(4))
+                        v -> assertThat(v).asArray().containsExactly(5))
                 .hasPathSatisfying(
                         "$.others[?(@.type == 'TOTAL_DAYS')].after",
+                        v -> assertThat(v).asArray().containsExactly(4));
+    }
+
+    @Test
+    void 연속_일수가_같아도_누적_일수가_늘어_앞서면_오른_것이다() {
+        session(user("z"), kst(10, 1, 9, 0), 15, 900); // 연속 1일·누적 1일, 먼저 도달
+        long me = user("me");
+        session(me, kst(10, 5, 9, 0), 15, 900); // 이번 세션 전 연속 1일·누적 1일 — z보다 늦어 2위
+        session(me, kst(10, 8, 9, 0), 15, 900); // 이번 제출 — 연속은 그대로 1일, 누적 2일로 1위
+
+        assertThat(gains("?startedAt=2026-10-08T00:00:00Z", me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.others[?(@.type == 'MAX_STREAK')].before",
+                        v -> assertThat(v).asArray().containsExactly(2))
+                .hasPathSatisfying(
+                        "$.others[?(@.type == 'MAX_STREAK')].after",
                         v -> assertThat(v).asArray().containsExactly(1));
     }
 

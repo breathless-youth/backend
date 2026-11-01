@@ -4,20 +4,29 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 순위표에 나를 끼운 결과 (BY-828). myIndex가 -1이면 나는 참가자가 아니다. merged는 읽기 전용이다. tied면 공동 순위다 — 같은 값은
- * 같은 순위이고 다음 순위는 그 인원만큼 건너뛴다(1, 1, 3). 줄 순서는 둘 다 같은 정렬 키를 따른다.
+ * 순위표에 나를 끼운 결과 (BY-828). myIndex가 -1이면 나는 참가자가 아니다. merged는 읽기 전용이다. tied면 일수 판이다 — 상위 %와
+ * 바로 위·아래를 같은 값 묶음 기준으로 센다. sharedRanks(API v1의 일수 판)면 순위도 공동 순위다 — 같은 값은 같은 순위이고 다음
+ * 순위는 그 인원만큼 건너뛴다(1, 1, 3). 아니면 순위는 자리대로다(1, 2, 3). 줄 순서는 모두 같은 정렬 키를 따른다.
  */
-public record Placement(List<RankingEntry> merged, int myIndex, boolean tied) {
+public record Placement(List<RankingEntry> merged, int myIndex, boolean tied, boolean sharedRanks) {
 
     /** 내 주변 리스트 줄 수 — 앞 2 · 나 · 뒤 2. */
     public static final int WINDOW = 5;
 
+    public Placement {
+        sharedRanks &= tied;
+    }
+
     public Placement(List<RankingEntry> merged, int myIndex) {
-        this(merged, myIndex, false);
+        this(merged, myIndex, false, false);
     }
 
     public Placement withTies(boolean tied) {
-        return new Placement(merged, myIndex, tied);
+        return new Placement(merged, myIndex, tied, sharedRanks);
+    }
+
+    public Placement withSharedRanks(boolean sharedRanks) {
+        return new Placement(merged, myIndex, tied, sharedRanks);
     }
 
     public boolean present() {
@@ -39,7 +48,7 @@ public record Placement(List<RankingEntry> merged, int myIndex, boolean tied) {
 
     /** index 자리의 순위 — 공동 순위면 같은 값 묶음의 첫 자리 순위. */
     public int rankAt(int index) {
-        return (tied ? groupStart(index) : index) + 1;
+        return (sharedRanks ? groupStart(index) : index) + 1;
     }
 
     /** 이 값을 가진 줄이 들어오면 받을 공동 순위 — 그보다 값이 큰 사람 수 + 1. */
@@ -65,7 +74,7 @@ public record Placement(List<RankingEntry> merged, int myIndex, boolean tied) {
         return ranked(start, Math.min(size(), start + WINDOW));
     }
 
-    /** 바로 위 — 공동 순위면 나와 값이 다른 가장 가까운 사람(위 묶음의 마지막). */
+    /** 바로 위 — 일수 판이면 나와 값이 다른 가장 가까운 사람(위 묶음의 마지막). */
     public RankingEntry above() {
         if (!present()) {
             return null;
@@ -74,7 +83,7 @@ public record Placement(List<RankingEntry> merged, int myIndex, boolean tied) {
         return index >= 0 ? merged.get(index) : null;
     }
 
-    /** 바로 아래 — 공동 순위면 나와 값이 다른 가장 가까운 사람(아래 묶음의 첫 사람). */
+    /** 바로 아래 — 일수 판이면 나와 값이 다른 가장 가까운 사람(아래 묶음의 첫 사람). */
     public RankingEntry below() {
         if (!present()) {
             return null;
@@ -83,9 +92,10 @@ public record Placement(List<RankingEntry> merged, int myIndex, boolean tied) {
         return index < size() ? merged.get(index) : null;
     }
 
-    /** max(1, ceil(순위 × 100 ÷ 참가자 수)) — 정수로 올림한다. 공동 순위면 공동 순위로 센다. */
+    /** max(1, ceil(순위 × 100 ÷ 참가자 수)) — 정수로 올림한다. 일수 판은 순차 순위여도 같은 값 묶음의 첫 자리로 센다. */
     public int topPercent() {
-        return Math.max(1, (myRank() * 100 + size() - 1) / size());
+        int rank = tied && present() ? groupStart(myIndex) + 1 : myRank();
+        return Math.max(1, (rank * 100 + size() - 1) / size());
     }
 
     /** size칸 목록에서 center를 가운데 두는 다섯 칸 창의 시작 — 앞이 모자라면 뒤를, 뒤가 모자라면 앞을 더 채운다. */

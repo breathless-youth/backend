@@ -45,8 +45,8 @@ public class RankingSource {
         return queries.slotTotals(slot, from, to, userId);
     }
 
-    public List<RankingDaysRow> studyDays(LocalDate today, Long userId) {
-        return queries.studyDays(today, userId);
+    public List<RankingDaysRow> studyDays(LocalDate focusFrom, LocalDate today, Long userId) {
+        return queries.studyDays(focusFrom, today, userId);
     }
 
     public List<RankingStreakRow> maxStreaks(LocalDate today, Long userId) {
@@ -97,8 +97,9 @@ public class RankingSource {
         return queries.slotTotals(slot, from, to, userId, excludeSubmission);
     }
 
-    public List<RankingDaysRow> studyDays(LocalDate today, Long userId, Instant excludeSubmission) {
-        return queries.studyDays(today, userId, excludeSubmission);
+    public List<RankingDaysRow> studyDays(
+            LocalDate focusFrom, LocalDate today, Long userId, Instant excludeSubmission) {
+        return queries.studyDays(focusFrom, today, userId, excludeSubmission);
     }
 
     public List<RankingStreakRow> maxStreaks(LocalDate today, Long userId, Instant excludeSubmission) {

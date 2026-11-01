@@ -41,6 +41,13 @@ class StandingsCalculatorExcludeTest extends RankingIntegrationTestBase {
                 .orElse(0.0);
     }
 
+    private long tiebreakWithout(RankingBoard board, long userId, Instant excluded) {
+        return calculator
+                .compute(board, RankingCalendar.window(board, NOW, 0), NOW, source.livePieces(NOW), userId, excluded)
+                .getFirst()
+                .tiebreak();
+    }
+
     @Test
     void 제출을_빼면_그_제출의_조각만_빠진다() {
         long me = user("me");
@@ -62,6 +69,21 @@ class StandingsCalculatorExcludeTest extends RankingIntegrationTestBase {
                 .isEqualTo(2);
         assertThat(valueWithout(new RankingBoard(FOCUS_TIME, DAILY, null), me, last))
                 .isZero();
+    }
+
+    @Test
+    void 제출을_빼면_일수_판의_보조_값도_함께_빠진다() {
+        long me = user("me");
+        session(me, kst(10, 9, 9, 0), 60, 3000);
+        Instant last = kst(10, 10, 9, 0);
+        session(me, last, 60, 2000);
+
+        assertThat(tiebreakWithout(new RankingBoard(TOTAL_DAYS, null, null), me, last))
+                .isEqualTo(3000);
+        assertThat(tiebreakWithout(new RankingBoard(MAX_STREAK, null, null), me, last))
+                .isEqualTo(1);
+        assertThat(tiebreakWithout(new RankingBoard(MAX_STREAK, null, null), me, null))
+                .isEqualTo(2);
     }
 
     @Test
