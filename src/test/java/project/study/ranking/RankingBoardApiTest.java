@@ -1,13 +1,17 @@
 package project.study.ranking;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static project.study.support.AuthTestSupport.asUser;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MockMvcTester.MockMvcRequestBuilder;
 import project.study.config.ApiVersionConfig;
@@ -18,11 +22,78 @@ class RankingBoardApiTest extends RankingIntegrationTestBase {
     private MockMvcTester mvc;
 
     private MockMvcRequestBuilder request(String query, long userId) {
-        // 새 경로라 기본버전 1이다 — asUser의 기본 헤더(2)를 덮는다 (ADR-0015 갱신)
+        return request(query, userId, "2");
+    }
+
+    // 일수 판이 개인 단위가 되며 2가 생겼다. 1은 묶음·공동 순위 계약이다
+    private MockMvcRequestBuilder request(String query, long userId, String version) {
         return mvc.get()
                 .uri("/api/rankings/board?" + query)
-                .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
+                .header(ApiVersionConfig.HEADER, version)
                 .with(asUser(userId));
+    }
+
+    private void studyDays(long userId, int... days) {
+        for (int day : days) {
+            session(userId, kst(10, day, 9, 0), 15, 900);
+        }
+    }
+
+    @Test
+    void 버전_2의_일수_판은_개인_줄로_준다() {
+        studyDays(user("a"), 1, 2, 3);
+        studyDays(user("b"), 4, 5, 6);
+        long me = user("me");
+        studyDays(me, 7);
+
+        assertThat(request("type=TOTAL_DAYS", me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.podium[*].rank", v -> assertThat(v).asArray().containsExactly(1, 2, 3))
+                .hasPathSatisfying("$.around.length()", v -> assertThat(v).isEqualTo(3))
+                .hasPathSatisfying("$.me.rank", v -> assertThat(v).isEqualTo(3))
+                .hasPathSatisfying("$.podiumGroups", v -> assertThat(v).isNull())
+                .hasPathSatisfying("$.aroundGroups", v -> assertThat(v).isNull());
+    }
+
+    @Test
+    void 버전_1의_일수_판은_같은_일수_묶음과_공동_순위로_준다() {
+        studyDays(user("a"), 1, 2, 3);
+        studyDays(user("b"), 4, 5, 6);
+        long me = user("me");
+        studyDays(me, 7);
+
+        assertThat(request("type=TOTAL_DAYS", me, ApiVersionConfig.DEFAULT_VERSION))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.podiumGroups[*].rank", v -> assertThat(v).asArray().containsExactly(1, 3))
+                .hasPathSatisfying("$.me.rank", v -> assertThat(v).isEqualTo(3))
+                .hasPathSatisfying("$.podium", v -> assertThat(v).asArray().isEmpty())
+                .hasPathSatisfying("$.around", v -> assertThat(v).asArray().isEmpty());
+    }
+
+    @Test
+    void 버전_헤더가_없으면_버전_1의_묶음으로_준다() {
+        studyDays(user("a"), 1, 2, 3);
+        long me = user("me");
+        studyDays(me, 7);
+        // asUser는 헤더가 없으면 2를 싣는다 — 헤더 없는 요청은 인증만 직접 건다
+        var auth = authentication(
+                new UsernamePasswordAuthenticationToken(me, null, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+
+        assertThat(mvc.get().uri("/api/rankings/board?type=TOTAL_DAYS").with(auth))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.podiumGroups[*].rank", v -> assertThat(v).asArray().containsExactly(1, 2))
+                .hasPathSatisfying("$.podium", v -> assertThat(v).asArray().isEmpty());
+    }
+
+    @Test
+    void 지원하지_않는_버전은_400이다() {
+        assertThat(request("type=TOTAL_DAYS", user("me"), "3")).hasStatus(HttpStatus.BAD_REQUEST);
     }
 
     @Test
@@ -73,9 +144,7 @@ class RankingBoardApiTest extends RankingIntegrationTestBase {
 
     @Test
     void 토큰이_없으면_401이다() {
-        assertThat(mvc.get()
-                        .uri("/api/rankings/board?type=TOTAL_TIME")
-                        .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION))
+        assertThat(mvc.get().uri("/api/rankings/board?type=TOTAL_TIME").header(ApiVersionConfig.HEADER, "2"))
                 .hasStatus(HttpStatus.UNAUTHORIZED);
     }
 }

@@ -2,6 +2,7 @@ package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static project.study.ranking.RankingCalendar.ALL_TIME_START;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -131,9 +132,37 @@ class StudySessionRankingQueriesTest {
         session(a, LocalDate.of(2031, 3, 20), 14, 30, 1000);
         session(a, LocalDate.of(2031, 4, 2), 9, 30, 1000);
 
-        assertThat(source.studyDays(TODAY, a))
+        assertThat(source.studyDays(ALL_TIME_START, TODAY, a))
                 .extracting(RankingDaysRow::days, RankingDaysRow::achievedAt)
                 .containsExactly(tuple(2, at(LocalDate.of(2031, 3, 20), 9).plusSeconds(1800)));
+    }
+
+    @Test
+    void 누적_일수의_누적_순공은_오늘까지_일분_이상_측정_조각의_합이고_제출을_빼면_함께_빠진다() {
+        long a = user();
+        session(a, LocalDate.of(2031, 3, 3), 9, 30, 1000);
+        session(a, LocalDate.of(2031, 3, 4), 9, 1, 59);
+        session(a, LocalDate.of(2031, 3, 20), 9, 30, 1200);
+        session(a, LocalDate.of(2031, 3, 20), 14, 30, 1300);
+        session(a, LocalDate.of(2031, 4, 2), 9, 30, 1000);
+        jdbc.update(
+                "INSERT INTO study_session (user_id, stat_date, started_at, submission_started_at, ended_at,"
+                        + " study_sec, focus_sec, auto_finalized, source) VALUES (?, ?, ?, ?, ?, 1800, 1800, false, 'MANUAL')",
+                a,
+                LocalDate.of(2031, 3, 21),
+                at(LocalDate.of(2031, 3, 21), 9).atOffset(ZoneOffset.UTC),
+                at(LocalDate.of(2031, 3, 21), 9).atOffset(ZoneOffset.UTC),
+                at(LocalDate.of(2031, 3, 21), 10).atOffset(ZoneOffset.UTC));
+
+        assertThat(source.studyDays(ALL_TIME_START, TODAY, a))
+                .extracting(RankingDaysRow::days, RankingDaysRow::focusSec)
+                .containsExactly(tuple(2, 3500L));
+        assertThat(source.studyDays(ALL_TIME_START, TODAY, a, at(LocalDate.of(2031, 3, 20), 14)))
+                .extracting(RankingDaysRow::days, RankingDaysRow::focusSec)
+                .containsExactly(tuple(2, 2200L));
+        assertThat(source.periodTotals(ALL_TIME_START, TODAY, a))
+                .extracting(RankingTotalRow::focusSec)
+                .containsExactly(3500L);
     }
 
     @Test
@@ -187,7 +216,7 @@ class StudySessionRankingQueriesTest {
         assertThat(source.periodTotals(FROM, TO, a))
                 .extracting(RankingTotalRow::profileImage)
                 .containsExactly(key);
-        assertThat(source.studyDays(TODAY, a))
+        assertThat(source.studyDays(ALL_TIME_START, TODAY, a))
                 .extracting(RankingDaysRow::profileImage)
                 .containsExactly(key);
         assertThat(source.maxStreaks(TODAY, a))

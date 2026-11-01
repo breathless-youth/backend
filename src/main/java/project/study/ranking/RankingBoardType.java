@@ -27,7 +27,9 @@ public enum RankingBoardType {
         return periods.isEmpty();
     }
 
-    /** 공동 순위 — 같은 일수면 같은 순위이고 다음 순위는 그 인원만큼 건너뛴다(1, 1, 3). 일수 판만. */
+    /**
+     * 일수 판 — 상위 %와 바로 위·아래를 같은 일수 묶음으로 센다. API v1은 순위도 공동 순위다(같은 일수면 같은 순위, 1, 1, 3).
+     */
     public boolean tiedRanks() {
         return this == TOTAL_DAYS || this == MAX_STREAK;
     }

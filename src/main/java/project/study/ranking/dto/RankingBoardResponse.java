@@ -23,13 +23,13 @@ public record RankingBoardResponse(
         @Schema(description = "값 기준 시각 — focusing인 값은 이 시각부터 1초씩 올려 보간한다")
         Instant asOf,
 
-        @Schema(description = "1·2·3위 (참가자가 적으면 그만큼). 일수 판(누적 일수·연속 공부)은 [] — podiumGroups를 쓴다")
+        @Schema(description = "1·2·3위 (참가자가 적으면 그만큼). 같은 값이어도 순위는 자리대로(1, 2, 3)다")
         List<BoardEntry> podium,
 
-        @Schema(description = "내 순위 — 참가하지 않았으면 null. 일수 판의 rank·topPercent는 공동 순위(같은 일수면 같은 순위, 1·1·3)")
+        @Schema(description = "내 순위 — 참가하지 않았으면 null. 일수 판의 topPercent는 같은 일수의 첫 순위로 센다(같은 일수끼리 같은 %)")
         BoardMe me,
 
-        @Schema(description = "앞 2 · 나 · 뒤 2 — 앞이 모자라면 뒤를 더. 일수 판은 [] — aroundGroups를 쓴다")
+        @Schema(description = "앞 2 · 나 · 뒤 2 — 앞이 모자라면 뒤를 더")
         List<BoardEntry> around,
 
         @Schema(description = "바로 위 — 1위면 null. 일수 판은 나와 일수가 다른 가장 가까운 사람이라 gap이 0이 아니다")
@@ -38,9 +38,7 @@ public record RankingBoardResponse(
         @Schema(description = "바로 아래 — 꼴찌면 null. 일수 판은 나와 일수가 다른 가장 가까운 사람이라 gap이 0이 아니다")
         BoardNeighbor below,
 
-        @Schema(
-                description = "me가 null일 때만: 지금 시작하면 받을 순위(참가자 + 1) — 일수 판은 1일이 되는 공동 순위(2일 이상인 사람 수 + 1). "
-                        + "집중률 판·지난 기간(offset=-1)은 null")
+        @Schema(description = "me가 null일 때만: 지금 시작하면 받을 순위(참가자 + 1). 집중률 판·지난 기간(offset=-1)은 null")
         Integer startNowRank,
 
         @Schema(
@@ -53,10 +51,10 @@ public record RankingBoardResponse(
 
         @Schema(description = "연속 공부 일수 판만: 최고 기록과 지금 연속") StreakCard streak,
 
-        @Schema(description = "일수 판만: 같은 일수 묶음 앞 2 · 내 묶음 · 뒤 2. me가 null이면 []")
+        @Schema(description = "API 버전 1의 일수 판만: 같은 일수 묶음 앞 2 · 내 묶음 · 뒤 2. me가 null이면 []. 버전 2는 null")
         List<DayGroupRow> aroundGroups,
 
-        @Schema(description = "일수 판만: 일수 많은 순 묶음 3개(묶음이 적으면 그만큼). 내 참가와 상관없이 준다")
+        @Schema(description = "API 버전 1의 일수 판만: 일수 많은 순 묶음 3개(묶음이 적으면 그만큼). 내 참가와 상관없이 준다. 버전 2는 null")
         List<DayGroupRow> podiumGroups,
 
         @Schema(description = "순공 주간 판에 me가 null일 때만: 지난주 분포의 구간별 필요 순공")
@@ -89,9 +87,9 @@ public record RankingBoardResponse(
             Integer nextRankIfContinue) {}
 
     /**
-     * 일수 판 묶음 한 줄 — rank는 공동 순위, nickname은 대표(내가 있으면 나, 없으면 먼저 달성한 사람), profileImageUrl은
+     * 일수 판 묶음 한 줄(API 버전 1) — rank는 공동 순위, nickname은 대표(내가 있으면 나, 없으면 묶음의 첫 사람), profileImageUrl은
      * 그 대표의 사진 경로, othersCount는 묶음 인원 − 1, achievedDate는 대표가 그 일수에 도달한 날. myOrder는 내 묶음에서만
-     * 같은 일수 중 몇 번째로 달성했는지.
+     * 같은 일수 중 몇 번째인지(정렬 키 순서).
      */
     public record DayGroupRow(
             int days,

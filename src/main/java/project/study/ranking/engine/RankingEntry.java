@@ -8,21 +8,27 @@ import java.util.Comparator;
 
 /**
  * 순위표 한 줄 (BY-828). value는 정렬 값 — 시간 판은 초, 일수 판은 일, 집중률은 % 원값. focusSec·studySec는 집중률·순공 판에서만
- * 채운다(따라잡기 계산용). nickname·profileImage(사진 키)는 가정한 줄(예상 순위 계산)이면 null일 수 있다.
+ * 채운다(따라잡기 계산용). nickname·profileImage(사진 키)는 가정한 줄(예상 순위 계산)이면 null일 수 있다. tiebreak는 같은 값끼리
+ * 순서를 가르는 보조 값이다 — 누적 일수 판은 누적 순공(초), 연속 공부 판은 누적 일수, 다른 판은 0.
  */
 public record RankingEntry(
         long userId,
         String nickname,
         String profileImage,
         double value,
+        long tiebreak,
         Instant achievedAt,
         boolean focusing,
         long focusSec,
         long studySec) {
 
-    /** 값 내림차순 → 먼저 도달한 사람 → userId. 줄 순서는 늘 이 키이고, 일수 판의 공동 순위는 {@link Placement}가 매긴다. */
+    /**
+     * 값 내림차순 → 보조 값 내림차순 → 먼저 도달한 사람 → userId. 줄 순서는 늘 이 키이고, 일수 판의 공동 순위(API v1)는
+     * {@link Placement}가 매긴다.
+     */
     public static final Comparator<RankingEntry> ORDER = Comparator.comparingDouble(RankingEntry::value)
             .reversed()
+            .thenComparing(Comparator.comparingLong(RankingEntry::tiebreak).reversed())
             .thenComparing(RankingEntry::achievedAt)
             .thenComparingLong(RankingEntry::userId);
 
@@ -33,7 +39,12 @@ public record RankingEntry(
     }
 
     public static RankingEntry of(long userId, String nickname, String profileImage, double value, Instant achievedAt) {
-        return new RankingEntry(userId, nickname, profileImage, value, achievedAt, false, 0, 0);
+        return of(userId, nickname, profileImage, value, 0, achievedAt);
+    }
+
+    public static RankingEntry of(
+            long userId, String nickname, String profileImage, double value, long tiebreak, Instant achievedAt) {
+        return new RankingEntry(userId, nickname, profileImage, value, tiebreak, achievedAt, false, 0, 0);
     }
 
     /** 집중 중이면 from부터 to까지 흐른 초만큼 값을 올린다 — 캐시된 값을 요청 시각으로 맞춘다. */
@@ -43,7 +54,15 @@ public record RankingEntry(
             return this;
         }
         return new RankingEntry(
-                userId, nickname, profileImage, value + seconds, to, true, focusSec + seconds, studySec + seconds);
+                userId,
+                nickname,
+                profileImage,
+                value + seconds,
+                tiebreak,
+                to,
+                true,
+                focusSec + seconds,
+                studySec + seconds);
     }
 
     /**
@@ -60,6 +79,7 @@ public record RankingEntry(
                 nickname,
                 profileImage,
                 advanced.value,
+                tiebreak,
                 advanced.achievedAt,
                 false,
                 advanced.focusSec,

@@ -98,27 +98,34 @@ public class StudySessionRankingQueries {
                 .list();
     }
 
-    /** 누적 공부일 — 순공 1분 이상 조각이 있는 날 수(오늘까지). 누적 공부일 API와 같은 숫자다. */
-    public List<RankingDaysRow> studyDays(LocalDate today, Long userId) {
-        return studyDays(today, userId, null);
+    /**
+     * 누적 공부일 — 순공 1분 이상 조각이 있는 날 수(오늘까지). 누적 공부일 API와 같은 숫자다. 같은 조각 중 focusFrom 이후의 순공
+     * 합(누적 시간 판의 값)을 함께 낸다 — 같은 일수끼리 순서를 가른다.
+     */
+    public List<RankingDaysRow> studyDays(LocalDate focusFrom, LocalDate today, Long userId) {
+        return studyDays(focusFrom, today, userId, null);
     }
 
-    public List<RankingDaysRow> studyDays(LocalDate today, Long userId, Instant excludeSubmission) {
+    public List<RankingDaysRow> studyDays(
+            LocalDate focusFrom, LocalDate today, Long userId, Instant excludeSubmission) {
         String sql = """
                 WITH days AS (
-                    SELECT s.user_id, s.stat_date, COALESCE(MIN(s.ended_at), MIN(s.started_at)) AS first_done
+                    SELECT s.user_id, s.stat_date, COALESCE(MIN(s.ended_at), MIN(s.started_at)) AS first_done,
+                           SUM(s.focus_sec) FILTER (WHERE s.stat_date >= :focusFrom) AS focus_sec
                     FROM study_session s
                     WHERE s.focus_sec >= :minFocusSec AND s.source = 'MEASURED' AND s.stat_date <= :today%s
                     GROUP BY s.user_id, s.stat_date
                 )
-                SELECT d.user_id, u.nickname, u.profile_image, COUNT(*) AS days,
+                SELECT d.user_id, u.nickname, u.profile_image, COUNT(*) AS days, COALESCE(SUM(d.focus_sec), 0) AS focus_sec,
                        (ARRAY_AGG(d.first_done ORDER BY d.stat_date DESC))[1] AS achieved_at
                 FROM days d
                 JOIN users u ON u.id = d.user_id
                 WHERE %s
                 GROUP BY d.user_id, u.nickname, u.profile_image""".formatted(userFilter(userId) + excludeFilter(excludeSubmission), NOT_WITHDRAWN);
-        MapSqlParameterSource params =
-                params(userId).addValue("today", today).addValue("minFocusSec", MIN_LIST_FOCUS_SEC);
+        MapSqlParameterSource params = params(userId)
+                .addValue("focusFrom", focusFrom)
+                .addValue("today", today)
+                .addValue("minFocusSec", MIN_LIST_FOCUS_SEC);
         return jdbc.sql(sql)
                 .paramSource(exclude(params, excludeSubmission))
                 .query((rs, i) -> new RankingDaysRow(
@@ -126,6 +133,7 @@ public class StudySessionRankingQueries {
                         rs.getString("nickname"),
                         rs.getString("profile_image"),
                         rs.getInt("days"),
+                        rs.getLong("focus_sec"),
                         instant(rs, "achieved_at")))
                 .list();
     }

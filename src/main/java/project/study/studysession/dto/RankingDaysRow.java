@@ -2,5 +2,9 @@ package project.study.studysession.dto;
 
 import java.time.Instant;
 
-/** 누적 공부일 한 줄 (BY-828) — achievedAt은 마지막 공부일에 기준(1분)을 처음 넘긴 조각의 종료 시각. */
-public record RankingDaysRow(long userId, String nickname, String profileImage, int days, Instant achievedAt) {}
+/**
+ * 누적 공부일 한 줄 (BY-828) — achievedAt은 마지막 공부일에 기준(1분)을 처음 넘긴 조각의 종료 시각. focusSec는 그 조각들의 누적
+ * 순공으로 누적 시간 판의 값과 같다.
+ */
+public record RankingDaysRow(
+        long userId, String nickname, String profileImage, int days, long focusSec, Instant achievedAt) {}

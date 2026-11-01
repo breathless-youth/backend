@@ -1,5 +1,6 @@
 package project.study.ranking.controller;
 
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -36,15 +37,19 @@ public class RankingController {
                     시간대(TIME_SLOT) 일·주(slot 생략 시 지금 구간), 명예의 전당(TOTAL_TIME·TOTAL_DAYS·MAX_STREAK, period 없음)
                     - 기간은 KST — 일간 00시, 주간 월요일 00시, 월간 1일 00시 마감
                     - 값·차이 단위: 시간 판 초, 일수 판 일, 집중률 %p(소수 1자리)
-                    - 순위: 값이 같으면 먼저 달성한 사람이 앞. 단 일수 판(누적 일수·연속 일수)은 같은 일수면 공동 순위(1, 1, 3)이고 \
-                    above·below는 일수가 다른 가장 가까운 사람이다. 상위 % = max(1, ceil(순위 × 100 ÷ 참가자 수))
+                    - 순위: 자리대로(1, 2, 3). 값이 같으면 먼저 달성한 사람이 앞. 일수 판은 같은 일수면 누적 일수 판은 누적 순공, \
+                    연속 일수 판은 누적 일수가 많은 사람이 앞이고, 그것도 같으면 먼저 달성한 사람이 앞이다. 일수 판의 above·below는 \
+                    일수가 다른 가장 가까운 사람이고 상위 %는 같은 일수의 첫 순위로 센다(같은 일수끼리 %가 같다). \
+                    상위 % = max(1, ceil(순위 × 100 ÷ 참가자 수))
                     - 실시간: 순공·집중률·시간대는 진행 중 세션을 포함한다(집중률 판은 focusing이 항상 false). \
                     focusing=true인 값은 asOf부터 1초씩 올려 보간하고, 마감된 지난 기간엔 focusing이 없다. 15초 폴링 권장
                     - 판별 추가 필드: 집중률 eligibility·above.catchUpFocusSec, 누적 nextTier, 연속 일수 streak, \
-                    일수 판 podiumGroups·aroundGroups(podium·around 대신), 순공 주간에 기록이 없으면 goalExamples. 해당하지 않으면 null
-                    - offset=-1은 직전 기간의 최종 결과(기간 판만). 없는 조합은 400""")
+                    순공 주간에 기록이 없으면 goalExamples. 해당하지 않으면 null. podiumGroups·aroundGroups는 버전 1 전용이라 늘 null
+                    - offset=-1은 직전 기간의 최종 결과(기간 판만). 없는 조합은 400
+                    - 버전 1(헤더 없음·1)은 일수 판을 같은 일수 묶음(podiumGroups·aroundGroups)과 공동 순위(1, 1, 3)로 준다. 문서에는 \
+                    싣지 않는다""")
     @ApiResponse(responseCode = "200", description = "조회 성공")
-    @GetMapping(value = "/board", version = "1")
+    @GetMapping(value = "/board", version = "2")
     public RankingBoardResponse board(
             @AuthenticationPrincipal Long userId,
             @Parameter(description = "종목", example = "FOCUS_TIME") @RequestParam RankingBoardType type,
@@ -61,10 +66,23 @@ public class RankingController {
         return rankingBoardService.board(userId, type, period, slot, offset);
     }
 
+    /** 버전 1 — 일수 판을 같은 일수 묶음·공동 순위로 준다. 일수 판 개인 단위 전환 전 앱용이라 문서에 싣지 않는다. */
+    @Hidden
+    @GetMapping(value = "/board", version = "1")
+    public RankingBoardResponse boardV1(
+            @AuthenticationPrincipal Long userId,
+            @RequestParam RankingBoardType type,
+            @RequestParam(required = false) RankingPeriod period,
+            @RequestParam(required = false) TimeSlot slot,
+            @RequestParam(defaultValue = "0") int offset) {
+        return rankingBoardService.board(userId, type, period, slot, offset, true);
+    }
+
     @Operation(summary = "세션 뒤 오른 랭킹", description = """
                     방금 제출한 세션으로 순위가 오른 판을 준다(공부 결과 화면 "랭킹이 올랐어요").
 
-                    - before: 이번 제출의 조각을 뺀 내 값, after: 지금 내 값 — 둘 다 지금의 같은 다른 사람들 사이에서 매긴 순위
+                    - before: 이번 제출의 조각을 뺀 내 값, after: 지금 내 값 — 둘 다 지금의 같은 다른 사람들 사이에서 매긴 순위. \
+                    일수 판도 자리대로 매긴 순위다(같은 일수 안에서 앞선 것도 오른 것으로 본다)
                     - 대상: 지금 기간의 순공 일·주·월, 집중률 주·월, 이 세션이 지난 시간대 일·주, 누적 시간·누적 일수·연속 일수
                     - 이번 세션 전에 순위가 없던 판(처음 순위가 생긴 판)과 오르지 않은 판은 빠진다
                     - startedAt은 제출한 세션의 시작 시각(자정 분할 조각 전부를 묶는 제출 시작). 없거나 내 세션이 아니면 404""")

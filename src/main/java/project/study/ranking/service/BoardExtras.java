@@ -67,13 +67,16 @@ class BoardExtras {
             return null;
         }
         RankingEntry cutoff = placement.merged().get(Tiers.cutoffRank(tier.getAsInt(), placement.size()) - 1);
-        // 공동 순위면 컷의 값과 같아지기만 해도 그 순위라 넘을 필요가 없다
+        // 일수 판은 상위 %를 같은 값 묶음의 첫 순위로 세므로 컷의 값과 같아지기만 해도 그 구간이라 넘을 필요가 없다
         long remaining = (long) (cutoff.value() - placement.me().value()) + (placement.tied() ? 0 : 1);
         return new NextTier(tier.getAsInt(), remaining, etaDays(type, userId, remaining, today(now)));
     }
 
-    /** 연속 공부 일수 카드 — 최고 기록과 지금 연속. 지금이 최고 기록이면 내일도 하면 받을 공동 순위를 붙인다. */
-    StreakCard streakCard(RankingBoard board, Standings standings, long userId, Instant now) {
+    /**
+     * 연속 공부 일수 카드 — 최고 기록과 지금 연속. 지금이 최고 기록이면 내일도 하면 받을 순위를 붙인다. 내일 공부하면 누적 일수도
+     * 하루 늘고, 순위 방식(공동·순차)은 지금 배치를 따른다.
+     */
+    StreakCard streakCard(RankingBoard board, Standings standings, Placement placement, long userId, Instant now) {
         if (board.type() != RankingBoardType.MAX_STREAK) {
             return null;
         }
@@ -82,12 +85,20 @@ class BoardExtras {
                 .map(row -> {
                     int current = source.currentStreak(userId);
                     boolean currentIsBest = current > 0 && current == row.days();
+                    long studyDays = placement.present() ? placement.me().tiebreak() : 0;
                     Integer nextRank = currentIsBest
                             ? standings
                                     .place(
                                             userId,
-                                            RankingEntry.of(userId, null, row.days() + 1, now.plus(Duration.ofDays(1))))
+                                            RankingEntry.of(
+                                                    userId,
+                                                    null,
+                                                    null,
+                                                    row.days() + 1,
+                                                    studyDays + 1,
+                                                    now.plus(Duration.ofDays(1))))
                                     .withTies(true)
+                                    .withSharedRanks(placement.sharedRanks())
                                     .myRank()
                             : null;
                     return new StreakCard(row.days(), row.startDate(), row.endDate(), current, currentIsBest, nextRank);
@@ -95,9 +106,9 @@ class BoardExtras {
                 .orElse(null);
     }
 
-    /** 일수 판의 같은 일수 묶음 앞 2 · 내 묶음 · 뒤 2 — 내 묶음은 내 이름과 같은 일수 중 몇 번째인지. */
-    List<DayGroupRow> aroundGroups(RankingBoard board, Placement placement) {
-        if (!board.type().tiedRanks()) {
+    /** v1 일수 판의 같은 일수 묶음 앞 2 · 내 묶음 · 뒤 2 — 내 묶음은 내 이름과 같은 일수 중 몇 번째인지. */
+    List<DayGroupRow> aroundGroups(Placement placement) {
+        if (!placement.sharedRanks()) {
             return null;
         }
         if (!placement.present()) {
@@ -143,7 +154,8 @@ class BoardExtras {
         // 나를 끼운 배치라 상위 %의 분모는 나를 포함한 참가자 수다 — 참가했을 때의 me.topPercent와 같은 식
         Placement expected = standings.place(
                 userId,
-                new RankingEntry(userId, null, null, totals.rate(), now, false, totals.focusSec(), totals.studySec()));
+                new RankingEntry(
+                        userId, null, null, totals.rate(), 0, now, false, totals.focusSec(), totals.studySec()));
         return new RateEligibility(false, totals.focusSec(), required, rate, expected.myRank(), expected.topPercent());
     }
 
@@ -158,9 +170,9 @@ class BoardExtras {
         return perDay <= 0 ? null : (int) Math.ceil(remaining / perDay);
     }
 
-    /** 일수 판의 시상대 — 일수 많은 순 묶음 3개. 내가 없어도 준다. */
-    List<DayGroupRow> podiumGroups(RankingBoard board, Placement placement) {
-        if (!board.type().tiedRanks()) {
+    /** v1 일수 판의 시상대 — 일수 많은 순 묶음 3개. 내가 없어도 준다. */
+    List<DayGroupRow> podiumGroups(Placement placement) {
+        if (!placement.sharedRanks()) {
             return null;
         }
         List<DayGroup> groups = DayGroup.of(placement.merged());
@@ -169,7 +181,7 @@ class BoardExtras {
                 .toList();
     }
 
-    /** 묶음 순위는 공동 순위(첫 자리 + 1). 대표는 내가 있으면 나, 없으면 먼저 달성한 사람. */
+    /** 묶음 순위는 공동 순위(첫 자리 + 1). 대표는 내가 있으면 나, 없으면 묶음의 첫 사람(정렬 키 순). */
     private DayGroupRow toRow(DayGroup group, Placement placement) {
         if (!group.contains(placement.myIndex())) {
             RankingEntry head = placement.merged().get(group.startIndex());
