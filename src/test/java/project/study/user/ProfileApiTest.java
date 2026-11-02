@@ -182,6 +182,25 @@ class ProfileApiTest {
     }
 
     @Test
+    void 카테고리를_내신과_대학_시험으로_바꿀_수_있다() {
+        long userId = registerUser();
+
+        for (String category : new String[] {"SCHOOL_EXAM", "UNIVERSITY_EXAM"}) {
+            assertThat(mvc.patch()
+                            .uri("/api/users/me/profile")
+                            .with(asUser(userId))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"category\": \"" + category + "\"}"))
+                    .as("category=%s", category)
+                    .hasStatusOk();
+            assertThat(mvc.get().uri("/api/users/me/profile").with(asUser(userId)))
+                    .hasStatusOk()
+                    .bodyJson()
+                    .hasPathSatisfying("$.category", v -> assertThat(v).isEqualTo(category));
+        }
+    }
+
+    @Test
     void 존재하지_않는_유저의_프로필_조회는_404다() {
         assertThat(mvc.get().uri("/api/users/me/profile").with(asUser(999_999_999L)))
                 .hasStatus(HttpStatus.NOT_FOUND);

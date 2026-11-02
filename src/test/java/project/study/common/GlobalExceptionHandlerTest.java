@@ -69,12 +69,52 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void BadRequestException은_400으로_응답한다() {
-        assertThat(mvc.get().uri("/test/bad-request").exchange()).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(mvc.get().uri("/test/bad-request").exchange())
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("BAD_REQUEST"));
     }
 
     @Test
     void ConflictException은_409로_응답한다() {
-        assertThat(mvc.get().uri("/test/conflict").exchange()).hasStatus(HttpStatus.CONFLICT);
+        assertThat(mvc.get().uri("/test/conflict").exchange())
+                .hasStatus(HttpStatus.CONFLICT)
+                .bodyJson()
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("CONFLICT"));
+    }
+
+    @Test
+    void ConflictException의_코드를_그대로_내려준다() {
+        assertThat(mvc.get().uri("/test/conflict-coded").exchange())
+                .hasStatus(HttpStatus.CONFLICT)
+                .bodyJson()
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("GROUP_FULL"))
+                .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("자리가 없어요"));
+    }
+
+    @Test
+    void BadRequestException의_코드를_그대로_내려준다() {
+        assertThat(mvc.get().uri("/test/bad-request-coded").exchange())
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("CONTACT_NOT_ALLOWED"));
+    }
+
+    @Test
+    void ForbiddenException은_403과_코드로_응답한다() {
+        assertThat(mvc.get().uri("/test/forbidden").exchange())
+                .hasStatus(HttpStatus.FORBIDDEN)
+                .bodyJson()
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("NOT_GROUP_OWNER"));
+    }
+
+    @Test
+    void NotImplementedException은_501로_응답한다() {
+        assertThat(mvc.get().uri("/test/not-implemented").exchange())
+                .hasStatus(HttpStatus.NOT_IMPLEMENTED)
+                .bodyJson()
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("NOT_IMPLEMENTED"))
+                .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("아직 준비 중인 기능입니다"));
     }
 
     /**
@@ -126,6 +166,26 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/conflict")
         void conflict() {
             throw new ConflictException("이미 존재합니다");
+        }
+
+        @GetMapping("/test/conflict-coded")
+        void conflictCoded() {
+            throw new ConflictException(ErrorCode.GROUP_FULL, "자리가 없어요");
+        }
+
+        @GetMapping("/test/bad-request-coded")
+        void badRequestCoded() {
+            throw new BadRequestException(ErrorCode.CONTACT_NOT_ALLOWED, "연락처는 적을 수 없어요");
+        }
+
+        @GetMapping("/test/forbidden")
+        void forbidden() {
+            throw new ForbiddenException(ErrorCode.NOT_GROUP_OWNER, "그룹장만 할 수 있어요");
+        }
+
+        @GetMapping("/test/not-implemented")
+        void notImplemented() {
+            throw new NotImplementedException();
         }
 
         @GetMapping("/test/service-unavailable")

@@ -18,7 +18,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadRequestException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleBadRequest(BadRequestException e) {
-        return new ErrorResponse(ErrorCode.BAD_REQUEST, e.getMessage());
+        return new ErrorResponse(e.getCode(), e.getMessage());
+    }
+
+    // 403·501은 @ResponseStatus가 아닌 ResponseEntity로 내린다 — springdoc이 @ResponseStatus 핸들러의 상태를 모든 오퍼레이션에
+    // 일반 응답으로 붙이는데, 403·501은 그룹 API에서만 쓰여 무관한 기존 API 문서까지 어긋난다 (그룹 API는 @ApiResponse로 직접 적는다)
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(e.getCode(), e.getMessage()));
     }
 
     @ExceptionHandler(NotFoundException.class)
@@ -30,7 +37,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse handleConflict(ConflictException e) {
-        return new ErrorResponse(ErrorCode.CONFLICT, e.getMessage());
+        return new ErrorResponse(e.getCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(NotImplementedException.class)
+    public ResponseEntity<ErrorResponse> handleNotImplemented(NotImplementedException e) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
+                .body(new ErrorResponse(ErrorCode.NOT_IMPLEMENTED, e.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
