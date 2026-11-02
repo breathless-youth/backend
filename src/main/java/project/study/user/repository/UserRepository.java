@@ -16,6 +16,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByProviderAndProviderUserId(Provider provider, String providerUserId);
 
+    // link용 값 조회 — 엔티티를 영속성 컨텍스트에 싣지 않는다. 같은 요청에서 뒤에 잠그는 행이 옛 값으로 보이지 않게 한다(open-in-view)
+    @Query("select u.id from User u where u.provider = :provider and u.providerUserId = :providerUserId")
+    Optional<Long> findIdByProviderAndProviderUserId(
+            @Param("provider") Provider provider, @Param("providerUserId") String providerUserId);
+
+    @Query("select u.provider from User u where u.id = :id")
+    Optional<Provider> findProviderById(@Param("id") Long id);
+
     // @Modifying 쿼리의 반환 타입은 void/int/long만 허용된다 — 삽입된 행 수(0 또는 1)를 반환
     // 프로필(자동 닉네임·이니셜·색상)은 등록 시점에 함께 발급한다. 재등록(멱등)이면 기존 값 보존
     // on conflict에 타겟이 없어 닉네임 유니크 충돌도 예외 없이 0행으로 떨어진다

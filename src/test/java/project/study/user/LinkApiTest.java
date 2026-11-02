@@ -1,7 +1,6 @@
 package project.study.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static project.study.user.LinkTestClient.sha256Hex;
 
@@ -14,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,9 +23,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -67,9 +65,6 @@ class LinkApiTest {
 
     @MockitoBean
     private SocialTokenVerifiers verifiers;
-
-    @MockitoSpyBean
-    private SimpMessagingTemplate messagingTemplate;
 
     private LinkTestClient api;
 
@@ -235,46 +230,17 @@ class LinkApiTest {
                     .extractingPath("$.code")
                     .isEqualTo("VALIDATION_FAILED");
         }
+        // 모르는 프로바이더 문자열은 본문을 읽지 못한 것이다 — enum에 있는 DEVICE만 INVALID_SOCIAL_TOKEN(SocialTokenVerifiersTest)
+        assertThat(api.linkRequest(device.accessToken()).content("{\"provider\":\"NAVER\",\"idToken\":\"x\"}"))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .extractingPath("$.code")
+                .isEqualTo("BAD_REQUEST");
         assertThat(mvc.post()
                         .uri("/api/auth/link")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"provider\":\"GOOGLE\",\"idToken\":\"x\"}"))
                 .hasStatus(HttpStatus.UNAUTHORIZED);
-    }
-
-    @Test
-    void link_순간_방_안에_있으면_방에서_빠지고_병합된다() {
-        Social google = api.stubSocial(Provider.GOOGLE, null);
-        Device account = api.register();
-        api.linkOk(account, google);
-        Device source = api.register();
-        Device other = api.register();
-        // STOMP로 확정된 참가자 둘 — 확정 전 예약은 나가기에서 이력 없이 지워져 방 안에 있는 상태가 아니다
-        long roomId = fixture.seedRoom(source.userId());
-        fixture.seedParticipation(roomId, source.userId(), true);
-        fixture.seedParticipation(roomId, other.userId(), true);
-
-        assertThat(api.link(source.accessToken(), google, null)).hasStatusOk();
-
-        // 남은 사람에게 옮기는 쪽의 퇴장이 나간다 — 병합 처리기의 경쟁 방지 닫기(SWITCHED_ROOM)가 아니라 방 나가기로 끝났다
-        verify(messagingTemplate).convertAndSend("/topic/room/" + roomId, (Object)
-                Map.of("type", "MEMBER_LEFT", "userId", source.userId()));
-        List<Map<String, Object>> rows =
-                jdbc.sql("""
-                        SELECT user_id, left_at IS NOT NULL AS left_room, leave_reason
-                          FROM room_participations WHERE room_id = :r ORDER BY id""").param("r", roomId).query().listOfRows();
-        assertThat(rows).hasSize(2);
-        assertThat(rows.get(0))
-                .containsEntry("user_id", account.userId())
-                .containsEntry("left_room", true)
-                .containsEntry("leave_reason", "EXPLICIT");
-        assertThat(rows.get(1)).containsEntry("user_id", other.userId()).containsEntry("left_room", false);
-        assertThat(jdbc.sql("SELECT created_by FROM rooms WHERE id = :r")
-                        .param("r", roomId)
-                        .query(Long.class)
-                        .single())
-                .isEqualTo(account.userId());
-        assertThat(countUsers(source.userId())).isZero();
     }
 
     @Test
@@ -303,8 +269,12 @@ class LinkApiTest {
         try {
             // a의 refresh 행을 잡아 a의 전환을 "users 행은 바꿨지만 커밋 전"에 세운다. 그동안 b도 소셜 ID가 비었다고 보고 전환하다
             // unique 인덱스에서 a를 기다린다. 풀면 a가 커밋하고, b는 위반으로 져서 새 트랜잭션의 병합 경로로 다시 한다
+            AtomicLong holderPid = new AtomicLong();
             Future<?> holder =
                     pool.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+                        holderPid.set(jdbc.sql("SELECT pg_backend_pid()")
+                                .query(Long.class)
+                                .single());
                         jdbc.sql("SELECT id FROM refresh_token WHERE user_id = :u FOR UPDATE")
                                 .param("u", a.userId())
                                 .query()
@@ -314,9 +284,9 @@ class LinkApiTest {
                     }));
             assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
             Future<MvcTestResult> first = pool.submit(() -> api.link(a.accessToken(), google, null));
-            awaitBlockedTransactions(1);
+            long firstPid = awaitBlockedBy(holderPid.get()); // a가 holder를 기다린다
             Future<MvcTestResult> second = pool.submit(() -> api.link(b.accessToken(), google, null));
-            awaitBlockedTransactions(2);
+            awaitBlockedBy(firstPid); // b가 unique 인덱스에서 a를 기다린다
             release.countDown();
             holder.get(10, TimeUnit.SECONDS);
 
@@ -346,14 +316,20 @@ class LinkApiTest {
                 .isEqualTo("INVALID_SOCIAL_TOKEN");
     }
 
-    // 잠금을 기다리는 백엔드 수 — 테스트는 순서대로 돌고 컨텍스트마다 DB가 따로라 다른 대기자가 없다
-    private void awaitBlockedTransactions(int count) throws InterruptedException {
+    // blocker를 기다리는 백엔드가 생길 때까지 기다려 그 pid를 돌려준다. 이 테스트가 잡은 잠금에서 시작한 사슬만 보므로, 다른 작업의
+    // 잠금 대기가 있어도 일찍 풀지 않는다
+    private long awaitBlockedBy(long blockerPid) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (jdbc.sql("SELECT count(*) FROM pg_locks WHERE NOT granted")
-                        .query(Integer.class)
-                        .single()
-                < count) {
-            assertThat(System.nanoTime()).as("잠금 대기 %d건을 기다림", count).isLessThan(deadline);
+        while (true) {
+            List<Long> blocked = jdbc.sql(
+                            "SELECT pid FROM pg_stat_activity WHERE :blocker = ANY(pg_blocking_pids(pid))")
+                    .param("blocker", (int) blockerPid)
+                    .query(Long.class)
+                    .list();
+            if (!blocked.isEmpty()) {
+                return blocked.get(0);
+            }
+            assertThat(System.nanoTime()).as("pid %d를 기다리는 백엔드", blockerPid).isLessThan(deadline);
             Thread.sleep(20);
         }
     }

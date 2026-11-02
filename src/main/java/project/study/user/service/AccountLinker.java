@@ -42,15 +42,30 @@ class AccountLinker {
         }
     }
 
+    /**
+     * 트랜잭션 밖의 미리 보기 — 병합 경로가 될지(옮기는 쪽이 비회원이고 그 소셜 ID의 다른 계정이 있다). 잠그지 않으므로 그 사이 바뀔 수
+     * 있어 방 나가기를 정하는 데만 쓴다. 값만 읽고 엔티티는 싣지 않는다.
+     */
+    boolean mergeAhead(long userId, OAuthUserInfo social) {
+        boolean device = userRepository
+                .findProviderById(userId)
+                .filter(provider -> provider == Provider.DEVICE)
+                .isPresent();
+        return device && ownerOf(social).filter(ownerId -> ownerId != userId).isPresent();
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     Linked link(long userId, OAuthUserInfo social) {
-        User source = lockDevice(userId);
-        Optional<User> existing =
-                userRepository.findByProviderAndProviderUserId(social.provider(), social.providerUserId());
-        if (existing.isEmpty()) {
-            return convert(source, social);
+        // 잠그기 전에 소셜 ID의 주인부터 본다 — 병합이면 두 행을 ID 작은 쪽부터 잠가야 해서 옮기는 쪽을 먼저 잡을 수 없다
+        Optional<Long> owner = ownerOf(social);
+        if (owner.isEmpty()) {
+            return convert(lockDevice(userId), social);
         }
-        return merge(source, existing.get().getId(), social);
+        if (owner.get() == userId) {
+            // 이 소셜 ID의 주인이 나다 — 이미 그 소셜 계정으로 로그인한 상태. 자기 자신과는 병합하지 않는다
+            throw new AlreadyLinkedException();
+        }
+        return merge(userId, owner.get(), social);
     }
 
     // 남은 파일은 어디서도 참조하지 않으므로 지우지 못해도 요청은 성공으로 둔다 (ProfileImageService와 같은 방식)
@@ -90,18 +105,13 @@ class AccountLinker {
         return new Linked(source.getId(), true, null);
     }
 
-    private Linked merge(User source, long targetId, OAuthUserInfo social) {
-        long sourceId = source.getId();
-        if (sourceId == targetId) {
-            // 옮기는 쪽은 DEVICE, 남는 쪽은 소셜이라 같을 수 없다. 같으면 병합 처리기가 자기 행을 지우므로 바로 멈춘다
-            throw new IllegalStateException("자기 자신으로 병합할 수 없습니다: userId=" + sourceId);
-        }
-        // 두 사용자 행을 ID 작은 쪽부터 잠근다. 옮기는 쪽은 이미 잡고 있어 다시 잠가도 바로 통과한다
+    private Linked merge(long sourceId, long targetId, OAuthUserInfo social) {
+        // 두 사용자 행을 ID 작은 쪽부터 잠근다 — 같은 두 행을 반대 순서로 잡는 요청과 교착하지 않게
         Optional<User> lower = userRepository.findByIdForUpdate(Math.min(sourceId, targetId));
         Optional<User> higher = userRepository.findByIdForUpdate(Math.max(sourceId, targetId));
-        User lockedSource = (sourceId < targetId ? lower : higher)
+        User source = (sourceId < targetId ? lower : higher)
                 .orElseThrow(() -> new NotFoundException(ErrorCode.USER_NOT_FOUND, "존재하지 않는 사용자입니다"));
-        if (lockedSource.getProvider() != Provider.DEVICE) {
+        if (source.getProvider() != Provider.DEVICE) {
             throw new AlreadyLinkedException();
         }
         if ((sourceId < targetId ? higher : lower).isEmpty()) {
@@ -113,5 +123,9 @@ class AccountLinker {
         userRepository.delete(source);
         log.info("계정 병합: 비회원 {} → 소셜 {}", sourceId, targetId);
         return new Linked(targetId, false, imageKey);
+    }
+
+    private Optional<Long> ownerOf(OAuthUserInfo social) {
+        return userRepository.findIdByProviderAndProviderUserId(social.provider(), social.providerUserId());
     }
 }

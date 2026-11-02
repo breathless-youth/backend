@@ -68,7 +68,7 @@ public class AuthController {
                     - 처음 쓰는 소셜 계정이면 **전환**: 지금 비회원이 그대로 그 소셜 계정이 된다(userId·기록 유지). `isNewUser: true`
                     - 이미 있는 소셜 계정이면 **병합**: 이 기기의 기록을 그 계정으로 옮기고 지금 비회원은 사라진다. \
                     부딪히는 기록은 기존 계정 것이 남는다. 응답 access의 `sub`가 기존 계정 userId로 바뀐다. `isNewUser: false`
-                    - 방 안에 있었으면 방에서 나간 뒤 처리한다(다른 사람에게 `MEMBER_LEFT`).
+                    - 병합이면, 방 안에 있던 경우 방에서 나간 뒤 처리한다(다른 사람에게 `MEMBER_LEFT`). 전환·409·404는 방을 건드리지 않는다.
 
                     **nonce**: 앱이 매번 원문을 만들어 그 SHA-256 **소문자 hex**를 SDK에 넘기고, 원문은 `nonce`에 싣는다. \
                     ID 토큰에 nonce가 들어 있으면 원문의 해시와 같아야 하고, **애플은 필수**다. \
@@ -77,8 +77,10 @@ public class AuthController {
     @ApiResponse(
             responseCode = "400",
             description = """
-                    `INVALID_SOCIAL_TOKEN`: ID 토큰 위조·만료·다른 앱용, nonce 불일치·누락, 지원하지 않는 프로바이더 — 소셜 로그인부터 다시. \
-                    `VALIDATION_FAILED`: 요청 형식(provider 누락, idToken 공백·4096자 초과, nonce 128자 초과)""",
+                    `INVALID_SOCIAL_TOKEN`: ID 토큰 검증 실패(위조·만료·다른 앱용), nonce 불일치·누락, \
+                    지원하지 않는 프로바이더 값 `DEVICE` — 소셜 로그인부터 다시. \
+                    `VALIDATION_FAILED`: 요청 형식(provider 누락, idToken 공백·4096자 초과, nonce 128자 초과). \
+                    `BAD_REQUEST`: 본문을 읽을 수 없음 — `GOOGLE`·`KAKAO`·`APPLE`·`DEVICE` 밖의 provider 문자열도 여기다""",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -91,7 +93,10 @@ public class AuthController {
                                 @ExampleObject(
                                         name = "요청 형식",
                                         value =
-                                                "{\"code\": \"VALIDATION_FAILED\", \"message\": \"idToken: 공백일 수 없습니다\"}")
+                                                "{\"code\": \"VALIDATION_FAILED\", \"message\": \"idToken: 공백일 수 없습니다\"}"),
+                                @ExampleObject(
+                                        name = "모르는 프로바이더",
+                                        value = "{\"code\": \"BAD_REQUEST\", \"message\": \"요청 본문을 읽을 수 없습니다\"}")
                             }))
     @ApiResponse(
             responseCode = "401",

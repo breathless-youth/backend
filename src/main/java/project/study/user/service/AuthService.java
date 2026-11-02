@@ -2,8 +2,9 @@ package project.study.user.service;
 
 import java.time.Instant;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import project.study.room.service.CurrentRoomLeaver;
@@ -31,7 +32,6 @@ import project.study.user.service.AccountLinker.Linked;
  * 재사용 감지의 전량 폐기가 동시에 커밋 중인 회전의 새 토큰을 삭제 대상 조회에서 놓쳐 살려 둔다.
  */
 @Service
-@RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -39,8 +39,27 @@ public class AuthService {
     private final TokenIssuer tokenIssuer;
     private final SocialTokenVerifiers socialTokenVerifiers;
     private final CurrentRoomLeaver currentRoomLeaver;
-    private final TransactionTemplate transactionTemplate;
+    private final TransactionTemplate linkTransaction;
     private final AccountLinker accountLinker;
+
+    public AuthService(
+            UserRepository userRepository,
+            RefreshTokenRepository refreshTokenRepository,
+            TokenIssuer tokenIssuer,
+            SocialTokenVerifiers socialTokenVerifiers,
+            CurrentRoomLeaver currentRoomLeaver,
+            PlatformTransactionManager transactionManager,
+            AccountLinker accountLinker) {
+        this.userRepository = userRepository;
+        this.refreshTokenRepository = refreshTokenRepository;
+        this.tokenIssuer = tokenIssuer;
+        this.socialTokenVerifiers = socialTokenVerifiers;
+        this.currentRoomLeaver = currentRoomLeaver;
+        this.accountLinker = accountLinker;
+        // link 전용 — 누가 트랜잭션 안에서 불러도 전환 경쟁의 재시도가 abort된 트랜잭션에 섞이지 않고 늘 새 트랜잭션이 되게 한다
+        this.linkTransaction = new TransactionTemplate(transactionManager);
+        this.linkTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
 
     /**
      * 기기 등록(재등록)용 발급 — 잠금 아래에서 이 행이 아직 그 기기의 비회원이면, refresh를 전량 폐기한 뒤 새 쌍을 만든다.
@@ -108,17 +127,23 @@ public class AuthService {
      *
      * <p>트랜잭션이 아니다. 프로바이더 검증(HTTP)과 방 나가기(자체 트랜잭션·브로드캐스트)는 DB 트랜잭션 밖에서 먼저 하고, 잠금·전환·병합·발급만
      * 한 트랜잭션으로 묶는다. 병합으로 버려진 프로필 사진 파일은 커밋 뒤에 지운다.
+     *
+     * <p>방 나가기는 병합 규칙이라 병합이 될 때만 한다. 전환은 userId가 그대로라 참가가 그대로 맞고, 409·404는 부작용이 없어야 한다.
+     * 미리 보기와 실제가 엇갈려 방에 남은 채 병합되면 병합 처리기가 그 참가를 닫는다(MEMBER_LEFT 없이).
      */
     public LinkResponse link(Long userId, LinkSocialRequest request) {
         OAuthUserInfo social = socialTokenVerifiers.verify(request.provider(), request.idToken());
         SocialNonce.check(social, request.nonce());
-        currentRoomLeaver.leave(userId);
+        if (accountLinker.mergeAhead(userId, social)) {
+            currentRoomLeaver.leave(userId);
+        }
         LinkOutcome outcome;
         try {
             outcome = linkInNewTransaction(userId, social);
         } catch (ConversionRaceLostException e) {
             // 다른 기기가 같은 소셜 ID로 먼저 전환했다 — 그 사용자가 이제 있으니 새 트랜잭션에서 병합 경로로 한 번 더 한다
-            // (제약 위반으로 abort된 트랜잭션 안에서는 다시 할 수 없다). 또 지면 그대로 실패시킨다
+            // (제약 위반으로 abort된 트랜잭션 안에서는 다시 할 수 없다). 이번엔 병합이라 방에서 먼저 뺀다. 또 지면 그대로 실패시킨다
+            currentRoomLeaver.leave(userId);
             outcome = linkInNewTransaction(userId, social);
         }
         accountLinker.deleteImageQuietly(outcome.linked().discardedImageKey());
@@ -129,7 +154,7 @@ public class AuthService {
 
     // 전환·병합과 발급을 한 트랜잭션으로 — 발급은 잠금 아래에서, 남는 쪽(병합) 또는 전환된 사용자에게 한다
     private LinkOutcome linkInNewTransaction(Long userId, OAuthUserInfo social) {
-        return transactionTemplate.execute(status -> {
+        return linkTransaction.execute(status -> {
             Linked linked = accountLinker.link(userId, social);
             return new LinkOutcome(linked, tokenIssuer.issue(linked.userId()));
         });

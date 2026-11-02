@@ -24,7 +24,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 import project.study.room.service.CurrentRoomLeaver;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
@@ -61,7 +60,7 @@ class AuthServiceTest {
                 new TokenIssuer(jwtUtil, refreshTokenRepository, REFRESH_EXPIRATION_MS),
                 mock(SocialTokenVerifiers.class),
                 mock(CurrentRoomLeaver.class),
-                new TransactionTemplate(mock(PlatformTransactionManager.class)),
+                mock(PlatformTransactionManager.class),
                 mock(AccountLinker.class));
         // 유저 행 잠금은 모든 발급·회전 경로가 거친다 — 기본은 "유저 존재"
         User user = new User(Provider.DEVICE, DEVICE_ID);
