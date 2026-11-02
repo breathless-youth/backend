@@ -23,15 +23,19 @@ import project.study.ranking.dto.RankingBoardResponse.RateEligibility;
 import project.study.ranking.dto.RankingBoardResponse.StreakCard;
 import project.study.studysession.entity.TimeSlot;
 
-/** 판별 추가 필드 — 집중률·시간대·누적 시간·연속 공부 일수 (BY-828). */
+/** 판별 추가 필드 — 집중률·시간대·누적 시간·연속 공부 일수 (BY-828). 일수 판은 v2(개인 단위)와 v1(묶음·공동 순위)을 함께 본다. */
 class RankingBoardExtrasTest extends RankingIntegrationTestBase {
 
     @Autowired
     private RankingBoardService service;
 
     private void streak(long userId, LocalDate first, int days) {
+        streak(userId, first, days, 900);
+    }
+
+    private void streak(long userId, LocalDate first, int days, int focusSec) {
         for (int i = 0; i < days; i++) {
-            session(userId, first.plusDays(i).atTime(9, 0).atZone(KST).toInstant(), 15, 900);
+            session(userId, first.plusDays(i).atTime(9, 0).atZone(KST).toInstant(), 30, focusSec);
         }
     }
 
@@ -132,7 +136,7 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         streak(me, LocalDate.of(2026, 9, 20), 4);
         streak(user("d"), LocalDate.of(2026, 9, 25), 3);
 
-        RankingBoardResponse r = service.board(me, MAX_STREAK, null, null, 0);
+        RankingBoardResponse r = service.board(me, MAX_STREAK, null, null, 0, true);
 
         List<DayGroupRow> groups = List.of(
                 new DayGroupRow(5, 1, "a", null, 1, LocalDate.of(2026, 9, 5), false, null),
@@ -157,7 +161,7 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         long me = user("me");
         streak(me, LocalDate.of(2026, 10, 7), 3); // 10/7~10/9, 오늘(10/10)은 아직
 
-        RankingBoardResponse r = service.board(me, MAX_STREAK, null, null, 0);
+        RankingBoardResponse r = service.board(me, MAX_STREAK, null, null, 0, true);
 
         // 내일 4일이 되면 q와 공동 2위
         assertThat(r.streak())
@@ -174,7 +178,7 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         streak(user("d"), LocalDate.of(2026, 9, 25), 3);
         streak(user("e"), LocalDate.of(2026, 10, 1), 1);
 
-        RankingBoardResponse r = service.board(me, TOTAL_DAYS, null, null, 0);
+        RankingBoardResponse r = service.board(me, TOTAL_DAYS, null, null, 0, true);
 
         assertThat(r.me().rank()).isEqualTo(3);
         assertThat(r.me().topPercent()).isEqualTo(50);
@@ -199,7 +203,7 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         streak(user("c"), LocalDate.of(2026, 9, 20), 1);
         long me = user("me");
 
-        RankingBoardResponse r = service.board(me, TOTAL_DAYS, null, null, 0);
+        RankingBoardResponse r = service.board(me, TOTAL_DAYS, null, null, 0, true);
 
         assertThat(r.me()).isNull();
         assertThat(r.startNowRank()).isEqualTo(2);
@@ -218,10 +222,108 @@ class RankingBoardExtrasTest extends RankingIntegrationTestBase {
         long me = user("me");
         streak(me, LocalDate.of(2026, 9, 10), 1);
 
-        RankingBoardResponse r = service.board(me, TOTAL_DAYS, null, null, 0);
+        RankingBoardResponse r = service.board(me, TOTAL_DAYS, null, null, 0, true);
 
         assertThat(r.podiumGroups())
                 .extracting(DayGroupRow::nickname, DayGroupRow::profileImageUrl)
                 .containsExactly(tuple("a", "/avatars/" + a + "/a.jpg"), tuple("me", null));
+    }
+
+    @Test
+    void 누적_일수_v2는_개인_단위_순차_순위이고_같은_일수면_순공이_많은_쪽이_앞이다() {
+        streak(user("a"), LocalDate.of(2026, 9, 1), 5, 900);
+        streak(user("b"), LocalDate.of(2026, 9, 2), 5, 1200); // a보다 늦게 5일이 됐지만 순공이 많다
+        streak(user("c"), LocalDate.of(2026, 9, 10), 4, 900);
+        long me = user("me");
+        streak(me, LocalDate.of(2026, 9, 20), 4, 1000);
+        streak(user("d"), LocalDate.of(2026, 9, 25), 3);
+        streak(user("e"), LocalDate.of(2026, 10, 1), 1);
+
+        RankingBoardResponse r = service.board(me, TOTAL_DAYS, null, null, 0);
+
+        assertThat(r.me().rank()).isEqualTo(3);
+        assertThat(r.me().topPercent()).isEqualTo(50);
+        assertThat(r.podium())
+                .extracting(BoardEntry::rank, BoardEntry::nickname, BoardEntry::value)
+                .containsExactly(tuple(1, "b", 5L), tuple(2, "a", 5L), tuple(3, "me", 4L));
+        assertThat(r.around())
+                .extracting(BoardEntry::rank, BoardEntry::nickname)
+                .containsExactly(tuple(1, "b"), tuple(2, "a"), tuple(3, "me"), tuple(4, "c"), tuple(5, "d"));
+        assertThat(r.podiumGroups()).isNull();
+        assertThat(r.aroundGroups()).isNull();
+        assertThat(r.above()).extracting("nickname", "gap").containsExactly("a", 1L);
+        assertThat(r.below()).extracting("nickname", "gap").containsExactly("d", 1L);
+        assertThat(r.nextTier()).isEqualTo(new NextTier(30, 1, null));
+    }
+
+    @Test
+    void 연속_공부_v2는_개인_단위_순차_순위이고_같은_일수면_누적_일수가_많은_쪽이_앞이다() {
+        streak(user("a"), LocalDate.of(2026, 9, 1), 5);
+        long b = user("b");
+        streak(b, LocalDate.of(2026, 9, 2), 5); // a보다 늦게 5일이 됐지만 누적 일수가 하루 더 많다
+        streak(b, LocalDate.of(2026, 9, 15), 1);
+        streak(user("c"), LocalDate.of(2026, 9, 10), 4);
+        long me = user("me");
+        streak(me, LocalDate.of(2026, 9, 20), 4);
+        streak(user("d"), LocalDate.of(2026, 9, 25), 3);
+
+        RankingBoardResponse r = service.board(me, MAX_STREAK, null, null, 0);
+
+        assertThat(r.me().rank()).isEqualTo(4);
+        assertThat(r.me().topPercent()).isEqualTo(60);
+        assertThat(r.podium())
+                .extracting(BoardEntry::rank, BoardEntry::nickname)
+                .containsExactly(tuple(1, "b"), tuple(2, "a"), tuple(3, "c"));
+        assertThat(r.around()).extracting(BoardEntry::rank).containsExactly(1, 2, 3, 4, 5);
+        assertThat(r.podiumGroups()).isNull();
+        assertThat(r.aroundGroups()).isNull();
+        assertThat(r.above()).extracting("nickname", "gap").containsExactly("a", 1L);
+        assertThat(r.below()).extracting("nickname", "gap").containsExactly("d", 1L);
+        assertThat(r.streak())
+                .isEqualTo(new StreakCard(4, LocalDate.of(2026, 9, 20), LocalDate.of(2026, 9, 23), 0, false, null));
+    }
+
+    @Test
+    void 일수_판_v2에_참가하지_않았으면_지금_시작할_때_순위는_참가자_더하기_1이다() {
+        streak(user("a"), LocalDate.of(2026, 9, 1), 3);
+        streak(user("b"), LocalDate.of(2026, 9, 10), 1);
+        streak(user("c"), LocalDate.of(2026, 9, 20), 1);
+        long me = user("me");
+
+        RankingBoardResponse r = service.board(me, TOTAL_DAYS, null, null, 0);
+
+        assertThat(r.me()).isNull();
+        assertThat(r.startNowRank()).isEqualTo(4);
+        assertThat(r.around()).isEmpty();
+        assertThat(r.podium())
+                .extracting(BoardEntry::rank, BoardEntry::nickname)
+                .containsExactly(tuple(1, "a"), tuple(2, "b"), tuple(3, "c"));
+        assertThat(r.podiumGroups()).isNull();
+    }
+
+    @Test
+    void 연속_공부_v2의_내일도_하면_받을_순위는_순차_순위다() {
+        streak(user("p"), LocalDate.of(2026, 9, 1), 5);
+        streak(user("q"), LocalDate.of(2026, 9, 10), 4);
+        long me = user("me");
+        streak(me, LocalDate.of(2026, 10, 7), 3); // 10/7~10/9, 오늘(10/10)은 아직
+
+        RankingBoardResponse r = service.board(me, MAX_STREAK, null, null, 0);
+
+        // 내일 4일·누적 4일이 되면 q(4일·누적 4일)와 같고 q가 먼저 도달해 3위
+        assertThat(r.streak())
+                .isEqualTo(new StreakCard(3, LocalDate.of(2026, 10, 7), LocalDate.of(2026, 10, 9), 3, true, 3));
+    }
+
+    @Test
+    void 연속_공부_v2의_내일도_하면_받을_순위는_누적_일수도_하루_늘려_센다() {
+        streak(user("q"), LocalDate.of(2026, 9, 10), 4);
+        long me = user("me");
+        streak(me, LocalDate.of(2026, 9, 1), 1);
+        streak(me, LocalDate.of(2026, 10, 7), 3); // 지금 누적 4일 — 내일 5일이 되어 q(누적 4일)보다 앞선다
+
+        RankingBoardResponse r = service.board(me, MAX_STREAK, null, null, 0);
+
+        assertThat(r.streak().nextRankIfContinue()).isEqualTo(1);
     }
 }
