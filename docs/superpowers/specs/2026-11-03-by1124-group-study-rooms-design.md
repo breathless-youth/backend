@@ -113,7 +113,7 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
 | 멤버 공부 알림 | `PUT /api/groups/{groupId}/notifications` | 멤버 | `{enabled}`. 처음엔 꺼짐 |
 | 멤버 목록 | `GET /api/groups/{groupId}/members` | 멤버 | `{userId, nickname, profileImageUrl, owner, joinedAt, lastStudiedAt}` |
 | 그룹장 넘기기 | `PUT /api/groups/{groupId}/owner` | 그룹장 | `{userId}` |
-| 내보내기 | `DELETE /api/groups/{groupId}/members/{userId}` | 그룹장 | 자기 자신은 안 된다. 그룹 홈·공부방 모두 이 경로 |
+| 내보내기 | `DELETE /api/groups/{groupId}/members/{userId}` | 그룹장 | 자기 자신은 안 된다. 그룹 홈·공부방 모두 이 경로. 비공개 그룹이면 초대코드도 새로 발급된다(응답 형식은 그대로, FE가 그룹 정보를 다시 받는다) |
 | 나가기 | `POST /api/groups/{groupId}/leave` | 멤버 | 혼자 남은 그룹장이면 그룹이 사라진다 |
 | 초대코드 보기 | `GET /api/groups/{groupId}/invite` | 멤버 | 비공개 그룹만, `{inviteCode}` |
 | 코드 새로 만들기 | `POST /api/groups/{groupId}/invite` | 그룹장 | 이전 코드는 바로 막힌다 |
@@ -233,6 +233,10 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
   - 신청이 이미 5개 안에 들어 있으므로 수락이 5개를 넘게 만들지 않는다.
 - **나가기**: 다른 멤버가 있는 그룹장은 `OWNER_CANNOT_LEAVE`. 혼자 남은 그룹장이 나가면 그룹을 지우고, 답을 기다리던 신청을 `GROUP_DELETED`로 바꿔 `group_application_room_closed`를 보낸다.
 - **내보내기**: 바로 멤버가 아니게 되고(`KICKED`), 3일 동안 같은 그룹에 신청·코드 참여가 막힌다. 푸시 `group_member_kicked`.
+  - 비공개 그룹이면 같은 트랜잭션에서 초대코드를 새로 발급한다(코드 새로 만들기와 같은 동작). 내보내진 사람이 예전 코드를 기억했다가 돌아오는 것을 막는다 **[합의, 2026-11-03 FE 요청]**
+  - 예전 코드·링크로 참여하면 `INVITE_CODE_NOT_FOUND`. 새 코드는 다른 사람이 쓸 수 있고, 내보내진 사람은 새 코드를 받아도 3일 안에는 `RECENTLY_KICKED`다.
+  - 새 코드 안내는 FE가 그룹장 화면에 토스트로만 띄운다. 푸시·STOMP 메시지는 없다.
+  - 3단계 테스트: 내보낸 뒤 예전 코드 참여 실패, 새 코드로 다른 사람 참여 성공, 내보내진 사람의 3일 안 새 코드 참여는 `RECENTLY_KICKED`, 재발급이 실패하면 내보내기도 롤백.
 - **그룹장 넘기기**: 대상은 지금 멤버여야 한다. 푸시 `group_owner_transferred`, 공부방이 열려 있으면 `OWNER_CHANGED`.
 - **신청 신고**: 신청을 `DECLINED`로 바꾸고 신고를 남긴다. 신청한 사람을 차단하지는 않는다 (위키 8절에 차단이 없다).
 - **공부방 멤버 신고**: 신고를 남기고 차단을 만든다 (이미 있으면 그대로). 그룹 멤버 자격·책상·순위는 그대로다.
