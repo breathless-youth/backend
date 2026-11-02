@@ -66,13 +66,20 @@ app:
 
 oauth:
   google:
-    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
+    # 허용하는 ID 토큰 aud 목록(쉼표 구분) — 웹(서버) 클라이언트 ID 등. 시크릿 아님
     # 값은 구글 클라우드 콘솔 > API 및 서비스 > 사용자 인증 정보에서 확인
-    client-id: <웹-클라이언트-ID>.apps.googleusercontent.com
+    client-ids: <웹-클라이언트-ID>.apps.googleusercontent.com
   kakao:
-    app-key: <카카오-앱-키>
+    app-keys: <카카오-앱-키>
   apple:
-    client-id: <애플-번들-ID>
+    bundle-id: <애플-번들-ID>
+    # 아래는 웹 로그인·연결 해제에 필요할 때만 채운다 (비워 두면 꺼짐)
+    services-id: ""
+    team-id: ""
+    key-id: ""
+    private-key: ""
+    web-redirect-uri: ""
+    android-callback-redirect: ""
 
 jwt:
   # 로컬 전용 — 32자 이상 아무 문자열이면 됨 (dev/prod는 환경변수 JWT_SECRET 주입)

@@ -39,12 +39,18 @@ decorator:
 
 oauth:
   google:
-    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
-    client-id: ${OAUTH_GOOGLE_CLIENT_ID:320200622450-5bqjf3j6lu8akp20p4oikiio7t8brjtd.apps.googleusercontent.com}
+    # 허용하는 ID 토큰 aud 목록(쉼표 구분) — 웹(서버) 클라이언트 ID 등. 시크릿 아님
+    client-ids: ${OAUTH_GOOGLE_CLIENT_IDS:320200622450-5bqjf3j6lu8akp20p4oikiio7t8brjtd.apps.googleusercontent.com}
   kakao:
-    app-key: ${OAUTH_KAKAO_APP_KEY:4c3e41ef0da3566b0ca844c6546457ba}
+    app-keys: ${OAUTH_KAKAO_APP_KEYS:4c3e41ef0da3566b0ca844c6546457ba}
   apple:
-    client-id: ${OAUTH_APPLE_CLIENT_ID:com.breathlessyouth.mobile}
+    bundle-id: ${OAUTH_APPLE_BUNDLE_ID:com.breathlessyouth.mobile}
+    services-id: ${OAUTH_APPLE_SERVICES_ID:}
+    team-id: ${OAUTH_APPLE_TEAM_ID:}
+    key-id: ${OAUTH_APPLE_KEY_ID:}
+    private-key: ${OAUTH_APPLE_PRIVATE_KEY:}
+    web-redirect-uri: ${OAUTH_APPLE_WEB_REDIRECT_URI:}
+    android-callback-redirect: ${OAUTH_APPLE_ANDROID_CALLBACK_REDIRECT:}
 
 springdoc:
   override-with-generic-response: false
