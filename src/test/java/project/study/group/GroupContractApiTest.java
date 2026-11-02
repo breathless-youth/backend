@@ -27,6 +27,9 @@ class GroupContractApiTest {
     private static final String CREATE_BODY = """
             {"name": "새벽 공시반", "visibility": "PUBLIC", "category": "CIVIL_SERVICE", "description": "같이 해요"}""";
 
+    private static final String JOIN_BODY = """
+            {"inviteCode": "K7M2PQ", "via": "LINK"}""";
+
     private static final String UPDATE_BODY = """
             {"name": "새벽 공시반", "category": "CIVIL_SERVICE", "description": "같이 해요"}""";
 
@@ -36,6 +39,18 @@ class GroupContractApiTest {
     // 새 경로라 버전 1이다 (ADR-0015 갱신) — asUser의 기본 헤더(2)를 덮는다
     private MockMvcRequestBuilder get(String uri) {
         return mvc.get().uri(uri).header(ApiVersionConfig.HEADER, "1").with(asUser(1L));
+    }
+
+    private MockMvcRequestBuilder post(String uri) {
+        return mvc.post().uri(uri).header(ApiVersionConfig.HEADER, "1").with(asUser(1L));
+    }
+
+    private MockMvcRequestBuilder put(String uri) {
+        return mvc.put().uri(uri).header(ApiVersionConfig.HEADER, "1").with(asUser(1L));
+    }
+
+    private MockMvcRequestBuilder delete(String uri) {
+        return mvc.delete().uri(uri).header(ApiVersionConfig.HEADER, "1").with(asUser(1L));
     }
 
     private MockMvcRequestBuilder withBody(MockMvcRequestBuilder builder, String body) {
@@ -152,5 +167,137 @@ class GroupContractApiTest {
                 .hasPathSatisfying(
                         "$.paths['/api/groups/{groupId}/notifications'].put",
                         v -> assertThat(v).isNotNull());
+    }
+
+    @Test
+    void 멤버_초대_공부방_경로도_로직_전에는_501이다() {
+        assertNotImplemented(get("/api/groups/10/members"));
+        assertNotImplemented(withBody(put("/api/groups/10/owner"), """
+                {"userId": 2}"""));
+        assertNotImplemented(delete("/api/groups/10/members/2"));
+        assertNotImplemented(post("/api/groups/10/leave"));
+        assertNotImplemented(get("/api/groups/10/invite"));
+        assertNotImplemented(post("/api/groups/10/invite"));
+        assertNotImplemented(withBody(post("/api/groups/join"), JOIN_BODY));
+        assertNotImplemented(post("/api/groups/10/room/join"));
+        assertNotImplemented(post("/api/groups/10/room/leave"));
+        assertNotImplemented(withBody(post("/api/groups/10/members/2/report"), """
+                {"reason": "욕설을 했어요"}"""));
+    }
+
+    @Test
+    void join은_고정_경로로_잡힌다() {
+        // POST /{groupId}/...로 잡혔다면 "join"을 Long으로 바꾸다 400이 나거나 405가 난다
+        assertNotImplemented(withBody(post("/api/groups/join"), JOIN_BODY));
+    }
+
+    @Test
+    void 신고_사유가_101자면_400_VALIDATION_FAILED다() {
+        String body = """
+                {"reason": "%s"}""".formatted("가".repeat(101));
+
+        assertThat(withBody(post("/api/groups/1/members/2/report"), body))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void 신고_사유는_비워도_된다() {
+        assertNotImplemented(withBody(post("/api/groups/1/members/2/report"), "{}"));
+    }
+
+    @Test
+    void 초대코드가_비면_400_VALIDATION_FAILED다() {
+        assertThat(withBody(post("/api/groups/join"), """
+                        {"inviteCode": " ", "via": "CODE"}"""))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void 초대코드는_형식을_검사하지_않는다() {
+        // 틀린 형식도 3단계에서 404 INVITE_CODE_NOT_FOUND가 되므로 여기서는 400이 아니다
+        assertNotImplemented(withBody(post("/api/groups/join"), """
+                {"inviteCode": "12", "via": "CODE"}"""));
+    }
+
+    @Test
+    void 없는_들어온_경로는_400_BAD_REQUEST다() {
+        assertThat(withBody(post("/api/groups/join"), """
+                        {"inviteCode": "K7M2PQ", "via": "QR"}"""))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("BAD_REQUEST"));
+    }
+
+    @Test
+    void 그룹장을_넘길_대상이_없으면_400_VALIDATION_FAILED다() {
+        assertThat(withBody(put("/api/groups/10/owner"), "{}"))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void Swagger에_멤버_초대_공부방_오퍼레이션과_설명이_실린다() {
+        assertThat(mvc.get().uri("/v3/api-docs"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/members'].get.tags[0]",
+                        v -> assertThat(v).isEqualTo("그룹"))
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/members'].get.parameters[?(@.name=='API-Version')].schema.default",
+                        v -> assertThat(v).asList().containsExactly("1"))
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/owner'].put",
+                        v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/members/{userId}'].delete",
+                        v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/leave'].post",
+                        v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/invite'].get",
+                        v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/invite'].post",
+                        v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/join'].post", v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/room/join'].post",
+                        v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/room/leave'].post",
+                        v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/members/{userId}/report'].post",
+                        v -> assertThat(v).isNotNull())
+                // FE가 이 설명을 보고 타입·문구를 쓴다
+                .hasPathSatisfying(
+                        "$.components.schemas.GroupInviteResponse.properties.inviteCode.description",
+                        v -> assertThat(v).asString().contains("영문 대문자·숫자 6자리(0·O·1·I·L 제외), 대소문자 무시"))
+                .hasPathSatisfying(
+                        "$.components.schemas.GroupJoinRequest.properties.inviteCode.description",
+                        v -> assertThat(v).asString().contains("영문 대문자·숫자 6자리(0·O·1·I·L 제외), 대소문자 무시"))
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/join'].post.description",
+                        v -> assertThat(v).asString().contains("이미 멤버면 409 대신 joined=false로 200"))
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/room/join'].post.description",
+                        v -> assertThat(v)
+                                .asString()
+                                .contains("/topic/room/{roomId}를 구독한다")
+                                .contains("/docs/websocket.html"))
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/members/{userId}/report'].post.description",
+                        v -> assertThat(v).asString().contains("신고하면 차단도 된다"))
+                // 태그 설명은 GroupController에만 있다 — 컨트롤러마다 적으면 springdoc이 합치다 어긋난다
+                .hasPathSatisfying(
+                        "$.tags[?(@.name=='그룹')]", v -> assertThat(v).asList().hasSize(1));
     }
 }
