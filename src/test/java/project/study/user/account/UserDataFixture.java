@@ -181,6 +181,55 @@ public class UserDataFixture {
                         VALUES (:u, 'SUBJECT', :t, :d, now())""").param("u", userId).param("t", subjectId).param("d", date).update();
     }
 
+    public long seedRoom(long creatorId) {
+        return jdbc.sql("""
+                        INSERT INTO rooms (invite_code, created_by, created_at)
+                        VALUES (:code, :u, now()) RETURNING id""")
+                .param("code", String.valueOf(1000 + SEQ.incrementAndGet() % 9000))
+                .param("u", creatorId)
+                .query(Long.class)
+                .single();
+    }
+
+    /** live가 false면 이미 나간 이력 행이다. */
+    public void seedParticipation(long roomId, long userId, boolean live) {
+        jdbc.sql("""
+                        INSERT INTO room_participations (room_id, user_id, reserved_at, joined_at, left_at, leave_reason)
+                        VALUES (:r, :u, now(), now(), CASE WHEN :live THEN NULL ELSE now() END,
+                                CASE WHEN :live THEN NULL ELSE 'EXPLICIT' END)""").param("r", roomId).param("u", userId).param("live", live).update();
+    }
+
+    public void seedRtcStat(long roomId, long userId, Long peerUserId) {
+        jdbc.sql("""
+                        INSERT INTO rtc_connection_stat (connection_id, room_id, user_id, peer_user_id, candidate_type, is_final, created_at)
+                        VALUES (:c, :r, :u, :p, 'host', true, now())""")
+                .param("c", UUID.randomUUID().toString())
+                .param("r", roomId)
+                .param("u", userId)
+                .param("p", peerUserId, Types.BIGINT)
+                .update();
+    }
+
+    public void seedRankingRecord(long userId, String boardKey, LocalDate periodStart, int rank) {
+        jdbc.sql("""
+                        INSERT INTO ranking_record (user_id, board_key, period_start, closes_at, rank, value)
+                        VALUES (:u, :b, :p, now(), :rank, 100)""")
+                .param("u", userId)
+                .param("b", boardKey)
+                .param("p", periodStart)
+                .param("rank", rank)
+                .update();
+    }
+
+    public void seedRankingBest(long userId, int rank, String boardKey, LocalDate periodStart) {
+        jdbc.sql("INSERT INTO ranking_best (user_id, rank, board_key, period_start) VALUES (:u, :rank, :b, :p)")
+                .param("u", userId)
+                .param("rank", rank)
+                .param("b", boardKey)
+                .param("p", periodStart)
+                .update();
+    }
+
     /** 모든 처리기가 책임지는 컬럼에서 userId를 가리키는 행의 합. */
     public long countRowsReferencing(long userId) {
         long total = 0;

@@ -33,7 +33,7 @@ public class Room {
     @Column(nullable = false, length = 4)
     private String inviteCode;
 
-    @Column(nullable = false, updatable = false)
+    @Column(updatable = false)
     private Long createdBy;
 
     @Column(nullable = false, updatable = false)

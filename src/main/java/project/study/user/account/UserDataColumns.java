@@ -9,14 +9,5 @@ public final class UserDataColumns {
     public static final Set<String> IGNORED =
             Set.of("amplitude_daily_event.user_id", "amplitude_user_attribute.user_id");
 
-    /** 아직 처리기가 없는 컬럼. 처리기를 만들면 여기서 지운다. */
-    public static final Set<String> PENDING = Set.of(
-            "rooms.created_by",
-            "room_participations.user_id",
-            "rtc_connection_stat.user_id",
-            "rtc_connection_stat.peer_user_id",
-            "ranking_record.user_id",
-            "ranking_best.user_id");
-
     private UserDataColumns() {}
 }

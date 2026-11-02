@@ -1,0 +1,100 @@
+package project.study.user.account;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.annotation.Transactional;
+import project.study.TestcontainersConfiguration;
+
+/** 모든 처리기 테이블에 행이 있는 사용자의 병합·삭제가 FK 위반 없이 끝나고 users 행을 지울 수 있어야 한다. */
+@SpringBootTest
+@Import(TestcontainersConfiguration.class)
+@Transactional
+class AccountDataCompletenessTest {
+
+    private static final Instant T0 = Instant.parse("2030-03-01T10:00:00Z");
+    private static final Instant T1 = Instant.parse("2030-03-01T11:00:00Z");
+    private static final LocalDate DAY = LocalDate.of(2030, 3, 1);
+
+    @Autowired
+    AccountData accountData;
+
+    @Autowired
+    UserDataFixture fixture;
+
+    @Autowired
+    JdbcClient jdbc;
+
+    private void seedEverything(long user, long other) {
+        fixture.seedDday(user, "d");
+        fixture.seedAcquisition(user, "s");
+        fixture.seedPushToken(user, "tok-" + user);
+        fixture.seedPushSend(user, DAY);
+        fixture.seedPushAssignment(user, "exp-" + user);
+        fixture.seedStats("study_stats_daily", user, DAY, 10);
+        fixture.seedStats("study_stats_weekly", user, DAY, 10);
+        fixture.seedStats("study_stats_monthly", user, DAY, 10);
+        fixture.seedRefreshToken(user);
+        fixture.seedReport(user, other);
+        fixture.seedReport(other, user);
+        fixture.seedInquiry(user);
+        fixture.seedUserNotification(user);
+        long session = fixture.seedSession(user, T0, T1);
+        fixture.seedStatusEvent(session);
+        fixture.seedActiveSession(user, T1.plusSeconds(3600));
+        long subject = fixture.seedSubject(user, "과목" + user, 0, false);
+        fixture.seedTask(subject, "할일");
+        fixture.seedSegment(session, subject, T0, T1);
+        fixture.seedDailyCompletion(user, subject, DAY);
+        long room = fixture.seedRoom(user);
+        fixture.seedParticipation(room, user, false);
+        fixture.seedRtcStat(room, user, other);
+        fixture.seedRankingRecord(user, "board-" + user, DAY, 1);
+        fixture.seedRankingBest(user, 1, "b", DAY);
+    }
+
+    private long countUser(long id) {
+        return jdbc.sql("SELECT count(*) FROM users WHERE id = :id")
+                .param("id", id)
+                .query(Long.class)
+                .single();
+    }
+
+    @Test
+    void 병합하면_옮기는_쪽을_가리키는_행이_없고_users_행을_지울_수_있다() {
+        long source = fixture.seedUser();
+        long target = fixture.seedUser();
+        seedEverything(source, target);
+        seedEverything(target, source);
+
+        accountData.merge(source, target);
+        // RTC 통계는 병합에서 그대로 두기로 했고(users FK 없음) 그 행은 가리켜도 무해하므로 세기 전에 치운다
+        jdbc.sql("DELETE FROM rtc_connection_stat WHERE user_id = :u OR peer_user_id = :u")
+                .param("u", source)
+                .update();
+
+        assertThat(fixture.countRowsReferencing(source)).isZero();
+        jdbc.sql("DELETE FROM users WHERE id = :id").param("id", source).update();
+        assertThat(countUser(source)).isZero();
+    }
+
+    @Test
+    void 삭제하면_지운_사용자를_가리키는_행이_없고_users_행을_지울_수_있다() {
+        long user = fixture.seedUser();
+        long other = fixture.seedUser();
+        seedEverything(user, other);
+        seedEverything(other, user);
+
+        accountData.erase(user);
+
+        assertThat(fixture.countRowsReferencing(user)).isZero();
+        jdbc.sql("DELETE FROM users WHERE id = :id").param("id", user).update();
+        assertThat(countUser(user)).isZero();
+    }
+}

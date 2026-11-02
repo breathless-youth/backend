@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import project.study.TestcontainersConfiguration;
 
-/** users를 가리키는 컬럼이 새로 생기면 처리기(또는 IGNORED/PENDING)에 등록하지 않은 채 넘어가지 못하게 한다. */
+/** users를 가리키는 컬럼이 새로 생기면 처리기(또는 IGNORED)에 등록하지 않은 채 넘어가지 못하게 한다. */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
 class UserDataCoverageTest {
@@ -45,7 +45,6 @@ class UserDataCoverageTest {
         Set<String> covered = new HashSet<>();
         handlers.forEach(h -> covered.addAll(h.columns()));
         covered.addAll(UserDataColumns.IGNORED);
-        covered.addAll(UserDataColumns.PENDING);
 
         assertThat(db).isEqualTo(covered);
     }
@@ -55,7 +54,6 @@ class UserDataCoverageTest {
         List<String> all = new ArrayList<>();
         handlers.forEach(h -> all.addAll(h.columns()));
         all.addAll(UserDataColumns.IGNORED);
-        all.addAll(UserDataColumns.PENDING);
 
         assertThat(all).doesNotHaveDuplicates();
     }

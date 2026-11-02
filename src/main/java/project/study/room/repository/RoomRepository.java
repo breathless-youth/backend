@@ -37,7 +37,7 @@ public class RoomRepository {
     private static final RowMapper<RoomRow> ROW = (rs, n) -> new RoomRow(
             rs.getLong("id"),
             rs.getString("invite_code"),
-            rs.getLong("created_by"),
+            rs.getObject("created_by", Long.class),
             instant(rs, "created_at"),
             instant(rs, "closed_at"),
             rs.getString("close_reason"));
