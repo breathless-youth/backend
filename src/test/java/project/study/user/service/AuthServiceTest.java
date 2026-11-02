@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,12 +23,16 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import project.study.room.service.CurrentRoomLeaver;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
 import project.study.user.entity.Provider;
 import project.study.user.entity.RefreshToken;
 import project.study.user.entity.User;
 import project.study.user.jwt.JwtUtil;
+import project.study.user.oauth.SocialTokenVerifiers;
 import project.study.user.repository.RefreshTokenRepository;
 import project.study.user.repository.UserRepository;
 
@@ -48,7 +53,15 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, refreshTokenRepository, jwtUtil, REFRESH_EXPIRATION_MS);
+        // link 협력자는 refresh·발급 경로에서 쓰이지 않는다 — AuthServiceLinkTest가 따로 본다
+        authService = new AuthService(
+                userRepository,
+                refreshTokenRepository,
+                new TokenIssuer(jwtUtil, refreshTokenRepository, REFRESH_EXPIRATION_MS),
+                mock(SocialTokenVerifiers.class),
+                mock(CurrentRoomLeaver.class),
+                new TransactionTemplate(mock(PlatformTransactionManager.class)),
+                mock(AccountLinker.class));
         // 유저 행 잠금은 모든 발급·회전 경로가 거친다 — 기본은 "유저 존재"
         User user = new User(Provider.DEVICE, "device-uuid");
         ReflectionTestUtils.setField(user, "id", 1L);

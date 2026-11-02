@@ -6,8 +6,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import project.study.common.BaseTimeEntity;
-import project.study.common.exception.ConflictException;
 import project.study.user.nickname.Nicknames;
+import project.study.user.service.AlreadyLinkedException;
 
 @Table(
         name = "users",
@@ -60,9 +60,10 @@ public class User extends BaseTimeEntity {
         this.email = email;
     }
 
+    // 전환: 식별자 쌍을 바꾼다. userId가 그대로라 기록이 이어지고, 옛 (DEVICE, deviceId) 연결은 끊겨 그 기기는 재등록하면 새 비회원이 된다
     public void linkSocialAccount(Provider provider, String providerUserId, String email) {
         if (this.provider != Provider.DEVICE) {
-            throw new ConflictException("이미 소셜 계정이 연동된 사용자입니다");
+            throw new AlreadyLinkedException();
         }
         this.provider = provider;
         this.providerUserId = providerUserId;

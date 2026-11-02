@@ -10,17 +10,19 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
+import project.study.user.dto.LinkResponse;
+import project.study.user.dto.LinkSocialRequest;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
 import project.study.user.service.AuthService;
 
-// 소셜 로그인(login·link·logout)은 파킹 상태 — 재도입 시 feature/BY-383-auth-contract 브랜치 참고
-@Tag(name = "Auth", description = "토큰 재발급 API — 비회원(DEVICE) 토큰 쌍은 POST /api/users가 발급한다 (ADR-0019)")
+@Tag(name = "Auth", description = "소셜 로그인·토큰 재발급 API — 비회원(DEVICE) 토큰 쌍은 POST /api/users가 발급한다 (ADR-0019)")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -58,5 +60,71 @@ public class AuthController {
     @PostMapping(value = "/refresh", version = "1")
     public TokenResponse refresh(@Valid @RequestBody RefreshRequest request) {
         return authService.refresh(request);
+    }
+
+    @Operation(summary = "소셜 로그인", description = """
+                    비회원 access 토큰을 들고 소셜 SDK의 ID 토큰으로 로그인한다. 응답의 토큰 쌍으로 갈아끼운다 — 이 기기의 이전 refresh는 무효다.
+
+                    - 처음 쓰는 소셜 계정이면 **전환**: 지금 비회원이 그대로 그 소셜 계정이 된다(userId·기록 유지). `isNewUser: true`
+                    - 이미 있는 소셜 계정이면 **병합**: 이 기기의 기록을 그 계정으로 옮기고 지금 비회원은 사라진다. \
+                    부딪히는 기록은 기존 계정 것이 남는다. 응답 access의 `sub`가 기존 계정 userId로 바뀐다. `isNewUser: false`
+                    - 방 안에 있었으면 방에서 나간 뒤 처리한다(다른 사람에게 `MEMBER_LEFT`).
+
+                    **nonce**: 앱이 매번 원문을 만들어 그 SHA-256 **소문자 hex**를 SDK에 넘기고, 원문은 `nonce`에 싣는다. \
+                    ID 토큰에 nonce가 들어 있으면 원문의 해시와 같아야 하고, **애플은 필수**다. \
+                    SDK에 nonce를 넘기지 않은 구글·카카오 토큰은 `nonce` 없이 보낸다.""")
+    @ApiResponse(responseCode = "200", description = "전환(`isNewUser: true`) 또는 병합(`false`) — 새 access·refresh 쌍")
+    @ApiResponse(
+            responseCode = "400",
+            description = """
+                    `INVALID_SOCIAL_TOKEN`: ID 토큰 위조·만료·다른 앱용, nonce 불일치·누락, 지원하지 않는 프로바이더 — 소셜 로그인부터 다시. \
+                    `VALIDATION_FAILED`: 요청 형식(provider 누락, idToken 공백·4096자 초과, nonce 128자 초과)""",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = {
+                                @ExampleObject(
+                                        name = "소셜 토큰",
+                                        value =
+                                                "{\"code\": \"INVALID_SOCIAL_TOKEN\", \"message\": \"nonce가 일치하지 않습니다\"}"),
+                                @ExampleObject(
+                                        name = "요청 형식",
+                                        value =
+                                                "{\"code\": \"VALIDATION_FAILED\", \"message\": \"idToken: 공백일 수 없습니다\"}")
+                            }))
+    @ApiResponse(
+            responseCode = "401",
+            description = "우리 access 토큰이 없거나 무효 — 기존 refresh 흐름",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples =
+                                    @ExampleObject(value = "{\"code\": \"UNAUTHORIZED\", \"message\": \"인증이 필요합니다\"}")))
+    @ApiResponse(
+            responseCode = "404",
+            description = "토큰의 사용자가 없다(지워진 비회원) — 토큰을 지우고 POST /api/users로 다시 등록",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples =
+                                    @ExampleObject(
+                                            value = "{\"code\": \"USER_NOT_FOUND\", \"message\": \"존재하지 않는 사용자입니다\"}")))
+    @ApiResponse(
+            responseCode = "409",
+            description = "이미 소셜 계정인 사용자 — 이미 로그인 상태이므로 로그인 화면을 닫는다",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples =
+                                    @ExampleObject(
+                                            value =
+                                                    "{\"code\": \"ALREADY_LINKED\", \"message\": \"이미 소셜 계정으로 로그인한 사용자입니다\"}")))
+    @PostMapping(value = "/link", version = "1")
+    public LinkResponse link(@AuthenticationPrincipal Long userId, @Valid @RequestBody LinkSocialRequest request) {
+        return authService.link(userId, request);
     }
 }

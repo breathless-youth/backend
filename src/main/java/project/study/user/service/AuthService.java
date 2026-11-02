@@ -1,50 +1,44 @@
 package project.study.user.service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HexFormat;
-import java.util.Optional;
-import java.util.UUID;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+import project.study.room.service.CurrentRoomLeaver;
+import project.study.user.dto.LinkResponse;
+import project.study.user.dto.LinkSocialRequest;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
 import project.study.user.entity.RefreshToken;
-import project.study.user.entity.User;
-import project.study.user.jwt.JwtUtil;
+import project.study.user.oauth.OAuthUserInfo;
+import project.study.user.oauth.SocialNonce;
+import project.study.user.oauth.SocialTokenVerifiers;
 import project.study.user.repository.RefreshTokenRepository;
 import project.study.user.repository.UserRepository;
+import project.study.user.service.AccountLinker.ConversionRaceLostException;
+import project.study.user.service.AccountLinker.Linked;
 
 /**
- * 비회원(DEVICE) 토큰 발급과 refresh 회전. 소셜 로그인(link·logout)은 파킹 상태 — BY-383 브랜치 참고.
+ * 비회원(DEVICE) 토큰 발급, refresh 회전, 소셜 로그인(link).
  *
  * <p>refresh는 opaque UUID를 SHA-256 해시로만 저장하고, 회전 시 삭제 대신 {@code usedAt}을 마킹한다.
  * 사용된 토큰이 다시 오면 탈취 의심으로 그 유저의 refresh를 전량 폐기한다 (ADR-0002).
  *
- * <p>발급·회전·전량 폐기는 모두 유저 행 잠금({@code SELECT ... FOR UPDATE}) 아래에서 실행한다. 잠금이 없으면
+ * <p>발급·회전·전량 폐기·병합은 모두 유저 행 잠금({@code SELECT ... FOR UPDATE}) 아래에서 실행한다. 잠금이 없으면
  * 재사용 감지의 전량 폐기가 동시에 커밋 중인 회전의 새 토큰을 삭제 대상 조회에서 놓쳐 살려 둔다.
  */
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final JwtUtil jwtUtil;
-    private final long refreshExpirationMs;
-
-    public AuthService(
-            UserRepository userRepository,
-            RefreshTokenRepository refreshTokenRepository,
-            JwtUtil jwtUtil,
-            @Value("${refresh-token.expiration}") long refreshExpirationMs) {
-        this.userRepository = userRepository;
-        this.refreshTokenRepository = refreshTokenRepository;
-        this.jwtUtil = jwtUtil;
-        this.refreshExpirationMs = refreshExpirationMs;
-    }
+    private final TokenIssuer tokenIssuer;
+    private final SocialTokenVerifiers socialTokenVerifiers;
+    private final CurrentRoomLeaver currentRoomLeaver;
+    private final TransactionTemplate transactionTemplate;
+    private final AccountLinker accountLinker;
 
     /**
      * 기기 등록(재등록)용 발급 — 이 유저의 refresh를 전량 폐기한 뒤 새 쌍을 만든다.
@@ -55,20 +49,24 @@ public class AuthService {
      */
     @Transactional
     public TokenPair issueTokensRevokingExisting(Long userId) {
-        lockUser(userId).orElseThrow(() -> new IllegalStateException("등록된 유저를 찾을 수 없습니다: " + userId));
+        userRepository
+                .findByIdForUpdate(userId)
+                .orElseThrow(() -> new IllegalStateException("등록된 유저를 찾을 수 없습니다: " + userId));
         refreshTokenRepository.deleteByUserId(userId);
-        return issueTokens(userId);
+        return tokenIssuer.issue(userId);
     }
 
     // noRollbackFor: 재사용 감지 시 예외를 던져도 "전체 폐기"는 커밋되어야 한다
     @Transactional(noRollbackFor = InvalidRefreshTokenException.class)
     public TokenResponse refresh(RefreshRequest request) {
-        String tokenHash = sha256(request.refreshToken());
+        String tokenHash = TokenIssuer.sha256(request.refreshToken());
         Long userId = refreshTokenRepository
                 .findUserIdByTokenHash(tokenHash)
                 .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
         // 유저 행 잠금 = 이 유저의 발급·회전·폐기 뮤텍스. 유저가 없으면(삭제) refresh가 살아 있어도 거부한다
-        lockUser(userId).orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
+        userRepository
+                .findByIdForUpdate(userId)
+                .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 refresh 토큰입니다"));
         // 토큰 행은 잠금을 잡은 뒤에 읽는다 — 잠금을 기다리는 사이 다른 요청이 회전시켰다면(usedAt 마킹)
         // 그 상태를 봐야 아래 재사용 검사가 tombstone 삭제가 아니라 전량 폐기로 간다 (Codex 2차 P2)
         RefreshToken saved = refreshTokenRepository
@@ -93,30 +91,43 @@ public class AuthService {
             throw new InvalidRefreshTokenException("이미 사용된 refresh 토큰입니다");
         }
 
-        TokenPair tokens = issueTokens(saved.getUserId());
+        TokenPair tokens = tokenIssuer.issue(saved.getUserId());
         return new TokenResponse(tokens.accessToken(), tokens.refreshToken());
     }
 
-    private Optional<User> lockUser(Long userId) {
-        return userRepository.findByIdForUpdate(userId);
-    }
-
-    TokenPair issueTokens(Long userId) {
-        String accessToken = jwtUtil.createAccessToken(userId);
-        String refreshToken = UUID.randomUUID().toString();
-        refreshTokenRepository.save(
-                new RefreshToken(userId, sha256(refreshToken), Instant.now().plusMillis(refreshExpirationMs)));
-        return new TokenPair(accessToken, refreshToken);
-    }
-
-    private static String sha256(String token) {
+    /**
+     * 비회원을 소셜 계정으로 로그인시킨다. 처음 쓰는 소셜 ID면 이 사용자를 그대로 전환하고, 이미 있으면 이 기기의 데이터를 그 계정으로 합친다.
+     *
+     * <p>트랜잭션이 아니다. 프로바이더 검증(HTTP)과 방 나가기(자체 트랜잭션·브로드캐스트)는 DB 트랜잭션 밖에서 먼저 하고, 잠금·전환·병합·발급만
+     * 한 트랜잭션으로 묶는다. 병합으로 버려진 프로필 사진 파일은 커밋 뒤에 지운다.
+     */
+    public LinkResponse link(Long userId, LinkSocialRequest request) {
+        OAuthUserInfo social = socialTokenVerifiers.verify(request.provider(), request.idToken());
+        SocialNonce.check(social, request.nonce());
+        currentRoomLeaver.leave(userId);
+        LinkOutcome outcome;
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256을 사용할 수 없습니다", e);
+            outcome = linkInNewTransaction(userId, social);
+        } catch (ConversionRaceLostException e) {
+            // 다른 기기가 같은 소셜 ID로 먼저 전환했다 — 그 사용자가 이제 있으니 새 트랜잭션에서 병합 경로로 한 번 더 한다
+            // (제약 위반으로 abort된 트랜잭션 안에서는 다시 할 수 없다). 또 지면 그대로 실패시킨다
+            outcome = linkInNewTransaction(userId, social);
         }
+        accountLinker.deleteImageQuietly(outcome.linked().discardedImageKey());
+        TokenPair tokens = outcome.tokens();
+        return new LinkResponse(
+                tokens.accessToken(), tokens.refreshToken(), outcome.linked().isNewUser());
     }
+
+    // 전환·병합과 발급을 한 트랜잭션으로 — 발급은 잠금 아래에서, 남는 쪽(병합) 또는 전환된 사용자에게 한다
+    private LinkOutcome linkInNewTransaction(Long userId, OAuthUserInfo social) {
+        return transactionTemplate.execute(status -> {
+            Linked linked = accountLinker.link(userId, social);
+            return new LinkOutcome(linked, tokenIssuer.issue(linked.userId()));
+        });
+    }
+
+    private record LinkOutcome(Linked linked, TokenPair tokens) {}
 
     public record TokenPair(String accessToken, String refreshToken) {}
 }
