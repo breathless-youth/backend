@@ -53,7 +53,7 @@ class ContactDetectorTest {
                 "카톡 아이디 kim1234",
                 "인스타 ID: study_kim",
                 "카카오 아이디 kim1234",
-                "kakao kim1234",
+                "kakao id kim1234",
                 "갠톡 kim1234",
                 "insta kim_study",
                 // ---- 추가 예시: 대소문자·한글 도메인 ----
@@ -97,7 +97,11 @@ class ContactDetectorTest {
                 "naver.company",
                 "화이팅 @ 7시",
                 "@10시 출석", // @ 뒤에 영문자가 없으면 아이디가 아니다
-                "installation guide" // insta는 영어 단어 속에서는 연락 수단이 아니다
+                "installation guide", // insta는 영어 단어 속에서는 연락 수단이 아니다
+                // 카카오·kakao는 회사 이름이라 뒤에 아이디 표시가 없으면 연락 수단이 아니다
+                "카카오 backend 준비",
+                "카카오 android 스터디",
+                "kakao backend 준비"
             })
     void 통과시킨다(String text) {
         assertThat(ContactDetector.containsContact(text)).isFalse();
