@@ -109,10 +109,15 @@ public class UserDataFixture {
 
     /** endedAt이 null이면 옛 세션처럼 ended_at을 비워 둔다. */
     public long seedSession(long userId, Instant startedAt, Instant endedAt) {
+        return seedSession(userId, startedAt, endedAt, 60);
+    }
+
+    public long seedSession(long userId, Instant startedAt, Instant endedAt, int studySec) {
         return jdbc.sql("""
                         INSERT INTO study_session (user_id, stat_date, started_at, ended_at, study_sec, focus_sec)
-                        VALUES (:u, DATE '2030-03-01', :s, :e, 60, 60) RETURNING id""")
+                        VALUES (:u, DATE '2030-03-01', :s, :e, :sec, 60) RETURNING id""")
                 .param("u", userId)
+                .param("sec", studySec)
                 .param("s", Timestamp.from(startedAt))
                 .param("e", endedAt == null ? null : Timestamp.from(endedAt), Types.TIMESTAMP)
                 .query(Long.class)
@@ -126,9 +131,17 @@ public class UserDataFixture {
     }
 
     public void seedActiveSession(long userId, Instant startedAt) {
+        seedActiveSession(userId, startedAt, Instant.now());
+    }
+
+    public void seedActiveSession(long userId, Instant startedAt, Instant lastSeenAt) {
         jdbc.sql("""
                         INSERT INTO active_study_session (user_id, started_at, reported_at, last_seen_at, study_sec, focus_sec)
-                        VALUES (:u, :s, now(), now(), 0, 0)""").param("u", userId).param("s", Timestamp.from(startedAt)).update();
+                        VALUES (:u, :s, :l, :l, 0, 0)""")
+                .param("u", userId)
+                .param("s", Timestamp.from(startedAt))
+                .param("l", Timestamp.from(lastSeenAt))
+                .update();
     }
 
     public long seedSubject(long userId, String name, int sortOrder, boolean deleted) {

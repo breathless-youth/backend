@@ -114,6 +114,60 @@ class StudySessionUserDataHandlerTest {
     }
 
     @Test
+    void 끝이_없는_세션이_남는_쪽_세션_안에서_시작하면_지운다() {
+        long source = fixture.seedUser();
+        long target = fixture.seedUser();
+        fixture.seedSession(target, at(10, 0), at(11, 0));
+        fixture.seedSession(source, at(10, 30), null, 0);
+
+        accountData.merge(source, target);
+
+        assertThat(startsOf(source)).isEmpty();
+        assertThat(startsOf(target)).containsExactly(at(10, 0));
+    }
+
+    @Test
+    void 남는_쪽_세션에_끝이_없어도_겹침을_찾는다() {
+        long source = fixture.seedUser();
+        long target = fixture.seedUser();
+        fixture.seedSession(target, at(10, 0), null, 3600);
+        fixture.seedSession(source, at(10, 30), at(10, 45));
+
+        accountData.merge(source, target);
+
+        assertThat(startsOf(source)).isEmpty();
+        assertThat(startsOf(target)).containsExactly(at(10, 0));
+    }
+
+    @Test
+    void 남는_쪽_세션과_겹치는_draft는_지운다() {
+        long source = fixture.seedUser();
+        long target = fixture.seedUser();
+        fixture.seedSession(target, at(10, 0), at(11, 0));
+        fixture.seedActiveSession(source, at(10, 30), at(10, 40));
+        fixture.seedActiveSession(source, at(12, 0), at(12, 10));
+
+        accountData.merge(source, target);
+
+        assertThat(fixture.count("active_study_session", "user_id", source)).isZero();
+        assertThat(fixture.count("active_study_session", "user_id", target)).isEqualTo(1);
+    }
+
+    @Test
+    void 남는_쪽_draft와_겹치는_draft는_지운다() {
+        long source = fixture.seedUser();
+        long target = fixture.seedUser();
+        fixture.seedActiveSession(target, at(10, 0), at(11, 0));
+        fixture.seedActiveSession(source, at(10, 30), at(10, 40));
+        fixture.seedActiveSession(source, at(12, 0), at(12, 10));
+
+        accountData.merge(source, target);
+
+        assertThat(fixture.count("active_study_session", "user_id", source)).isZero();
+        assertThat(fixture.count("active_study_session", "user_id", target)).isEqualTo(2);
+    }
+
+    @Test
     void erase하면_세션과_하위_행이_모두_사라지고_다른_사용자는_그대로다() {
         long user = fixture.seedUser();
         long other = fixture.seedUser();
