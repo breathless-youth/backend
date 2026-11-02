@@ -40,6 +40,7 @@ import project.study.user.repository.UserRepository;
 class AuthServiceTest {
 
     private static final long REFRESH_EXPIRATION_MS = 1_209_600_000L;
+    private static final String DEVICE_ID = "device-uuid";
 
     @Mock
     private UserRepository userRepository;
@@ -63,9 +64,13 @@ class AuthServiceTest {
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
                 mock(AccountLinker.class));
         // 유저 행 잠금은 모든 발급·회전 경로가 거친다 — 기본은 "유저 존재"
-        User user = new User(Provider.DEVICE, "device-uuid");
+        User user = new User(Provider.DEVICE, DEVICE_ID);
         ReflectionTestUtils.setField(user, "id", 1L);
         lenient().when(userRepository.findByIdForUpdate(anyLong())).thenReturn(Optional.of(user));
+        // 기기 발급의 잠금은 행이 아직 그 기기의 비회원일 때만 잡힌다 — 기본은 "그대로 비회원"
+        lenient()
+                .when(userRepository.findByIdAndIdentityForUpdate(anyLong(), eq(Provider.DEVICE), eq(DEVICE_ID)))
+                .thenReturn(Optional.of(user));
         lenient()
                 .when(refreshTokenRepository.findUserIdByTokenHash(anyString()))
                 .thenReturn(Optional.of(1L));
@@ -89,17 +94,18 @@ class AuthServiceTest {
 
     @Test
     void 재발급과_폐기는_유저_행_잠금을_먼저_잡는다() {
-        authService.issueTokensRevokingExisting(5L);
+        authService.issueDeviceTokens(5L, DEVICE_ID);
 
         InOrder inOrder = inOrder(userRepository, refreshTokenRepository);
-        inOrder.verify(userRepository).findByIdForUpdate(5L);
+        inOrder.verify(userRepository).findByIdAndIdentityForUpdate(5L, Provider.DEVICE, DEVICE_ID);
         inOrder.verify(refreshTokenRepository).deleteByUserId(5L);
         inOrder.verify(refreshTokenRepository).save(any(RefreshToken.class));
     }
 
     @Test
     void refresh_토큰은_원문이_아닌_SHA256_해시로_저장된다() {
-        AuthService.TokenPair tokens = authService.issueTokensRevokingExisting(5L);
+        AuthService.TokenPair tokens =
+                authService.issueDeviceTokens(5L, DEVICE_ID).orElseThrow();
 
         ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
         verify(refreshTokenRepository).save(captor.capture());
@@ -112,11 +118,22 @@ class AuthServiceTest {
     @Test
     void 재등록_발급은_기존_refresh를_전량_폐기한_뒤_새_쌍을_저장한다() {
         // DEVICE 유저 = 기기 하나. 재등록 전에 남아 있던 토큰(다른 곳에 복사된 것 포함)은 전부 무효가 돼야 한다
-        authService.issueTokensRevokingExisting(5L);
+        authService.issueDeviceTokens(5L, DEVICE_ID);
 
         InOrder inOrder = inOrder(refreshTokenRepository);
         inOrder.verify(refreshTokenRepository).deleteByUserId(5L);
         inOrder.verify(refreshTokenRepository).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void 잠금_아래에서_그_기기의_비회원이_아니면_발급하지_않고_아무것도_지우지_않는다() {
+        // 등록이 커밋된 뒤 link가 이 행을 소셜 계정으로 바꿨거나(전환) 지웠다(병합) — deviceId만으로 그 계정 토큰을 주면 안 된다
+        when(userRepository.findByIdAndIdentityForUpdate(5L, Provider.DEVICE, DEVICE_ID))
+                .thenReturn(Optional.empty());
+
+        assertThat(authService.issueDeviceTokens(5L, DEVICE_ID)).isEmpty();
+        verify(refreshTokenRepository, never()).deleteByUserId(anyLong());
+        verify(refreshTokenRepository, never()).save(any());
     }
 
     @Test

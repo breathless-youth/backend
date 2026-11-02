@@ -1,6 +1,7 @@
 package project.study.user.service;
 
 import java.time.Instant;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,6 +11,7 @@ import project.study.user.dto.LinkResponse;
 import project.study.user.dto.LinkSocialRequest;
 import project.study.user.dto.RefreshRequest;
 import project.study.user.dto.TokenResponse;
+import project.study.user.entity.Provider;
 import project.study.user.entity.RefreshToken;
 import project.study.user.oauth.OAuthUserInfo;
 import project.study.user.oauth.SocialNonce;
@@ -41,19 +43,25 @@ public class AuthService {
     private final AccountLinker accountLinker;
 
     /**
-     * 기기 등록(재등록)용 발급 — 이 유저의 refresh를 전량 폐기한 뒤 새 쌍을 만든다.
+     * 기기 등록(재등록)용 발급 — 잠금 아래에서 이 행이 아직 그 기기의 비회원이면, refresh를 전량 폐기한 뒤 새 쌍을 만든다.
+     *
+     * <p>등록과 발급은 트랜잭션이 따로라, 그 사이 link가 이 비회원을 소셜 계정으로 전환(행 유지)하거나 병합(행 삭제)할 수 있다. 그러면
+     * 빈 값이다 — deviceId만으로 소셜 계정의 토큰을 받으면 안 되고, 전환이 막 발급한 refresh를 지워서도 안 된다. 호출한 쪽이 다시
+     * 등록한다(그 deviceId는 이제 어느 비회원과도 맞지 않아 새 비회원이 생긴다).
      *
      * <p>DEVICE 유저는 기기 하나라는 전제라, 재등록은 곧 "다른 곳에 남은 refresh를 무효화"하는 동작이다.
      * 재사용 감지용 tombstone까지 지워지지만, 남는 토큰이 하나도 없으므로 옛 토큰이 다시 와도
      * "알 수 없는 토큰"으로 거부되어 문제없다. 회전({@link #refresh})은 tombstone을 남겨야 하므로 이 경로를 쓰지 않는다.
      */
     @Transactional
-    public TokenPair issueTokensRevokingExisting(Long userId) {
-        userRepository
-                .findByIdForUpdate(userId)
-                .orElseThrow(() -> new IllegalStateException("등록된 유저를 찾을 수 없습니다: " + userId));
+    public Optional<TokenPair> issueDeviceTokens(Long userId, String deviceId) {
+        if (userRepository
+                .findByIdAndIdentityForUpdate(userId, Provider.DEVICE, deviceId)
+                .isEmpty()) {
+            return Optional.empty();
+        }
         refreshTokenRepository.deleteByUserId(userId);
-        return tokenIssuer.issue(userId);
+        return Optional.of(tokenIssuer.issue(userId));
     }
 
     // noRollbackFor: 재사용 감지 시 예외를 던져도 "전체 폐기"는 커밋되어야 한다

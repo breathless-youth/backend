@@ -50,11 +50,14 @@ public class UserService {
                 .findByProviderAndProviderUserId(Provider.DEVICE, deviceId)
                 .orElseThrow(() -> new IllegalStateException("등록 이후 조회 실패")));
 
-        return new RegisterResult(user.getId(), existing.isEmpty());
+        return new RegisterResult(user.getId(), existing.isEmpty(), deviceId);
     }
 
-    /** 등록 결과. 토큰은 컨트롤러가 AuthService로 덧붙인다 — 시더 같은 내부 호출은 토큰이 필요 없다. */
-    public record RegisterResult(Long userId, boolean isNew) {}
+    /**
+     * 등록 결과. deviceId는 정규화한 값이다. 토큰은 {@link DeviceRegistrationService}가 덧붙인다 — 시더 같은 내부 호출은 토큰이 필요
+     * 없다.
+     */
+    public record RegisterResult(Long userId, boolean isNew, String deviceId) {}
 
     // 자동 닉네임(포메{랜덤5자리})이 기존 닉네임과 충돌하면 재생성해서 재시도한다.
     private Optional<User> insertWithAutoNickname(String deviceId) {

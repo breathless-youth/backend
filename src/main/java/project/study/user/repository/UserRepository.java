@@ -42,6 +42,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
 
+    // 행이 아직 그 식별자일 때만 잠근다. 식별자 비교를 WHERE에 둬서 DB가 잠근 최신 행으로 판정한다 — 같은 요청에서 먼저 읽은
+    // 엔티티가 영속성 컨텍스트에 남아 있어도(open-in-view) 옛 값으로 통과하지 않는다
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id and u.provider = :provider and u.providerUserId = :providerUserId")
+    Optional<User> findByIdAndIdentityForUpdate(
+            @Param("id") Long id, @Param("provider") Provider provider, @Param("providerUserId") String providerUserId);
+
     // 일일 리포트 v2 — 이 시각 이후 가입자 (BY-904)
     List<User> findByCreatedAtGreaterThanEqual(Instant from);
 }

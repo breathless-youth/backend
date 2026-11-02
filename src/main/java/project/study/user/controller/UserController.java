@@ -30,6 +30,7 @@ import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
 import project.study.user.service.AuthService;
+import project.study.user.service.DeviceRegistrationService;
 import project.study.user.service.ProfileImageService;
 import project.study.user.service.UserService;
 
@@ -41,7 +42,7 @@ import project.study.user.service.UserService;
 public class UserController {
 
     private final UserService userService;
-    private final AuthService authService;
+    private final DeviceRegistrationService deviceRegistrationService;
     private final ProfileImageService profileImageService;
 
     @Operation(summary = "익명 기기 유저 등록 (토큰 발급)", description = """
@@ -80,9 +81,8 @@ public class UserController {
     @SecurityRequirements // 인증 없이 호출하는 유일한 등록 경로 — 여기서 토큰이 시작된다
     @PostMapping(version = "2")
     public ResponseEntity<UserRegisterResponse> register(@Valid @RequestBody UserRegisterRequest request) {
-        UserService.RegisterResult result = userService.register(request);
-        // 등록과 발급은 별도 트랜잭션이다 — 발급이 실패해도 유저는 남고, 재호출(멱등)이 토큰을 채운다
-        AuthService.TokenPair tokens = authService.issueTokensRevokingExisting(result.userId());
+        DeviceRegistrationService.Registration result = deviceRegistrationService.register(request);
+        AuthService.TokenPair tokens = result.tokens();
         UserRegisterResponse response =
                 new UserRegisterResponse(result.isNew(), tokens.accessToken(), tokens.refreshToken());
         // 신규 등록은 201, 같은 기기의 재등록(멱등)은 200
