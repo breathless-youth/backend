@@ -11,7 +11,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import project.study.TestcontainersConfiguration;
 
 /**
- * 신청·차단 Swagger 문서 (BY-1124). FE가 이 설명을 보고 문구를 쓰므로 계약에 적은 말이 빠지지 않았는지 본다.
+ * 신청·차단·내보내기 Swagger 문서 (BY-1124). FE가 이 설명을 보고 문구를 쓰므로 계약에 적은 말이 빠지지 않았는지 본다.
  * 경로·상태 코드 계약은 {@link GroupContractApiTest}에 있다 (그 파일이 checkstyle 파일 길이 한도에 닿아 따로 뒀다).
  */
 @SpringBootTest
@@ -38,6 +38,22 @@ class GroupApplicationBlockSwaggerTest {
                         "$.paths['/api/groups/{groupId}/applications'].post.description",
                         v -> assertThat(v).asString().contains("공개 그룹만. 답이 없으면 3일 뒤 취소"))
                 .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/applications'].post.description",
+                        v -> assertThat(v)
+                                .asString()
+                                .contains(
+                                        "다 찬 그룹에는 신청할 수 없다(GROUP_FULL). 신청한 뒤에 자리가 차면 신청은 기한까지 남고 수락만 GROUP_FULL로 막힌다"))
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/applications'].post.responses['409'].description",
+                        v -> assertThat(v).asString().contains("`GROUP_FULL`"))
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/{groupId}/members/{userId}'].delete.description",
+                        v -> assertThat(v)
+                                .asString()
+                                .contains("비공개 그룹이면 같은 처리에서 초대코드가 새로 발급되고, 예전 코드·링크로 참여하면 INVITE_CODE_NOT_FOUND다. "
+                                        + "응답 형식은 그대로이고 FE는 그룹 정보를 다시 받아 새 코드를 보여 준다. "
+                                        + "내보내진 사람은 새 코드를 받아도 3일 동안 RECENTLY_KICKED다"))
+                .hasPathSatisfying(
                         "$.paths['/api/group-applications/{applicationId}/accept'].post.description",
                         v -> assertThat(v).asString().contains("자리가 없으면 GROUP_FULL, 신청은 기한까지 남는다"))
                 .hasPathSatisfying(
@@ -45,7 +61,10 @@ class GroupApplicationBlockSwaggerTest {
                         v -> assertThat(v).asString().contains("신고하면 바로 거절되고 신청한 사람에게는 거절 알림만 간다. 신청한 사람을 차단하지 않는다"))
                 .hasPathSatisfying(
                         "$.paths['/api/blocks/{userId}'].delete.description",
-                        v -> assertThat(v).asString().contains("다음 공부방 입장부터 다시 보인다"))
+                        v -> assertThat(v)
+                                .asString()
+                                .contains("다음 공부방 입장부터 다시 보인다")
+                                .contains("상대도 나를 차단했다면 계속 보이지 않는다"))
                 // 컨트롤러가 늘어도 태그 설명은 GroupController 하나다
                 .hasPathSatisfying(
                         "$.tags[?(@.name=='그룹')]", v -> assertThat(v).asList().hasSize(1));

@@ -40,6 +40,7 @@ public class BlockController {
 
     @Operation(summary = "차단 해제", description = """
                     내가 건 차단을 푼다. 다음 공부방 입장부터 다시 보인다. \
+                    상대도 나를 차단했다면 계속 보이지 않는다 — 어느 한쪽이라도 차단했으면 막힌다. \
                     차단하지 않은 사람이어도 같은 204다.""")
     @ApiResponse(responseCode = "204", description = "해제됨")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")

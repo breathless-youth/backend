@@ -73,6 +73,9 @@ public class GroupMemberController {
     @Operation(summary = "멤버 내보내기", description = """
                     멤버를 그룹에서 내보낸다 — 그룹장만 할 수 있고, 그룹 홈과 공부방 모두 이 경로를 쓴다. 자기 자신은 내보낼 수 없다(나가려면 나가기). \
                     바로 멤버가 아니게 되고, 내보내진 사람은 3일 동안 같은 그룹에 신청·코드 참여를 할 수 없다(409 `RECENTLY_KICKED`). \
+                    비공개 그룹이면 같은 처리에서 초대코드가 새로 발급되고, 예전 코드·링크로 참여하면 INVITE_CODE_NOT_FOUND다. \
+                    응답 형식은 그대로이고 FE는 그룹 정보를 다시 받아 새 코드를 보여 준다. \
+                    내보내진 사람은 새 코드를 받아도 3일 동안 RECENTLY_KICKED다. \
                     내보내진 사람에게 푸시가 가고, 공부방에 있었다면 개인 큐로 `KICKED`, 방 토픽에 `MEMBER_LEFT`가 나간다 (공부방 메시지는 /docs/websocket.html).""")
     @ApiResponse(responseCode = "204", description = "내보내짐")
     @ApiResponse(responseCode = "400", description = "`BAD_REQUEST` 자기 자신을 내보내려 함")

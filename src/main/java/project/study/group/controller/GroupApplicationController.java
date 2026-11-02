@@ -35,7 +35,8 @@ public class GroupApplicationController {
 
     @Operation(summary = "그룹에 신청하기", description = """
                     공개 그룹만. 답이 없으면 3일 뒤 취소된다(`expiresAt`). 비공개 그룹은 신청 없이 초대코드로 들어오므로 400 `BAD_REQUEST`다. \
-                    그룹장이 수락하면 멤버가 되고, 그룹장에게는 푸시가 간다. \
+                    신청하면 그룹장에게 푸시가 가고, 그룹장이 수락하면 멤버가 된다. \
+                    다 찬 그룹에는 신청할 수 없다(GROUP_FULL). 신청한 뒤에 자리가 차면 신청은 기한까지 남고 수락만 GROUP_FULL로 막힌다. \
                     신청은 "들어간 그룹과 답을 기다리는 신청 5개"와 "답을 기다리는 신청 3개" 한도에 들어가고, 같은 그룹에 답을 기다리는 신청은 하나만 둘 수 있다. \
                     신청 소개 글에 연락처나 링크가 있으면 막는다.""")
     @ApiResponse(responseCode = "201", description = "신청됨 — `{applicationId, expiresAt}`")
@@ -50,6 +51,7 @@ public class GroupApplicationController {
             responseCode = "409",
             description = "`ALREADY_MEMBER` 이미 이 그룹의 멤버 / "
                     + "`ALREADY_APPLIED` 이 그룹에 답을 기다리는 신청이 이미 있음 / "
+                    + "`GROUP_FULL` 멤버가 이미 6명 / "
                     + "`RECENTLY_KICKED` 이 그룹에서 내보내진 지 3일이 안 됨 / "
                     + "`GROUP_SLOT_LIMIT` 들어간 그룹과 답을 기다리는 신청이 합쳐 이미 5개 / "
                     + "`APPLICATION_LIMIT` 답을 기다리는 신청이 이미 3곳")
