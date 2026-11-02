@@ -20,8 +20,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
+import project.study.user.dto.DeleteAccountRequest;
 import project.study.user.dto.ProfileImageUpdateRequest;
 import project.study.user.dto.ProfileImageUploadUrlRequest;
 import project.study.user.dto.ProfileImageUploadUrlResponse;
@@ -29,6 +31,7 @@ import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
+import project.study.user.service.AccountDeletionService;
 import project.study.user.service.AuthService;
 import project.study.user.service.DeviceRegistrationService;
 import project.study.user.service.ProfileImageService;
@@ -44,6 +47,7 @@ public class UserController {
     private final UserService userService;
     private final DeviceRegistrationService deviceRegistrationService;
     private final ProfileImageService profileImageService;
+    private final AccountDeletionService accountDeletionService;
 
     @Operation(summary = "익명 기기 유저 등록 (토큰 발급)", description = """
                     앱은 첫 실행 때 **UUID**를 하나 생성해 기기 보안 저장소에 보관하고, \
@@ -181,5 +185,35 @@ public class UserController {
     @DeleteMapping(value = "/me/profile-image", version = "1")
     public ProfileResponse deleteProfileImage(@AuthenticationPrincipal Long userId) {
         return profileImageService.deleteProfileImage(userId);
+    }
+
+    @Operation(summary = "계정 삭제(탈퇴)", description = """
+                    계정과 이 계정의 모든 데이터(공부 기록·과목·방 참가 이력·랭킹·프로필 사진 등)를 즉시 지운다. **되돌릴 수 없다.** \
+                    모든 기기가 로그아웃되고(refresh 전량 무효), 공부방에 있으면 먼저 나간다. 같은 소셜 계정으로 다시 로그인하면 새 가입이다.
+
+                    애플 계정은 앱이 애플 로그인을 다시 띄워 받은 `appleAuthorizationCode`와 `appleClient`를 본문에 함께 보낸다. \
+                    다른 계정과 비회원은 본문이 없어도 된다. 이미 삭제된 계정이어도 204다.""")
+    @ApiResponse(responseCode = "204", description = "삭제됨 — 본문 없음. 앱은 저장된 토큰을 지우고 `POST /api/users`로 새 비회원이 된다")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_FAILED — appleAuthorizationCode가 1024자 초과이거나 appleClient가 정의되지 않은 값",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "우리 access 토큰이 없거나 무효 — 기존 refresh 흐름",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples =
+                                    @ExampleObject(value = "{\"code\": \"UNAUTHORIZED\", \"message\": \"인증이 필요합니다\"}")))
+    @DeleteMapping(value = "/me", version = "1")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteAccount(
+            @AuthenticationPrincipal Long userId, @RequestBody(required = false) @Valid DeleteAccountRequest request) {
+        accountDeletionService.delete(userId, request);
     }
 }
