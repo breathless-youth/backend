@@ -33,7 +33,8 @@
 
 <h1>룸 WebSocket 명세</h1>
 <p class="meta">실시간 공부방(룸)의 STOMP 계약. 기준: 2026-09-17 (BY-667). REST API는 <a href="/swagger-ui.html">Swagger</a>, 이 문서는 소켓 계약만 다룬다.
-서버 코드가 곧 진실이며, 메시지 type·목적지가 이 문서에서 빠지면 서버 빌드가 실패한다.</p>
+서버 코드가 곧 진실이며, 메시지 type·목적지가 이 문서에서 빠지면 서버 빌드가 실패한다.
+다만 그룹 공부방(§11)은 서버 구현보다 계약이 먼저 나가 있다.</p>
 
 <nav><ol>
   <li><a href="#connect">연결과 인증</a></li>
@@ -46,6 +47,7 @@
   <li><a href="#leave">퇴장과 방 소멸</a></li>
   <li><a href="#fe">FE가 처리해야 할 것</a></li>
   <li><a href="#limits">수치 한눈에</a></li>
+  <li><a href="#group-room">그룹 공부방</a></li>
   <li><a href="#changelog">변경 이력</a></li>
 </ol></nav>
 
@@ -283,13 +285,96 @@ sequenceDiagram
   <tr><td>ICE 자격 TTL</td><td>join 응답 <code>iceTtlSeconds</code></td><td>환경마다 다르다</td></tr>
 </table>
 
-<h2 id="changelog">11. 변경 이력</h2>
+<h2 id="group-room">11. 그룹 공부방</h2>
+<div class="note">
+  <strong>그룹 공부방 계약이다. 서버는 BY-1124 4단계에서 보내기 시작한다. 초대코드 방에는 아무것도 바뀌지 않는다.</strong>
+  이 절의 새 필드와 새 메시지 종류는 그룹 공부방에만 나가고, 초대코드 방의 SNAPSHOT·MEMBER_JOINED에서는 새 필드가 빠진다(직렬화에서 생략).
+  그룹·신청·멤버 REST는 <a href="/swagger-ui.html">Swagger</a>의 <code>그룹</code> 태그를 본다.
+</div>
+
+<h3>11.1 들어오기와 나가기</h3>
+<p>그룹 공부방은 그룹마다 열린 방이 하나다. 처음 누군가 자리를 잡을 때 열리고, 마지막 사람이 나가면 닫히며, 다음 입장 때 새로 열린다. 초대코드는 없다.
+구독·발행 목적지는 §3 그대로이고, 입구만 REST가 다르다.</p>
+<ol>
+  <li><code>POST /api/groups/{groupId}/room/join</code> — 그룹 멤버만. 200 <code>{roomId, graceRejoin, cameraOn, micOn, onBreak, iceServers, iceTtlSeconds}</code>.
+    §2의 join과 같은 30초 자리 예약이다. 멤버가 아니면 403 <code>NOT_GROUP_MEMBER</code>, 없거나 사라진 그룹이면 404 <code>GROUP_NOT_FOUND</code>(본문 <code>code</code>로 구분).</li>
+  <li>CONNECT → <code>/user/queue/room</code> 구독 → <code>/topic/room/{roomId}</code> 구독(= 입장 확정). 순서와 SNAPSHOT 재요청은 §2·§9와 같다.</li>
+  <li>발행은 <code>/app/room/{roomId}/snapshot</code> · <code>/app/room/{roomId}/signal</code> · <code>/app/room/{roomId}/state</code>.</li>
+  <li>나가기는 <code>POST /api/groups/{groupId}/room/leave</code>. 소켓은 그다음에 끊는다(§8).</li>
+</ol>
+<ul>
+  <li><code>graceRejoin: true</code>이면 <code>cameraOn</code>, <code>micOn</code>, <code>onBreak</code>는 이전 값이다. 새 입장이거나 이미 확정된 멤버가 ICE 자격을 갱신하려고 다시 부른 경우는 <code>graceRejoin: false</code>이고 세 값은 모두 <code>null</code>이다 — <code>false</code>가 자리를 잃었다는 뜻은 아니다(§2).</li>
+  <li>끊김 유예 30초 안에 다시 들어오면(<code>graceRejoin</code>) 지금 <code>cameraOn</code>처럼 <code>micOn</code>과 <code>onBreak</code>도 이어 간다. 새로 들어오면 둘 다 <code>false</code>다.</li>
+</ul>
+
+<h3>11.2 멤버 객체에 더해지는 필드</h3>
+<p>§5의 멤버 객체(<code>SNAPSHOT.members[]</code>, <code>MEMBER_JOINED.member</code>)에 아래 셋이 더해진다. 기존 필드의 값은 늘리지 않는다 — 휴식은 <code>focusState</code>에 새 값을 더하지 않고 <code>onBreak</code>로 따로 보낸다.</p>
+<table>
+  <tr><th>필드</th><th>타입</th><th>의미</th></tr>
+  <tr><td><code>micOn</code></td><td>boolean</td><td>마지막으로 보고된 마이크 켜짐. 입장 직후 <code>false</code>. <code>graceRejoin</code>이면 이전 값을 이어 간다</td></tr>
+  <tr><td><code>onBreak</code></td><td>boolean</td><td>뽀모도로 휴식 중인지. 입장 직후 <code>false</code>. <code>graceRejoin</code>이면 이전 값을 이어 간다</td></tr>
+  <tr><td><code>owner</code></td><td>boolean</td><td>이 멤버가 지금 그룹장인지. 바뀌면 방 토픽에 OWNER_CHANGED가 온다</td></tr>
+</table>
+
+<h3>11.3 <code>/app/room/{roomId}/state</code>가 더 받는 것</h3>
+<pre><code>{ "micOn": true }
+{ "onBreak": true }</code></pre>
+<table>
+  <tr><th>필드</th><th>타입</th><th>의미</th></tr>
+  <tr><td><code>micOn</code></td><td>boolean, 선택</td><td>마이크 켜짐 → 방에 MIC_CHANGED</td></tr>
+  <tr><td><code>onBreak</code></td><td>boolean, 선택</td><td>뽀모도로 휴식 시작·끝 → 방에 BREAK_CHANGED</td></tr>
+</table>
+<ul>
+  <li>§4.1과 같은 규칙이다. 필드는 모두 선택이고, <strong>바뀐 값만 알리면 된다</strong>. 반영된 필드마다 이벤트가 하나씩 나간다.</li>
+  <li>소리는 영상처럼 WebRTC P2P로 오가고, 서버는 녹음·저장하지 않는다. 서버가 다루는 것은 <code>micOn</code> 표시값뿐이다.</li>
+</ul>
+
+<h3>11.4 새 메시지 종류</h3>
+<p>"방 토픽"은 <code>/topic/room/{roomId}</code>, "내 큐"는 <code>/user/queue/room</code>이다(§5).</p>
+<table>
+  <tr><th>type</th><th>어디로</th><th>필드</th><th>언제</th></tr>
+  <tr><td><code>MIC_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>, <code>micOn</code></td><td>누군가의 state 보고에 <code>micOn</code>이 있을 때(마이크를 켜고 끌 때)</td></tr>
+  <tr><td><code>BREAK_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>, <code>onBreak</code></td><td>뽀모도로 휴식이 시작되거나 끝날 때</td></tr>
+  <tr><td><code>OWNER_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>(새 그룹장)</td><td>공부방이 열려 있는 동안 그룹장이 바뀔 때</td></tr>
+  <tr><td><code>KICKED</code></td><td>내보내진 당사자의 내 큐</td><td><code>groupId</code></td><td>공부방에 있던 사람이 그룹에서 내보내질 때. 이어서 방 토픽에 MEMBER_LEFT가 간다</td></tr>
+  <tr><td><code>PEER_BLOCKED</code></td><td>차단 관계인 두 사람 각자의 내 큐</td><td><code>userId</code>(연결하지 말 상대)</td><td>차단 관계인 두 사람이 같은 방에 있게 될 때(입장 확정 시)와, 공부방에서 신고·차단하는 순간. <strong>SNAPSHOT을 보낼 때마다</strong> 그 세션에 해당하는 PEER_BLOCKED를 상대마다 하나씩 이어서 다시 보낸다</td></tr>
+</table>
+
+<h3>예시</h3>
+<pre><code>{ "type": "SNAPSHOT", "members": [
+  { "userId": 12, "nickname": "상재", "goal": "정보처리기사", "category": "자격증",
+    "profileImageUrl": null, "cameraOn": true, "focusState": "FOCUS", "focusSec": 1520, "disconnected": false,
+    "micOn": true, "onBreak": false, "owner": true },
+  { "userId": 34, "nickname": "원일", "goal": null, "category": null, "profileImageUrl": null,
+    "cameraOn": false, "focusState": "FOCUS", "focusSec": 300, "disconnected": false,
+    "micOn": false, "onBreak": true, "owner": false }
+] }
+{ "type": "MEMBER_JOINED", "member": { "userId": 56, "nickname": "선규", "goal": null, "category": null,
+    "profileImageUrl": null, "cameraOn": false, "focusState": "FOCUS", "focusSec": 0, "disconnected": false,
+    "micOn": false, "onBreak": false, "owner": false } }
+{ "type": "MIC_CHANGED", "userId": 12, "micOn": false }
+{ "type": "BREAK_CHANGED", "userId": 34, "onBreak": false }
+{ "type": "OWNER_CHANGED", "userId": 34 }
+{ "type": "KICKED", "groupId": 7 }
+{ "type": "PEER_BLOCKED", "userId": 56 }</code></pre>
+
+<h3>11.5 차단·내보내짐·그룹 변화</h3>
+<ul>
+  <li><strong>SIGNAL 차단.</strong> 차단 관계(어느 쪽이 차단했든)인 두 사람 사이의 signal(§4.2)은 서버가 조용히 버린다. 응답이나 오류는 없다. 이 상대와는 WebRTC 연결을 맺지 않는다.</li>
+  <li><strong>PEER_BLOCKED는 양쪽이 같은 모양이다.</strong> 누가 차단했는지 알 수 없다. 구독 순서 때문에 놓치지 않도록 SNAPSHOT(재요청 응답 포함)마다 다시 오므로, 같은 <code>userId</code>가 여러 번 와도 같은 결과여야 한다.</li>
+  <li><strong>내보내짐.</strong> 당사자는 내 큐로 KICKED를 받고, 나머지 멤버는 방 토픽으로 MEMBER_LEFT를 받는다. 서버가 자리를 이미 지웠으므로 방 화면을 닫으면 된다. 그 그룹의 멤버가 아니게 되므로 같은 방에 다시 join하면 403 <code>NOT_GROUP_MEMBER</code>다.</li>
+  <li><strong>그룹을 나가거나 그룹이 사라질 때.</strong> 공부방에 있었다면 서버가 자리를 지우고 방 토픽에 MEMBER_LEFT를 보낸다. KICKED는 내보내진 때만 온다.</li>
+  <li><strong>그룹장이 바뀔 때.</strong> OWNER_CHANGED의 <code>userId</code> 멤버만 <code>owner: true</code>이고 나머지는 <code>false</code>다. 새 그룹장이 방에 없으면 목록에 없는 <code>userId</code>이므로 그 항목은 무시하되 기존 그룹장의 <code>owner</code>는 내린다.</li>
+</ul>
+
+<h2 id="changelog">12. 변경 이력</h2>
 <table>
   <tr><th>날짜</th><th>티켓</th><th>내용</th></tr>
   <tr><td>2026-09-17</td><td>BY-667</td><td>첫 판. BY-626(룸 상태 DB 원본화) 이후 계약 기준: <code>focusSec</code>, <code>members[].disconnected</code>, <code>ROOM_UNAVAILABLE</code>, SNAPSHOT 재요청</td></tr>
   <tr><td>2026-09-18</td><td>BY-676</td><td>구 앱(v1.2.x) 병행: CONNECT에 <code>Authorization</code>이 없을 때만 핸드셰이크 <code>?userId=</code> 폴백(§1). 새 앱 계약은 변화 없음. 강제 업데이트 뒤 제거 예정</td></tr>
   <tr><td>2026-10-16</td><td>BY-925</td><td>빈 방 소멸을 600초에서 3600초로 늘림(§8·§10). 방 생성 응답 <code>emptyTtlSeconds</code>도 3600. 소멸한 코드의 ROOM_CLOSED 안내 600초는 그대로</td></tr>
   <tr><td>2026-10-28</td><td>BY-1035</td><td>멤버 객체에 <code>profileImageUrl</code>(string | null) 추가(§5). 입장 시점 값이라 방 안에서 사진을 바꿔도 다음 입장부터 반영</td></tr>
+  <tr><td>2026-11-03</td><td>BY-1124</td><td>그룹 공부방 계약(§11) 추가: 멤버 객체 <code>micOn</code>·<code>onBreak</code>·<code>owner</code>, state 보고 <code>micOn</code>·<code>onBreak</code>, 새 type 5개(<code>MIC_CHANGED</code>, <code>BREAK_CHANGED</code>, <code>OWNER_CHANGED</code>, <code>KICKED</code>, <code>PEER_BLOCKED</code>). 서버 송신은 4단계부터. 초대코드 방은 변화 없음</td></tr>
 </table>
 
 </main>
