@@ -1,8 +1,9 @@
 package project.study.user.oauth;
 
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.RestClientException;
 import project.study.user.entity.Provider;
 
 @Component
@@ -28,10 +29,12 @@ public class KakaoTokenVerifier implements OAuthTokenVerifier {
         KakaoTokenInfo tokenInfo;
         try {
             tokenInfo = restClient.get().uri(TOKEN_INFO_URL, idToken).retrieve().body(KakaoTokenInfo.class);
-        } catch (RestClientResponseException e) {
+        } catch (RestClientException e) {
             throw new InvalidOAuthTokenException("카카오 ID 토큰 검증에 실패했습니다");
         }
-        if (tokenInfo == null || !properties.appKeys().contains(tokenInfo.aud())) {
+        if (tokenInfo == null
+                || !StringUtils.hasText(tokenInfo.aud())
+                || !properties.appKeys().contains(tokenInfo.aud())) {
             throw new InvalidOAuthTokenException("카카오 ID 토큰의 대상(aud)이 일치하지 않습니다");
         }
         return new OAuthUserInfo(Provider.KAKAO, tokenInfo.sub(), tokenInfo.email(), tokenInfo.nonce());

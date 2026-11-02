@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -71,6 +73,21 @@ class GoogleTokenVerifierTest {
     @Test
     void 구글이_거부한_토큰은_예외를_던진다() {
         server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withBadRequest());
+
+        assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(InvalidOAuthTokenException.class);
+    }
+
+    @Test
+    void 네트워크_실패는_InvalidOAuthTokenException으로_바꾼다() {
+        server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withException(new IOException("connection reset")));
+
+        assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(InvalidOAuthTokenException.class);
+    }
+
+    @Test
+    void aud가_없는_응답은_거부한다() {
+        server.expect(requestTo(TOKEN_INFO_URL))
+                .andRespond(withSuccess("{\"sub\":\"12345\"}", MediaType.APPLICATION_JSON));
 
         assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(InvalidOAuthTokenException.class);
     }

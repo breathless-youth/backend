@@ -1,8 +1,9 @@
 package project.study.user.oauth;
 
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.RestClientException;
 import project.study.user.entity.Provider;
 
 @Component
@@ -28,10 +29,12 @@ public class GoogleTokenVerifier implements OAuthTokenVerifier {
         GoogleTokenInfo tokenInfo;
         try {
             tokenInfo = restClient.get().uri(TOKEN_INFO_URL, idToken).retrieve().body(GoogleTokenInfo.class);
-        } catch (RestClientResponseException e) {
+        } catch (RestClientException e) {
             throw new InvalidOAuthTokenException("구글 ID 토큰 검증에 실패했습니다");
         }
-        if (tokenInfo == null || !properties.clientIds().contains(tokenInfo.aud())) {
+        if (tokenInfo == null
+                || !StringUtils.hasText(tokenInfo.aud())
+                || !properties.clientIds().contains(tokenInfo.aud())) {
             throw new InvalidOAuthTokenException("구글 ID 토큰의 대상(aud)이 일치하지 않습니다");
         }
         return new OAuthUserInfo(Provider.GOOGLE, tokenInfo.sub(), tokenInfo.email(), tokenInfo.nonce());
