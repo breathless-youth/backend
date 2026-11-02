@@ -3,6 +3,10 @@ package project.study.group;
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.support.AuthTestSupport.asUser;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +33,11 @@ class GroupContractApiTest {
 
     private static final String JOIN_BODY = """
             {"inviteCode": "K7M2PQ", "via": "LINK"}""";
+
+    private static final String APPLY_BODY = """
+            {"introduction": "새벽 5시에 일어나는 공시생이에요"}""";
+
+    private static final Set<String> HTTP_METHODS = Set.of("get", "put", "post", "delete", "patch");
 
     private static final String UPDATE_BODY = """
             {"name": "새벽 공시반", "category": "CIVIL_SERVICE", "description": "같이 해요"}""";
@@ -299,5 +308,85 @@ class GroupContractApiTest {
                 // 태그 설명은 GroupController에만 있다 — 컨트롤러마다 적으면 springdoc이 합치다 어긋난다
                 .hasPathSatisfying(
                         "$.tags[?(@.name=='그룹')]", v -> assertThat(v).asList().hasSize(1));
+    }
+
+    @Test
+    void 신청과_차단_경로도_로직_전에는_501이다() {
+        assertNotImplemented(withBody(post("/api/groups/10/applications"), APPLY_BODY));
+        assertNotImplemented(get("/api/groups/10/applications"));
+        assertNotImplemented(get("/api/group-applications/me"));
+        assertNotImplemented(delete("/api/group-applications/55"));
+        assertNotImplemented(post("/api/group-applications/55/accept"));
+        assertNotImplemented(post("/api/group-applications/55/decline"));
+        assertNotImplemented(withBody(post("/api/group-applications/55/report"), """
+                {"reason": "부적절한 소개 글이에요"}"""));
+        assertNotImplemented(get("/api/blocks"));
+        assertNotImplemented(delete("/api/blocks/2"));
+    }
+
+    @Test
+    void 신청_소개_글이_비었거나_51자면_400이다() {
+        assertValidationFailed(withBody(post("/api/groups/10/applications"), """
+                {"introduction": "  "}"""));
+        assertValidationFailed(withBody(post("/api/groups/10/applications"), """
+                {"introduction": "%s"}""".formatted("가".repeat(51))));
+        assertValidationFailed(withBody(post("/api/groups/10/applications"), "{}"));
+        // 경계: 50자는 검증을 통과해 501까지 간다
+        assertNotImplemented(withBody(post("/api/groups/10/applications"), """
+                {"introduction": "%s"}""".formatted("가".repeat(50))));
+    }
+
+    @Test
+    void 신청_신고_사유가_101자면_400_VALIDATION_FAILED다() {
+        assertValidationFailed(withBody(post("/api/group-applications/55/report"), """
+                {"reason": "%s"}""".formatted("가".repeat(101))));
+    }
+
+    @Test
+    void 그룹_API는_모두_그룹_태그_하나다() {
+        assertThat(mvc.get().uri("/v3/api-docs"))
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.paths")
+                .asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
+                .satisfies(pathItems -> {
+                    List<String> groupPaths = pathItems.keySet().stream()
+                            .filter(path -> path.startsWith("/api/groups")
+                                    || path.startsWith("/api/group-applications")
+                                    || path.startsWith("/api/blocks"))
+                            .toList();
+                    // 신청·차단 경로가 문서에 실려야 아래 검사가 의미 있다
+                    assertThat(groupPaths)
+                            .contains(
+                                    "/api/groups/{groupId}/applications",
+                                    "/api/group-applications/me",
+                                    "/api/group-applications/{applicationId}",
+                                    "/api/group-applications/{applicationId}/accept",
+                                    "/api/group-applications/{applicationId}/decline",
+                                    "/api/group-applications/{applicationId}/report",
+                                    "/api/blocks",
+                                    "/api/blocks/{userId}");
+                    for (String path : groupPaths) {
+                        castMap(pathItems.get(path)).forEach((method, operation) -> {
+                            if (HTTP_METHODS.contains(method)) {
+                                assertThat(castMap(operation).get("tags"))
+                                        .as("%s %s", method, path)
+                                        .isEqualTo(List.of("그룹"));
+                            }
+                        });
+                    }
+                });
+    }
+
+    private void assertValidationFailed(MockMvcRequestBuilder request) {
+        assertThat(request)
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("VALIDATION_FAILED"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Object value) {
+        return (Map<String, Object>) value;
     }
 }
