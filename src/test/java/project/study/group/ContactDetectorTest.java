@@ -37,8 +37,10 @@ class ContactDetectorTest {
                 "오픈채팅 abc123",
                 "텔레그램 kimstudy",
                 "디엠 kim_99",
-                // ---- 추가 예시: 숫자 구분자 하나 (-, 공백, .) ----
+                // ---- 추가 예시: 숫자 구분자 하나 (-, 공백·줄바꿈·탭, .) ----
                 "010.1234.5678",
+                "010\n1234\n5678",
+                "010\t1234\t5678",
                 // ---- 추가 예시: 연락 수단 말 전부 (앞 조건을 너무 조이지 않았는지) ----
                 "dm kim99",
                 "라인 abc123",
@@ -50,6 +52,10 @@ class ContactDetectorTest {
                 "텔레 abc123",
                 "카톡 아이디 kim1234",
                 "인스타 ID: study_kim",
+                "카카오 아이디 kim1234",
+                "kakao kim1234",
+                "갠톡 kim1234",
+                "insta kim_study",
                 // ---- 추가 예시: 대소문자·한글 도메인 ----
                 "KAKAO.COM",
                 "공부모임.com",
@@ -89,7 +95,9 @@ class ContactDetectorTest {
                 "가이드라인 100선",
                 "DM me later",
                 "naver.company",
-                "화이팅 @ 7시"
+                "화이팅 @ 7시",
+                "@10시 출석", // @ 뒤에 영문자가 없으면 아이디가 아니다
+                "installation guide" // insta는 영어 단어 속에서는 연락 수단이 아니다
             })
     void 통과시킨다(String text) {
         assertThat(ContactDetector.containsContact(text)).isFalse();

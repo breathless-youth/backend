@@ -2,6 +2,7 @@ package project.study.group;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -68,5 +69,21 @@ class GroupApplicationBlockSwaggerTest {
                 // 컨트롤러가 늘어도 태그 설명은 GroupController 하나다
                 .hasPathSatisfying(
                         "$.tags[?(@.name=='그룹')]", v -> assertThat(v).asList().hasSize(1));
+    }
+
+    /**
+     * 403·501은 그룹 오퍼레이션이 @ApiResponse로 직접 적는다. 핸들러를 @ResponseStatus로 두면 springdoc이 그 상태를 모든 오퍼레이션에
+     * 일반 응답으로 붙여, 403·501과 무관한 기존 API(랭킹 등)의 문서가 어긋난다.
+     */
+    @Test
+    void 그룹과_무관한_기존_오퍼레이션에_403_501_응답이_자동으로_붙지_않는다() {
+        assertThat(mvc.get().uri("/v3/api-docs"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.paths['/api/rankings/board'].get.responses",
+                        v -> assertThat(v)
+                                .asInstanceOf(InstanceOfAssertFactories.MAP)
+                                .doesNotContainKeys("403", "501"));
     }
 }

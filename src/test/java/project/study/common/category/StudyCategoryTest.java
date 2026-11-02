@@ -2,6 +2,7 @@ package project.study.common.category;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Pattern;
 import java.util.Arrays;
 import java.util.List;
@@ -44,6 +45,15 @@ class StudyCategoryTest {
         Set<String> names =
                 Arrays.stream(StudyCategory.values()).map(Enum::name).collect(Collectors.toSet());
         assertThat(allowed).isEqualTo(names);
+
+        // Swagger 허용값은 FE 칩의 순서가 되므로 enum 선언 순서와 같아야 한다
+        String[] swaggerValues = ProfileUpdateRequest.class
+                .getDeclaredField("category")
+                .getAnnotation(Schema.class)
+                .allowableValues();
+        assertThat(swaggerValues)
+                .containsExactly(
+                        Arrays.stream(StudyCategory.values()).map(Enum::name).toArray(String[]::new));
 
         for (StudyCategory category : StudyCategory.values()) {
             assertThat(Categories.label(category.name())).isEqualTo(category.label());

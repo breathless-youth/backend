@@ -69,7 +69,10 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void BadRequestException은_400으로_응답한다() {
-        assertThat(mvc.get().uri("/test/bad-request").exchange()).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(mvc.get().uri("/test/bad-request").exchange())
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("BAD_REQUEST"));
     }
 
     @Test
