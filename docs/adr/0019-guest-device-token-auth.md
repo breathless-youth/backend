@@ -42,7 +42,7 @@ ADR-0013으로 소셜 로그인과 JWT를 재도입했다가 2026-09-06 사업 �
 7. **로그 컨텍스트의 userId는 `JwtFilter`가 SecurityContext에서 싣는다.** ADR-0016의 결정 3·4
    (BodyAdvice·경로변수 인터셉터)는 폐기. `JwtFilter`는 빈이 아니다 — 빈이면 Boot가 서블릿 필터로
    한 번 더 등록해 시큐리티 체인 밖에서도 돈다.
-8. **소셜 로그인(login·link·logout·탈퇴)은 계속 파킹.** `feature/BY-383-auth-contract`와 주석 코드가
+8. **소셜 로그인(login·link·logout·탈퇴)은 계속 파킹(ADR-0041이 대체).** `feature/BY-383-auth-contract`와 주석 코드가
    원본이다. ADR-0013 중 "DEVICE 등록도 JWT 발급"(결정 4)만 이 ADR로 선행 구현했다.
 
 ## 결과
