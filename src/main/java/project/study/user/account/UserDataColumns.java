@@ -11,10 +11,6 @@ public final class UserDataColumns {
 
     /** 아직 처리기가 없는 컬럼. 처리기를 만들면 여기서 지운다. */
     public static final Set<String> PENDING = Set.of(
-            "study_session.user_id",
-            "active_study_session.user_id",
-            "study_subject.user_id",
-            "daily_completion.user_id",
             "rooms.created_by",
             "room_participations.user_id",
             "rtc_connection_stat.user_id",

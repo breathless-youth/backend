@@ -1,5 +1,8 @@
 package project.study.user.account;
 
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -102,6 +105,67 @@ public class UserDataFixture {
         jdbc.sql("""
                         INSERT INTO user_notification (user_id, notification_id, is_read, created_at)
                         VALUES (:u, :n, false, now())""").param("u", userId).param("n", notificationId).update();
+    }
+
+    /** endedAt이 null이면 옛 세션처럼 ended_at을 비워 둔다. */
+    public long seedSession(long userId, Instant startedAt, Instant endedAt) {
+        return jdbc.sql("""
+                        INSERT INTO study_session (user_id, stat_date, started_at, ended_at, study_sec, focus_sec)
+                        VALUES (:u, DATE '2030-03-01', :s, :e, 60, 60) RETURNING id""")
+                .param("u", userId)
+                .param("s", Timestamp.from(startedAt))
+                .param("e", endedAt == null ? null : Timestamp.from(endedAt), Types.TIMESTAMP)
+                .query(Long.class)
+                .single();
+    }
+
+    public void seedStatusEvent(long sessionId) {
+        jdbc.sql("INSERT INTO status_event (session_id, status) VALUES (:s, 'PAUSE')")
+                .param("s", sessionId)
+                .update();
+    }
+
+    public void seedActiveSession(long userId, Instant startedAt) {
+        jdbc.sql("""
+                        INSERT INTO active_study_session (user_id, started_at, reported_at, last_seen_at, study_sec, focus_sec)
+                        VALUES (:u, :s, now(), now(), 0, 0)""").param("u", userId).param("s", Timestamp.from(startedAt)).update();
+    }
+
+    public long seedSubject(long userId, String name, int sortOrder, boolean deleted) {
+        return jdbc.sql("""
+                        INSERT INTO study_subject (user_id, name, sort_order, deleted_at)
+                        VALUES (:u, :n, :o, CASE WHEN :d THEN now() END) RETURNING id""")
+                .param("u", userId)
+                .param("n", name)
+                .param("o", sortOrder)
+                .param("d", deleted)
+                .query(Long.class)
+                .single();
+    }
+
+    public long seedTask(long subjectId, String name) {
+        return jdbc.sql("INSERT INTO study_task (subject_id, name) VALUES (:s, :n) RETURNING id")
+                .param("s", subjectId)
+                .param("n", name)
+                .query(Long.class)
+                .single();
+    }
+
+    public void seedSegment(long sessionId, long subjectId, Instant startedAt, Instant endedAt) {
+        jdbc.sql("""
+                        INSERT INTO study_session_subject_segment (session_id, subject_id, started_at, ended_at, study_sec, focus_sec)
+                        VALUES (:sess, :sub, :s, :e, 60, 60)""")
+                .param("sess", sessionId)
+                .param("sub", subjectId)
+                .param("s", Timestamp.from(startedAt))
+                .param("e", Timestamp.from(endedAt))
+                .update();
+    }
+
+    public void seedDailyCompletion(long userId, long subjectId, LocalDate date) {
+        jdbc.sql("""
+                        INSERT INTO daily_completion (user_id, target_type, target_id, completed_date, completed_at)
+                        VALUES (:u, 'SUBJECT', :t, :d, now())""").param("u", userId).param("t", subjectId).param("d", date).update();
     }
 
     /** 모든 처리기가 책임지는 컬럼에서 userId를 가리키는 행의 합. */
