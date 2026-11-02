@@ -19,8 +19,7 @@ public record GroupUpdateRequest(
         StudyCategory category,
 
         @Schema(
-                description =
-                        "그룹 소개 — 0~500자. 이 요청은 전체 교체라 생략하거나 비우면 소개가 지워진다. " + "연락처나 링크가 있으면 400 `CONTACT_NOT_ALLOWED`",
+                description = "그룹 소개 — 0~500자. 이 요청은 전체 교체라 생략하거나 비우면 소개가 지워진다. 연락처나 링크가 있으면 400 `CONTACT_NOT_ALLOWED`",
                 example = "평일 새벽 5시부터 같이 공부해요")
         @TextLength(max = 500)
         String description) {}

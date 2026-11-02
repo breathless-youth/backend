@@ -31,8 +31,7 @@ public record GroupCreateRequest(
         StudyCategory category,
 
         @Schema(
-                description =
-                        "그룹 소개 — 0~500자 (이름과 같은 글자 수 기준). 생략하거나 비워도 된다. " + "연락처나 링크가 있으면 400 `CONTACT_NOT_ALLOWED`",
+                description = "그룹 소개 — 0~500자 (이름과 같은 글자 수 기준). 생략하거나 비워도 된다. 연락처나 링크가 있으면 400 `CONTACT_NOT_ALLOWED`",
                 example = "평일 새벽 5시부터 같이 공부해요")
         @TextLength(max = 500)
         String description) {}

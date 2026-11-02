@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
 
-/** 내가 차단한 사람 목록 — 차단은 그룹과 상관없이 사용자 사이에 걸려, 어느 그룹 공부방에서든 서로 보이지 않는다. */
+/** 내가 차단한 사람 목록 — 차단은 그룹과 상관없이 사용자 사이에 걸려, 어느 그룹 공부방에서든 영상·소리가 오가지 않는다. */
 public record BlockListResponse(
         @Schema(description = "내가 차단한 사람 — 차단한 순서(오래된 것부터)") List<BlockedUser> blockedUsers) {
 

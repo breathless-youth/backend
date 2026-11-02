@@ -98,7 +98,7 @@ public class GroupController {
     @ApiResponse(
             responseCode = "400",
             description = "`VALIDATION_FAILED` 이름 1~20자·소개 0~500자 위반, 필수값 누락 / "
-                    + "`BAD_REQUEST` 없는 시험·목표·공개 여부 값, 읽을 수 없는 본문 / "
+                    + "`BAD_REQUEST` 없는 시험·목표 값, 읽을 수 없는 본문 / "
                     + "`CONTACT_NOT_ALLOWED` 이름이나 소개에 연락처·링크가 있음")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "403", description = "`NOT_GROUP_OWNER` 그룹장이 아님")

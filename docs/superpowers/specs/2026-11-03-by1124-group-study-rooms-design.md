@@ -89,7 +89,7 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
 | `ALREADY_APPLIED` | 409 | 이 그룹에 답을 기다리는 신청이 이미 있다 |
 | `ALREADY_MEMBER` | 409 | 이미 멤버다 (신청할 때) |
 | `APPLICATION_NOT_PENDING` | 409 | 이미 답했거나 취소·만료된 신청이다 |
-| `GROUP_NOT_FOUND` | 404 | 없거나 사라진 그룹, 또는 비공개 그룹을 공개 그룹 보기로 열었다 |
+| `GROUP_NOT_FOUND` | 404 | 없거나 사라진 그룹, 또는 비공개 그룹을 공개 그룹 보기로 열었거나 비공개 그룹에 신청했다 |
 | `GROUP_MEMBER_NOT_FOUND` | 404 | 그 사람은 이 그룹 멤버가 아니다 (넘기기·내보내기·신고 대상) |
 | `INVITE_CODE_NOT_FOUND` | 404 | 없거나 새로 만들어져 막힌 초대코드 (기존 코드 재사용) |
 | `NOT_GROUP_MEMBER` | 403 | 멤버만 할 수 있다 |
@@ -113,12 +113,12 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
 | 멤버 공부 알림 | `PUT /api/groups/{groupId}/notifications` | 멤버 | `{enabled}`. 처음엔 꺼짐 |
 | 멤버 목록 | `GET /api/groups/{groupId}/members` | 멤버 | `{userId, nickname, profileImageUrl, owner, joinedAt, lastStudiedAt}` |
 | 그룹장 넘기기 | `PUT /api/groups/{groupId}/owner` | 그룹장 | `{userId}` |
-| 내보내기 | `DELETE /api/groups/{groupId}/members/{userId}` | 그룹장 | 자기 자신은 안 된다. 그룹 홈·공부방 모두 이 경로. 비공개 그룹이면 초대코드도 새로 발급된다(응답 형식은 그대로, FE가 그룹 정보를 다시 받는다) |
+| 내보내기 | `DELETE /api/groups/{groupId}/members/{userId}` | 그룹장 | 자기 자신은 안 된다. 그룹 홈·공부방 모두 이 경로. 비공개 그룹이면 초대코드도 새로 발급된다(응답 형식은 그대로, FE는 초대코드 보기 `GET /api/groups/{groupId}/invite`를 다시 받아 새 코드를 보여 준다) |
 | 나가기 | `POST /api/groups/{groupId}/leave` | 멤버 | 혼자 남은 그룹장이면 그룹이 사라진다 |
 | 초대코드 보기 | `GET /api/groups/{groupId}/invite` | 멤버 | 비공개 그룹만, `{inviteCode}` |
 | 코드 새로 만들기 | `POST /api/groups/{groupId}/invite` | 그룹장 | 이전 코드는 바로 막힌다 |
 | 코드·링크로 들어오기 | `POST /api/groups/join` | 누구나 | `{inviteCode, via: LINK\|CODE}` → `{groupId, joined}`. 이미 멤버면 409 대신 `joined:false`로 200 (링크를 두 번 눌러도 그룹 홈으로 간다) |
-| 신청 보내기 | `POST /api/groups/{groupId}/applications` | 누구나 | `{introduction}` → 201 `{applicationId, expiresAt}`. 공개 그룹만 |
+| 신청 보내기 | `POST /api/groups/{groupId}/applications` | 누구나 | `{introduction}` → 201 `{applicationId, expiresAt}`. 공개 그룹만, 비공개 그룹이면 `GROUP_NOT_FOUND` |
 | 그룹장용 신청 목록 | `GET /api/groups/{groupId}/applications` | 그룹장 | `{remainingSeats, applications[{applicationId, userId, nickname, profileImageUrl, introduction, appliedAt, expiresAt}]}`, 신청한 순서 |
 | 내 신청 목록 | `GET /api/group-applications/me` | 누구나 | 답을 기다리는 것만 `{applicationId, groupId, groupName, category, appliedAt, expiresAt}` |
 | 신청 취소 | `DELETE /api/group-applications/{applicationId}` | 신청한 사람 | |
@@ -175,7 +175,7 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
 | `KICKED` | 당사자 개인 큐 | `groupId` | 공부방에 있던 사람이 내보내질 때. 이어서 방 토픽에 `MEMBER_LEFT` |
 | `PEER_BLOCKED` | 두 사람 각자 개인 큐 | `userId`(연결하지 말 상대) | 차단 관계인 두 사람이 같은 방에 있게 될 때(입장 확정 시)와, 공부방에서 신고·차단하는 순간. 구독 순서 때문에 놓치지 않게, SNAPSHOT을 보낼 때마다 그 세션에 해당하는 `PEER_BLOCKED`를 이어서 다시 보낸다. 양쪽 모두 같은 모양이라 누가 차단했는지 알 수 없다 |
 
-- **SIGNAL**: 차단 관계(어느 쪽이든)인 두 사람 사이는 서버가 조용히 버린다.
+- **SIGNAL**: 차단 관계(어느 쪽이든)인 두 사람 사이는 서버가 조용히 버린다. 이미 맺은 연결은 서버가 끊을 수 없으므로 FE가 `PEER_BLOCKED`를 받으면 그 상대와의 기존 연결을 즉시 닫는다(상대 타일은 카메라를 끈 사람처럼 프로필로 보이고, SNAPSHOT·`MEMBER_JOINED`·방 토픽 이벤트에는 그대로 나온다).
 - **마이크·휴식 초기값**: 새로 들어오면 `micOn`, `onBreak`는 거짓이다. 30초 안에 다시 들어오는 경우(`graceRejoin`)는 지금 `cameraOn`처럼 이어 간다.
 - **그룹을 나가거나 그룹이 사라질 때** 공부방에 있었다면 자리를 지우고 `MEMBER_LEFT`를 보낸다 (`KICKED`는 내보내진 때만).
 - 소리는 영상처럼 P2P이고 서버는 녹음·저장하지 않는다.

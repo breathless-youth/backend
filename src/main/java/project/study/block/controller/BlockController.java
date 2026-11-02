@@ -30,7 +30,7 @@ public class BlockController {
 
     @Operation(summary = "차단 목록", description = """
                     내가 차단한 사람을 차단한 순서(오래된 것부터)로 준다. 차단은 공부방에서 멤버를 신고할 때 함께 걸리고, \
-                    걸리면 어느 그룹 공부방에서든 서로 보이지 않는다. 이 목록에는 내가 건 차단만 나오고, 나를 차단한 사람은 알 수 없다.""")
+                    걸리면 어느 그룹 공부방에서든 영상·소리가 오가지 않는다. 이 목록에는 내가 건 차단만 나오고, 나를 차단한 사람은 알 수 없다.""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 차단한 사람이 없으면 `blockedUsers`가 빈 배열")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @GetMapping(version = "1")
@@ -39,8 +39,8 @@ public class BlockController {
     }
 
     @Operation(summary = "차단 해제", description = """
-                    내가 건 차단을 푼다. 다음 공부방 입장부터 다시 보인다. \
-                    상대도 나를 차단했다면 계속 보이지 않는다 — 어느 한쪽이라도 차단했으면 막힌다. \
+                    내가 건 차단을 푼다. 다음 공부방 입장부터 영상·소리가 다시 오간다. \
+                    상대도 나를 차단했다면 계속 오가지 않는다 — 어느 한쪽이라도 차단했으면 막힌다. \
                     차단하지 않은 사람이어도 같은 204다.""")
     @ApiResponse(responseCode = "204", description = "해제됨")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")

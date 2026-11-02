@@ -34,7 +34,7 @@ public class GroupApplicationController {
     private final GroupApplicationService groupApplicationService;
 
     @Operation(summary = "그룹에 신청하기", description = """
-                    공개 그룹만. 답이 없으면 3일 뒤 취소된다(`expiresAt`). 비공개 그룹은 신청 없이 초대코드로 들어오므로 400 `BAD_REQUEST`다. \
+                    공개 그룹만. 답이 없으면 3일 뒤 취소된다(`expiresAt`). 비공개 그룹은 신청 없이 초대코드로 들어온다 — 비공개 그룹에 신청하면 공개 그룹 보기처럼 404 `GROUP_NOT_FOUND`이고, 비공개 그룹이 있는지는 알려 주지 않는다. \
                     신청하면 그룹장에게 푸시가 가고, 그룹장이 수락하면 멤버가 된다. \
                     다 찬 그룹에는 신청할 수 없다(GROUP_FULL). 신청한 뒤에 자리가 차면 신청은 기한까지 남고 수락만 GROUP_FULL로 막힌다. \
                     신청은 "들어간 그룹과 답을 기다리는 신청 5개"와 "답을 기다리는 신청 3개" 한도에 들어가고, 같은 그룹에 답을 기다리는 신청은 하나만 둘 수 있다. \
@@ -43,10 +43,10 @@ public class GroupApplicationController {
     @ApiResponse(
             responseCode = "400",
             description = "`VALIDATION_FAILED` 신청 소개 글 1~50자 위반, 필수값 누락 / "
-                    + "`BAD_REQUEST` 비공개 그룹, 읽을 수 없는 본문 / "
+                    + "`BAD_REQUEST` 읽을 수 없는 본문 / "
                     + "`CONTACT_NOT_ALLOWED` 신청 소개 글에 연락처·링크가 있음")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
-    @ApiResponse(responseCode = "404", description = "`GROUP_NOT_FOUND` 없거나 사라진 그룹")
+    @ApiResponse(responseCode = "404", description = "`GROUP_NOT_FOUND` 없거나 사라진 그룹, 또는 비공개 그룹")
     @ApiResponse(
             responseCode = "409",
             description = "`ALREADY_MEMBER` 이미 이 그룹의 멤버 / "

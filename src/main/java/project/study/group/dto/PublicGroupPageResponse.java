@@ -6,9 +6,7 @@ import project.study.common.category.StudyCategory;
 
 /** 공개 그룹 목록의 한 쪽 — 쪽 번호 방식이라 다음 쪽이 있는지만 준다. */
 public record PublicGroupPageResponse(
-        @Schema(
-                description =
-                        "이 쪽의 공개 그룹 — 다 차지 않은 그룹 → 평균 많은 순 → 그룹 ID 작은 순, " + "쪽마다 순서가 바뀔 수 있어 FE가 groupId로 중복을 거른다")
+        @Schema(description = "이 쪽의 공개 그룹 — 다 차지 않은 그룹 → 평균 많은 순 → 그룹 ID 작은 순, 쪽마다 순서가 바뀔 수 있어 FE가 groupId로 중복을 거른다")
         List<PublicGroupCard> groups,
 
         @Schema(description = "다음 쪽이 있으면 true — 없으면 목록의 끝이다", example = "true")

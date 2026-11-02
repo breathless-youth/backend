@@ -55,7 +55,8 @@ public class GroupMemberController {
     @ApiResponse(responseCode = "204", description = "넘겨짐")
     @ApiResponse(
             responseCode = "400",
-            description = "`VALIDATION_FAILED` `userId` 누락 / `BAD_REQUEST` 읽을 수 없는 본문, 숫자가 아닌 userId")
+            description = "`VALIDATION_FAILED` `userId` 누락 / `BAD_REQUEST` 읽을 수 없는 본문, 숫자가 아닌 userId / "
+                    + "`BAD_REQUEST` 대상이 자기 자신")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "403", description = "`NOT_GROUP_OWNER` 그룹장이 아님")
     @ApiResponse(
@@ -74,7 +75,7 @@ public class GroupMemberController {
                     멤버를 그룹에서 내보낸다 — 그룹장만 할 수 있고, 그룹 홈과 공부방 모두 이 경로를 쓴다. 자기 자신은 내보낼 수 없다(나가려면 나가기). \
                     바로 멤버가 아니게 되고, 내보내진 사람은 3일 동안 같은 그룹에 신청·코드 참여를 할 수 없다(409 `RECENTLY_KICKED`). \
                     비공개 그룹이면 같은 처리에서 초대코드가 새로 발급되고, 예전 코드·링크로 참여하면 INVITE_CODE_NOT_FOUND다. \
-                    응답 형식은 그대로이고 FE는 그룹 정보를 다시 받아 새 코드를 보여 준다. \
+                    응답 형식은 그대로이고 FE는 초대코드 보기(GET /api/groups/{groupId}/invite)를 다시 받아 새 코드를 보여 준다. \
                     내보내진 사람은 새 코드를 받아도 3일 동안 RECENTLY_KICKED다. \
                     내보내진 사람에게 푸시가 가고, 공부방에 있었다면 개인 큐로 `KICKED`, 방 토픽에 `MEMBER_LEFT`가 나간다 (공부방 메시지는 /docs/websocket.html).""")
     @ApiResponse(responseCode = "204", description = "내보내짐")
@@ -143,6 +144,7 @@ public class GroupMemberController {
     @Operation(summary = "초대코드·링크로 들어오기", description = """
                     비공개 그룹의 초대코드로 멤버가 된다 — 코드를 입력하든 링크를 누르든 이 API 하나다(`via`로만 구분). \
                     **이미 멤버면 409 대신 joined=false로 200**을 준다 — 링크를 두 번 눌러도 그룹 홈으로 보내면 된다. \
+                    이미 멤버인지를 한도·정원·내보냄 검사보다 먼저 본다 — 이미 멤버면 GROUP_FULL·GROUP_SLOT_LIMIT·RECENTLY_KICKED 대신 joined=false로 200이다. \
                     코드는 영문 대문자·숫자 6자리(0·O·1·I·L 제외), 대소문자 무시이고 서버는 형식을 따로 검사하지 않는다 — 없는 코드·틀린 형식·새로 만들어져 막힌 코드·사라진 그룹의 코드는 모두 404 `INVITE_CODE_NOT_FOUND`다. \
                     들어가면 "들어간 그룹과 답을 기다리는 신청 5개" 한도와 "멤버 6명" 한도를 본다.""")
     @ApiResponse(
@@ -150,7 +152,7 @@ public class GroupMemberController {
             description = "`joined` true — 멤버가 됨 / `joined` false — 이미 멤버였음. 둘 다 `groupId`의 그룹 홈으로 보낸다")
     @ApiResponse(
             responseCode = "400",
-            description = "`VALIDATION_FAILED` `inviteCode`가 비었거나 `via` 누락 / " + "`BAD_REQUEST` 없는 `via` 값, 읽을 수 없는 본문")
+            description = "`VALIDATION_FAILED` `inviteCode`가 비었거나 `via` 누락 / `BAD_REQUEST` 없는 `via` 값, 읽을 수 없는 본문")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "404", description = "`INVITE_CODE_NOT_FOUND` 없거나 막힌 초대코드")
     @ApiResponse(
@@ -196,11 +198,13 @@ public class GroupMemberController {
 
     @Operation(summary = "공부방 멤버 신고", description = """
                     같은 그룹 멤버를 신고한다 — 멤버만 할 수 있다. **신고하면 차단도 된다**(이미 차단했으면 그대로). \
-                    서버가 신고를 남기고 운영 채널에 알린다. 차단된 두 사람 사이는 다음 공부방 입장부터 서로 보이지 않고, \
-                    같은 공부방에 있으면 두 사람 각자의 개인 큐로 `PEER_BLOCKED`가 나간다 (공부방 메시지는 /docs/websocket.html). \
+                    서버가 신고를 남기고 운영 채널에 알린다. 차단된 두 사람 사이는 다음 공부방 입장부터 영상·소리가 오가지 않고, \
+                    같은 공부방에 있으면 두 사람 각자의 개인 큐로 `PEER_BLOCKED`가 나가 이미 맺은 연결도 닫힌다 (공부방 메시지는 /docs/websocket.html). \
                     그룹 멤버 자격·책상·순위는 그대로다. 사유는 선택이지만 본문은 필수라, 사유가 없으면 `{}`를 보낸다.""")
     @ApiResponse(responseCode = "204", description = "신고되고 차단됨")
-    @ApiResponse(responseCode = "400", description = "`VALIDATION_FAILED` 사유가 100자 초과 / `BAD_REQUEST` 읽을 수 없는 본문")
+    @ApiResponse(
+            responseCode = "400",
+            description = "`VALIDATION_FAILED` 사유가 100자 초과 / `BAD_REQUEST` 읽을 수 없는 본문 / `BAD_REQUEST` 대상이 자기 자신")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "403", description = "`NOT_GROUP_MEMBER` 내가 이 그룹 멤버가 아님")
     @ApiResponse(

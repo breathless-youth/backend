@@ -23,7 +23,7 @@ public record GroupHomeResponse(
         boolean notifyEnabled,
 
         @Schema(
-                description = "새 신청 수 — 답을 기다리는 신청 전부. 그룹장이 목록을 봤는지는 따로 기록하지 않아 답할 때까지 남는다. " + "공개 그룹 그룹장이 아니면 null",
+                description = "새 신청 수 — 답을 기다리는 신청 전부. 그룹장이 목록을 봤는지는 따로 기록하지 않아 답할 때까지 남는다. 공개 그룹 그룹장이 아니면 null",
                 example = "2")
         Integer newApplicationCount,
 
