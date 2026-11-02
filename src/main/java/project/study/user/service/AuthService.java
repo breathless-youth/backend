@@ -123,6 +123,28 @@ public class AuthService {
     }
 
     /**
+     * 이 기기의 refresh만 폐기한다. 유저 행 잠금 아래에서 회전과 같은 뮤텍스를 쓴다.
+     *
+     * <p>호출자 소유의 미사용 토큰을 한 문장으로 지우면 끝이다. 0이면 토큰을 조회해, 내 것인데 이미 회전된 토큰이면 재사용 증거를 지우려는
+     * 시도로 보고 전량 폐기한다(재사용 감지와 같다). 없거나 남의 토큰이면 아무것도 하지 않는다 — 소유 검증 없이 지우면 인증만 통과한
+     * 쪽이 남의 토큰으로 그 사람을 로그아웃시킬 수 있다. 호출자 행이 없어도 조용히 끝난다.
+     */
+    @Transactional
+    public void logout(Long userId, String refreshToken) {
+        if (userRepository.findByIdForUpdate(userId).isEmpty()) {
+            return;
+        }
+        String tokenHash = TokenIssuer.sha256(refreshToken);
+        if (refreshTokenRepository.deleteByTokenHashAndUserIdIfUnused(tokenHash, userId) == 1) {
+            return;
+        }
+        refreshTokenRepository
+                .findByTokenHash(tokenHash)
+                .filter(saved -> saved.getUserId().equals(userId))
+                .ifPresent(saved -> refreshTokenRepository.deleteByUserId(userId));
+    }
+
+    /**
      * 비회원을 소셜 계정으로 로그인시킨다. 처음 쓰는 소셜 ID면 이 사용자를 그대로 전환하고, 이미 있으면 이 기기의 데이터를 그 계정으로 합친다.
      *
      * <p>트랜잭션이 아니다. 프로바이더 검증(HTTP)과 방 나가기(자체 트랜잭션·브로드캐스트)는 DB 트랜잭션 밖에서 먼저 하고, 잠금·전환·병합·발급만

@@ -9,11 +9,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
 import project.study.user.dto.LinkResponse;
@@ -131,5 +133,33 @@ public class AuthController {
     @PostMapping(value = "/link", version = "1")
     public LinkResponse link(@AuthenticationPrincipal Long userId, @Valid @RequestBody LinkSocialRequest request) {
         return authService.link(userId, request);
+    }
+
+    @Operation(summary = "로그아웃", description = """
+                    이 기기의 refresh 토큰만 폐기한다. 같은 계정의 다른 기기는 로그인 상태로 남는다. \
+                    없는 토큰이거나 남의 토큰이어도 204다 — 앱은 응답과 상관없이 저장된 토큰을 지우고 `POST /api/users`로 새 비회원이 된다.
+
+                    이미 회전돼 쓸 수 없게 된 **내** refresh를 보내면 탈취 의심으로 보고 이 계정의 refresh를 전량 폐기한다.""")
+    @ApiResponse(responseCode = "204", description = "처리됨 — 본문 없음")
+    @ApiResponse(
+            responseCode = "400",
+            description = "refreshToken 누락 또는 64자 초과",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "우리 access 토큰이 없거나 무효 — 기존 refresh 흐름",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples =
+                                    @ExampleObject(value = "{\"code\": \"UNAUTHORIZED\", \"message\": \"인증이 필요합니다\"}")))
+    @PostMapping(value = "/logout", version = "1")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(@AuthenticationPrincipal Long userId, @Valid @RequestBody RefreshRequest request) {
+        authService.logout(userId, request.refreshToken());
     }
 }
