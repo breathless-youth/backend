@@ -18,7 +18,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadRequestException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleBadRequest(BadRequestException e) {
-        return new ErrorResponse(ErrorCode.BAD_REQUEST, e.getMessage());
+        return new ErrorResponse(e.getCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ErrorResponse handleForbidden(ForbiddenException e) {
+        return new ErrorResponse(e.getCode(), e.getMessage());
     }
 
     @ExceptionHandler(NotFoundException.class)
@@ -30,7 +36,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse handleConflict(ConflictException e) {
-        return new ErrorResponse(ErrorCode.CONFLICT, e.getMessage());
+        return new ErrorResponse(e.getCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(NotImplementedException.class)
+    @ResponseStatus(HttpStatus.NOT_IMPLEMENTED)
+    public ErrorResponse handleNotImplemented(NotImplementedException e) {
+        return new ErrorResponse(ErrorCode.NOT_IMPLEMENTED, e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
