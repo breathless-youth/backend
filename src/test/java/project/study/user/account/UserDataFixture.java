@@ -5,6 +5,7 @@ import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
@@ -232,9 +233,17 @@ public class UserDataFixture {
 
     /** 모든 처리기가 책임지는 컬럼에서 userId를 가리키는 행의 합. */
     public long countRowsReferencing(long userId) {
+        return countRowsReferencing(userId, Set.of());
+    }
+
+    /** excludedColumns("테이블.컬럼")는 세지 않는다. 명세상 예외를 테스트에서 드러내 쓸 때만 쓴다. */
+    public long countRowsReferencing(long userId, Set<String> excludedColumns) {
         long total = 0;
         for (UserDataHandler handler : handlers) {
             for (String column : handler.columns()) {
+                if (excludedColumns.contains(column)) {
+                    continue;
+                }
                 int dot = column.indexOf('.');
                 String table = column.substring(0, dot);
                 String col = column.substring(dot + 1);

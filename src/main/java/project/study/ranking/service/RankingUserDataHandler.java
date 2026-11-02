@@ -20,7 +20,7 @@ public class RankingUserDataHandler implements UserDataHandler {
 
     @Override
     public int order() {
-        return 800;
+        return 400;
     }
 
     @Override

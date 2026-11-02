@@ -20,7 +20,7 @@ public class RtcStatsUserDataHandler implements UserDataHandler {
 
     @Override
     public int order() {
-        return 700;
+        return 450;
     }
 
     @Override

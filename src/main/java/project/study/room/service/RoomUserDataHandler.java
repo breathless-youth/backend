@@ -20,11 +20,12 @@ public class RoomUserDataHandler implements UserDataHandler {
 
     @Override
     public int order() {
-        return 600;
+        return 300;
     }
 
     @Override
     public void merge(long sourceUserId, long targetUserId) {
+        // 이 닫기는 경쟁 방지용일 뿐이다 — 호출한 쪽이 먼저 CurrentRoomLeaver.leave로 방 닫기와 MEMBER_LEFT를 처리한다
         // 경쟁으로 아직 방에 있으면 닫아 두어야 남는 쪽의 살아 있는 행과 부분 유니크 인덱스가 부딪히지 않는다
         jdbc.sql("UPDATE room_participations SET left_at = now(), leave_reason = 'SWITCHED_ROOM' "
                         + "WHERE user_id = :source AND left_at IS NULL")

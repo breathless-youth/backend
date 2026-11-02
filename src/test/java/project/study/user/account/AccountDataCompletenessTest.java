@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -73,13 +74,14 @@ class AccountDataCompletenessTest {
         seedEverything(source, target);
         seedEverything(target, source);
 
-        accountData.merge(source, target);
-        // RTC 통계는 병합에서 그대로 두기로 했고(users FK 없음) 그 행은 가리켜도 무해하므로 세기 전에 치운다
-        jdbc.sql("DELETE FROM rtc_connection_stat WHERE user_id = :u OR peer_user_id = :u")
-                .param("u", source)
-                .update();
+        assertThat(fixture.countRowsReferencing(source)).isPositive();
 
-        assertThat(fixture.countRowsReferencing(source)).isZero();
+        accountData.merge(source, target);
+
+        // 명세상 예외: RTC 통계는 병합에서 그대로 둔다 (users FK 없음)
+        Set<String> rtcColumns = Set.of("rtc_connection_stat.user_id", "rtc_connection_stat.peer_user_id");
+        assertThat(fixture.count("rtc_connection_stat", "user_id", source)).isPositive();
+        assertThat(fixture.countRowsReferencing(source, rtcColumns)).isZero();
         jdbc.sql("DELETE FROM users WHERE id = :id").param("id", source).update();
         assertThat(countUser(source)).isZero();
     }
@@ -90,6 +92,8 @@ class AccountDataCompletenessTest {
         long other = fixture.seedUser();
         seedEverything(user, other);
         seedEverything(other, user);
+
+        assertThat(fixture.countRowsReferencing(user)).isPositive();
 
         accountData.erase(user);
 
