@@ -262,4 +262,39 @@ public class UserDataFixture {
                 .query(Long.class)
                 .single();
     }
+
+    /**
+     * users를 가리키는 모든 테이블에 user의 행을 심는다. other는 신고·RTC 통계처럼 상대가 필요한 행의 상대다. users를 참조하는 테이블이
+     * 늘면 여기에 한 줄을 더한다 — 병합·탈퇴 테스트가 모두 이 시드를 쓴다.
+     */
+    public void seedEverything(long user, long other) {
+        Instant t0 = Instant.parse("2030-03-01T10:00:00Z");
+        Instant t1 = Instant.parse("2030-03-01T11:00:00Z");
+        LocalDate day = LocalDate.of(2030, 3, 1);
+        seedDday(user, "d");
+        seedAcquisition(user, "s");
+        seedPushToken(user, "tok-" + user);
+        seedPushSend(user, day);
+        seedPushAssignment(user, "exp-" + user);
+        seedStats("study_stats_daily", user, day, 10);
+        seedStats("study_stats_weekly", user, day, 10);
+        seedStats("study_stats_monthly", user, day, 10);
+        seedRefreshToken(user);
+        seedReport(user, other);
+        seedReport(other, user);
+        seedInquiry(user);
+        seedUserNotification(user);
+        long session = seedSession(user, t0, t1);
+        seedStatusEvent(session);
+        seedActiveSession(user, t1.plusSeconds(3600));
+        long subject = seedSubject(user, "과목" + user, 0, false);
+        seedTask(subject, "할일");
+        seedSegment(session, subject, t0, t1);
+        seedDailyCompletion(user, subject, day);
+        long room = seedRoom(user);
+        seedParticipation(room, user, false);
+        seedRtcStat(room, user, other);
+        seedRankingRecord(user, "board-" + user, day, 1);
+        seedRankingBest(user, 1, "b", day);
+    }
 }

@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,10 +36,6 @@ import tools.jackson.databind.ObjectMapper;
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class AccountDeletionApiTest {
-
-    private static final Instant T0 = Instant.parse("2030-03-01T10:00:00Z");
-    private static final Instant T1 = Instant.parse("2030-03-01T11:00:00Z");
-    private static final LocalDate DAY = LocalDate.of(2030, 3, 1);
 
     @Autowired
     private MockMvcTester mvc;
@@ -89,40 +83,12 @@ class AccountDeletionApiTest {
                 .single();
     }
 
-    private void seedEverything(long user, long other) {
-        fixture.seedDday(user, "d");
-        fixture.seedAcquisition(user, "s");
-        fixture.seedPushToken(user, "tok-" + user);
-        fixture.seedPushSend(user, DAY);
-        fixture.seedPushAssignment(user, "exp-" + user);
-        fixture.seedStats("study_stats_daily", user, DAY, 10);
-        fixture.seedStats("study_stats_weekly", user, DAY, 10);
-        fixture.seedStats("study_stats_monthly", user, DAY, 10);
-        fixture.seedRefreshToken(user);
-        fixture.seedReport(user, other);
-        fixture.seedReport(other, user);
-        fixture.seedInquiry(user);
-        fixture.seedUserNotification(user);
-        long session = fixture.seedSession(user, T0, T1);
-        fixture.seedStatusEvent(session);
-        fixture.seedActiveSession(user, T1.plusSeconds(3600));
-        long subject = fixture.seedSubject(user, "과목" + user, 0, false);
-        fixture.seedTask(subject, "할일");
-        fixture.seedSegment(session, subject, T0, T1);
-        fixture.seedDailyCompletion(user, subject, DAY);
-        long room = fixture.seedRoom(user);
-        fixture.seedParticipation(room, user, false);
-        fixture.seedRtcStat(room, user, other);
-        fixture.seedRankingRecord(user, "board-" + user, DAY, 1);
-        fixture.seedRankingBest(user, 1, "b", DAY);
-    }
-
     @Test
     void 탈퇴하면_사용자와_모든_사용자_데이터가_사라진다() {
         Device me = api.register();
         Device other = api.register();
-        seedEverything(me.userId(), other.userId());
-        seedEverything(other.userId(), me.userId());
+        fixture.seedEverything(me.userId(), other.userId());
+        fixture.seedEverything(other.userId(), me.userId());
         assertThat(fixture.countRowsReferencing(me.userId())).isPositive();
 
         assertThat(deleteMe(me.accessToken())).hasStatus(204);
@@ -228,8 +194,8 @@ class AccountDeletionApiTest {
     void 다른_사람의_데이터는_그대로다() {
         Device me = api.register();
         Device other = api.register();
-        seedEverything(me.userId(), other.userId());
-        seedEverything(other.userId(), me.userId());
+        fixture.seedEverything(me.userId(), other.userId());
+        fixture.seedEverything(other.userId(), me.userId());
 
         assertThat(deleteMe(me.accessToken())).hasStatus(204);
 
