@@ -1,11 +1,16 @@
 package project.study.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static project.study.user.LinkTestClient.sha256Hex;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -24,10 +30,12 @@ import project.study.config.ApiVersionConfig;
 import project.study.user.LinkTestClient.Device;
 import project.study.user.LinkTestClient.Social;
 import project.study.user.account.UserDataFixture;
+import project.study.user.dto.AppleClient;
 import project.study.user.dto.LinkResponse;
 import project.study.user.entity.Provider;
 import project.study.user.image.ProfileImageStorage;
 import project.study.user.jwt.JwtUtil;
+import project.study.user.oauth.AppleTokenRevoker;
 import project.study.user.oauth.SocialTokenVerifiers;
 import tools.jackson.databind.ObjectMapper;
 
@@ -58,6 +66,9 @@ class AccountDeletionApiTest {
     @MockitoBean
     private ProfileImageStorage storage;
 
+    @MockitoBean
+    private AppleTokenRevoker appleTokenRevoker;
+
     @MockitoSpyBean
     private SimpMessagingTemplate messagingTemplate;
 
@@ -74,6 +85,23 @@ class AccountDeletionApiTest {
                 .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                 .exchange();
+    }
+
+    private MvcTestResult deleteMe(String accessToken, String jsonBody) {
+        return mvc.delete()
+                .uri("/api/users/me")
+                .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonBody)
+                .exchange();
+    }
+
+    private LinkResponse linkApple() {
+        String rawNonce = "nonce-" + UUID.randomUUID();
+        Social apple = api.stubSocial(Provider.APPLE, sha256Hex(rawNonce));
+        Device device = api.register();
+        return api.okBody(api.link(device.accessToken(), apple, rawNonce));
     }
 
     private long countUser(long id) {
@@ -205,6 +233,39 @@ class AccountDeletionApiTest {
         assertThat(fixture.count("refresh_token", "user_id", other.userId())).isPositive();
         assertThat(fixture.count("rtc_connection_stat", "user_id", other.userId()))
                 .isPositive();
+    }
+
+    @Test
+    void 애플_계정은_코드와_함께_탈퇴하면_해지를_부른다() {
+        LinkResponse linked = linkApple();
+
+        assertThat(deleteMe(
+                        linked.accessToken(), "{\"appleAuthorizationCode\":\"auth-code\",\"appleClient\":\"ANDROID\"}"))
+                .hasStatus(204);
+
+        verify(appleTokenRevoker).revoke("auth-code", AppleClient.ANDROID);
+    }
+
+    @Test
+    void 코드가_없어도_탈퇴는_된다() {
+        LinkResponse linked = linkApple();
+        long userId = api.subOf(linked.accessToken());
+
+        assertThat(deleteMe(linked.accessToken())).hasStatus(204);
+
+        assertThat(countUser(userId)).isZero();
+        verifyNoInteractions(appleTokenRevoker);
+    }
+
+    @Test
+    void 애플이_아닌_계정은_해지를_부르지_않는다() {
+        Social google = api.stubSocial(Provider.GOOGLE, null);
+        LinkResponse linked = api.linkOk(api.register(), google);
+
+        assertThat(deleteMe(linked.accessToken(), "{\"appleAuthorizationCode\":\"auth-code\",\"appleClient\":\"IOS\"}"))
+                .hasStatus(204);
+
+        verify(appleTokenRevoker, never()).revoke(anyString(), any());
     }
 
     @Test
