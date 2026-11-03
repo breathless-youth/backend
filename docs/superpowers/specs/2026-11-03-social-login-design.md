@@ -4,7 +4,7 @@
 - 원본 계약: 위키 `.ai/product/specs/BY-383-소셜로그인-인증인가.md` (2026-08-18 확정본)
 - 참고 구현: PR #8 `feature/BY-383-auth-contract` — dev보다 514커밋 뒤라 머지하지 않고 지금 dev 위에서 다시 짠다
 - 함께 보는 설계: BY-1124 그룹 공부방 백엔드 설계 (`feat/BY-1124-group-rooms` 브랜치의 `docs/superpowers/specs/2026-11-03-by1124-group-study-rooms-design.md`)
-- 분기 기준: origin/dev `b49b680`. BY-1124가 V36·ADR-0040을 먼저 잡았으므로 마이그레이션·ADR 번호는 머지 직전에 다시 정한다
+- 분기 기준: origin/dev `b49b680`. BY-1124가 V36~V39·ADR-0040을 잡아 이 작업은 V40·V41·ADR-0041을 쓴다(2026-11-04 맞춤). 그룹 쪽이 번호를 더 쓰면 머지 직전에 다시 맞춘다
 - 표기: **[사용자]** 이번 인터뷰에서 사용자가 정한 것, **[명세]** 8월 명세에 확정된 것, **[BE 판단]** 백엔드가 정한 것
 
 ## 왜
@@ -187,7 +187,7 @@
 
 ## 운영·출시 확인
 
-- 로그인 앱 출시 전에 운영에 `OAUTH_GOOGLE_CLIENT_IDS`·`OAUTH_KAKAO_APP_KEYS`·`OAUTH_APPLE_BUNDLE_ID`(목록형으로 바뀐 이름)를 넣는다. 그룹 릴리즈가 먼저 나가므로 값이 없어도 기동한다 — 비어 있는 프로바이더는 로그인이 전부 400이고 기동 로그에 WARN이 남는다(최종 리뷰)
+- 로그인 앱 출시 전에 운영에 `OAUTH_GOOGLE_CLIENT_IDS`·`OAUTH_KAKAO_APP_KEYS`·`OAUTH_APPLE_BUNDLE_ID`(목록형으로 바뀐 이름)를 넣는다. 그룹 릴리즈가 먼저 나가므로 값이 없어도 기동한다 — 비어 있는 프로바이더는 로그인이 전부 400이고, 기동 뒤 빈 항목이 로그와 Sentry 경고로 남는다(최종 리뷰, Sentry는 2026-11-04)
 - 애플 해지용 새 비밀값: Team ID, Key ID, Sign in with Apple 개인 키(.p8). 운영 SSM·태스크 정의, dev `.env`에 넣는다. 값이 없으면 기동은 되고 해지만 건너뛰며 경고를 남긴다 (`app.<기능>.enabled` 프로퍼티 규칙)- 안드로이드 애플 웹 로그인: 애플 개발자 계정에 Services ID를 만들고, 반환 주소로 API 서버의 `/api/auth/apple/callback`(dev·운영 도메인)을 등록한다. 콜백이 넘길 안드로이드 딥링크 주소는 FE가 정해 설정값으로 넣는다
 - 개인정보처리방침에 소셜 로그인과 이메일 수집이 들어 있는지 확인한다
 - 위키 `app-review-checklist.md` §0-1은 "계정 생성이 없는 앱이라 삭제는 이메일 요청"으로 확정돼 있고, `user-flow.md` S6도 "로그아웃·계정 삭제 없음"이다. 로그인이 생기면 둘 다 인앱 탈퇴로 바꿔야 한다 (기획 몫, 출시 전 확인 목록)
