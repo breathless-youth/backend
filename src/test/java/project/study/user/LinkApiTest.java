@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -24,6 +25,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.transaction.PlatformTransactionManager;
 import project.study.TestcontainersConfiguration;
+import project.study.config.ApiVersionConfig;
 import project.study.user.LinkTestClient.Device;
 import project.study.user.LinkTestClient.Social;
 import project.study.user.account.UserDataFixture;
@@ -87,6 +89,22 @@ class LinkApiTest {
                 .containsEntry("provider", "GOOGLE")
                 .containsEntry("provider_user_id", google.sub())
                 .containsEntry("email", google.email());
+    }
+
+    @Test
+    void 로그인하면_프로필에_로그인한_소셜_계정이_보인다() {
+        Device device = api.register();
+        LinkResponse linked = api.okBody(api.link(device.accessToken(), api.stubSocial(Provider.KAKAO, null), null));
+
+        // 앱이 로그인 상태를 잃어도 서버에서 다시 알 수 있게 — 그룹 탭 진입과 탈퇴 방법(애플 재인증·카카오 연결 끊기)을 고른다
+        assertThat(mvc.get()
+                        .uri("/api/users/me/profile")
+                        .header(ApiVersionConfig.HEADER, "2")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + linked.accessToken()))
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.loginProvider")
+                .isEqualTo("KAKAO");
     }
 
     @Test

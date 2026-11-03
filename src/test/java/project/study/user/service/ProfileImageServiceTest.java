@@ -34,7 +34,7 @@ class ProfileImageServiceTest {
     private static final Instant EXPIRES = Instant.parse("2026-10-28T10:05:00Z");
     private static final String MINE = "avatars/12/3f2a9c1e-7b4d-4e8a-9c2f-1a2b3c4d5e6f.jpg";
     private static final String OLD = "avatars/12/0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d.jpg";
-    private static final ProfileResponse PROFILE = new ProfileResponse("포메", null, null, "포", 3, "/" + MINE);
+    private static final ProfileResponse PROFILE = new ProfileResponse("포메", null, null, "포", 3, "/" + MINE, null);
     private static final StoredObject JPEG = new StoredObject(1_048_576, "image/jpeg");
 
     @Mock
@@ -140,7 +140,7 @@ class ProfileImageServiceTest {
 
     @Test
     void 되돌리면_이전_파일을_지우고_사진이_없었으면_아무것도_지우지_않는다() {
-        ProfileResponse none = new ProfileResponse("포메", null, null, "포", 3, null);
+        ProfileResponse none = new ProfileResponse("포메", null, null, "포", 3, null, null);
         when(userService.replaceProfileImage(12L, null))
                 .thenReturn(new UserService.ProfileImageChange(none, OLD))
                 .thenReturn(new UserService.ProfileImageChange(none, null));

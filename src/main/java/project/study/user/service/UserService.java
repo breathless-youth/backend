@@ -131,7 +131,10 @@ public class UserService {
                 user.getCategory(),
                 user.getInitial(),
                 user.getColorIndex(),
-                profileImageUrls.of(user.getProfileImage()));
+                profileImageUrls.of(user.getProfileImage()),
+                user.getProvider() == Provider.DEVICE
+                        ? null
+                        : user.getProvider().name());
     }
 
     /** 회원번호 중 users에 있는 것 — Amplitude에만 있는 id(타 환경·지운 행)를 리포트에서 거른다 (스펙 §7.4, BY-904). */
