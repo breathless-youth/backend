@@ -4,6 +4,8 @@ package project.study.acquisition.entity;
 public enum AcquisitionSource {
     /** 메타(인스타·페이스북) 광고. */
     META_AD,
+    /** 구글 광고. 설치 정보의 gclid나 앱이 읽은 구글 딥링크 라벨로 판별한다. */
+    GOOGLE_AD,
     /** 친구 초대 링크. */
     INVITE,
     /** 스토어 검색 등 광고·링크 없이 들어온 설치. */
