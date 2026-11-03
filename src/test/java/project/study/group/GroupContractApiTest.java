@@ -1,7 +1,15 @@
 package project.study.group;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static project.study.support.AuthTestSupport.asUser;
+import static project.study.group.support.GroupApiTestSupport.assertErrorCode;
+import static project.study.group.support.GroupApiTestSupport.assertNotImplemented;
+import static project.study.group.support.GroupApiTestSupport.assertValidationFailed;
+import static project.study.group.support.GroupApiTestSupport.json;
+import static project.study.group.support.GroupApiTestSupport.v1Delete;
+import static project.study.group.support.GroupApiTestSupport.v1Get;
+import static project.study.group.support.GroupApiTestSupport.v1Patch;
+import static project.study.group.support.GroupApiTestSupport.v1Post;
+import static project.study.group.support.GroupApiTestSupport.v1Put;
 
 import java.util.List;
 import java.util.Map;
@@ -13,9 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
-import org.springframework.test.web.servlet.assertj.MockMvcTester.MockMvcRequestBuilder;
 import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
 
@@ -37,6 +43,8 @@ class GroupContractApiTest {
     private static final String APPLY_BODY = """
             {"introduction": "새벽 5시에 일어나는 공시생이에요"}""";
 
+    private static final long USER = 1L;
+
     private static final Set<String> HTTP_METHODS = Set.of("get", "put", "post", "delete", "patch");
 
     private static final String UPDATE_BODY = """
@@ -45,66 +53,23 @@ class GroupContractApiTest {
     @Autowired
     private MockMvcTester mvc;
 
-    // 새 경로라 버전 1이다 (ADR-0015 갱신) — asUser의 기본 헤더(2)를 덮는다
-    private MockMvcRequestBuilder get(String uri) {
-        return mvc.get().uri(uri).header(ApiVersionConfig.HEADER, "1").with(asUser(1L));
-    }
-
-    private MockMvcRequestBuilder post(String uri) {
-        return mvc.post().uri(uri).header(ApiVersionConfig.HEADER, "1").with(asUser(1L));
-    }
-
-    private MockMvcRequestBuilder put(String uri) {
-        return mvc.put().uri(uri).header(ApiVersionConfig.HEADER, "1").with(asUser(1L));
-    }
-
-    private MockMvcRequestBuilder delete(String uri) {
-        return mvc.delete().uri(uri).header(ApiVersionConfig.HEADER, "1").with(asUser(1L));
-    }
-
-    private MockMvcRequestBuilder withBody(MockMvcRequestBuilder builder, String body) {
-        return builder.contentType(MediaType.APPLICATION_JSON).content(body);
-    }
-
-    private void assertNotImplemented(MockMvcRequestBuilder request) {
-        assertThat(request)
-                .hasStatus(HttpStatus.NOT_IMPLEMENTED)
-                .bodyJson()
-                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("NOT_IMPLEMENTED"));
-    }
-
     @Test
     void 로직_전에는_501과_NOT_IMPLEMENTED다() {
-        assertNotImplemented(withBody(
-                mvc.post()
-                        .uri("/api/groups")
-                        .header(ApiVersionConfig.HEADER, "1")
-                        .with(asUser(1L)),
-                CREATE_BODY));
-        assertNotImplemented(get("/api/groups/me"));
-        assertNotImplemented(get("/api/groups/10"));
-        assertNotImplemented(withBody(
-                mvc.patch()
-                        .uri("/api/groups/10")
-                        .header(ApiVersionConfig.HEADER, "1")
-                        .with(asUser(1L)),
-                UPDATE_BODY));
-        assertNotImplemented(get("/api/groups/public"));
-        assertNotImplemented(get("/api/groups/public/10"));
-        assertNotImplemented(withBody(
-                mvc.put()
-                        .uri("/api/groups/10/notifications")
-                        .header(ApiVersionConfig.HEADER, "1")
-                        .with(asUser(1L)),
-                """
+        assertNotImplemented(json(v1Post(mvc, "/api/groups", USER), CREATE_BODY));
+        assertNotImplemented(v1Get(mvc, "/api/groups/me", USER));
+        assertNotImplemented(v1Get(mvc, "/api/groups/10", USER));
+        assertNotImplemented(json(v1Patch(mvc, "/api/groups/10", USER), UPDATE_BODY));
+        assertNotImplemented(v1Get(mvc, "/api/groups/public", USER));
+        assertNotImplemented(v1Get(mvc, "/api/groups/public/10", USER));
+        assertNotImplemented(json(v1Put(mvc, "/api/groups/10/notifications", USER), """
                 {"enabled": true}"""));
     }
 
     @Test
     void 고정_경로가_groupId_경로보다_먼저_잡힌다() {
         // /{groupId}가 먼저 잡혔다면 "me"·"public"을 Long으로 바꾸다 400이 난다
-        assertNotImplemented(get("/api/groups/me"));
-        assertNotImplemented(get("/api/groups/public"));
+        assertNotImplemented(v1Get(mvc, "/api/groups/me", USER));
+        assertNotImplemented(v1Get(mvc, "/api/groups/public", USER));
     }
 
     @Test
@@ -118,15 +83,7 @@ class GroupContractApiTest {
         String body = """
                 {"name": "%s", "visibility": "PUBLIC", "category": "CIVIL_SERVICE"}""".formatted("가".repeat(21));
 
-        assertThat(withBody(
-                        mvc.post()
-                                .uri("/api/groups")
-                                .header(ApiVersionConfig.HEADER, "1")
-                                .with(asUser(1L)),
-                        body))
-                .hasStatus(HttpStatus.BAD_REQUEST)
-                .bodyJson()
-                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("VALIDATION_FAILED"));
+        assertValidationFailed(json(v1Post(mvc, "/api/groups", USER), body));
     }
 
     @Test
@@ -134,18 +91,12 @@ class GroupContractApiTest {
         String body = """
                 {"name": "새벽 공시반", "visibility": "PUBLIC", "category": "UNKNOWN"}""";
 
-        assertThat(withBody(
-                        mvc.post()
-                                .uri("/api/groups")
-                                .header(ApiVersionConfig.HEADER, "1")
-                                .with(asUser(1L)),
-                        body))
-                .hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(json(v1Post(mvc, "/api/groups", USER), body)).hasStatus(HttpStatus.BAD_REQUEST);
     }
 
     @Test
     void size가_50을_넘으면_400이다() {
-        assertThat(get("/api/groups/public?size=51")).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(v1Get(mvc, "/api/groups/public?size=51", USER)).hasStatus(HttpStatus.BAD_REQUEST);
     }
 
     @Test
@@ -160,44 +111,34 @@ class GroupContractApiTest {
                         "$.paths['/api/groups/me'].get.parameters[?(@.name=='API-Version')].schema.default",
                         v -> assertThat(v).asList().containsExactly("1"))
                 // 7개 오퍼레이션이 모두 문서에 실린다
-                .hasPathSatisfying(
-                        "$.paths['/api/groups'].post", v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}'].get",
-                        v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}'].patch",
-                        v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/public'].get", v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/public/{groupId}'].get",
-                        v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}/notifications'].put",
-                        v -> assertThat(v).isNotNull());
+                .hasPath("$.paths['/api/groups'].post")
+                .hasPath("$.paths['/api/groups/{groupId}'].get")
+                .hasPath("$.paths['/api/groups/{groupId}'].patch")
+                .hasPath("$.paths['/api/groups/public'].get")
+                .hasPath("$.paths['/api/groups/public/{groupId}'].get")
+                .hasPath("$.paths['/api/groups/{groupId}/notifications'].put");
     }
 
     @Test
     void 멤버_초대_공부방_경로도_로직_전에는_501이다() {
-        assertNotImplemented(get("/api/groups/10/members"));
-        assertNotImplemented(withBody(put("/api/groups/10/owner"), """
+        assertNotImplemented(v1Get(mvc, "/api/groups/10/members", USER));
+        assertNotImplemented(json(v1Put(mvc, "/api/groups/10/owner", USER), """
                 {"userId": 2}"""));
-        assertNotImplemented(delete("/api/groups/10/members/2"));
-        assertNotImplemented(post("/api/groups/10/leave"));
-        assertNotImplemented(get("/api/groups/10/invite"));
-        assertNotImplemented(post("/api/groups/10/invite"));
-        assertNotImplemented(withBody(post("/api/groups/join"), JOIN_BODY));
-        assertNotImplemented(post("/api/groups/10/room/join"));
-        assertNotImplemented(post("/api/groups/10/room/leave"));
-        assertNotImplemented(withBody(post("/api/groups/10/members/2/report"), """
+        assertNotImplemented(v1Delete(mvc, "/api/groups/10/members/2", USER));
+        assertNotImplemented(v1Post(mvc, "/api/groups/10/leave", USER));
+        assertNotImplemented(v1Get(mvc, "/api/groups/10/invite", USER));
+        assertNotImplemented(v1Post(mvc, "/api/groups/10/invite", USER));
+        assertNotImplemented(json(v1Post(mvc, "/api/groups/join", USER), JOIN_BODY));
+        assertNotImplemented(v1Post(mvc, "/api/groups/10/room/join", USER));
+        assertNotImplemented(v1Post(mvc, "/api/groups/10/room/leave", USER));
+        assertNotImplemented(json(v1Post(mvc, "/api/groups/10/members/2/report", USER), """
                 {"reason": "욕설을 했어요"}"""));
     }
 
     @Test
     void join은_고정_경로로_잡힌다() {
         // POST /{groupId}/...로 잡혔다면 "join"을 Long으로 바꾸다 400이 나거나 405가 난다
-        assertNotImplemented(withBody(post("/api/groups/join"), JOIN_BODY));
+        assertNotImplemented(json(v1Post(mvc, "/api/groups/join", USER), JOIN_BODY));
     }
 
     @Test
@@ -205,48 +146,36 @@ class GroupContractApiTest {
         String body = """
                 {"reason": "%s"}""".formatted("가".repeat(101));
 
-        assertThat(withBody(post("/api/groups/1/members/2/report"), body))
-                .hasStatus(HttpStatus.BAD_REQUEST)
-                .bodyJson()
-                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("VALIDATION_FAILED"));
+        assertValidationFailed(json(v1Post(mvc, "/api/groups/1/members/2/report", USER), body));
     }
 
     @Test
     void 신고_사유는_비워도_된다() {
-        assertNotImplemented(withBody(post("/api/groups/1/members/2/report"), "{}"));
+        assertNotImplemented(json(v1Post(mvc, "/api/groups/1/members/2/report", USER), "{}"));
     }
 
     @Test
     void 초대코드가_비면_400_VALIDATION_FAILED다() {
-        assertThat(withBody(post("/api/groups/join"), """
-                        {"inviteCode": " ", "via": "CODE"}"""))
-                .hasStatus(HttpStatus.BAD_REQUEST)
-                .bodyJson()
-                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("VALIDATION_FAILED"));
+        assertValidationFailed(json(v1Post(mvc, "/api/groups/join", USER), """
+                        {"inviteCode": " ", "via": "CODE"}"""));
     }
 
     @Test
     void 초대코드는_형식을_검사하지_않는다() {
         // 틀린 형식도 3단계에서 404 INVITE_CODE_NOT_FOUND가 되므로 여기서는 400이 아니다
-        assertNotImplemented(withBody(post("/api/groups/join"), """
+        assertNotImplemented(json(v1Post(mvc, "/api/groups/join", USER), """
                 {"inviteCode": "12", "via": "CODE"}"""));
     }
 
     @Test
     void 없는_들어온_경로는_400_BAD_REQUEST다() {
-        assertThat(withBody(post("/api/groups/join"), """
-                        {"inviteCode": "K7M2PQ", "via": "QR"}"""))
-                .hasStatus(HttpStatus.BAD_REQUEST)
-                .bodyJson()
-                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("BAD_REQUEST"));
+        assertErrorCode(json(v1Post(mvc, "/api/groups/join", USER), """
+                {"inviteCode": "K7M2PQ", "via": "QR"}"""), HttpStatus.BAD_REQUEST, "BAD_REQUEST");
     }
 
     @Test
     void 그룹장을_넘길_대상이_없으면_400_VALIDATION_FAILED다() {
-        assertThat(withBody(put("/api/groups/10/owner"), "{}"))
-                .hasStatus(HttpStatus.BAD_REQUEST)
-                .bodyJson()
-                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("VALIDATION_FAILED"));
+        assertValidationFailed(json(v1Put(mvc, "/api/groups/10/owner", USER), "{}"));
     }
 
     @Test
@@ -260,32 +189,15 @@ class GroupContractApiTest {
                 .hasPathSatisfying(
                         "$.paths['/api/groups/{groupId}/members'].get.parameters[?(@.name=='API-Version')].schema.default",
                         v -> assertThat(v).asList().containsExactly("1"))
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}/owner'].put",
-                        v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}/members/{userId}'].delete",
-                        v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}/leave'].post",
-                        v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}/invite'].get",
-                        v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}/invite'].post",
-                        v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/join'].post", v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}/room/join'].post",
-                        v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}/room/leave'].post",
-                        v -> assertThat(v).isNotNull())
-                .hasPathSatisfying(
-                        "$.paths['/api/groups/{groupId}/members/{userId}/report'].post",
-                        v -> assertThat(v).isNotNull())
+                .hasPath("$.paths['/api/groups/{groupId}/owner'].put")
+                .hasPath("$.paths['/api/groups/{groupId}/members/{userId}'].delete")
+                .hasPath("$.paths['/api/groups/{groupId}/leave'].post")
+                .hasPath("$.paths['/api/groups/{groupId}/invite'].get")
+                .hasPath("$.paths['/api/groups/{groupId}/invite'].post")
+                .hasPath("$.paths['/api/groups/join'].post")
+                .hasPath("$.paths['/api/groups/{groupId}/room/join'].post")
+                .hasPath("$.paths['/api/groups/{groupId}/room/leave'].post")
+                .hasPath("$.paths['/api/groups/{groupId}/members/{userId}/report'].post")
                 // FE가 이 설명을 보고 타입·문구를 쓴다
                 .hasPathSatisfying(
                         "$.components.schemas.GroupInviteResponse.properties.inviteCode.description",
@@ -312,33 +224,34 @@ class GroupContractApiTest {
 
     @Test
     void 신청과_차단_경로도_로직_전에는_501이다() {
-        assertNotImplemented(withBody(post("/api/groups/10/applications"), APPLY_BODY));
-        assertNotImplemented(get("/api/groups/10/applications"));
-        assertNotImplemented(get("/api/group-applications/me"));
-        assertNotImplemented(delete("/api/group-applications/55"));
-        assertNotImplemented(post("/api/group-applications/55/accept"));
-        assertNotImplemented(post("/api/group-applications/55/decline"));
-        assertNotImplemented(withBody(post("/api/group-applications/55/report"), """
+        assertNotImplemented(json(v1Post(mvc, "/api/groups/10/applications", USER), APPLY_BODY));
+        assertNotImplemented(v1Get(mvc, "/api/groups/10/applications", USER));
+        assertNotImplemented(v1Get(mvc, "/api/group-applications/me", USER));
+        assertNotImplemented(v1Delete(mvc, "/api/group-applications/55", USER));
+        assertNotImplemented(v1Post(mvc, "/api/group-applications/55/accept", USER));
+        assertNotImplemented(v1Post(mvc, "/api/group-applications/55/decline", USER));
+        assertNotImplemented(json(v1Post(mvc, "/api/group-applications/55/report", USER), """
                 {"reason": "부적절한 소개 글이에요"}"""));
-        assertNotImplemented(get("/api/blocks"));
-        assertNotImplemented(delete("/api/blocks/2"));
+        assertNotImplemented(v1Get(mvc, "/api/blocks", USER));
+        assertNotImplemented(v1Delete(mvc, "/api/blocks/2", USER));
     }
 
     @Test
     void 신청_소개_글이_비었거나_51자면_400이다() {
-        assertValidationFailed(withBody(post("/api/groups/10/applications"), """
+        assertValidationFailed(json(v1Post(mvc, "/api/groups/10/applications", USER), """
                 {"introduction": "  "}"""));
-        assertValidationFailed(withBody(post("/api/groups/10/applications"), """
+        assertValidationFailed(json(v1Post(mvc, "/api/groups/10/applications", USER), """
                 {"introduction": "%s"}""".formatted("가".repeat(51))));
-        assertValidationFailed(withBody(post("/api/groups/10/applications"), "{}"));
+        assertValidationFailed(json(v1Post(mvc, "/api/groups/10/applications", USER), "{}"));
         // 경계: 50자는 검증을 통과해 501까지 간다
-        assertNotImplemented(withBody(post("/api/groups/10/applications"), """
+        assertNotImplemented(json(v1Post(mvc, "/api/groups/10/applications", USER), """
                 {"introduction": "%s"}""".formatted("가".repeat(50))));
     }
 
     @Test
     void 신청_신고_사유가_101자면_400_VALIDATION_FAILED다() {
-        assertValidationFailed(withBody(post("/api/group-applications/55/report"), """
+        assertValidationFailed(
+                json(v1Post(mvc, "/api/group-applications/55/report", USER), """
                 {"reason": "%s"}""".formatted("가".repeat(101))));
     }
 
@@ -376,13 +289,6 @@ class GroupContractApiTest {
                         });
                     }
                 });
-    }
-
-    private void assertValidationFailed(MockMvcRequestBuilder request) {
-        assertThat(request)
-                .hasStatus(HttpStatus.BAD_REQUEST)
-                .bodyJson()
-                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("VALIDATION_FAILED"));
     }
 
     @SuppressWarnings("unchecked")

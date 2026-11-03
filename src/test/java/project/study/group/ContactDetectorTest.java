@@ -56,6 +56,10 @@ class ContactDetectorTest {
                 "kakao id kim1234",
                 "갠톡 kim1234",
                 "insta kim_study",
+                // ---- 추가 예시: 영어 연락 수단 말 직접 케이스 (kakaotalk·instagram, 아이디 표시 포함) ----
+                "kakaotalk kim1234",
+                "instagram abc_12",
+                "KakaoTalk 아이디 abc12",
                 // ---- 추가 예시: 대소문자·한글 도메인 ----
                 "KAKAO.COM",
                 "공부모임.com",

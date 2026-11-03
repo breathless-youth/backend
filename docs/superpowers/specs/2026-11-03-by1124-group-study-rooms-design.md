@@ -129,7 +129,7 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
 | 공부방 나가기 | `POST /api/groups/{groupId}/room/leave` | 멤버 | |
 | 공부방 멤버 신고 | `POST /api/groups/{groupId}/members/{userId}/report` | 멤버 | `{reason?}`. 신고 + 차단 + 슬랙, 같은 방이면 `PEER_BLOCKED` |
 | 차단 목록 | `GET /api/blocks` | 누구나 | 내가 차단한 사람 `{userId, nickname, profileImageUrl, blockedAt}` |
-| 차단 해제 | `DELETE /api/blocks/{userId}` | 누구나 | 다음 공부방 입장부터 다시 보인다 |
+| 차단 해제 | `DELETE /api/blocks/{userId}` | 누구나 | 다음 공부방 입장부터 영상·소리가 다시 오간다 |
 | 프로필 카테고리 | 기존 프로필 API | | 허용 값을 9개로 늘리고 Swagger 설명에 9개를 적는다 |
 
 **멤버 책상 (`GroupMemberDesk`)** — 내 그룹 카드, 그룹 홈, 공개 그룹 보기가 함께 쓴다.

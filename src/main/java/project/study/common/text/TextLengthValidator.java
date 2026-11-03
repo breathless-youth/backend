@@ -25,7 +25,9 @@ public class TextLengthValidator implements ConstraintValidator<TextLength, Stri
         if (value.length() > (long) max * RAW_CHARS_PER_GRAPHEME) {
             return false;
         }
-        int length = Graphemes.count(Graphemes.normalize(value));
+        String normalized = Graphemes.normalize(value);
+        // 보이지 않는 글자만이면 글자 수를 0으로 본다 — 한글 채움 문자 하나로 min = 1을 통과하는 빈 이름을 막는다
+        int length = Graphemes.isVisuallyBlank(normalized) ? 0 : Graphemes.count(normalized);
         return length >= min && length <= max;
     }
 }
