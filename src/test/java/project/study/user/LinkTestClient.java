@@ -87,9 +87,17 @@ final class LinkTestClient {
         return social;
     }
 
-    /** 이 계정으로 SDK 로그인을 한 번 더 한 것처럼 새 ID 토큰을 만든다 — ID 토큰은 한 번만 받으므로 link마다 새 토큰이 필요하다. */
+    /**
+     * 이 계정으로 SDK 로그인을 한 번 더 한 것처럼 새 ID 토큰을 만든다 — ID 토큰은 한 번만 받으므로 link마다 새 토큰이 필요하다. JWT처럼
+     * `header.payload.signature` 세 조각이고, 새 토큰마다 서명이 덮는 앞 두 조각이 달라진다.
+     */
     static String freshIdToken(Social social) {
-        return social.idToken() + "." + SEQ.incrementAndGet();
+        return social.idToken() + "." + SEQ.incrementAndGet() + ".signature";
+    }
+
+    /** 사용 기록의 키: 서명이 덮는 `header.payload`의 SHA-256 hex. */
+    static String usedKey(String idToken) {
+        return sha256Hex(idToken.substring(0, idToken.lastIndexOf('.')));
     }
 
     /** 새 경로라 기본버전 1이다 — 실제 Bearer 토큰을 싣는다. */

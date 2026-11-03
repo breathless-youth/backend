@@ -158,7 +158,7 @@ public class AuthService {
     public LinkResponse link(Long userId, LinkSocialRequest request) {
         OAuthUserInfo social = socialTokenVerifiers.verify(request.provider(), request.idToken());
         SocialNonce.check(social, request.nonce());
-        String idTokenHash = TokenIssuer.sha256(request.idToken());
+        String idTokenHash = TokenIssuer.sha256(signedPart(request.idToken()));
         if (accountLinker.mergeAhead(userId, social)) {
             currentRoomLeaver.leave(userId);
         }
@@ -186,6 +186,15 @@ public class AuthService {
     }
 
     private record LinkOutcome(Linked linked, TokenPair tokens) {}
+
+    /**
+     * 사용 기록의 키로 쓸 부분: 서명이 덮는 {@code header.payload}. 서명 조각은 같은 바이트를 여러 문자열로 쓸 수 있어(base64url의 남는
+     * 비트·패딩) 토큰 전체를 키로 하면 서명만 고쳐 쓴 토큰이 새 토큰으로 통과한다. 앞 두 조각은 한 글자만 바뀌어도 서명 검증이 깨진다.
+     */
+    static String signedPart(String idToken) {
+        int lastDot = idToken.lastIndexOf('.');
+        return lastDot < 0 ? idToken : idToken.substring(0, lastDot);
+    }
 
     public record TokenPair(String accessToken, String refreshToken) {}
 }
