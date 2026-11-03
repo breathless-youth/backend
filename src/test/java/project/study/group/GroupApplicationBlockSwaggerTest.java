@@ -96,7 +96,7 @@ class GroupApplicationBlockSwaggerTest {
                         v -> assertThat(v)
                                 .asString()
                                 .contains(
-                                        "이미 멤버인지를 한도·정원·내보냄 검사보다 먼저 본다 — 이미 멤버면 GROUP_FULL·GROUP_SLOT_LIMIT·RECENTLY_KICKED 대신 joined=false로 200"))
+                                        "이미 멤버인지를 내보냄·정원·한도 검사보다 먼저 본다 — 이미 멤버면 RECENTLY_KICKED·GROUP_FULL·GROUP_SLOT_LIMIT 대신 joined=false로 200"))
                 // 차단은 영상·소리만 막는다 — 멤버 목록·타일에는 그대로 나온다
                 .hasPathSatisfying(
                         "$.paths['/api/groups/{groupId}/members/{userId}/report'].post.description",
@@ -127,11 +127,11 @@ class GroupApplicationBlockSwaggerTest {
     }
 
     /**
-     * 403·501은 그룹 오퍼레이션이 @ApiResponse로 직접 적는다. 핸들러를 @ResponseStatus로 두면 springdoc이 그 상태를 모든 오퍼레이션에
-     * 일반 응답으로 붙여, 403·501과 무관한 기존 API(랭킹 등)의 문서가 어긋난다.
+     * 403은 그룹 오퍼레이션이 @ApiResponse로 직접 적는다. 핸들러를 @ResponseStatus로 두면 springdoc이 그 상태를 모든 오퍼레이션에
+     * 일반 응답으로 붙여, 403과 무관한 기존 API(랭킹 등)의 문서가 어긋난다.
      */
     @Test
-    void 그룹과_무관한_기존_오퍼레이션에_403_501_응답이_자동으로_붙지_않는다() {
+    void 그룹과_무관한_기존_오퍼레이션에_403_응답이_자동으로_붙지_않는다() {
         assertThat(mvc.get().uri("/v3/api-docs"))
                 .hasStatusOk()
                 .bodyJson()
@@ -139,6 +139,6 @@ class GroupApplicationBlockSwaggerTest {
                         "$.paths['/api/rankings/board'].get.responses",
                         v -> assertThat(v)
                                 .asInstanceOf(InstanceOfAssertFactories.MAP)
-                                .doesNotContainKeys("403", "501"));
+                                .doesNotContainKeys("403"));
     }
 }

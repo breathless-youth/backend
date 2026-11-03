@@ -108,15 +108,6 @@ class GlobalExceptionHandlerTest {
                 .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("NOT_GROUP_OWNER"));
     }
 
-    @Test
-    void NotImplementedException은_501로_응답한다() {
-        assertThat(mvc.get().uri("/test/not-implemented").exchange())
-                .hasStatus(HttpStatus.NOT_IMPLEMENTED)
-                .bodyJson()
-                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("NOT_IMPLEMENTED"))
-                .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("아직 준비 중인 기능입니다"));
-    }
-
     /**
      * 회귀 방지 테스트. @ExceptionHandler(Exception.class)는 Spring MVC 표준 예외를 담당하는
      * DefaultHandlerExceptionResolver보다 먼저 실행되므로, ErrorResponse 분기가 없으면
@@ -181,11 +172,6 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/forbidden")
         void forbidden() {
             throw new ForbiddenException(ErrorCode.NOT_GROUP_OWNER, "그룹장만 할 수 있어요");
-        }
-
-        @GetMapping("/test/not-implemented")
-        void notImplemented() {
-            throw new NotImplementedException();
         }
 
         @GetMapping("/test/service-unavailable")

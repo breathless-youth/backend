@@ -30,8 +30,12 @@ public class Room {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 4)
+    // 초대코드 방은 코드만, 그룹 공부방은 groupId만 가진다 — 둘 중 정확히 하나 (V37 rooms_code_xor_group_chk)
+    @Column(length = 4)
     private String inviteCode;
+
+    @Column(updatable = false)
+    private Long groupId;
 
     @Column(nullable = false, updatable = false)
     private Long createdBy;

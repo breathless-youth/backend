@@ -7,6 +7,8 @@ import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /** @TextLength — 정규화한 뒤 글자 수 [min, max], 원문이 max * 16을 넘으면 실패 (BY-1124). */
 class TextLengthValidatorTest {
@@ -18,6 +20,8 @@ class TextLengthValidatorTest {
     private static final String COMBINING_ACUTE = "́";
 
     record Sample(@TextLength(min = 1, max = 20) String name) {}
+
+    record OptionalSample(@TextLength(max = 20) String description) {}
 
     @AfterAll
     static void closeFactory() {
@@ -60,5 +64,40 @@ class TextLengthValidatorTest {
         assertThat(violations)
                 .singleElement()
                 .satisfies(v -> assertThat(v.getMessage()).isEqualTo("1~20자여야 합니다"));
+    }
+
+    // 한글 채움 문자(U+3164·U+115F·U+1160·U+FFA0)·제로폭 공백(U+200B)·줄바꿈 없는 공백(U+00A0)·전각 공백은 strip()이 못 지우거나
+    // 글자 한 개로 세어져 "빈 이름"이 min = 1을 통과한다
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "\u3164",
+                "\u200B",
+                "\u00A0",
+                "\u3164\u200B\u00A0",
+                "\u115F",
+                "\u1160",
+                "\uFFA0",
+                "\u2003",
+                "\u3000\u3164",
+                "\u200D",
+                "\u0007"
+            })
+    void 보이지_않는_글자만이면_min_1에서_실패한다(String invisible) {
+        assertThat(VALIDATOR.validate(new Sample(invisible))).hasSize(1);
+    }
+
+    @Test
+    void 보이는_글자가_하나라도_있으면_통과한다() {
+        assertThat(VALIDATOR.validate(new Sample("a\u200B"))).isEmpty();
+        assertThat(VALIDATOR.validate(new Sample("\u3164가"))).isEmpty();
+        // ZWJ가 들어간 이모지 조합은 보이는 글자다
+        assertThat(VALIDATOR.validate(new Sample(FAMILY))).isEmpty();
+    }
+
+    @Test
+    void 보이지_않는_글자만이어도_min_0이면_통과한다() {
+        // 글자 수를 0으로 볼 뿐이라 선택 입력은 그대로 비워 둘 수 있다
+        assertThat(VALIDATOR.validate(new OptionalSample("\u3164\u200B"))).isEmpty();
     }
 }

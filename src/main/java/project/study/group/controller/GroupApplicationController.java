@@ -38,7 +38,8 @@ public class GroupApplicationController {
                     신청하면 그룹장에게 푸시가 가고, 그룹장이 수락하면 멤버가 된다. \
                     다 찬 그룹에는 신청할 수 없다(GROUP_FULL). 신청한 뒤에 자리가 차면 신청은 기한까지 남고 수락만 GROUP_FULL로 막힌다. \
                     신청은 "들어간 그룹과 답을 기다리는 신청 5개"와 "답을 기다리는 신청 3개" 한도에 들어가고, 같은 그룹에 답을 기다리는 신청은 하나만 둘 수 있다. \
-                    신청 소개 글에 연락처나 링크가 있으면 막는다.""")
+                    신청 소개 글에 연락처나 링크가 있으면 막는다. \
+                    409가 겹치면 ALREADY_MEMBER → ALREADY_APPLIED → RECENTLY_KICKED → GROUP_FULL → GROUP_SLOT_LIMIT → APPLICATION_LIMIT 순서로 먼저 걸린 하나만 준다.""")
     @ApiResponse(responseCode = "201", description = "신청됨 — `{applicationId, expiresAt}`")
     @ApiResponse(
             responseCode = "400",
@@ -51,8 +52,8 @@ public class GroupApplicationController {
             responseCode = "409",
             description = "`ALREADY_MEMBER` 이미 이 그룹의 멤버 / "
                     + "`ALREADY_APPLIED` 이 그룹에 답을 기다리는 신청이 이미 있음 / "
-                    + "`GROUP_FULL` 멤버가 이미 6명 / "
                     + "`RECENTLY_KICKED` 이 그룹에서 내보내진 지 3일이 안 됨 / "
+                    + "`GROUP_FULL` 멤버가 이미 6명 / "
                     + "`GROUP_SLOT_LIMIT` 들어간 그룹과 답을 기다리는 신청이 합쳐 이미 5개 / "
                     + "`APPLICATION_LIMIT` 답을 기다리는 신청이 이미 3곳")
     @PostMapping(value = "/api/groups/{groupId}/applications", version = "1")
@@ -111,7 +112,7 @@ public class GroupApplicationController {
     @ApiResponse(responseCode = "204", description = "수락됨 — 신청한 사람이 멤버가 됨")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "403", description = "`NOT_GROUP_OWNER` 이 신청이 간 그룹의 그룹장이 아님")
-    @ApiResponse(responseCode = "404", description = "`NOT_FOUND` 없는 신청")
+    @ApiResponse(responseCode = "404", description = "`NOT_FOUND` 없는 신청 — 그룹이 사라진 신청 포함")
     @ApiResponse(
             responseCode = "409",
             description = "`GROUP_FULL` 멤버가 이미 6명 — 신청은 기한까지 남는다 / `APPLICATION_NOT_PENDING` 이미 답했거나 취소·만료된 신청")
@@ -128,7 +129,7 @@ public class GroupApplicationController {
     @ApiResponse(responseCode = "204", description = "거절됨")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "403", description = "`NOT_GROUP_OWNER` 이 신청이 간 그룹의 그룹장이 아님")
-    @ApiResponse(responseCode = "404", description = "`NOT_FOUND` 없는 신청")
+    @ApiResponse(responseCode = "404", description = "`NOT_FOUND` 없는 신청 — 그룹이 사라진 신청 포함")
     @ApiResponse(responseCode = "409", description = "`APPLICATION_NOT_PENDING` 이미 답했거나 취소·만료된 신청")
     @PostMapping(value = "/api/group-applications/{applicationId}/decline", version = "1")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -146,7 +147,7 @@ public class GroupApplicationController {
     @ApiResponse(responseCode = "400", description = "`VALIDATION_FAILED` 사유가 100자 초과 / `BAD_REQUEST` 읽을 수 없는 본문")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "403", description = "`NOT_GROUP_OWNER` 이 신청이 간 그룹의 그룹장이 아님")
-    @ApiResponse(responseCode = "404", description = "`NOT_FOUND` 없는 신청")
+    @ApiResponse(responseCode = "404", description = "`NOT_FOUND` 없는 신청 — 그룹이 사라진 신청 포함")
     @ApiResponse(responseCode = "409", description = "`APPLICATION_NOT_PENDING` 이미 답했거나 취소·만료된 신청")
     @PostMapping(value = "/api/group-applications/{applicationId}/report", version = "1")
     @ResponseStatus(HttpStatus.NO_CONTENT)

@@ -47,6 +47,13 @@ public class RoomParticipation {
     @Column(nullable = false)
     private int focusSec;
 
+    // 그룹 공부방만 쓰는 표시값 — 초대코드 방에서는 기본값(false) 그대로다
+    @Column(nullable = false)
+    private boolean micOn;
+
+    @Column(nullable = false)
+    private boolean onBreak;
+
     @Column(nullable = false)
     private Instant reservedAt;
 
