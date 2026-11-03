@@ -42,6 +42,9 @@ public class AppleTokenVerifier implements OAuthTokenVerifier {
             @Qualifier(SocialProviderHttpConfig.REST_CLIENT) RestClient restClient, OAuthProperties properties) {
         this.restClient = restClient;
         this.audiences = properties.apple().audiences();
+        if (audiences.isEmpty()) {
+            log.warn("oauth.apple.bundle-id(OAUTH_APPLE_BUNDLE_ID)·services-id가 비어 있어 애플 로그인을 모두 거부한다");
+        }
     }
 
     @Override
@@ -51,6 +54,10 @@ public class AppleTokenVerifier implements OAuthTokenVerifier {
 
     @Override
     public OAuthUserInfo verify(String idToken) {
+        // 받을 aud가 없으면 결과와 상관없이 거부되므로 JWKS도 부르지 않는다
+        if (audiences.isEmpty()) {
+            throw new InvalidOAuthTokenException("애플 로그인이 설정되지 않았습니다");
+        }
         try {
             Claims claims = Jwts.parser()
                     .keyLocator(new AppleKeyLocator())

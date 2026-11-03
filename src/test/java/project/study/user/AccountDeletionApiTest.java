@@ -258,6 +258,33 @@ class AccountDeletionApiTest {
     }
 
     @Test
+    void 애플_코드만_있고_appleClient가_없으면_400이고_지우지_않는다() {
+        LinkResponse linked = linkApple();
+        long userId = api.subOf(linked.accessToken());
+
+        assertThat(deleteMe(linked.accessToken(), "{\"appleAuthorizationCode\":\"auth-code\"}"))
+                .hasStatus(400)
+                .bodyJson()
+                .extractingPath("$.code")
+                .isEqualTo("VALIDATION_FAILED");
+        assertThat(countUser(userId)).isEqualTo(1);
+        verifyNoInteractions(appleTokenRevoker);
+    }
+
+    @Test
+    void 정의되지_않은_appleClient는_400_BAD_REQUEST이고_지우지_않는다() {
+        LinkResponse linked = linkApple();
+        long userId = api.subOf(linked.accessToken());
+
+        assertThat(deleteMe(linked.accessToken(), "{\"appleAuthorizationCode\":\"auth-code\",\"appleClient\":\"WEB\"}"))
+                .hasStatus(400)
+                .bodyJson()
+                .extractingPath("$.code")
+                .isEqualTo("BAD_REQUEST");
+        assertThat(countUser(userId)).isEqualTo(1);
+    }
+
+    @Test
     void 애플이_아닌_계정은_해지를_부르지_않는다() {
         Social google = api.stubSocial(Provider.GOOGLE, null);
         LinkResponse linked = api.linkOk(api.register(), google);

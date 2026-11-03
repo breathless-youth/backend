@@ -29,6 +29,9 @@ public class GoogleTokenVerifier implements OAuthTokenVerifier {
             @Qualifier(SocialProviderHttpConfig.REST_CLIENT) RestClient restClient, OAuthProperties properties) {
         this.restClient = restClient;
         this.properties = properties.google();
+        if (this.properties.clientIds().isEmpty()) {
+            log.warn("oauth.google.client-ids(OAUTH_GOOGLE_CLIENT_IDS)가 비어 있어 구글 로그인을 모두 거부한다");
+        }
     }
 
     @Override
@@ -38,6 +41,10 @@ public class GoogleTokenVerifier implements OAuthTokenVerifier {
 
     @Override
     public OAuthUserInfo verify(String idToken) {
+        // 받을 aud가 없으면 결과와 상관없이 거부되므로 토큰을 구글에 보내지도 않는다
+        if (properties.clientIds().isEmpty()) {
+            throw new InvalidOAuthTokenException("구글 로그인이 설정되지 않았습니다");
+        }
         GoogleTokenInfo tokenInfo;
         try {
             tokenInfo = restClient.get().uri(TOKEN_INFO_URL, idToken).retrieve().body(GoogleTokenInfo.class);

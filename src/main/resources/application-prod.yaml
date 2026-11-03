@@ -38,14 +38,16 @@ decorator:
     enabled: false
 
 
+# 소셜 로그인 (BY-1126, ADR-0041). 로그인 앱보다 그룹 릴리즈가 먼저 나가므로 값이 없어도 기동한다 — 허용 aud 목록이 빈 프로바이더는
+# 모든 토큰을 400으로 거부하고 기동 로그에 프로바이더마다 WARN을 남긴다. 로그인 앱 출시 전에 SSM·태스크 정의에 넣는다
 oauth:
   google:
     # 허용하는 ID 토큰 aud 목록(쉼표 구분) — 웹(서버) 클라이언트 ID 등. 시크릿 아님
-    client-ids: ${OAUTH_GOOGLE_CLIENT_IDS}
+    client-ids: ${OAUTH_GOOGLE_CLIENT_IDS:}
   kakao:
-    app-keys: ${OAUTH_KAKAO_APP_KEYS}
+    app-keys: ${OAUTH_KAKAO_APP_KEYS:}
   apple:
-    bundle-id: ${OAUTH_APPLE_BUNDLE_ID}
+    bundle-id: ${OAUTH_APPLE_BUNDLE_ID:}
     services-id: ${OAUTH_APPLE_SERVICES_ID:}
     team-id: ${OAUTH_APPLE_TEAM_ID:}
     key-id: ${OAUTH_APPLE_KEY_ID:}

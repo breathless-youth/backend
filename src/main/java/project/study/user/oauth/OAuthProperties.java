@@ -1,16 +1,35 @@
 package project.study.user.oauth;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Stream;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.StringUtils;
 
+/**
+ * 소셜 로그인 설정. 허용 aud 목록이 비어도 기동한다 — 운영은 로그인 앱보다 그룹 릴리즈가 먼저 나가 OAUTH_* 값이 없을 수 있다. 빈 목록인
+ * 프로바이더의 토큰은 모두 400이고, 검증기가 기동 때 경고를 남긴다. 섹션이 통째로 없어도 빈 값으로 채운다.
+ */
 @ConfigurationProperties("oauth")
 public record OAuthProperties(Google google, Kakao kakao, Apple apple) {
 
-    public record Google(List<String> clientIds) {}
+    public OAuthProperties {
+        google = google == null ? new Google(null) : google;
+        kakao = kakao == null ? new Kakao(null) : kakao;
+        apple = apple == null ? new Apple(null, null, null, null, null, null, null) : apple;
+    }
 
-    public record Kakao(List<String> appKeys) {}
+    public record Google(List<String> clientIds) {
+        public Google {
+            clientIds = audienceList(clientIds);
+        }
+    }
+
+    public record Kakao(List<String> appKeys) {
+        public Kakao {
+            appKeys = audienceList(appKeys);
+        }
+    }
 
     public record Apple(
             String bundleId,
@@ -30,5 +49,17 @@ public record OAuthProperties(Google google, Kakao kakao, Apple apple) {
         public boolean revokeConfigured() {
             return StringUtils.hasText(teamId) && StringUtils.hasText(keyId) && StringUtils.hasText(privateKey);
         }
+    }
+
+    // 쉼표 목록의 앞뒤 공백을 떼고 빈 항목을 버린다 — 빈 문자열이 aud로 허용되지 않게
+    private static List<String> audienceList(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(Objects::nonNull)
+                .map(String::strip)
+                .filter(value -> !value.isEmpty())
+                .toList();
     }
 }

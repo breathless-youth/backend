@@ -196,7 +196,9 @@ public class UserController {
     @ApiResponse(responseCode = "204", description = "삭제됨 — 본문 없음. 앱은 저장된 토큰을 지우고 `POST /api/users`로 새 비회원이 된다")
     @ApiResponse(
             responseCode = "400",
-            description = "VALIDATION_FAILED — appleAuthorizationCode가 1024자 초과이거나 appleClient가 정의되지 않은 값",
+            description =
+                    "`VALIDATION_FAILED`: appleAuthorizationCode가 1024자 초과이거나, appleAuthorizationCode만 있고 appleClient가 없음. "
+                            + "`BAD_REQUEST`: 본문을 읽을 수 없음 — `IOS`·`ANDROID` 밖의 appleClient 값도 여기다. 어느 쪽이든 지우지 않는다",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,

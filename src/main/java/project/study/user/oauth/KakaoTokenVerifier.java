@@ -29,6 +29,9 @@ public class KakaoTokenVerifier implements OAuthTokenVerifier {
             @Qualifier(SocialProviderHttpConfig.REST_CLIENT) RestClient restClient, OAuthProperties properties) {
         this.restClient = restClient;
         this.properties = properties.kakao();
+        if (this.properties.appKeys().isEmpty()) {
+            log.warn("oauth.kakao.app-keys(OAUTH_KAKAO_APP_KEYS)가 비어 있어 카카오 로그인을 모두 거부한다");
+        }
     }
 
     @Override
@@ -38,6 +41,10 @@ public class KakaoTokenVerifier implements OAuthTokenVerifier {
 
     @Override
     public OAuthUserInfo verify(String idToken) {
+        // 받을 aud가 없으면 결과와 상관없이 거부되므로 토큰을 카카오에 보내지도 않는다
+        if (properties.appKeys().isEmpty()) {
+            throw new InvalidOAuthTokenException("카카오 로그인이 설정되지 않았습니다");
+        }
         KakaoTokenInfo tokenInfo;
         try {
             tokenInfo = restClient.get().uri(TOKEN_INFO_URL, idToken).retrieve().body(KakaoTokenInfo.class);

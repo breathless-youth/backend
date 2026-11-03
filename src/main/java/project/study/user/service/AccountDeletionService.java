@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import project.study.room.service.CurrentRoomLeaver;
-import project.study.user.dto.AppleClient;
 import project.study.user.dto.DeleteAccountRequest;
 import project.study.user.entity.Provider;
 import project.study.user.image.ProfileImageStorage;
@@ -46,8 +45,8 @@ public class AccountDeletionService {
             Sentry.captureMessage(message, SentryLevel.WARNING);
             return;
         }
-        AppleClient client = request.appleClient() == null ? AppleClient.IOS : request.appleClient();
-        appleTokenRevoker.revoke(code, client);
+        // 요청 검증이 코드와 앱 종류를 함께 보장한다. 짐작해 고르지 않는다 — 다른 클라이언트로 만든 코드는 교환이 반드시 실패한다
+        appleTokenRevoker.revoke(code, request.appleClient());
     }
 
     // 남은 파일은 어디서도 참조하지 않으므로 지우지 못해도 탈퇴는 성공으로 둔다 (ProfileImageService와 같은 방식)

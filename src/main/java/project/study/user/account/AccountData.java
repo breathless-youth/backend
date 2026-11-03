@@ -20,6 +20,10 @@ public class AccountData {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void merge(long sourceUserId, long targetUserId) {
+        // 같으면 처리기마다 "남는 쪽으로 옮긴 뒤 옮기는 쪽 행 삭제"가 자기 데이터를 지운다
+        if (sourceUserId == targetUserId) {
+            throw new IllegalArgumentException("자기 자신과는 병합할 수 없습니다: " + sourceUserId);
+        }
         for (UserDataHandler handler : handlers) {
             handler.merge(sourceUserId, targetUserId);
         }

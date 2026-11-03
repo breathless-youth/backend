@@ -24,4 +24,11 @@ public record LinkSocialRequest(
                 description = "앱이 만든 nonce 원문. SDK에는 이 값의 SHA-256 소문자 hex를 넘긴다. 애플은 필수, 구글·카카오는 SDK에 넘겼을 때만 싣는다",
                 example = "3f9c2a8e-6b1d-4c5e-9a7f-0d2e4b6c8a1f")
         @Size(max = 128, message = "nonce는 128자 이하여야 합니다")
-        String nonce) {}
+        String nonce) {
+
+    // ID 토큰·nonce가 로그·예외 메시지로 새지 않게 record 기본 toString을 막는다
+    @Override
+    public String toString() {
+        return "LinkSocialRequest[provider=" + provider + "]";
+    }
+}
