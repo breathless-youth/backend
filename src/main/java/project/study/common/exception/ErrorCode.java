@@ -49,5 +49,11 @@ public enum ErrorCode {
     REQUEST_FAILED,
 
     /** 서버 내부 오류 */
-    INTERNAL_ERROR
+    INTERNAL_ERROR,
+
+    /**
+     * 소셜 프로바이더 검증 서버가 응답하지 않거나 5xx를 줬다 (503) — 토큰 문제가 아니므로 클라이언트는 같은 소셜 로그인을 잠시 뒤 다시 시도한다.
+     * 400 {@code INVALID_SOCIAL_TOKEN}과 갈라 두는 것은 장애 때 사용자를 소셜 로그인 처음으로 돌려보내지 않기 위해서다
+     */
+    SOCIAL_PROVIDER_UNAVAILABLE
 }

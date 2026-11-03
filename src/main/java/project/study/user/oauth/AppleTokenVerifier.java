@@ -15,10 +15,17 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import project.study.user.entity.Provider;
 
+/**
+ * 애플 ID 토큰을 애플 공개키(JWKS)로 직접 검증한다. 서명·iss·exp·aud가 틀리면 400(토큰 문제), JWKS를 가져오지 못하면 503(프로바이더 장애)이다.
+ */
+@Slf4j
 @Component
 public class AppleTokenVerifier implements OAuthTokenVerifier {
 
@@ -31,8 +38,9 @@ public class AppleTokenVerifier implements OAuthTokenVerifier {
 
     private volatile CachedJwks cachedJwks;
 
-    public AppleTokenVerifier(RestClient.Builder restClientBuilder, OAuthProperties properties) {
-        this.restClient = restClientBuilder.build();
+    public AppleTokenVerifier(
+            @Qualifier(SocialProviderHttpConfig.REST_CLIENT) RestClient restClient, OAuthProperties properties) {
+        this.restClient = restClient;
         this.audiences = properties.apple().audiences();
     }
 
@@ -64,7 +72,7 @@ public class AppleTokenVerifier implements OAuthTokenVerifier {
                     (String) claims.get("email"),
                     (String) claims.get("nonce"),
                     expiresAt);
-        } catch (InvalidOAuthTokenException e) {
+        } catch (InvalidOAuthTokenException | SocialProviderUnavailableException e) {
             throw e;
         } catch (Exception e) {
             throw new InvalidOAuthTokenException("애플 ID 토큰 검증에 실패했습니다");
@@ -77,9 +85,16 @@ public class AppleTokenVerifier implements OAuthTokenVerifier {
         if (cached != null && !cached.isExpired()) {
             return cached.keys();
         }
-        Map<String, Object> response = restClient.get().uri(JWKS_URL).retrieve().body(Map.class);
-        if (response == null || !response.containsKey("keys")) {
-            throw new InvalidOAuthTokenException("애플 JWKS를 가져올 수 없습니다");
+        Map<String, Object> response;
+        try {
+            response = restClient.get().uri(JWKS_URL).retrieve().body(Map.class);
+        } catch (RestClientException e) {
+            log.warn("애플 JWKS 호출 실패: {}", e.getClass().getSimpleName());
+            throw new SocialProviderUnavailableException("애플 공개키를 가져올 수 없습니다");
+        }
+        // 토큰이 아니라 애플 쪽 응답이 잘못됐다 — 잠시 뒤 다시 하면 된다
+        if (response == null || !(response.get("keys") instanceof List)) {
+            throw new SocialProviderUnavailableException("애플 공개키를 가져올 수 없습니다");
         }
         List<Map<String, String>> rawKeys = (List<Map<String, String>>) response.get("keys");
         List<JwkKey> keys = rawKeys.stream()

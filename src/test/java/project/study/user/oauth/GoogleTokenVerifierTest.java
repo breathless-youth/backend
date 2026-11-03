@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withTooManyRequests;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -25,7 +27,7 @@ class GoogleTokenVerifierTest {
     private final MockRestServiceServer server =
             MockRestServiceServer.bindTo(builder).build();
     private final GoogleTokenVerifier verifier = new GoogleTokenVerifier(
-            builder,
+            builder.build(),
             new OAuthProperties(new OAuthProperties.Google(List.of("my-client-id", "second-client-id")), null, null));
 
     @Test
@@ -100,10 +102,29 @@ class GoogleTokenVerifierTest {
     }
 
     @Test
-    void 네트워크_실패는_InvalidOAuthTokenException으로_바꾼다() {
+    void 네트워크_실패는_토큰_문제가_아니라_프로바이더_장애다() {
         server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withException(new IOException("connection reset")));
 
-        assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(InvalidOAuthTokenException.class);
+        assertThatThrownBy(() -> verifier.verify("id-token"))
+                .isInstanceOf(SocialProviderUnavailableException.class)
+                .hasNoCause();
+    }
+
+    @Test
+    void 구글_5xx와_429는_프로바이더_장애다() {
+        server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withServerError());
+        assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(SocialProviderUnavailableException.class);
+
+        server.reset();
+        server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withTooManyRequests());
+        assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(SocialProviderUnavailableException.class);
+    }
+
+    @Test
+    void 읽을_수_없는_응답은_프로바이더_장애다() {
+        server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withSuccess("not-json", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(SocialProviderUnavailableException.class);
     }
 
     @Test

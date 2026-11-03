@@ -1,5 +1,7 @@
 package project.study.user.service;
 
+import io.sentry.Sentry;
+import io.sentry.SentryLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,11 +37,13 @@ public class AccountDeletionService {
         });
     }
 
-    // 해지는 실패해도 탈퇴를 막지 않는다. 코드는 비밀값이라 로그에 남기지 않는다
+    // 해지는 실패해도 탈퇴를 막지 않는다. 못 한 경우는 Sentry에 남긴다(애플 요건). 코드는 비밀값이라 로그에 남기지 않는다
     private void revokeAppleQuietly(DeleteAccountRequest request) {
         String code = request == null ? null : request.appleAuthorizationCode();
         if (!StringUtils.hasText(code)) {
-            log.warn("애플 계정이 인가 코드 없이 탈퇴해 애플 토큰을 해지하지 못했습니다");
+            String message = "애플 토큰 해지 못 함: 애플 계정이 인가 코드 없이 탈퇴했다";
+            log.warn(message);
+            Sentry.captureMessage(message, SentryLevel.WARNING);
             return;
         }
         AppleClient client = request.appleClient() == null ? AppleClient.IOS : request.appleClient();

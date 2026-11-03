@@ -9,11 +9,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import project.study.common.exception.ErrorCode;
 import project.study.common.exception.ErrorResponse;
 import project.study.user.oauth.InvalidOAuthTokenException;
+import project.study.user.oauth.SocialProviderUnavailableException;
 import project.study.user.service.AlreadyLinkedException;
 import project.study.user.service.InvalidRefreshTokenException;
 
 /**
- * 인증 도메인 예외 → refresh 실패 401, 소셜 토큰 실패 400, 이미 소셜 계정 409. {@code GlobalExceptionHandler}의 최종
+ * 인증 도메인 예외 → refresh 실패 401, 소셜 토큰 실패 400, 프로바이더 장애 503, 이미 소셜 계정 409. {@code GlobalExceptionHandler}의 최종
  * {@code Exception} 핸들러(500)가 먼저 잡지 않도록 최상위 우선순위를 준다.
  */
 @RestControllerAdvice
@@ -31,6 +32,13 @@ public class AuthExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleInvalidSocialToken(InvalidOAuthTokenException e) {
         return new ErrorResponse(ErrorCode.INVALID_SOCIAL_TOKEN, e.getMessage());
+    }
+
+    // 토큰이 아니라 프로바이더 쪽 장애다 — 400으로 내면 앱이 사용자를 소셜 로그인 처음으로 돌려보낸다
+    @ExceptionHandler(SocialProviderUnavailableException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ErrorResponse handleSocialProviderUnavailable(SocialProviderUnavailableException e) {
+        return new ErrorResponse(ErrorCode.SOCIAL_PROVIDER_UNAVAILABLE, e.getMessage());
     }
 
     @ExceptionHandler(AlreadyLinkedException.class)

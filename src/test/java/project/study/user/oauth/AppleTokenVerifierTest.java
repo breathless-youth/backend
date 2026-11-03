@@ -3,10 +3,13 @@ package project.study.user.oauth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
+import java.io.IOException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
@@ -33,7 +36,7 @@ class AppleTokenVerifierTest {
     private final MockRestServiceServer server =
             MockRestServiceServer.bindTo(builder).build();
     private final AppleTokenVerifier verifier = new AppleTokenVerifier(
-            builder,
+            builder.build(),
             new OAuthProperties(null, null, new OAuthProperties.Apple(BUNDLE_ID, SERVICES_ID, "", "", "", "", "")));
 
     @Test
@@ -122,6 +125,35 @@ class AppleTokenVerifierTest {
         stubJwks();
 
         assertThatThrownBy(() -> verifier.verify(token)).isInstanceOf(InvalidOAuthTokenException.class);
+    }
+
+    @Test
+    void JWKS_서버가_5xx면_토큰_문제가_아니라_프로바이더_장애다() {
+        String token =
+                baseJwt("apple-user-123", BUNDLE_ID, ISSUER, futureDate()).compact();
+        server.expect(requestTo(JWKS_URL)).andRespond(withServerError());
+
+        assertThatThrownBy(() -> verifier.verify(token))
+                .isInstanceOf(SocialProviderUnavailableException.class)
+                .hasNoCause();
+    }
+
+    @Test
+    void JWKS를_네트워크_실패로_못_가져와도_프로바이더_장애다() {
+        String token =
+                baseJwt("apple-user-123", BUNDLE_ID, ISSUER, futureDate()).compact();
+        server.expect(requestTo(JWKS_URL)).andRespond(withException(new IOException("timeout")));
+
+        assertThatThrownBy(() -> verifier.verify(token)).isInstanceOf(SocialProviderUnavailableException.class);
+    }
+
+    @Test
+    void JWKS_응답에_keys가_없으면_프로바이더_장애다() {
+        String token =
+                baseJwt("apple-user-123", BUNDLE_ID, ISSUER, futureDate()).compact();
+        server.expect(requestTo(JWKS_URL)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> verifier.verify(token)).isInstanceOf(SocialProviderUnavailableException.class);
     }
 
     private JwtBuilder baseJwt(String sub, String aud, String iss, Date exp) {

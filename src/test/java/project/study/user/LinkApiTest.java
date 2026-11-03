@@ -31,6 +31,7 @@ import project.study.user.dto.LinkResponse;
 import project.study.user.entity.Provider;
 import project.study.user.jwt.JwtUtil;
 import project.study.user.oauth.InvalidOAuthTokenException;
+import project.study.user.oauth.SocialProviderUnavailableException;
 import project.study.user.oauth.SocialTokenVerifiers;
 import tools.jackson.databind.ObjectMapper;
 
@@ -188,6 +189,21 @@ class LinkApiTest {
                 .thenThrow(new InvalidOAuthTokenException("구글 ID 토큰 검증에 실패했습니다"));
 
         assertInvalidSocialToken(api.link(device.accessToken(), forged, null));
+        assertThat(userRow(device.userId())).containsEntry("provider", "DEVICE");
+    }
+
+    @Test
+    void 프로바이더_장애는_503_SOCIAL_PROVIDER_UNAVAILABLE이고_전환하지_않는다() {
+        Device device = api.register();
+        Social google = new Social(Provider.GOOGLE, "outage-" + UUID.randomUUID(), null, null);
+        when(verifiers.verify(eq(Provider.GOOGLE), startsWith(google.idToken())))
+                .thenThrow(new SocialProviderUnavailableException("구글 ID 토큰 검증 서버에 연결할 수 없습니다"));
+
+        assertThat(api.link(device.accessToken(), google, null))
+                .hasStatus(HttpStatus.SERVICE_UNAVAILABLE)
+                .bodyJson()
+                .extractingPath("$.code")
+                .isEqualTo("SOCIAL_PROVIDER_UNAVAILABLE");
         assertThat(userRow(device.userId())).containsEntry("provider", "DEVICE");
     }
 

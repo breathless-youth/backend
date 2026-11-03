@@ -3,6 +3,9 @@ package project.study.user.oauth;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mockStatic;
 import static org.springframework.test.web.client.ExpectedCount.never;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -11,10 +14,14 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import io.sentry.Sentry;
+import io.sentry.SentryLevel;
 import java.security.KeyPairGenerator;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Base64;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -30,6 +37,13 @@ class AppleTokenRevokerTest {
     private final RestClient.Builder builder = RestClient.builder();
     private final MockRestServiceServer server =
             MockRestServiceServer.bindTo(builder).build();
+    // 해지 실패는 로그만으로는 아무도 모른다(sentry-logback 없음) — 이 코드베이스 관례대로 Sentry에 직접 남는지 본다
+    private final MockedStatic<Sentry> sentry = mockStatic(Sentry.class);
+
+    @AfterEach
+    void closeSentry() {
+        sentry.close();
+    }
 
     @Test
     void IOS는_bundleId로_교환하고_redirect_uri_없이_해지한다() {
@@ -51,6 +65,7 @@ class AppleTokenRevokerTest {
         revoker(true).revoke("the-code", AppleClient.IOS);
 
         server.verify();
+        sentry.verifyNoInteractions();
     }
 
     @Test
@@ -76,6 +91,7 @@ class AppleTokenRevokerTest {
         assertThatCode(() -> revoker(false).revoke("the-code", AppleClient.IOS)).doesNotThrowAnyException();
 
         server.verify();
+        assertSentry(SentryLevel.WARNING, "IOS");
     }
 
     @Test
@@ -86,6 +102,29 @@ class AppleTokenRevokerTest {
         assertThatCode(() -> revoker(true).revoke("the-code", AppleClient.IOS)).doesNotThrowAnyException();
 
         server.verify();
+        assertSentry(SentryLevel.ERROR, "IOS");
+    }
+
+    @Test
+    void 교환_응답에_refresh_token이_없으면_Sentry에_남긴다() {
+        server.expect(requestTo(TOKEN_URL)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        server.expect(never(), requestTo(REVOKE_URL)).andRespond(withSuccess());
+
+        assertThatCode(() -> revoker(true).revoke("the-code", AppleClient.ANDROID))
+                .doesNotThrowAnyException();
+
+        server.verify();
+        assertSentry(SentryLevel.ERROR, "ANDROID");
+    }
+
+    @Test
+    void 앱_종류가_없으면_교환하지_않고_Sentry에_남긴다() {
+        server.expect(never(), requestTo(TOKEN_URL)).andRespond(withSuccess());
+
+        assertThatCode(() -> revoker(true).revoke("the-code", null)).doesNotThrowAnyException();
+
+        server.verify();
+        assertSentry(SentryLevel.ERROR, "null");
     }
 
     @Test
@@ -97,6 +136,17 @@ class AppleTokenRevokerTest {
         assertThatCode(() -> revoker(true).revoke("the-code", AppleClient.IOS)).doesNotThrowAnyException();
 
         server.verify();
+        assertSentry(SentryLevel.ERROR, "IOS");
+    }
+
+    // 고정 문구 + 앱 종류만 — 인가 코드·client secret·애플 토큰은 싣지 않는다
+    private void assertSentry(SentryLevel level, String client) {
+        sentry.verify(() -> Sentry.captureMessage(
+                argThat(message -> message.startsWith("애플 토큰 해지")
+                        && message.contains("client=" + client)
+                        && !message.contains("the-code")
+                        && !message.contains("r-token")),
+                eq(level)));
     }
 
     private AppleTokenRevoker revoker(boolean configured) {
@@ -109,7 +159,7 @@ class AppleTokenRevokerTest {
                 "https://example.com/callback",
                 "");
         OAuthProperties properties = new OAuthProperties(null, null, apple);
-        return new AppleTokenRevoker(builder, properties, new AppleClientSecret(properties));
+        return new AppleTokenRevoker(builder.build(), properties, new AppleClientSecret(properties));
     }
 
     private static String pem() {

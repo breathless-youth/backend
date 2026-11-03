@@ -79,7 +79,7 @@ public class AuthController {
     @ApiResponse(
             responseCode = "400",
             description = """
-                    `INVALID_SOCIAL_TOKEN`: ID 토큰 검증 실패(위조·만료·다른 앱용), nonce 불일치·누락, \
+                    `INVALID_SOCIAL_TOKEN`: ID 토큰 검증 실패(위조·만료·다른 앱용), 이미 한 번 쓴 ID 토큰, nonce 불일치·누락, \
                     지원하지 않는 프로바이더 값 `DEVICE` — 소셜 로그인부터 다시. \
                     `VALIDATION_FAILED`: 요청 형식(provider 누락, idToken 공백·4096자 초과, nonce 128자 초과). \
                     `BAD_REQUEST`: 본문을 읽을 수 없음 — `GOOGLE`·`KAKAO`·`APPLE`·`DEVICE` 밖의 provider 문자열도 여기다""",
@@ -119,6 +119,18 @@ public class AuthController {
                             examples =
                                     @ExampleObject(
                                             value = "{\"code\": \"USER_NOT_FOUND\", \"message\": \"존재하지 않는 사용자입니다\"}")))
+    @ApiResponse(
+            responseCode = "503",
+            description = "`SOCIAL_PROVIDER_UNAVAILABLE`: 프로바이더 검증 서버가 응답하지 않거나(연결·타임아웃) 5xx·429를 줬다. "
+                    + "토큰 문제가 아니므로 소셜 로그인 처음으로 돌아가지 말고 잠시 뒤 다시 시도한다",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples =
+                                    @ExampleObject(
+                                            value =
+                                                    "{\"code\": \"SOCIAL_PROVIDER_UNAVAILABLE\", \"message\": \"구글 ID 토큰 검증 서버에 연결할 수 없습니다\"}")))
     @ApiResponse(
             responseCode = "409",
             description = "이미 소셜 계정인 사용자 — 이미 로그인 상태이므로 로그인 화면을 닫는다",
