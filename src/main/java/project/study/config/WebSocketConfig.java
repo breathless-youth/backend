@@ -29,14 +29,13 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 import org.springframework.web.socket.server.HandshakeInterceptor;
-import project.study.common.exception.NotFoundException;
 import project.study.common.logging.StompMdcChannelInterceptor;
 import project.study.room.service.RoomStateService;
 import project.study.room.websocket.RoomMessenger;
 import project.study.room.websocket.SessionRegistry;
 import project.study.room.websocket.SessionTrackingDecorator;
 import project.study.user.jwt.JwtUtil;
-import project.study.user.service.UserService;
+import project.study.user.service.LegacyGuestGuard;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -51,8 +50,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     // 순환 참조가 나므로 ObjectProvider로 지연 해석한다
     private final ObjectProvider<RoomMessenger> roomMessenger;
     private final JwtUtil jwtUtil;
-    // 구 앱 폴백의 실존 유저 확인용 — contract 시 함께 삭제한다 (ADR-0020)
-    private final UserService userService;
+    // 구 앱 폴백의 비회원 확인용 — contract 시 함께 삭제한다 (ADR-0020, ADR-0041)
+    private final LegacyGuestGuard legacyGuestGuard;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
@@ -92,7 +91,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registration.taskExecutor().corePoolSize(8).maxPoolSize(8);
         // 인가 인터셉터가 CONNECT에서 프린시펄을 세팅하므로 MDC 인터셉터는 그 뒤에 둔다
         registration.interceptors(
-                new UserIdChannelInterceptor(roomStateService, roomMessenger, jwtUtil, userService),
+                new UserIdChannelInterceptor(roomStateService, roomMessenger, jwtUtil, legacyGuestGuard),
                 new StompMdcChannelInterceptor());
     }
 
@@ -160,7 +159,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         private final RoomStateService roomStateService;
         private final ObjectProvider<RoomMessenger> messenger;
         private final JwtUtil jwtUtil;
-        private final UserService userService;
+        private final LegacyGuestGuard legacyGuestGuard;
 
         @Override
         public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -222,22 +221,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             if (userId instanceof String s) {
                 try {
                     long id = Long.parseLong(s);
-                    // 토큰과 달리 아무 숫자나 올 수 있다 — 계정 없는 principal이 구독을 쌓지 못하게 실존 유저만 통과시킨다
-                    if (id > 0 && exists(id)) return new StompPrincipal(s);
+                    // 토큰과 달리 아무 숫자나 올 수 있다 — 계정 없는 principal이 구독을 쌓지 못하게, 또 숫자만으로 소셜 계정의
+                    // 방에 붙지 못하게 실존 비회원만 통과시킨다 (구 앱 사용자는 늘 비회원이다, ADR-0041)
+                    if (id > 0 && legacyGuestGuard.isGuest(id)) return new StompPrincipal(s);
                 } catch (NumberFormatException ignored) {
                     // 아래에서 거부
                 }
             }
             throw new MessageDeliveryException(message, "인증이 필요합니다");
-        }
-
-        private boolean exists(long userId) {
-            try {
-                userService.getProfile(userId);
-                return true;
-            } catch (NotFoundException e) {
-                return false;
-            }
         }
 
         // 클라이언트 SEND는 /app/** 만 허용 — 브로커 목적지(/topic, /queue)로의 직접 발행을 차단해

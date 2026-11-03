@@ -16,13 +16,15 @@ import project.study.user.dto.LegacyUserRegisterResponse;
 import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
+import project.study.user.service.LegacyGuestGuard;
 import project.study.user.service.UserService;
 
 /**
  * 구 앱(v1.2.x) 전용 유저 API — API-Version 헤더가 없거나 1인 요청만 여기로 온다 (ADR-0020).
  *
  * <p>계약은 v1.2.1 그대로다: 등록은 토큰 없이 {@code {userId, isNew}}, 프로필은 경로의 userId로 식별.
- * 프로필은 토큰 계약 핸들러({@link UserController})에 userId만 바꿔 위임하는 어댑터라 로직이 없다.
+ * 프로필은 토큰 계약 핸들러({@link UserController})에 userId만 바꿔 위임하는 어댑터다. 경로의 userId는 비회원만 받는다
+ * ({@link LegacyGuestGuard}).
  * 강제 업데이트(BY-531) 뒤 contract 시 이 클래스와 {@link LegacyUserRegisterResponse}를 삭제한다.
  */
 // Swagger에 싣지 않는다 — springdoc은 같은 경로+메서드를 하나로 합쳐 토큰 계약(v2) 문서를 덮어쓴다.
@@ -35,6 +37,7 @@ public class LegacyUserController {
 
     private final UserService userService;
     private final UserController userController;
+    private final LegacyGuestGuard legacyGuestGuard;
 
     @PostMapping
     public ResponseEntity<LegacyUserRegisterResponse> register(@Valid @RequestBody UserRegisterRequest request) {
@@ -45,11 +48,13 @@ public class LegacyUserController {
 
     @GetMapping("/{userId}/profile")
     public ProfileResponse getProfile(@PathVariable Long userId) {
+        legacyGuestGuard.requireGuest(userId);
         return userController.getProfile(userId);
     }
 
     @PatchMapping("/{userId}/profile")
     public ProfileResponse updateProfile(@PathVariable Long userId, @Valid @RequestBody ProfileUpdateRequest request) {
+        legacyGuestGuard.requireGuest(userId);
         return userController.updateProfile(userId, request);
     }
 }

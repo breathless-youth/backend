@@ -2,7 +2,7 @@ package project.study.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -21,26 +22,30 @@ import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
-import project.study.common.exception.ErrorCode;
-import project.study.common.exception.NotFoundException;
 import project.study.room.service.RoomStateService;
 import project.study.room.websocket.RoomMessenger;
+import project.study.user.entity.Provider;
 import project.study.user.jwt.JwtUtil;
-import project.study.user.service.UserService;
+import project.study.user.repository.UserRepository;
+import project.study.user.service.LegacyGuestGuard;
 
 class UserIdChannelInterceptorTest {
 
     private final RoomStateService roomState = mock(RoomStateService.class);
     private final RoomMessenger messenger = mock(RoomMessenger.class);
     private final JwtUtil jwtUtil = new JwtUtil("test-secret-key-that-is-at-least-32-chars-long", 3_600_000L);
-    // 구 앱 폴백의 실존 유저 확인용 — 스텁하지 않은 userId는 존재하는 것으로 본다(null 반환), 없는 유저만 예외를 던지게 한다
-    private final UserService userService = mock(UserService.class);
+    // 구 앱 폴백의 비회원 확인용 — 스텁하지 않은 userId는 실존 비회원으로 본다, 없는 유저·소셜 계정만 false로 둔다
+    private final LegacyGuestGuard guestGuard = mock(LegacyGuestGuard.class);
+
+    {
+        when(guestGuard.isGuest(anyLong())).thenReturn(true);
+    }
 
     @SuppressWarnings("unchecked")
     private WebSocketConfig.UserIdChannelInterceptor interceptor() {
         ObjectProvider<RoomMessenger> provider = mock(ObjectProvider.class);
         when(provider.getObject()).thenReturn(messenger);
-        return new WebSocketConfig.UserIdChannelInterceptor(roomState, provider, jwtUtil, userService);
+        return new WebSocketConfig.UserIdChannelInterceptor(roomState, provider, jwtUtil, guestGuard);
     }
 
     private static Message<byte[]> subscribe(String destination, String userId) {
@@ -124,14 +129,33 @@ class UserIdChannelInterceptorTest {
     @Test
     void 핸드셰이크_userId가_존재하지_않는_유저면_거부된다() {
         // 토큰과 달리 아무 숫자나 올 수 있다 — 계정 없는 principal이 구독을 쌓지 못하게 한다 (Codex 보안 챌린지)
-        doThrow(new NotFoundException(ErrorCode.USER_NOT_FOUND, "존재하지 않는 사용자입니다"))
-                .when(userService)
-                .getProfile(404L);
+        when(guestGuard.isGuest(404L)).thenReturn(false);
 
         assertThatThrownBy(() ->
                         interceptor().preSend(connect(StompCommand.CONNECT, null, "404"), mock(MessageChannel.class)))
                 .isInstanceOf(MessagingException.class)
                 .hasMessageContaining("인증이 필요합니다");
+    }
+
+    @Test
+    void 핸드셰이크_userId가_소셜_계정이면_없는_유저처럼_거부된다() {
+        // 구 앱 사용자는 늘 비회원이다 — 숫자 userId만으로 소셜 계정의 방 구독을 열지 못하게 한다 (ADR-0041)
+        LegacyGuestGuard realGuard = new LegacyGuestGuard(socialUserRepository(77L));
+        @SuppressWarnings("unchecked")
+        ObjectProvider<RoomMessenger> provider = mock(ObjectProvider.class);
+        WebSocketConfig.UserIdChannelInterceptor withRealGuard =
+                new WebSocketConfig.UserIdChannelInterceptor(roomState, provider, jwtUtil, realGuard);
+
+        assertThatThrownBy(() ->
+                        withRealGuard.preSend(connect(StompCommand.CONNECT, null, "77"), mock(MessageChannel.class)))
+                .isInstanceOf(MessagingException.class)
+                .hasMessageContaining("인증이 필요합니다");
+    }
+
+    private static UserRepository socialUserRepository(long socialUserId) {
+        UserRepository repository = mock(UserRepository.class);
+        when(repository.findProviderById(socialUserId)).thenReturn(Optional.of(Provider.GOOGLE));
+        return repository;
     }
 
     @Test
