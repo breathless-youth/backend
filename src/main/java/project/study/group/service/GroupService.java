@@ -2,8 +2,12 @@ package project.study.group.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.category.StudyCategory;
 import project.study.common.exception.BadRequestException;
@@ -13,25 +17,34 @@ import project.study.common.exception.ForbiddenException;
 import project.study.common.exception.NotImplementedException;
 import project.study.common.text.Graphemes;
 import project.study.group.ContactDetector;
+import project.study.group.GroupRole;
 import project.study.group.GroupVisibility;
 import project.study.group.InviteCodes;
 import project.study.group.dto.GroupCreateRequest;
 import project.study.group.dto.GroupHomeResponse;
+import project.study.group.dto.GroupMemberDesk;
 import project.study.group.dto.GroupUpdateRequest;
 import project.study.group.dto.MyGroupsResponse;
+import project.study.group.dto.MyGroupsResponse.GroupLimits;
+import project.study.group.dto.MyGroupsResponse.MyGroupCard;
 import project.study.group.dto.PublicGroupDetailResponse;
 import project.study.group.dto.PublicGroupPageResponse;
 import project.study.group.repository.GroupApplicationRepository;
 import project.study.group.repository.GroupMemberRepository;
 import project.study.group.repository.GroupRepository;
+import project.study.group.repository.GroupRepository.GroupRow;
+import project.study.group.service.GroupAccess.Membership;
 
-/** 그룹 만들기·설정·알림은 채웠고, 나머지는 REST 계약만 있는 스텁이다 — 다음 단계에서 채우고 {@link NotImplementedException}을 지운다 (BY-1124). */
+/** 그룹 만들기·내 그룹·그룹 홈·설정·알림은 채웠고, 나머지는 REST 계약만 있는 스텁이다 — 다음 단계에서 채우고 {@link NotImplementedException}을 지운다 (BY-1124). */
 @Service
 @RequiredArgsConstructor
 public class GroupService {
 
     /** 들어간 그룹과 답을 기다리는 신청을 합친 상한 */
     static final int MAX_GROUP_SLOTS = 5;
+
+    /** 동시에 답을 기다릴 수 있는 신청 수 상한 */
+    static final int MAX_PENDING_APPLICATIONS = 3;
 
     /** 한 사람이 그룹장일 수 있는 그룹 수 상한 */
     static final int MAX_OWNED_GROUPS = 2;
@@ -41,6 +54,7 @@ public class GroupService {
     private final GroupApplicationRepository applications;
     private final GroupLocks locks;
     private final GroupAccess access;
+    private final GroupDeskReader deskReader;
     private final Clock clock;
 
     /**
@@ -74,12 +88,67 @@ public class GroupService {
         return groupId;
     }
 
+    /**
+     * 내 그룹 탭 — 들어간 순서의 그룹 카드와 신청·그룹장 수, 한도. 책상은 그룹 수와 상관없이 한 번에 읽는다. 멤버 공부 상태가 확정 합계와 draft를 한
+     * 스냅샷에서 읽어야 해서 REPEATABLE READ로 연다.
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public MyGroupsResponse myGroups(Long userId) {
-        throw new NotImplementedException();
+        Instant now = clock.instant();
+        List<Long> groupIds = members.findLiveGroupIdsOfUser(userId);
+        Map<Long, GroupRow> live = new HashMap<>();
+        groups.findLiveByIds(groupIds).forEach(group -> live.put(group.id(), group));
+        // 들어간 순서를 지킨다 — 그룹을 ID 순으로 읽었으므로 소속 순서로 다시 놓는다
+        List<GroupRow> joined =
+                groupIds.stream().filter(live::containsKey).map(live::get).toList();
+        Map<Long, List<GroupMemberDesk>> desks = deskReader.desks(joined, now);
+
+        List<MyGroupCard> cards = joined.stream()
+                .map(group -> {
+                    List<GroupMemberDesk> groupDesks = desks.get(group.id());
+                    return new MyGroupCard(
+                            group.id(),
+                            group.name(),
+                            group.category(),
+                            group.visibility(),
+                            groupDesks.size(),
+                            GroupDeskReader.studyingCount(groupDesks),
+                            group.ownerId() == userId,
+                            groupDesks);
+                })
+                .toList();
+        return new MyGroupsResponse(
+                cards,
+                applications.countPendingOfUser(userId, now),
+                groups.countOwnedLive(userId),
+                new GroupLimits(MAX_GROUP_SLOTS, MAX_PENDING_APPLICATIONS, MAX_OWNED_GROUPS));
     }
 
+    /**
+     * 그룹 홈 — 멤버만. 새 신청 수는 공개 그룹 그룹장에게만 답을 기다리는(기한 안) 신청 전부를 센다. 내 그룹 탭과 같은 이유로 REPEATABLE READ다.
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public GroupHomeResponse home(Long userId, long groupId) {
-        throw new NotImplementedException();
+        Instant now = clock.instant();
+        Membership membership = access.requireMember(groupId, userId, false);
+        GroupRow group = membership.group();
+        List<GroupMemberDesk> desks = deskReader.desks(List.of(group), now).get(groupId);
+        boolean owner = group.ownerId() == userId;
+        Integer newApplicationCount = owner && group.visibility() == GroupVisibility.PUBLIC
+                ? applications.countPendingOfGroup(groupId, now)
+                : null;
+        return new GroupHomeResponse(
+                group.id(),
+                group.name(),
+                group.visibility(),
+                group.category(),
+                group.description(),
+                desks.size(),
+                owner ? GroupRole.OWNER : GroupRole.MEMBER,
+                membership.member().notifyEnabled(),
+                newApplicationCount,
+                GroupDeskReader.studyingCount(desks),
+                desks);
     }
 
     /** 이름·시험·목표·소개를 통째로 바꾼다(소개를 빼면 지워진다). 그룹장만 할 수 있고, 그룹 행을 잠가 그룹장 넘기기·삭제와 직렬화한다. */

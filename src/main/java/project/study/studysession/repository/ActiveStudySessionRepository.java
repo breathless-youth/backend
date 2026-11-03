@@ -1,6 +1,7 @@
 package project.study.studysession.repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -59,6 +60,17 @@ public interface ActiveStudySessionRepository extends JpaRepository<ActiveStudyS
                 select 1 from StudySession s
                 where s.userId = d.userId and s.submissionStartedAt = d.startedAt)""")
     List<Long> findUnfinalizedIds();
+
+    // 그룹 멤버 책상(BY-1124) — 그 사람들 draft만. (user_id, started_at) 유니크 인덱스의 앞 열이라 인덱스로 찾는다
+    List<ActiveStudySession> findByUserIdIn(Collection<Long> userIds);
+
+    /** {@link #findUnfinalizedIds()}와 같은 조건을 그 사람들 draft에 한정한다 (BY-1124 멤버 책상). */
+    @Query("""
+            select d.id from ActiveStudySession d
+            where d.userId in :userIds and not exists (
+                select 1 from StudySession s
+                where s.userId = d.userId and s.submissionStartedAt = d.startedAt)""")
+    List<Long> findUnfinalizedIdsByUserIdIn(@Param("userIds") Collection<Long> userIds);
 
     // 인터뷰 대상 판정(ADR-0027) — 진행 중(또는 확정 대기) 세션이 있으면 1·2번 그룹에서 뺀다
     boolean existsByUserId(Long userId);

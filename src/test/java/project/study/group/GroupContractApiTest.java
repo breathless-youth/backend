@@ -27,7 +27,7 @@ import project.study.config.ApiVersionConfig;
 /**
  * 그룹 REST 계약 (BY-1124). 로직 전에는 컨트롤러가 501 {@code NOT_IMPLEMENTED}를 주고, FE는 Swagger의 경로·DTO로 타입을 쓴다.
  * 501을 단언하는 엔드포인트는 서비스가 DB를 건드리지 않으므로 {@code asUser}가 가리키는 사용자 행이 필요 없다. 로직이 채워진
- * 엔드포인트(그룹 만들기·설정·알림)는 각자의 API 테스트가 실제 사용자 행으로 본다.
+ * 엔드포인트(그룹 만들기·내 그룹·그룹 홈·설정·알림)는 각자의 API 테스트가 실제 사용자 행으로 본다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -49,9 +49,8 @@ class GroupContractApiTest {
 
     @Test
     void 로직_전에는_501과_NOT_IMPLEMENTED다() {
-        // 만들기·설정 수정·알림 켜기는 로직이 채워졌다 — GroupCreateApiTest·GroupSettingsApiTest가 본다
-        assertNotImplemented(v1Get(mvc, "/api/groups/me", USER));
-        assertNotImplemented(v1Get(mvc, "/api/groups/10", USER));
+        // 만들기·내 그룹·그룹 홈·설정 수정·알림 켜기는 로직이 채워졌다 — GroupCreateApiTest·MyGroupsApiTest·GroupDeskApiTest·
+        // GroupSettingsApiTest가 본다
         assertNotImplemented(v1Get(mvc, "/api/groups/public", USER));
         assertNotImplemented(v1Get(mvc, "/api/groups/public/10", USER));
     }
@@ -59,7 +58,7 @@ class GroupContractApiTest {
     @Test
     void 고정_경로가_groupId_경로보다_먼저_잡힌다() {
         // /{groupId}가 먼저 잡혔다면 "me"·"public"을 Long으로 바꾸다 400이 난다
-        assertNotImplemented(v1Get(mvc, "/api/groups/me", USER));
+        assertThat(v1Get(mvc, "/api/groups/me", USER)).hasStatusOk();
         assertNotImplemented(v1Get(mvc, "/api/groups/public", USER));
     }
 

@@ -81,6 +81,24 @@ public class GroupProbe {
                 .single();
     }
 
+    /**
+     * 닉네임·사진 키가 있는 사용자. 닉네임은 유니크라 {@code 접두어-userId}로 만든다({@link #nickname}). 사진 키는 null이어도 된다.
+     */
+    public long insertUser(String nicknamePrefix, String profileImage) {
+        long userId = insertUser();
+        jdbc.sql("update users set nickname = :nickname, profile_image = :profileImage where id = :id")
+                .param("nickname", nickname(nicknamePrefix, userId))
+                .param("profileImage", profileImage)
+                .param("id", userId)
+                .update();
+        return userId;
+    }
+
+    /** {@link #insertUser(String, String)}가 만든 닉네임. */
+    public static String nickname(String prefix, long userId) {
+        return prefix + "-" + userId;
+    }
+
     public Optional<GroupRow> group(long groupId) {
         return jdbc.sql("select * from study_group where id = :id")
                 .param("id", groupId)
@@ -143,6 +161,39 @@ public class GroupProbe {
                 .param("groupId", groupId)
                 .param("userId", userId)
                 .param("via", joinedVia)
+                .update();
+    }
+
+    /** 들어온 시각을 정한 소속 행 — "들어간 순서"가 그룹 ID 순서와 다르게 하려고 쓴다. */
+    public void insertMemberAt(long groupId, long userId, String joinedVia, Instant joinedAt) {
+        jdbc.sql("insert into study_group_member (group_id, user_id, joined_at, joined_via) "
+                        + "values (:groupId, :userId, :joinedAt, :via)")
+                .param("groupId", groupId)
+                .param("userId", userId)
+                .param("joinedAt", Timestamp.from(joinedAt))
+                .param("via", joinedVia)
+                .update();
+    }
+
+    public void setNotify(long groupId, long userId, boolean enabled) {
+        jdbc.sql("update study_group_member set notify_enabled = :enabled "
+                        + "where group_id = :groupId and user_id = :userId and left_at is null")
+                .param("enabled", enabled)
+                .param("groupId", groupId)
+                .param("userId", userId)
+                .update();
+    }
+
+    /** 이 그룹에 {@code userId}가 낸 신청 행. 만든 시각은 기한 3일 전이다. */
+    public void insertApplication(long groupId, long userId, String status, Instant expiresAt) {
+        jdbc.sql("insert into study_group_application "
+                        + "(group_id, user_id, introduction, status, created_at, expires_at) "
+                        + "values (:groupId, :userId, '안녕하세요', :status, :createdAt, :expiresAt)")
+                .param("groupId", groupId)
+                .param("userId", userId)
+                .param("status", status)
+                .param("createdAt", Timestamp.from(expiresAt.minusSeconds(3 * 24 * 3600)))
+                .param("expiresAt", Timestamp.from(expiresAt))
                 .update();
     }
 
