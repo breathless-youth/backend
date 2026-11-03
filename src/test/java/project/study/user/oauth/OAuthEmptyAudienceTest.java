@@ -6,13 +6,17 @@ import static org.springframework.test.web.client.ExpectedCount.never;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.anything;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -49,6 +53,33 @@ class OAuthEmptyAudienceTest {
             assertThat(context.getBean(OAuthProperties.class).google().clientIds())
                     .isEmpty();
         });
+    }
+
+    @Test
+    void 운영_yaml은_목록형_이름이_없으면_바뀌기_전_이름의_값을_읽는다() throws IOException {
+        // 운영에는 목록형으로 바뀌기 전 이름(OAUTH_GOOGLE_CLIENT_ID 등)으로 값이 이미 들어가 있다 — 다시 넣지 않아도 로그인이 열린다
+        MockEnvironment old = prodYaml();
+        old.setProperty("OAUTH_GOOGLE_CLIENT_ID", "old-web-id");
+        old.setProperty("OAUTH_KAKAO_APP_KEY", "old-kakao-key");
+        old.setProperty("OAUTH_APPLE_CLIENT_ID", "com.example.app");
+        assertThat(old.getProperty("oauth.google.client-ids")).isEqualTo("old-web-id");
+        assertThat(old.getProperty("oauth.kakao.app-keys")).isEqualTo("old-kakao-key");
+        assertThat(old.getProperty("oauth.apple.bundle-id")).isEqualTo("com.example.app");
+
+        // 목록형 이름이 있으면 그쪽이 이긴다
+        old.setProperty("OAUTH_GOOGLE_CLIENT_IDS", "web-id,ios-id");
+        assertThat(old.getProperty("oauth.google.client-ids")).isEqualTo("web-id,ios-id");
+
+        // 둘 다 없으면 빈 값 — 기동은 되고 그 로그인만 막힌다
+        assertThat(prodYaml().getProperty("oauth.google.client-ids")).isEmpty();
+    }
+
+    private static MockEnvironment prodYaml() throws IOException {
+        MockEnvironment env = new MockEnvironment();
+        new YamlPropertySourceLoader()
+                .load("application-prod", new ClassPathResource("application-prod.yaml"))
+                .forEach(env.getPropertySources()::addLast);
+        return env;
     }
 
     @Test

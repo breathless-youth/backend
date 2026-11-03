@@ -43,11 +43,12 @@ decorator:
 oauth:
   google:
     # 허용하는 ID 토큰 aud 목록(쉼표 구분) — 웹(서버) 클라이언트 ID 등. 시크릿 아님
-    client-ids: ${OAUTH_GOOGLE_CLIENT_IDS:}
+    # 목록형 이름이 없으면 바뀌기 전 이름(OAUTH_GOOGLE_CLIENT_ID·OAUTH_KAKAO_APP_KEY·OAUTH_APPLE_CLIENT_ID)의 값을 읽는다 — 운영에 이미 들어가 있다
+    client-ids: ${OAUTH_GOOGLE_CLIENT_IDS:${OAUTH_GOOGLE_CLIENT_ID:}}
   kakao:
-    app-keys: ${OAUTH_KAKAO_APP_KEYS:}
+    app-keys: ${OAUTH_KAKAO_APP_KEYS:${OAUTH_KAKAO_APP_KEY:}}
   apple:
-    bundle-id: ${OAUTH_APPLE_BUNDLE_ID:}
+    bundle-id: ${OAUTH_APPLE_BUNDLE_ID:${OAUTH_APPLE_CLIENT_ID:}}
     services-id: ${OAUTH_APPLE_SERVICES_ID:}
     team-id: ${OAUTH_APPLE_TEAM_ID:}
     key-id: ${OAUTH_APPLE_KEY_ID:}

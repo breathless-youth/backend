@@ -187,7 +187,7 @@
 
 ## 운영·출시 확인
 
-- 로그인 앱 출시 전에 운영에 `OAUTH_GOOGLE_CLIENT_IDS`·`OAUTH_KAKAO_APP_KEYS`·`OAUTH_APPLE_BUNDLE_ID`(목록형으로 바뀐 이름)를 넣는다. 그룹 릴리즈가 먼저 나가므로 값이 없어도 기동한다 — 비어 있는 프로바이더는 로그인이 전부 400이고, 기동 뒤 빈 항목이 로그와 Sentry 경고로 남는다(최종 리뷰, Sentry는 2026-11-04)
+- 운영의 `OAUTH_GOOGLE_CLIENT_ID`·`OAUTH_KAKAO_APP_KEY`·`OAUTH_APPLE_CLIENT_ID`(바뀌기 전 이름)는 이미 들어가 있어 목록형 이름이 없으면 그 값을 읽는다(2026-11-04). 플랫폼별 ID를 더할 때만 목록형 이름(`OAUTH_GOOGLE_CLIENT_IDS` 등)에 쉼표로 넣는다. 그룹 릴리즈가 먼저 나가므로 값이 없어도 기동한다 — 비어 있는 프로바이더는 로그인이 전부 400이고, 기동 뒤 빈 항목이 로그와 Sentry 경고로 남는다(최종 리뷰, Sentry는 2026-11-04)
 - 애플 해지용 새 비밀값: Team ID, Key ID, Sign in with Apple 개인 키(.p8). 운영 SSM·태스크 정의, dev `.env`에 넣는다. 값이 없으면 기동은 되고 해지만 건너뛰며 경고를 남긴다 (`app.<기능>.enabled` 프로퍼티 규칙)- 안드로이드 애플 웹 로그인: 애플 개발자 계정에 Services ID를 만들고, 반환 주소로 API 서버의 `/api/auth/apple/callback`(dev·운영 도메인)을 등록한다. 콜백이 넘길 안드로이드 딥링크 주소는 FE가 정해 설정값으로 넣는다
 - 개인정보처리방침에 소셜 로그인과 이메일 수집이 들어 있는지 확인한다
 - 위키 `app-review-checklist.md` §0-1은 "계정 생성이 없는 앱이라 삭제는 이메일 요청"으로 확정돼 있고, `user-flow.md` S6도 "로그아웃·계정 삭제 없음"이다. 로그인이 생기면 둘 다 인앱 탈퇴로 바꿔야 한다 (기획 몫, 출시 전 확인 목록)
