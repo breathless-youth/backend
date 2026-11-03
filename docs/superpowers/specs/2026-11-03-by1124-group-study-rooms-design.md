@@ -94,7 +94,7 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
 | `INVITE_CODE_NOT_FOUND` | 404 | 없거나 새로 만들어져 막힌 초대코드 (기존 코드 재사용) |
 | `NOT_GROUP_MEMBER` | 403 | 멤버만 할 수 있다 |
 | `NOT_GROUP_OWNER` | 403 | 그룹장만 할 수 있다 |
-| `NOT_IMPLEMENTED` | 501 | 계약만 있고 로직이 아직 없다 (다 채우면 지운다) |
+| `NOT_IMPLEMENTED` | 501 | 계약만 있고 로직이 아직 없다 (다 채워 지웠다 — 아래 "구현하며 정한 것") |
 
 글자 수 위반은 지금처럼 `VALIDATION_FAILED`(400)다.
 
@@ -284,3 +284,17 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
 - 신고 알림 채널과 담당자: 팀이 정해 알려 준다. 정해지기 전까지 설정값이 비어 있으면 알림이 나가지 않으므로, 출시 전 확인 목록에 넣는다.
 - 푸시 `link`: FE 라우트가 정해지면 바꾼다.
 - 다른 사람이 한 일로 생기는 효과 측정 이벤트(신청 수락으로 멤버가 됨, 내보내짐, 그룹 사라짐)는 당사자 기기에서 그 순간 보낼 수 없다. 서버 DB에 `joined_via`, `leave_reason`을 남겨 분석할 수 있게 해 두고, FE와 어떻게 셀지 맞춘다.
+
+## 구현하며 정한 것 (2026-11-03)
+
+1~6단계 로직을 채우며 0단계 계약과 다르게 되었거나 계약에 적지 않았던 것이다. 그룹·차단 API에서 `501`/`NOT_IMPLEMENTED`는 지웠다.
+Swagger 설명과 `websocket.html`도 같은 내용으로 맞췄고, 구조에 관한 결정은 ADR-0040(결정 6~14)에 적었다.
+
+- 그룹 공부방 입장 응답(`POST /api/groups/{groupId}/room/join`)의 `micOn`·`onBreak`는 새 자리면 `null`이고, 끊김 유예 중이던 자리로 다시
+  들어온 경우(`graceRejoin: true`)에만 이전 값이 든다.
+- 공개 그룹 목록에서 `query`가 100자를 넘거나 `page`가 0~10000 밖이면 `400 REQUEST_FAILED`다(`VALIDATION_FAILED`가 아니다).
+- 이미 차단한 사람을 다시 신고해도 `204`다.
+- 코드 참여가 `409`로 막히는 이유가 여럿이면 `RECENTLY_KICKED` → `GROUP_FULL` → `GROUP_SLOT_LIMIT` 순서로 하나만 준다.
+- 그룹 만들기에서 "그룹+신청 5개"와 "그룹장 2개" 한도가 둘 다 걸리면 `GROUP_SLOT_LIMIT`을 먼저 준다.
+- 그룹이 사라진 신청의 수락·거절·신고는 `404 NOT_FOUND`다(`GROUP_NOT_FOUND`가 아니다).
+- FE는 받은 `PEER_BLOCKED`를 그 방에서 나갈 때까지 기억한다. 차단을 풀어도 알림 없이 다음 입장부터 풀린다.

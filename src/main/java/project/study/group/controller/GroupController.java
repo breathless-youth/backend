@@ -38,8 +38,7 @@ import project.study.group.service.GroupService;
 
                 - 구 앱 대응이 없는 새 경로라 모두 `API-Version: 1`이고 인증이 필요하다
                 - 못 하는 이유는 응답 본문 `{code, message}`의 `code`로만 가른다 — message는 바뀔 수 있다
-                - 한도: 들어간 그룹과 답을 기다리는 신청을 합쳐 5개, 신청 3개, 그룹장 2개, 멤버 6명
-                - 인증·검증을 통과한 요청은 로직이 채워지기 전까지 501 `NOT_IMPLEMENTED`를 준다""")
+                - 한도: 들어간 그룹과 답을 기다리는 신청을 합쳐 5개, 신청 3개, 그룹장 2개, 멤버 6명""")
 @RestController
 @RequestMapping("/api/groups")
 @RequiredArgsConstructor

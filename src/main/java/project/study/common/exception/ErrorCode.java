@@ -78,9 +78,6 @@ public enum ErrorCode {
     /** 그룹장만 할 수 있다 (403) */
     NOT_GROUP_OWNER,
 
-    /** 계약만 있고 로직이 아직 없다 (501) — 그룹 기능을 다 채우면 지운다 */
-    NOT_IMPLEMENTED,
-
     /** Spring MVC 표준 4xx (405·415 등) */
     REQUEST_FAILED,
 

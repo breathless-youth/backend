@@ -127,11 +127,11 @@ class GroupApplicationBlockSwaggerTest {
     }
 
     /**
-     * 403·501은 그룹 오퍼레이션이 @ApiResponse로 직접 적는다. 핸들러를 @ResponseStatus로 두면 springdoc이 그 상태를 모든 오퍼레이션에
-     * 일반 응답으로 붙여, 403·501과 무관한 기존 API(랭킹 등)의 문서가 어긋난다.
+     * 403은 그룹 오퍼레이션이 @ApiResponse로 직접 적는다. 핸들러를 @ResponseStatus로 두면 springdoc이 그 상태를 모든 오퍼레이션에
+     * 일반 응답으로 붙여, 403과 무관한 기존 API(랭킹 등)의 문서가 어긋난다.
      */
     @Test
-    void 그룹과_무관한_기존_오퍼레이션에_403_501_응답이_자동으로_붙지_않는다() {
+    void 그룹과_무관한_기존_오퍼레이션에_403_응답이_자동으로_붙지_않는다() {
         assertThat(mvc.get().uri("/v3/api-docs"))
                 .hasStatusOk()
                 .bodyJson()
@@ -139,6 +139,6 @@ class GroupApplicationBlockSwaggerTest {
                         "$.paths['/api/rankings/board'].get.responses",
                         v -> assertThat(v)
                                 .asInstanceOf(InstanceOfAssertFactories.MAP)
-                                .doesNotContainKeys("403", "501"));
+                                .doesNotContainKeys("403"));
     }
 }

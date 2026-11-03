@@ -49,11 +49,6 @@ public final class GroupApiTestSupport {
         return builder.contentType(MediaType.APPLICATION_JSON).content(body);
     }
 
-    /** 인증·검증을 통과했지만 로직이 아직 없는 요청은 501 {@code NOT_IMPLEMENTED}다. */
-    public static void assertNotImplemented(MockMvcRequestBuilder request) {
-        assertErrorCode(request, HttpStatus.NOT_IMPLEMENTED, "NOT_IMPLEMENTED");
-    }
-
     /** 요청 검증 실패는 400 {@code VALIDATION_FAILED}다. */
     public static void assertValidationFailed(MockMvcRequestBuilder request) {
         assertErrorCode(request, HttpStatus.BAD_REQUEST, "VALIDATION_FAILED");
