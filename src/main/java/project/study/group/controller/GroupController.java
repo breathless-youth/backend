@@ -47,7 +47,7 @@ public class GroupController {
     private final GroupService groupService;
 
     @Operation(summary = "그룹 만들기", description = """
-                    그룹을 만든다. 만든 사람은 멤버이자 그룹장이 되므로 "그룹+신청 5개"와 "그룹장 2개" 한도를 모두 본다. \
+                    그룹을 만든다. 만든 사람은 멤버이자 그룹장이 되므로 "그룹+신청 5개"와 "그룹장 2개" 한도를 모두 보고, 둘 다 걸리면 `GROUP_SLOT_LIMIT`을 먼저 준다. \
                     공개 여부(`visibility`)는 만든 뒤 바꿀 수 없다. 이름·소개에 연락처나 링크가 있으면 막는다.""")
     @ApiResponse(responseCode = "201", description = "만들어짐 — `{groupId}`")
     @ApiResponse(

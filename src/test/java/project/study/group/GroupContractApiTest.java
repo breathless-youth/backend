@@ -7,7 +7,6 @@ import static project.study.group.support.GroupApiTestSupport.assertValidationFa
 import static project.study.group.support.GroupApiTestSupport.json;
 import static project.study.group.support.GroupApiTestSupport.v1Delete;
 import static project.study.group.support.GroupApiTestSupport.v1Get;
-import static project.study.group.support.GroupApiTestSupport.v1Patch;
 import static project.study.group.support.GroupApiTestSupport.v1Post;
 import static project.study.group.support.GroupApiTestSupport.v1Put;
 
@@ -27,15 +26,13 @@ import project.study.config.ApiVersionConfig;
 
 /**
  * 그룹 REST 계약 (BY-1124). 로직 전에는 컨트롤러가 501 {@code NOT_IMPLEMENTED}를 주고, FE는 Swagger의 경로·DTO로 타입을 쓴다.
- * 서비스가 DB를 건드리지 않으므로 {@code asUser}가 가리키는 사용자 행은 필요 없다.
+ * 501을 단언하는 엔드포인트는 서비스가 DB를 건드리지 않으므로 {@code asUser}가 가리키는 사용자 행이 필요 없다. 로직이 채워진
+ * 엔드포인트(그룹 만들기·설정·알림)는 각자의 API 테스트가 실제 사용자 행으로 본다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class GroupContractApiTest {
-
-    private static final String CREATE_BODY = """
-            {"name": "새벽 공시반", "visibility": "PUBLIC", "category": "CIVIL_SERVICE", "description": "같이 해요"}""";
 
     private static final String JOIN_BODY = """
             {"inviteCode": "K7M2PQ", "via": "LINK"}""";
@@ -47,22 +44,16 @@ class GroupContractApiTest {
 
     private static final Set<String> HTTP_METHODS = Set.of("get", "put", "post", "delete", "patch");
 
-    private static final String UPDATE_BODY = """
-            {"name": "새벽 공시반", "category": "CIVIL_SERVICE", "description": "같이 해요"}""";
-
     @Autowired
     private MockMvcTester mvc;
 
     @Test
     void 로직_전에는_501과_NOT_IMPLEMENTED다() {
-        assertNotImplemented(json(v1Post(mvc, "/api/groups", USER), CREATE_BODY));
+        // 만들기·설정 수정·알림 켜기는 로직이 채워졌다 — GroupCreateApiTest·GroupSettingsApiTest가 본다
         assertNotImplemented(v1Get(mvc, "/api/groups/me", USER));
         assertNotImplemented(v1Get(mvc, "/api/groups/10", USER));
-        assertNotImplemented(json(v1Patch(mvc, "/api/groups/10", USER), UPDATE_BODY));
         assertNotImplemented(v1Get(mvc, "/api/groups/public", USER));
         assertNotImplemented(v1Get(mvc, "/api/groups/public/10", USER));
-        assertNotImplemented(json(v1Put(mvc, "/api/groups/10/notifications", USER), """
-                {"enabled": true}"""));
     }
 
     @Test
