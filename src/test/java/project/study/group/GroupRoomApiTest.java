@@ -1,6 +1,7 @@
 package project.study.group;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static project.study.group.support.GroupApiTestSupport.assertErrorCode;
 import static project.study.group.support.GroupApiTestSupport.v1Get;
@@ -20,10 +21,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.messaging.support.AbstractSubscribableChannel;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import project.study.TestcontainersConfiguration;
 import project.study.group.dto.GroupHomeResponse;
 import project.study.group.dto.GroupMemberDesk;
 import project.study.group.dto.GroupRoomJoinResponse;
+import project.study.group.service.GroupRoomService;
 import project.study.group.support.GroupProbe;
 import project.study.group.support.GroupRoomProbe;
 import project.study.group.support.GroupRoomProbe.SeatRow;
@@ -54,6 +59,12 @@ class GroupRoomApiTest {
 
     @Autowired
     private RoomCleanupService cleanup;
+
+    @Autowired
+    private GroupRoomService groupRoomService;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     @Qualifier("brokerChannel")
@@ -98,6 +109,17 @@ class GroupRoomApiTest {
     private void confirm(long roomId, long userId) {
         assertThat(roomService.confirmStomp(roomId, userId, "s-" + UUID.randomUUID(), Instant.now(), TASK))
                 .isNotEmpty();
+    }
+
+    @Test
+    void 바깥_트랜잭션_안에서_자리_잡기를_부르면_거절하고_아무것도_만들지_않는다() {
+        // 닫힘 경합 재시도는 "트랜잭션을 통째로 새로 열어"야 성립한다 — 바깥 트랜잭션에 합류하면 그 보장이 깨진다
+        TransactionTemplate outer = new TransactionTemplate(transactionManager);
+
+        assertThatThrownBy(() -> outer.executeWithoutResult(status -> groupRoomService.join(member, group)))
+                .isInstanceOf(IllegalTransactionStateException.class);
+
+        assertThat(rooms.openRoomOf(group)).isEmpty();
     }
 
     @Test

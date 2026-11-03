@@ -6,7 +6,8 @@ import org.springframework.stereotype.Repository;
 
 /**
  * 같은 사용자의 수동 기록 추가·수정을 트랜잭션 동안 직렬화하는 advisory 락 (ADR-0031).
- * 키 공간은 룸 유저 락(userId 그대로)·초대코드 락(2^40 ± 2^31)·과목 락(9,724,000,000 + userId)과 겹치지 않게 2^41을 더한다.
+ * 키 공간은 룸 유저 락(userId 그대로)·초대코드 락(2^40 ± 2^31)·과목 락(9,724,000,000 + userId)·그룹 사용자 락(2^42 + userId)과
+ * 겹치지 않게 2^41을 더한다. 쓰고 있는 키 전체 목록은 {@code GroupLocks}의 Javadoc이 관리한다.
  */
 @Repository
 @RequiredArgsConstructor

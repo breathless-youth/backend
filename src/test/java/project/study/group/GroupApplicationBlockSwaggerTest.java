@@ -96,7 +96,7 @@ class GroupApplicationBlockSwaggerTest {
                         v -> assertThat(v)
                                 .asString()
                                 .contains(
-                                        "이미 멤버인지를 한도·정원·내보냄 검사보다 먼저 본다 — 이미 멤버면 GROUP_FULL·GROUP_SLOT_LIMIT·RECENTLY_KICKED 대신 joined=false로 200"))
+                                        "이미 멤버인지를 내보냄·정원·한도 검사보다 먼저 본다 — 이미 멤버면 RECENTLY_KICKED·GROUP_FULL·GROUP_SLOT_LIMIT 대신 joined=false로 200"))
                 // 차단은 영상·소리만 막는다 — 멤버 목록·타일에는 그대로 나온다
                 .hasPathSatisfying(
                         "$.paths['/api/groups/{groupId}/members/{userId}/report'].post.description",

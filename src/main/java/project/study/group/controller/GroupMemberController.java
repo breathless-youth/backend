@@ -144,9 +144,9 @@ public class GroupMemberController {
     @Operation(summary = "초대코드·링크로 들어오기", description = """
                     비공개 그룹의 초대코드로 멤버가 된다 — 코드를 입력하든 링크를 누르든 이 API 하나다(`via`로만 구분). \
                     **이미 멤버면 409 대신 joined=false로 200**을 준다 — 링크를 두 번 눌러도 그룹 홈으로 보내면 된다. \
-                    이미 멤버인지를 한도·정원·내보냄 검사보다 먼저 본다 — 이미 멤버면 GROUP_FULL·GROUP_SLOT_LIMIT·RECENTLY_KICKED 대신 joined=false로 200이다. \
+                    이미 멤버인지를 내보냄·정원·한도 검사보다 먼저 본다 — 이미 멤버면 RECENTLY_KICKED·GROUP_FULL·GROUP_SLOT_LIMIT 대신 joined=false로 200이다. \
                     코드는 영문 대문자·숫자 6자리(0·O·1·I·L 제외), 대소문자 무시이고 서버는 형식을 따로 검사하지 않는다 — 없는 코드·틀린 형식·새로 만들어져 막힌 코드·사라진 그룹의 코드는 모두 404 `INVITE_CODE_NOT_FOUND`다. \
-                    들어가면 "들어간 그룹과 답을 기다리는 신청 5개" 한도와 "멤버 6명" 한도를 본다. \
+                    들어가면 내보낸 지 3일, "멤버 6명", "들어간 그룹과 답을 기다리는 신청 5개" 순서로 본다. \
                     409가 여러 개 걸리면 RECENTLY_KICKED → GROUP_FULL → GROUP_SLOT_LIMIT 순으로 먼저 걸린 하나를 준다.""")
     @ApiResponse(
             responseCode = "200",

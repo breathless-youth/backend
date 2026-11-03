@@ -5,6 +5,9 @@
 --   살아 있는 소속은 (group_id, user_id)당 하나만(sgm_live_uidx). 내보낸 뒤 3일 제한은 KICKED 행의 left_at으로 본다.
 -- study_group_application: 공개 그룹 신청. 답을 기다리는 신청(PENDING)은 같은 그룹에 한 사람당 하나만 둔다(sga_pending_uidx).
 --   expires_at이 지난 PENDING은 만료 작업이 EXPIRED로 바꾸기 전에도 서비스가 "기다리는 신청"으로 세지 않는다.
+-- 락 대기 상한: 새 테이블 FK가 users에 잠금을 걸 때 오래 걸리는 분석 쿼리 뒤에 줄을 서면 로그인·룸 문장까지 그 뒤에 쌓인다.
+--   5초 안에 못 잡으면 배포가 실패하고 다시 시도하면 된다. SET LOCAL은 이 마이그레이션 트랜잭션에서만 적용된다(Flyway가 파일마다 트랜잭션으로 실행).
+SET LOCAL lock_timeout = '5s';
 CREATE TABLE study_group (
     id          BIGSERIAL PRIMARY KEY,
     name        TEXT        NOT NULL,

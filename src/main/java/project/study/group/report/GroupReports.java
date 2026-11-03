@@ -27,9 +27,36 @@ public class GroupReports {
             Long applicationId,
             String rawReason,
             Instant now) {
+        Report report = insert(type, reporterId, targetUserId, groupId, applicationId, rawReason, now);
+        alert.send(report);
+    }
+
+    /**
+     * 신고 행만 남기고 운영 채널에는 알리지 않는다 — 같은 사람이 같은 대상을 거듭 신고해(이미 건 차단이 있다) 운영 채널이 한 사람 때문에 넘치지
+     * 않게 할 때 쓴다. 행은 남아 DB/Metabase로는 모두 볼 수 있다.
+     */
+    public void recordWithoutAlert(
+            String type,
+            long reporterId,
+            long targetUserId,
+            long groupId,
+            Long applicationId,
+            String rawReason,
+            Instant now) {
+        insert(type, reporterId, targetUserId, groupId, applicationId, rawReason, now);
+    }
+
+    private Report insert(
+            String type,
+            long reporterId,
+            long targetUserId,
+            long groupId,
+            Long applicationId,
+            String rawReason,
+            Instant now) {
         String reason = normalize(rawReason);
         reports.insert(type, reporterId, targetUserId, groupId, applicationId, reason, now);
-        alert.send(new Report(type, reporterId, targetUserId, groupId, applicationId, reason, now));
+        return new Report(type, reporterId, targetUserId, groupId, applicationId, reason, now);
     }
 
     private static String normalize(String raw) {

@@ -3,6 +3,9 @@
 --   그대로), 해제는 행을 지운다. "어느 쪽이든 차단한 사이"를 양쪽 방향으로 찾으려고 차단당한 사람 쪽 인덱스를 따로 둔다.
 -- user_report: 공부방 멤버 신고(ROOM_MEMBER)와 그룹 신청 신고(APPLICATION). 운영자는 슬랙 알림과 DB/Metabase로 본다.
 --   V1의 report 테이블은 쓰는 코드가 없고 컬럼(그룹·신청·종류)이 맞지 않아 새로 만든다.
+-- 락 대기 상한: 새 테이블 FK가 users·study_group에 잠금을 걸 때 오래 걸리는 분석 쿼리 뒤에 줄을 서면 그 뒤 문장이 모두 쌓인다.
+--   5초 안에 못 잡으면 배포가 실패하고 다시 시도하면 된다. SET LOCAL은 이 마이그레이션 트랜잭션에서만 적용된다.
+SET LOCAL lock_timeout = '5s';
 CREATE TABLE user_block (
     blocker_id BIGINT      NOT NULL REFERENCES users (id),
     blocked_id BIGINT      NOT NULL REFERENCES users (id),

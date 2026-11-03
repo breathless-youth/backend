@@ -303,7 +303,7 @@ sequenceDiagram
 </ol>
 <ul>
   <li><code>graceRejoin: true</code>이면 <code>cameraOn</code>, <code>micOn</code>, <code>onBreak</code>는 이전 값이다. 새 입장이거나 이미 확정된 멤버가 ICE 자격을 갱신하려고 다시 부른 경우는 <code>graceRejoin: false</code>이고 세 값은 모두 <code>null</code>이다 — <code>false</code>가 자리를 잃었다는 뜻은 아니다(§2).</li>
-  <li>끊김 유예 30초 안에 다시 들어오면(<code>graceRejoin</code>) 지금 <code>cameraOn</code>처럼 <code>micOn</code>과 <code>onBreak</code>도 이어 간다. 새로 들어오면 둘 다 <code>false</code>다.</li>
+  <li>끊김 유예 30초 안에 다시 들어오면(<code>graceRejoin</code>) 지금 <code>cameraOn</code>처럼 <code>micOn</code>과 <code>onBreak</code>도 이어 간다. 새로 들어온 자리의 <code>micOn</code>·<code>onBreak</code>가 <code>false</code>로 시작하는 곳은 위 join 응답이 아니라 §11.2의 멤버 객체(<code>SNAPSHOT.members[]</code>, <code>MEMBER_JOINED.member</code>)다. join 응답에서는 위 첫째 항목대로 <code>null</code>이다.</li>
 </ul>
 
 <h3>11.2 멤버 객체에 더해지는 필드</h3>

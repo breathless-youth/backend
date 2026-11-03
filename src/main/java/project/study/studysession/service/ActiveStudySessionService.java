@@ -215,8 +215,9 @@ public class ActiveStudySessionService {
                         isFocusing(draft, events, asOf),
                         toLivePieces(draft, events, asOf, true)));
             } catch (RuntimeException e) {
+                // 그룹 책상은 홈·내 그룹이 30초마다 읽는다 — 읽지 못하는 draft 하나가 읽을 때마다 Sentry에 쌓이지 않게 경고 로그만 남긴다.
+                // 같은 draft는 랭킹 집계(livePieces)가 Sentry로 알리고, 확정 스케줄러가 폐기한다
                 log.warn("멤버 공부 상태에서 draft를 건너뜀: draftId={}", draft.getId(), e);
-                Sentry.captureException(e);
             }
         }
         return drafts;

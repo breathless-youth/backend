@@ -39,10 +39,10 @@ public class BlockService {
         blocks.delete(userId, targetUserId);
     }
 
-    /** 차단을 건다. 이미 걸려 있으면 그대로다(처음 차단 시각 유지). */
+    /** 차단을 건다. 이미 걸려 있으면 그대로이고(처음 차단 시각 유지) false다 — 새로 걸렸을 때만 true. */
     @Transactional
-    public void block(long blockerId, long blockedId, Instant now) {
-        blocks.insert(blockerId, blockedId, now);
+    public boolean block(long blockerId, long blockedId, Instant now) {
+        return blocks.insert(blockerId, blockedId, now) > 0;
     }
 
     @Transactional(readOnly = true)

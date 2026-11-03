@@ -2,7 +2,11 @@ package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 
+import io.sentry.Sentry;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -16,6 +20,8 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -26,6 +32,7 @@ import project.study.TestcontainersConfiguration;
 import project.study.studysession.dto.MemberStudy;
 import project.study.studysession.dto.MemberStudy.Presence;
 import project.study.studysession.repository.ActiveStudySessionRepository;
+import project.study.studysession.service.ActiveStudySessionService;
 import project.study.studysession.service.MemberStudySource;
 
 /**
@@ -46,6 +53,9 @@ class MemberStudySourceTest {
 
     @Autowired
     private ActiveStudySessionRepository drafts;
+
+    @Autowired
+    private ActiveStudySessionService activeStudySessionService;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -283,6 +293,75 @@ class MemberStudySourceTest {
         assertThat(studies.get(studying).todayFocusSec()).isEqualTo(600);
         assertThat(studies.get(studying).presence()).isEqualTo(Presence.STUDYING);
         assertThat(studies.get(nothing)).isEqualTo(new MemberStudy(nothing, Presence.IDLE, false, 0, 0, null));
+    }
+
+    /**
+     * 마지막 공부는 사람마다 가장 늦은 stat_date의 가장 늦은 끝 시각이다(MAX(끝)과 같은 값). 날짜가 여럿이고, 자정에서 쪼개진 세션이 있고, 끝 시각이
+     * 빈 옛 행은 시작 시각으로 본다.
+     */
+    @Test
+    void 마지막_공부는_사람마다_가장_늦은_날짜의_가장_늦은_끝이다() {
+        long split = user();
+        long legacy = user();
+        long older = user();
+        long onlyShort = user();
+        long nothing = user();
+        // 자정에서 쪼개진 세션 — 10/13 23:30~24:00, 10/14 00:00~00:20, 그 앞에 더 이른 날
+        session(split, kst(10, 9, 0, 0), 3600, "MEASURED");
+        session(split, kst(13, 23, 30, 0), 1800, "MEASURED");
+        session(split, kst(14, 0, 0, 0), 1200, "MEASURED");
+        // 끝 시각이 빈 옛 행은 시작 시각이 끝이다. 같은 날 더 이른 시작의 일반 행이 있어도 늦은 쪽이 이긴다
+        jdbc.update(
+                "INSERT INTO study_session (user_id, stat_date, started_at, submission_started_at, ended_at,"
+                        + " study_sec, focus_sec, source) VALUES (?, ?, ?, ?, NULL, 600, 600, 'MEASURED')",
+                legacy,
+                Date.valueOf(LocalDate.of(2026, 10, 13)),
+                Timestamp.from(kst(13, 18, 0, 0)),
+                Timestamp.from(kst(13, 18, 0, 0)));
+        session(legacy, kst(13, 8, 0, 0), 600, "MEASURED");
+        // 같은 날 두 세션 — 먼저 넣은 쪽이 더 늦게 끝나도 늦은 끝 시각을 고른다
+        session(older, kst(9, 20, 0, 0), 1200, "MEASURED");
+        session(older, kst(9, 8, 0, 0), 600, "MEASURED");
+        // 1분 미만 측정과 수동 기록뿐이면 없다
+        session(onlyShort, kst(14, 8, 0, 0), 59, "MEASURED");
+        session(onlyShort, kst(14, 9, 0, 0), 3600, "MANUAL");
+
+        Map<Long, MemberStudy> studies = source.of(List.of(split, legacy, older, onlyShort, nothing), AS_OF);
+
+        assertThat(studies.get(split).lastStudiedAt()).isEqualTo(kst(14, 0, 20, 0));
+        assertThat(studies.get(legacy).lastStudiedAt()).isEqualTo(kst(13, 18, 0, 0));
+        assertThat(studies.get(older).lastStudiedAt())
+                .isEqualTo(kst(9, 20, 0, 0).plusSeconds(1200));
+        assertThat(studies.get(onlyShort).lastStudiedAt()).isNull();
+        assertThat(studies.get(nothing).lastStudiedAt()).isNull();
+    }
+
+    @Test
+    void 읽지_못하는_draft는_책상_경로에서_건너뛰고_Sentry로_보내지_않는다() {
+        long broken = user();
+        long fine = user();
+        draft(broken, AS_OF.minusSeconds(600), AS_OF.minusSeconds(10), 590, "{}"); // 배열이 아니라 events를 읽지 못한다
+        draft(fine, AS_OF.minusSeconds(600), AS_OF.minusSeconds(10), 590, "[]");
+
+        try (MockedStatic<Sentry> sentry = Mockito.mockStatic(Sentry.class)) {
+            Map<Long, MemberStudy> studies = source.of(List.of(broken, fine), AS_OF);
+
+            assertThat(studies.get(broken).presence()).isEqualTo(Presence.IDLE);
+            assertThat(studies.get(fine).presence()).isEqualTo(Presence.STUDYING);
+            sentry.verify(() -> Sentry.captureException(any(Throwable.class)), never());
+        }
+    }
+
+    @Test
+    void 읽지_못하는_draft라도_랭킹_집계_경로는_그대로_Sentry로_알린다() {
+        long broken = user();
+        draft(broken, AS_OF.minusSeconds(600), AS_OF.minusSeconds(10), 590, "{}");
+
+        try (MockedStatic<Sentry> sentry = Mockito.mockStatic(Sentry.class)) {
+            activeStudySessionService.livePieces(AS_OF);
+
+            sentry.verify(() -> Sentry.captureException(any(Throwable.class)), atLeastOnce());
+        }
     }
 
     @Test

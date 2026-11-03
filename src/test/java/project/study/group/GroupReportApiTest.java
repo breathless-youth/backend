@@ -3,6 +3,7 @@ package project.study.group;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static project.study.group.support.GroupApiTestSupport.assertErrorCode;
 import static project.study.group.support.GroupApiTestSupport.json;
@@ -205,6 +206,34 @@ class GroupReportApiTest {
 
         assertThat(blocks.blockedAt(member, owner)).contains(firstBlock);
         assertThat(blocks.reportsBy(member)).hasSize(2);
+        // 차단이 이미 있던 사이의 신고는 기록만 남고 운영 채널에는 가지 않는다
+        verify(reportAlert, never()).send(any());
+    }
+
+    @Test
+    void 같은_멤버를_다시_신고하면_신고는_남기지만_운영_알림은_처음_한_번만_간다() {
+        assertThat(reportMember(member, group, owner, """
+                        {"reason": "첫 신고"}""")).hasStatus(HttpStatus.NO_CONTENT);
+        assertThat(reportMember(member, group, owner, """
+                        {"reason": "또 신고"}""")).hasStatus(HttpStatus.NO_CONTENT);
+        assertThat(reportMember(member, group, owner, "{}")).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(blocks.reportsBy(member))
+                .extracting(ReportRow::reason)
+                .containsExactlyInAnyOrder("첫 신고", "또 신고", null);
+        verify(reportAlert, times(1)).send(any());
+        verify(reportAlert).send(new Report("ROOM_MEMBER", member, owner, group, null, "첫 신고", NOW));
+    }
+
+    @Test
+    void 다른_사람이_같은_멤버를_신고하면_각자의_첫_신고는_운영_알림이_간다() {
+        long other = probe.insertUser("다른 멤버", null);
+        probe.insertMember(group, other, "APPLICATION");
+
+        assertThat(reportMember(member, group, owner, "{}")).hasStatus(HttpStatus.NO_CONTENT);
+        assertThat(reportMember(other, group, owner, "{}")).hasStatus(HttpStatus.NO_CONTENT);
+
+        verify(reportAlert, times(2)).send(any());
     }
 
     @Test

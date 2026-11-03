@@ -3,6 +3,9 @@
 --   한 번만 나간다.
 -- active_study_session.start_notified: 새 draft를 알림 대상으로 한 번만 꺼내려는 표시. 하트비트 UPSERT는 이 열을 쓰지 않아 새 행은 기본값
 --   false로 들어오고, 꺼낸 행은 true가 된다.
+-- 락 대기 상한: active_study_session에 열을 더하고 인덱스를 만드는 동안 하트비트 UPSERT가 막히므로, 오래 걸리는 분석 쿼리 뒤에서
+--   기다리지 않고 5초 안에 못 잡으면 배포를 실패시킨다(다시 시도하면 된다). SET LOCAL은 이 마이그레이션 트랜잭션에서만 적용된다.
+SET LOCAL lock_timeout = '5s';
 CREATE TABLE group_study_alert (
     receiver_id  BIGINT      NOT NULL REFERENCES users (id),
     group_id     BIGINT      NOT NULL REFERENCES study_group (id),

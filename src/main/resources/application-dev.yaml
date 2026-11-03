@@ -23,11 +23,12 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres/study}
     username: ${SPRING_DATASOURCE_USERNAME:study}
     password: ${SPRING_DATASOURCE_PASSWORD}
-  # 5초 룸 정리 스윕이 일일 리포트·세션 확정 스케줄러와 스레드를 나눠 쓰지 않게 (기본 풀 크기 1)
+  # 5초 룸 정리 스윕이 일일 리포트·세션 확정 스케줄러와 스레드를 나눠 쓰지 않게 (기본 풀 크기 1).
+  # 그룹 공부방(BY-1124)이 10초 멤버 시작 알림·60초 신청 만료 작업을 더해 2에서 3으로 올렸다
   task:
     scheduling:
       pool:
-        size: 2
+        size: 3
 
 # p6spy — 바인딩 파라미터가 채워진 실제 실행 SQL을 slf4j 로거 'p6spy'로 출력한다.
 decorator:

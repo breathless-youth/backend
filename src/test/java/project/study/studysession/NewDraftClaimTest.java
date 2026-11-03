@@ -1,8 +1,11 @@
 package project.study.studysession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static project.study.group.support.GroupDeskTestConfig.NOW;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -158,6 +161,35 @@ class NewDraftClaimTest {
             assertThat(all.stream().map(NewDraft::userId).collect(Collectors.toSet()))
                     .hasSize(draftCount);
         }
+    }
+
+    /** 체크포인트 플러시가 행을 쥐고 있으면 그 행만 건너뛰고 기다리지 않는다. 건너뛴 행은 표시되지 않아 다음 틱에 나온다. */
+    @Test
+    void 다른_트랜잭션이_잠근_draft는_기다리지_않고_건너뛰었다가_다음에_꺼낸다() throws Exception {
+        long locked = user();
+        long free = user();
+        study.draft(locked, START, NOW, 25, "[]");
+        study.draft(free, START, NOW, 25, "[]");
+
+        try (Connection holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            try (PreparedStatement lock =
+                    holder.prepareStatement("select id from active_study_session where user_id = ? for update")) {
+                lock.setLong(1, locked);
+                lock.executeQuery().close();
+
+                List<NewDraft> whileLocked =
+                        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> source.claimNewDrafts(NOW));
+
+                assertThat(whileLocked).containsExactly(new NewDraft(free, START));
+                assertThat(startNotified(free, START)).isTrue();
+            } finally {
+                holder.rollback();
+            }
+        }
+
+        assertThat(startNotified(locked, START)).isFalse();
+        assertThat(source.claimNewDrafts(NOW.plusSeconds(10))).containsExactly(new NewDraft(locked, START));
     }
 
     @Test

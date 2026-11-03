@@ -246,7 +246,7 @@ public class GroupMemberService {
     /**
      * 공부방 멤버를 신고한다 — 신고하면 차단도 된다. 순서(Swagger): 그룹 없음 404 → 멤버 아님 403 → 자기 자신 400 → 대상이 멤버가 아님 404
      * {@code GROUP_MEMBER_NOT_FOUND} → 차단(이미 있으면 그대로) → 두 사람이 같은 그룹 공부방에 있으면 커밋 뒤 각자에게 {@code PEER_BLOCKED} → 신고
-     * 기록·운영 알림. 그룹 멤버 자격·책상·순위는 그대로다.
+     * 기록·운영 알림(이미 차단한 대상을 또 신고하면 기록만 하고 알림은 다시 보내지 않는다). 그룹 멤버 자격·책상·순위는 그대로다.
      *
      * <p>그룹을 바꾸지 않으므로 그룹 행을 잠그지 않는다. 같은 순간 대상이 내보내져도 신고는 그때의 멤버를 신고한 것으로 남는다(그룹은 지워져도 행이
      * 남아 신고의 그룹 참조가 깨지지 않는다).
@@ -261,9 +261,15 @@ public class GroupMemberService {
             throw memberNotFound();
         }
         Instant now = clock.instant();
-        blocks.block(userId, targetUserId, now);
+        boolean newlyBlocked = blocks.block(userId, targetUserId, now);
         groupRooms.peerBlocked(userId, targetUserId);
-        reports.record(ReportRepository.ROOM_MEMBER, userId, targetUserId, groupId, null, request.reason(), now);
+        if (newlyBlocked) {
+            reports.record(ReportRepository.ROOM_MEMBER, userId, targetUserId, groupId, null, request.reason(), now);
+        } else {
+            // 이미 차단한 대상을 또 신고한 것 — 신고 행은 남기되 운영 채널에는 다시 알리지 않는다(한 사람이 채널을 도배하지 못하게)
+            reports.recordWithoutAlert(
+                    ReportRepository.ROOM_MEMBER, userId, targetUserId, groupId, null, request.reason(), now);
+        }
     }
 
     private static String joinedVia(JoinVia via) {

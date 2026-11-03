@@ -50,7 +50,11 @@ public class GroupRoomService {
      *
      * <p>찾은 공부방이 잠그기 전에 닫혔으면({@link GroupRoomClosedException}) 트랜잭션을 통째로 롤백해 쥔 락을 모두 놓고 새 트랜잭션으로 다시 한다 —
      * 두 번째에는 새 방을 열거나 다른 멤버가 막 연 방에 앉는다. 롤백된 시도의 커밋 뒤 작업은 버려진다.
+     *
+     * <p>바깥 트랜잭션이 있으면 거절한다({@code NEVER}) — 있으면 {@code tx.execute}가 그 트랜잭션에 합류해, 닫힘 경합 때 "통째로 롤백하고 새
+     * 트랜잭션으로 다시"가 되지 않고 바깥 트랜잭션이 rollback-only로 오염된 채 같은 락을 쥐고 다시 시도하게 된다.
      */
+    @Transactional(propagation = Propagation.NEVER)
     public GroupRoomJoinResponse join(long userId, long groupId) {
         for (int attempt = 1; ; attempt++) {
             try {

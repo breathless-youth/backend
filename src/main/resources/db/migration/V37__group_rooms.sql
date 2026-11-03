@@ -3,6 +3,10 @@
 --   열린 방 unique(rooms_open_group_uidx)가 동시에 처음 들어오는 두 멤버의 방 열기를 하나로 모은다(INSERT ... ON CONFLICT DO NOTHING).
 -- room_participations: 마이크·휴식 표시값. 그룹 공부방에서만 읽고 쓰고, 초대코드 방에서는 기본값 그대로 둔다.
 --   leave_reason은 varchar(20)에 CHECK가 없어 새 사유(KICKED, GROUP_LEFT)는 스키마를 바꾸지 않는다.
+-- 락 대기 상한: ALTER가 rooms·room_participations에 ACCESS EXCLUSIVE를 요구하는데, 오래 걸리는 분석 쿼리가 먼저 잡고 있으면
+--   그 뒤의 모든 룸 문장이 ALTER 뒤에 줄을 서게 된다. 5초 안에 못 잡으면 배포가 실패하고 다시 시도하면 된다.
+--   SET LOCAL은 이 마이그레이션 트랜잭션에서만 적용된다(Flyway가 파일마다 트랜잭션으로 실행).
+SET LOCAL lock_timeout = '5s';
 ALTER TABLE rooms ALTER COLUMN invite_code DROP NOT NULL;
 ALTER TABLE rooms ADD COLUMN group_id BIGINT REFERENCES study_group (id);
 ALTER TABLE rooms ADD CONSTRAINT rooms_code_xor_group_chk CHECK ((invite_code IS NULL) <> (group_id IS NULL));

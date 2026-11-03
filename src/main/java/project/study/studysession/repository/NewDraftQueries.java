@@ -25,12 +25,20 @@ public class NewDraftQueries {
      * <p>돌려주지 않는 행도 표시는 한다 — 늦게 올라온 draft({@code started_at < freshSince})나 이미 확정된 세션(같은 사용자·{@code
      * submission_started_at = started_at})의 draft가 뒤늦은 하트비트로 되살아난 것은 "지금 시작한 공부"가 아니다. 표시하지 않으면 매번 다시
      * 걸러야 한다.
+     *
+     * <p>행은 {@code FOR UPDATE SKIP LOCKED}로 잠가서 가져온다. 체크포인트 플러시가 쥐고 있는 draft 행을 기다리다가 알림 틱 전체가 밀리지 않게
+     * 하려는 것이다 — 그 틱에서 건너뛴 행은 표시되지 않은 채 남아 다음 틱(10초 뒤)에 꺼낸다. 여러 태스크가 동시에 불러도 서로 다른 행만
+     * 잠그므로 한 행은 한 태스크에만 나온다.
      */
     public List<NewDraft> claim(Instant freshSince) {
         return jdbc.sql("""
                         WITH claimed AS (
                             UPDATE active_study_session SET start_notified = true
-                             WHERE NOT start_notified
+                             WHERE id IN (
+                                   SELECT id FROM active_study_session
+                                    WHERE NOT start_notified
+                                    ORDER BY id
+                                      FOR UPDATE SKIP LOCKED)
                             RETURNING user_id, started_at)
                         SELECT c.user_id, c.started_at
                           FROM claimed c
