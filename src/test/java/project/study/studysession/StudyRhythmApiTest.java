@@ -135,6 +135,46 @@ class StudyRhythmApiTest {
     }
 
     @Test
+    void 마지막_구간이_이벤트여도_나눗셈_나머지는_마지막_구간이_가져간다() {
+        // 20:00~23:00, 순공 7201초, 22시 구간이 통째로 PHONE → 20시·21시 3600초씩, 나머지 1초는 규칙대로 마지막(22시) 칸
+        Instant start = at(yesterday, 20, 0);
+        submit(start, 10800, 7201, """
+                [{"status": "PHONE", "startedAt": "%s", "endedAt": "%s"}]""".formatted(at(yesterday, 22, 0), at(yesterday, 23, 0)));
+
+        assertThat(rhythm(userId))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(cell(yesterdayRow, 20), v -> assertThat(v).isEqualTo(3600))
+                .hasPathSatisfying(cell(yesterdayRow, 21), v -> assertThat(v).isEqualTo(3600))
+                .hasPathSatisfying(cell(yesterdayRow, 22), v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying(
+                        "$.focusSecByWeekdayHour",
+                        v -> assertThat(v).extracting(StudyRhythmApiTest::sum).isEqualTo(7201));
+    }
+
+    @Test
+    void 종료_시각이_없는_레거시_세션은_건너뛴다() {
+        // 초기 스키마는 ended_at이 null일 수 있다 — 구간을 못 자르니 읽지 않고, 다른 세션은 그대로 집계한다
+        jdbcTemplate.update(
+                "INSERT INTO study_session (user_id, stat_date, started_at, submission_started_at, ended_at,"
+                        + " study_sec, focus_sec) VALUES (?, ?, ?, ?, NULL, 1200, 1200)",
+                userId,
+                java.sql.Date.valueOf(yesterday.minusDays(1)),
+                java.sql.Timestamp.from(at(yesterday.minusDays(1), 9, 0)),
+                java.sql.Timestamp.from(at(yesterday.minusDays(1), 9, 0)));
+        submit(at(yesterday, 20, 0), 3600, 3600, "[]");
+
+        assertThat(rhythm(userId))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.studyDays", v -> assertThat(v).isEqualTo(2))
+                .hasPathSatisfying(cell(yesterdayRow, 20), v -> assertThat(v).isEqualTo(3600))
+                .hasPathSatisfying(
+                        "$.focusSecByWeekdayHour",
+                        v -> assertThat(v).extracting(StudyRhythmApiTest::sum).isEqualTo(3600));
+    }
+
+    @Test
     void 순공_1분_미만_세션은_공부일에도_격자에도_넣지_않는다() {
         submit(at(yesterday, 9, 0), 600, 59, "[]");
 
