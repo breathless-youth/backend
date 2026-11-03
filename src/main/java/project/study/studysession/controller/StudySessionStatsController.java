@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.studysession.dto.StudyDaysResponse;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
+import project.study.studysession.dto.StudyRhythmResponse;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.service.StudySessionService;
@@ -117,6 +118,21 @@ public class StudySessionStatsController {
     @GetMapping(value = "/study-days", version = "1")
     public StudyDaysResponse studyDays(@AuthenticationPrincipal Long userId) {
         return studySessionService.studyDays(userId);
+    }
+
+    @Operation(summary = "공부 리듬 조회", description = """
+                    기록 탭 '나의 공부 리듬' 히트맵용. 가입 이후 전체 측정 세션(순공시간 1분 이상)의 순공을 \
+                    요일(월=0 … 일=6) × 시각(KST 0~23시) 격자에 누적해 반환한다. 세션 하나의 순공은 시작~종료 사이의 \
+                    정시 경계로 잘라 이벤트(PHONE/DEVICE/AWAY/SLEEP/PAUSE)를 뺀 길이 비율로 배분하므로 격자 합은 순공 합과 같다.
+
+                    - `studyDays` — 누적 공부일. `GET /api/stats/study-days`의 totalDays와 같은 값(1분 기준, 오늘까지)
+                    - `focusSecByWeekdayHour` — 7 × 24 정수(초). 앱이 며칠부터 보여줄지(노출 기준)와 농도·문구를 정한다
+
+                    기록이 없거나 존재하지 않는 userId면 studyDays는 0, 격자는 모두 0이다.""")
+    @ApiResponse(responseCode = "200", description = "조회 성공 — 누적 공부일 + 요일 × 시각별 누적 순공(초)")
+    @GetMapping(value = "/rhythm", version = "1")
+    public StudyRhythmResponse rhythm(@AuthenticationPrincipal Long userId) {
+        return studySessionService.rhythm(userId);
     }
 
     @Operation(summary = "기간 집계 조회", description = """
