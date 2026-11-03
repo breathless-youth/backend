@@ -24,14 +24,23 @@ public class StudySessionUserDataHandler implements UserDataHandler {
     private static final String DRAFT_END = "GREATEST(%1$s.started_at, %1$s.last_seen_at)";
 
     /**
-     * 같은 시간을 두 번 세지 않도록 시작이 같거나 기간이 겹치면 충돌이다. 맞닿은 경계(s 시작 = t 끝)는 겹침이 아니다.
-     * 길이 0인 세션도 다른 세션 기간의 안쪽이면 겹친다.
+     * 같은 시간을 두 번 세지 않도록 옮기는 쪽 완료 세션(s)이 남는 쪽 완료 세션이나 진행 중 기록과 시작이 같거나 기간이 겹치면 충돌이다.
+     * 진행 중 기록도 보는 것은 남는 쪽이 다른 기기에서 공부 중일 수 있어서다 — 확정되면 같은 시간이 두 번 세진다. 맞닿은 경계(s 시작 = t 끝)는
+     * 겹침이 아니다. 길이 0인 세션도 다른 세션 기간의 안쪽이면 겹친다.
      */
     private static final String CONFLICT = """
-            EXISTS (SELECT 1 FROM study_session t
-                    WHERE t.user_id = :target
-                      AND (t.started_at = s.started_at
-                           OR (s.started_at < %s AND t.started_at < %s)))""".formatted(SESSION_END.formatted("t"), SESSION_END.formatted("s"));
+            (EXISTS (SELECT 1 FROM study_session t
+                     WHERE t.user_id = :target
+                       AND (t.started_at = s.started_at
+                            OR (s.started_at < %s AND t.started_at < %s)))
+             OR EXISTS (SELECT 1 FROM active_study_session t
+                        WHERE t.user_id = :target
+                          AND (t.started_at = s.started_at
+                               OR (s.started_at < %s AND t.started_at < %s))))""".formatted(
+                    SESSION_END.formatted("t"),
+                    SESSION_END.formatted("s"),
+                    DRAFT_END.formatted("t"),
+                    SESSION_END.formatted("s"));
 
     /** 옮기는 쪽 진행 중 기록(a)이 남는 쪽 완료 세션이나 진행 중 기록과 시간이 겹치거나 시작이 같은 경우. */
     private static final String DRAFT_CONFLICT = """

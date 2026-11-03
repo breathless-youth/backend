@@ -168,6 +168,22 @@ class StudySessionUserDataHandlerTest {
     }
 
     @Test
+    void 남는_쪽_draft와_겹치는_세션은_지운다() {
+        long source = fixture.seedUser();
+        long target = fixture.seedUser();
+        // 남는 쪽이 다른 기기에서 10:00~11:00째 공부 중이다 — 확정되면 같은 시간을 두 번 세게 된다
+        fixture.seedActiveSession(target, at(10, 0), at(11, 0));
+        fixture.seedSession(source, at(10, 30), at(11, 30));
+        fixture.seedSession(source, at(9, 0), at(10, 0)); // 끝이 draft 시작과 맞닿는다
+        fixture.seedSession(source, at(11, 0), at(12, 0)); // 시작이 draft 끝과 맞닿는다
+
+        accountData.merge(source, target);
+
+        assertThat(startsOf(source)).isEmpty();
+        assertThat(startsOf(target)).containsExactly(at(9, 0), at(11, 0));
+    }
+
+    @Test
     void erase하면_세션과_하위_행이_모두_사라지고_다른_사용자는_그대로다() {
         long user = fixture.seedUser();
         long other = fixture.seedUser();

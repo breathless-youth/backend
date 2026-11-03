@@ -12,8 +12,8 @@ import org.springframework.stereotype.Component;
 import project.study.user.account.UserDataHandler;
 
 /**
- * 계정 병합·탈퇴 시 과목·할 일·완료 기록 처리. 이름(NFC + 앞뒤 공백 제거)이 같은 살아 있는 과목은 남는 쪽 과목으로 합치고,
- * 나머지는 남는 쪽 과목 뒤 순서로 옮긴다. 세션(order 100)이 먼저 옮겨져 있어야 하므로 order 200.
+ * 계정 병합·탈퇴 시 과목·할 일·완료 기록 처리. 이름(NFC + 앞뒤 공백 제거)이 같은 살아 있는 과목은 남는 쪽 과목으로 합치고(옮기는 쪽
+ * 과목은 남는 쪽의 지운 과목이 된다), 나머지는 남는 쪽 과목 뒤 순서로 옮긴다. 세션(order 100)이 먼저 옮겨져 있어야 하므로 order 200.
  */
 @Slf4j
 @Component
@@ -126,8 +126,26 @@ public class SubjectUserDataHandler implements UserDataHandler {
                 .param("source", sourceUserId)
                 .param("src", sourceSubjectId)
                 .update();
-        jdbc.sql("DELETE FROM study_subject WHERE id = :id")
-                .param("id", sourceSubjectId)
+        // 옮기는 쪽 과목은 지우지 않고 남는 쪽의 지운 과목으로 둔다. 링크한 앱의 진행 중 세션은 병합 뒤에도 이 ID로 하트비트·최종 제출을
+        // 보낸다 — 행이 없으면 소유 검증이 400을 내고 자동 확정은 FK 위반으로 영원히 재시도한다. 지운 과목은 목록에 안 보이고 기록은 남는다
+        jdbc.sql("UPDATE study_subject SET user_id = :target, deleted_at = now() WHERE id = :src")
+                .param("target", targetUserId)
+                .param("src", sourceSubjectId)
+                .update();
+        // 세션 처리기(order 100)가 옮겨 둔 진행 중 기록의 구간도 남는 쪽 과목을 가리키게 한다 — 확정되면 기록이 합친 과목에 붙는다
+        jdbc.sql("""
+                        UPDATE active_study_session a
+                        SET subject_segments = (
+                            SELECT jsonb_agg(CASE WHEN seg ->> 'subjectId' = CAST(:src AS text)
+                                                  THEN jsonb_set(seg, '{subjectId}', to_jsonb(CAST(:keep AS bigint)))
+                                                  ELSE seg END
+                                             ORDER BY ord)
+                            FROM jsonb_array_elements(a.subject_segments) WITH ORDINALITY AS e(seg, ord))
+                        WHERE a.user_id = :target
+                          AND a.subject_segments @> jsonb_build_array(jsonb_build_object('subjectId', CAST(:src AS bigint)))""")
+                .param("src", sourceSubjectId)
+                .param("keep", keepSubjectId)
+                .param("target", targetUserId)
                 .update();
     }
 

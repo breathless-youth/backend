@@ -2,6 +2,7 @@ package project.study.user.account;
 
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -143,6 +144,24 @@ public class UserDataFixture {
                 .param("s", Timestamp.from(startedAt))
                 .param("l", Timestamp.from(lastSeenAt))
                 .update();
+    }
+
+    /** 과목 구간 하나가 [startedAt, reportedAt) 전체인 진행 중 기록 — 자동 확정할 수 있는 모양이다. */
+    public long seedDraftWithSegment(long userId, Instant startedAt, Instant reportedAt, long subjectId) {
+        int sec = (int) Duration.between(startedAt, reportedAt).toSeconds();
+        String segments = "[{\"subjectId\":%d,\"startedAt\":\"%s\",\"endedAt\":\"%s\"}]"
+                .formatted(subjectId, startedAt, reportedAt);
+        return jdbc.sql("""
+                        INSERT INTO active_study_session
+                            (user_id, started_at, reported_at, last_seen_at, study_sec, focus_sec, subject_segments)
+                        VALUES (:u, :s, :r, :r, :sec, :sec, CAST(:seg AS jsonb)) RETURNING id""")
+                .param("u", userId)
+                .param("s", Timestamp.from(startedAt))
+                .param("r", Timestamp.from(reportedAt))
+                .param("sec", sec)
+                .param("seg", segments)
+                .query(Long.class)
+                .single();
     }
 
     public long seedSubject(long userId, String name, int sortOrder, boolean deleted) {
