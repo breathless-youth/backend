@@ -21,6 +21,14 @@ public class RoomMessenger {
         messagingTemplate.convertAndSendToUser(userName, "/queue/room", payload, headers.getMessageHeaders());
     }
 
+    /**
+     * 그 사용자의 모든 세션 개인 큐로 보낸다 — 세션 헤더를 달지 않는다. 방 밖에서 일어난 일(내보내짐·차단)은 어느 세션이 방을 보고 있는지 가리지 않고
+     * 알려야 해서다 (BY-1124 KICKED·PEER_BLOCKED).
+     */
+    public void toUser(long userId, Object payload) {
+        messagingTemplate.convertAndSendToUser(String.valueOf(userId), "/queue/room", payload);
+    }
+
     public void broadcast(Long roomId, Object payload) {
         messagingTemplate.convertAndSend("/topic/room/" + roomId, payload);
     }

@@ -18,10 +18,13 @@ import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
 import project.study.common.exception.ErrorCode;
 import project.study.common.exception.NotFoundException;
+import project.study.group.dto.GroupRoomJoinResponse;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinResponse;
 import project.study.room.dto.RoomMember;
 import project.study.room.entity.LeaveReason;
+import project.study.room.repository.GroupSeatRepository;
+import project.study.room.repository.GroupSeatRepository.GroupFlags;
 import project.study.room.repository.RoomParticipationRepository;
 import project.study.room.repository.RoomParticipationRepository.Profile;
 import project.study.room.repository.RoomParticipationRepository.Row;
@@ -34,6 +37,10 @@ import project.study.room.repository.RoomRepository.RoomRow;
  * <p>락 순서: 유저 advisory → 방 행(id 오름차순) → 참가자 행 → 코드 advisory(닫을 때만). 락을 잡기 전에 읽은
  * 값은 판단에 쓰지 않는다 — 방 락을 잡은 뒤 참가자 행을 다시 잠가 읽고 그 값으로 분기한다. 이것이 옛 전역
  * synchronized 락이 주던 "읽기와 쓰기 사이에 아무도 끼어들지 않음"을 대신한다. 모든 갱신은 건수를 확인한다.
+ *
+ * <p>그룹 공부방(BY-1124)도 같은 예약·유예 복귀·방 전환을 쓰고, 방을 코드 대신 그룹으로 찾는다. 그룹 쪽 락 순서(① 그룹 행 → ② 그룹 사용자
+ * advisory → ③ 위의 유저 advisory → ④ 방 행 → ⑤ 참가자 행)에서 이 클래스는 ③ 이후만 잡는다 — 그룹 행을 쥔 호출자 안에서 불려도 거꾸로 잡지
+ * 않는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -52,8 +59,25 @@ public class RoomService {
         public static final LeaveResult NONE = new LeaveResult(false, false);
     }
 
+    /** 그룹 공부방 자리 예약 결과 — autoLeave는 {@link JoinResult}와 같다 (BY-1124). */
+    public record GroupRoomJoin(GroupRoomJoinResponse response, AutoLeave autoLeave) {}
+
+    /**
+     * 찾은 그룹 공부방이 잠그기 전에 닫혔다(마지막 사람이 막 나감). 트랜잭션을 통째로 롤백하고 처음부터 다시 하라는 신호다 — 같은 트랜잭션에서 다시 열면
+     * 이미 잠근 지금 방을 쥔 채 다른 멤버가 막 넣은 새 방을 기다리게 되고, 그 멤버가 같은 지금 방을 기다리면 교착이다.
+     */
+    public static final class GroupRoomClosedException extends RuntimeException {
+        public GroupRoomClosedException(long groupId) {
+            super("그룹 공부방이 잠그기 전에 닫힘: groupId=" + groupId);
+        }
+    }
+
+    /** 응답 모양과 상관없는 자리 잡기 결과. graceRow는 유예 복귀일 때만 있다(이전 표시값을 이어 주려고). */
+    private record Seat(Long roomId, Row graceRow, AutoLeave autoLeave) {}
+
     private final RoomRepository rooms;
     private final RoomParticipationRepository participations;
+    private final GroupSeatRepository groupSeats;
     private final ParticipantRemover remover;
     private final TurnCredentialIssuer turnCredentials;
     private final TransactionTemplate tx;
@@ -91,17 +115,63 @@ public class RoomService {
             throw new NotFoundException(ErrorCode.ROOM_CLOSED, "방이 종료되었어요"); // 조회와 락 사이에 닫힘
         }
 
-        // 락 아래에서 다시 읽는다 — 이 값만 판단에 쓴다
+        Seat seat = seat(lockedTarget, locked, userId, profile, now);
+        Row grace = seat.graceRow();
+        return new JoinResult(
+                response(seat.roomId(), grace != null, grace == null ? null : grace.cameraOn(), userId),
+                seat.autoLeave());
+    }
+
+    /**
+     * 그룹 공부방 자리 예약 (BY-1124). 초대코드 join과 같은 예약·유예 복귀·방 전환이고, 열린 방이 없으면 연다. 호출자가 그룹 행 {@code FOR
+     * SHARE}·멤버 확인을 하고 같은 트랜잭션으로 부른다. 유예 복귀면 카메라·마이크·휴식을 이어 주고, 새 자리는 마이크·휴식이 꺼진 채(DB 기본값)
+     * 시작한다.
+     *
+     * <p>찾은 방이 잠그기 전에 마지막 사람이 나가 닫혔으면 {@link GroupRoomClosedException}을 던진다 — 초대코드 방은 이때 ROOM_CLOSED지만 그룹
+     * 공부방은 언제든 새로 열 수 있어, 호출자가 트랜잭션을 새로 열어 다시 부른다. 방을 열 때(넣기)는 아직 어떤 방 행도 쥐고 있지 않다.
+     */
+    @Transactional
+    public GroupRoomJoin joinGroupRoom(long userId, long groupId, String nickname, String goal, String category) {
+        Instant now = clock.instant();
+        Profile profile = new Profile(nickname, goal, category);
+
+        rooms.lockUser(userId);
+        Long targetId =
+                rooms.openGroupRoom(groupId, userId, now).orElseThrow(() -> new GroupRoomClosedException(groupId));
+        Map<Long, RoomRow> locked = lockRooms(targetId, participations.findLiveRoomIdOfUser(userId));
+        RoomRow target = locked.get(targetId);
+        if (target == null || !target.isOpen()) {
+            throw new GroupRoomClosedException(groupId);
+        }
+        return groupRoomJoin(seat(target, locked, userId, profile, now), userId);
+    }
+
+    private GroupRoomJoin groupRoomJoin(Seat seat, long userId) {
+        Row grace = seat.graceRow();
+        GroupFlags flags = grace == null ? null : groupSeats.flags(grace.id());
+        GroupRoomJoinResponse response = new GroupRoomJoinResponse(
+                seat.roomId(),
+                grace != null,
+                grace == null ? null : grace.cameraOn(),
+                flags == null ? null : flags.micOn(),
+                flags == null ? null : flags.onBreak(),
+                turnCredentials.forUser(userId),
+                turnCredentials.ttlSeconds());
+        return new GroupRoomJoin(response, seat.autoLeave());
+    }
+
+    // 대상 방과 지금 방을 잠근 뒤 자리를 잡는다. 락 아래에서 다시 읽는다 — 이 값만 판단에 쓴다
+    private Seat seat(RoomRow target, Map<Long, RoomRow> locked, Long userId, Profile profile, Instant now) {
         Optional<Row> current = participations.lockLiveOfUser(userId);
-        if (current.isPresent() && current.get().roomId().equals(lockedTarget.id())) {
-            return rejoin(current.get(), lockedTarget, profile, now);
+        if (current.isPresent() && current.get().roomId().equals(target.id())) {
+            return rejoin(current.get(), target, profile, now);
         }
         current.ifPresent(row -> {
             if (!locked.containsKey(row.roomId())) {
                 throw new IllegalStateException("유저 락 아래에서 잠그지 않은 방의 자리가 나타남: userId=" + userId);
             }
         });
-        return takeSeat(lockedTarget, current, locked, userId, profile, now);
+        return takeSeat(target, current, locked, userId, profile, now);
     }
 
     private RoomRow findJoinableRoom(String inviteCode, Instant now) {
@@ -124,18 +194,18 @@ public class RoomService {
     }
 
     // 같은 방에 이미 자리가 있다 — 유예 복귀(끊김 상태) 또는 예약 재시도·확정 멤버의 중복 join
-    private JoinResult rejoin(Row current, RoomRow room, Profile profile, Instant now) {
+    private Seat rejoin(Row current, RoomRow room, Profile profile, Instant now) {
         if (current.disconnectedAt() != null) {
             expectOne(participations.restoreFromGrace(current.id(), profile, now), "유예 복귀");
             log.debug("재입장(유예 중 복원): roomId={}, userId={}", room.id(), current.userId());
-            return new JoinResult(response(room.id(), true, current.cameraOn(), current.userId()), null);
+            return new Seat(room.id(), current, null);
         }
         expectOne(participations.refreshReservation(current.id(), profile, now), "예약 갱신");
-        return new JoinResult(response(room.id(), false, null, current.userId()), null);
+        return new Seat(room.id(), null, null);
     }
 
     // 정원 검사를 기존 방 퇴장보다 먼저 한다 — 대상 방이 가득이면 기존 방 자리를 잃지 않아야 한다
-    private JoinResult takeSeat(
+    private Seat takeSeat(
             RoomRow target,
             Optional<Row> current,
             Map<Long, RoomRow> locked,
@@ -155,7 +225,7 @@ public class RoomService {
         }
         participations.insertReservation(target.id(), userId, profile, now);
         log.debug("신규 입장 예약: roomId={}, userId={}, autoLeave={}", target.id(), userId, autoLeave);
-        return new JoinResult(response(target.id(), false, null, userId), autoLeave);
+        return new Seat(target.id(), null, autoLeave);
     }
 
     private RoomJoinResponse response(Long roomId, boolean graceRejoin, Boolean cameraOn, Long userId) {
@@ -176,6 +246,33 @@ public class RoomService {
         var removed = remover.remove(row.get(), room.get(), LeaveReason.EXPLICIT, clock.instant(), null);
         log.debug("퇴장 요청: roomId={}, userId={}, 처리됨={}", roomId, userId, removed.removed());
         return new LeaveResult(removed.removed(), !removed.roomClosed());
+    }
+
+    /**
+     * 그룹 쪽 변화(내보내기·그룹 나가기·그룹 사라짐)로 이 그룹 공부방의 자리를 지운다 (BY-1124). 호출자의 그룹 트랜잭션 안에서 ④ 방 행 → ⑤ 자리
+     * 행만 잡는다 — 같은 자리를 두고 겨루는 join(방 전환)·정리 작업과는 이 두 락이 직렬화한다. 지운 자리가 있던 방 ID를 돌려주고, 이 그룹 공부방에
+     * 자리가 없었으면 비어 있다(다른 방의 자리는 건드리지 않는다).
+     */
+    @Transactional
+    public Optional<Long> removeFromGroupRoom(long groupId, long userId, LeaveReason reason, Instant now) {
+        Optional<RoomRow> room = rooms.lockOpenByGroup(groupId);
+        if (room.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<Row> row = participations.lockLive(room.get().id(), userId);
+        if (row.isEmpty()) {
+            return Optional.empty();
+        }
+        boolean removed =
+                remover.remove(row.get(), room.get(), reason, now, null).removed();
+        log.debug("그룹 공부방 자리 정리: groupId={}, userId={}, 사유={}, 처리됨={}", groupId, userId, reason, removed);
+        return removed ? Optional.of(room.get().id()) : Optional.empty();
+    }
+
+    /** 그룹의 열린 공부방 ID. 잠그지 않는다. */
+    @Transactional(readOnly = true)
+    public Optional<Long> openGroupRoomId(long groupId) {
+        return rooms.findOpenByGroup(groupId).map(RoomRow::id);
     }
 
     /**

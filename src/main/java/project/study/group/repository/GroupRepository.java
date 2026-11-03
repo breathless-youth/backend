@@ -93,6 +93,17 @@ public class GroupRepository {
     }
 
     /**
+     * 그룹 행을 공유 락으로 읽는다 — 락 순서 ①의 읽기 쪽. 같은 그룹의 공부방 자리 잡기끼리는 서로 막지 않고, 내보내기·나가기·삭제({@link
+     * #lockLive})와는 직렬화된다. 기다리는 사이 삭제됐으면 다시 확인한 조건에서 빠져 비어 있다.
+     */
+    public Optional<GroupRow> shareLive(long id) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM study_group WHERE id = :id AND deleted_at IS NULL FOR SHARE")
+                .param("id", id)
+                .query(ROW)
+                .optional();
+    }
+
+    /**
      * 살아 있는 공개 그룹 전부와 지금 멤버 수. 이름 검색·정렬은 호출자가 메모리에서 한다 — 평균이 캐시에 있어 SQL로 정렬할 수 없고, 이름의
      * {@code LIKE}는 {@code %}·{@code _} 이스케이프와 대소문자 규칙이 얽힌다.
      */

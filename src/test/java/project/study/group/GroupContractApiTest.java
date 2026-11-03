@@ -27,7 +27,7 @@ import project.study.config.ApiVersionConfig;
 /**
  * 그룹 REST 계약 (BY-1124). 로직 전에는 컨트롤러가 501 {@code NOT_IMPLEMENTED}를 주고, FE는 Swagger의 경로·DTO로 타입을 쓴다.
  * 501을 단언하는 엔드포인트는 서비스가 DB를 건드리지 않으므로 {@code asUser}가 가리키는 사용자 행이 필요 없다. 로직이 채워진
- * 엔드포인트(그룹 만들기·내 그룹·그룹 홈·설정·알림·공개 그룹 목록·보기)는 각자의 API 테스트가 실제 사용자 행으로 본다.
+ * 엔드포인트(그룹 만들기·내 그룹·그룹 홈·설정·알림·공개 그룹 목록·보기·공부방 자리 잡기·나가기)는 각자의 API 테스트가 실제 사용자 행으로 본다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -103,7 +103,7 @@ class GroupContractApiTest {
     }
 
     @Test
-    void 멤버_초대_공부방_경로도_로직_전에는_501이다() {
+    void 멤버_초대_경로도_로직_전에는_501이다() {
         assertNotImplemented(v1Get(mvc, "/api/groups/10/members", USER));
         assertNotImplemented(json(v1Put(mvc, "/api/groups/10/owner", USER), """
                 {"userId": 2}"""));
@@ -112,8 +112,6 @@ class GroupContractApiTest {
         assertNotImplemented(v1Get(mvc, "/api/groups/10/invite", USER));
         assertNotImplemented(v1Post(mvc, "/api/groups/10/invite", USER));
         assertNotImplemented(json(v1Post(mvc, "/api/groups/join", USER), JOIN_BODY));
-        assertNotImplemented(v1Post(mvc, "/api/groups/10/room/join", USER));
-        assertNotImplemented(v1Post(mvc, "/api/groups/10/room/leave", USER));
         assertNotImplemented(json(v1Post(mvc, "/api/groups/10/members/2/report", USER), """
                 {"reason": "욕설을 했어요"}"""));
     }

@@ -42,8 +42,18 @@ public class GroupAccess {
     /** 그룹이 없으면 404, 멤버가 아니면 403 {@code NOT_GROUP_MEMBER}. */
     public Membership requireMember(long groupId, long userId, boolean lock) {
         GroupRow group = load(groupId, lock);
-        MemberRow member = members.findLive(groupId, userId)
-                .orElseThrow(() -> new ForbiddenException(ErrorCode.NOT_GROUP_MEMBER, "이 그룹의 멤버가 아니에요"));
+        MemberRow member = members.findLive(groupId, userId).orElseThrow(GroupAccess::notMember);
+        return new Membership(group, member);
+    }
+
+    /**
+     * {@link #requireMember}와 같은 검사를 그룹 행 {@code FOR SHARE} 아래에서 한다 — 그룹 공부방 자리 잡기·나가기처럼 그룹을 바꾸지 않지만, 같은
+     * 순간의 내보내기·나가기·삭제(그룹 행 {@code FOR UPDATE})와 엇갈리면 안 되는 작업이 쓴다. 내보내기가 먼저면 기다렸다가 멤버가 아니라 403이고,
+     * 자리 잡기가 먼저면 내보내기가 그 자리를 지운다.
+     */
+    public Membership requireMemberForShare(long groupId, long userId) {
+        GroupRow group = groups.shareLive(groupId).orElseThrow(GroupAccess::notFound);
+        MemberRow member = members.findLive(groupId, userId).orElseThrow(GroupAccess::notMember);
         return new Membership(group, member);
     }
 
@@ -61,6 +71,10 @@ public class GroupAccess {
 
     private GroupRow load(long groupId, boolean lock) {
         return (lock ? groups.lockLive(groupId) : groups.findLive(groupId)).orElseThrow(GroupAccess::notFound);
+    }
+
+    private static ForbiddenException notMember() {
+        return new ForbiddenException(ErrorCode.NOT_GROUP_MEMBER, "이 그룹의 멤버가 아니에요");
     }
 
     private static NotFoundException notFound() {

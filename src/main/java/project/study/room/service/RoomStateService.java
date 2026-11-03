@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.room.dto.RoomMember;
+import project.study.room.dto.StateUpdatePayload;
+import project.study.room.repository.GroupSeatRepository;
 import project.study.room.repository.RoomParticipationRepository;
 import project.study.room.repository.RoomParticipationRepository.Row;
 
@@ -16,7 +18,13 @@ import project.study.room.repository.RoomParticipationRepository.Row;
 @RequiredArgsConstructor
 public class RoomStateService {
 
+    /** 그룹 공부방 필드가 있는 state 보고의 결과 — 저장했는지와, 저장한 방이 그룹 공부방인지(그래야 micOn·onBreak를 알린다). */
+    public record StateUpdate(boolean saved, boolean groupRoom) {
+        public static final StateUpdate NONE = new StateUpdate(false, false);
+    }
+
     private final RoomParticipationRepository participations;
+    private final GroupSeatRepository groupSeats;
 
     /** 갱신 1행 = 인가(현재 세션의 확정 멤버) + 저장. 필드별 검증은 핸들러가 SQL 전에 한다. */
     @Transactional
@@ -26,6 +34,21 @@ public class RoomStateService {
             return false;
         }
         return participations.updateState(roomId, userId, sessionId, cameraOn, focusState, focusSec) == 1;
+    }
+
+    /**
+     * micOn·onBreak가 있는 보고 (BY-1124). 저장과 방 종류 판정이 한 문장이다 — 그룹 공부방이면 다섯 필드를, 초대코드 방이면 기존 세 필드만
+     * 반영한다. 그룹 공부방 필드가 없는 보고는 {@link #updateState(Long, Long, String, Boolean, String, Integer)}를 쓴다.
+     */
+    @Transactional
+    public StateUpdate updateState(Long roomId, Long userId, String sessionId, StateUpdatePayload change) {
+        if (sessionId == null) {
+            return StateUpdate.NONE;
+        }
+        return groupSeats
+                .updateState(roomId, userId, sessionId, change)
+                .map(groupRoom -> new StateUpdate(true, groupRoom))
+                .orElse(StateUpdate.NONE);
     }
 
     /** 발신자가 현재 세션의 확정 멤버이고 수신자가 확정 멤버인지 한 번의 조회로 판정한다. */

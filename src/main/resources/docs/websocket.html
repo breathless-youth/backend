@@ -34,7 +34,7 @@
 <h1>룸 WebSocket 명세</h1>
 <p class="meta">실시간 공부방(룸)의 STOMP 계약. 기준: 2026-09-17 (BY-667). REST API는 <a href="/swagger-ui.html">Swagger</a>, 이 문서는 소켓 계약만 다룬다.
 서버 코드가 곧 진실이며, 메시지 type·목적지가 이 문서에서 빠지면 서버 빌드가 실패한다.
-다만 그룹 공부방(§11)은 서버 구현보다 계약이 먼저 나가 있다.</p>
+다만 그룹 공부방(§11)의 PEER_BLOCKED와 차단 사이 signal 버리기는 서버 구현보다 계약이 먼저 나가 있다.</p>
 
 <nav><ol>
   <li><a href="#connect">연결과 인증</a></li>
@@ -145,7 +145,7 @@ sequenceDiagram
   <tr><th>type</th><th>어디로</th><th>언제</th><th>필드</th></tr>
   <tr><td><code>SNAPSHOT</code></td><td>내 큐</td><td>입장 확정 직후, 또는 재요청에 응답</td><td><code>members[]</code> — 나를 포함한 확정 멤버 전체. 예약만 하고 아직 토픽을 구독하지 않은 자리는 보이지 않는다</td></tr>
   <tr><td><code>MEMBER_JOINED</code></td><td>방 토픽</td><td>누군가 입장 확정(재입장 포함)</td><td><code>member</code></td></tr>
-  <tr><td><code>MEMBER_LEFT</code></td><td>방 토픽</td><td>명시적 퇴장, 유예 만료 자동 퇴장, 다른 방 입장으로 자동 퇴장, 예약(30초) 만료. 확정 전 자리가 만료되면 MEMBER_JOINED를 본 적 없는 <code>userId</code>의 MEMBER_LEFT가 올 수 있다 — 모르는 id는 무시한다</td><td><code>userId</code></td></tr>
+  <tr><td><code>MEMBER_LEFT</code></td><td>방 토픽</td><td>명시적 퇴장, 유예 만료 자동 퇴장, 다른 방 입장으로 자동 퇴장, 예약(30초) 만료. 그룹 공부방에서는 그룹을 나가거나 내보내질 때도(§11.5). 확정 전 자리가 만료되면 MEMBER_JOINED를 본 적 없는 <code>userId</code>의 MEMBER_LEFT가 올 수 있다 — 모르는 id는 무시한다</td><td><code>userId</code></td></tr>
   <tr><td><code>CAMERA_CHANGED</code></td><td>방 토픽</td><td>누군가의 state 보고에 <code>cameraOn</code>이 있을 때</td><td><code>userId</code>, <code>cameraOn</code></td></tr>
   <tr><td><code>FOCUS_CHANGED</code></td><td>방 토픽</td><td>… <code>focusState</code>가 있을 때</td><td><code>userId</code>, <code>focusState</code></td></tr>
   <tr><td><code>STUDY_TIME</code></td><td>방 토픽</td><td>… <code>focusSec</code>이 있을 때</td><td><code>userId</code>, <code>focusSec</code></td></tr>
@@ -287,7 +287,7 @@ sequenceDiagram
 
 <h2 id="group-room">11. 그룹 공부방</h2>
 <div class="note">
-  <strong>그룹 공부방 계약이다. 서버는 BY-1124 4단계에서 보내기 시작한다. 초대코드 방에는 아무것도 바뀌지 않는다.</strong>
+  <strong>그룹 공부방 계약이다. 초대코드 방에는 아무것도 바뀌지 않는다.</strong> 서버는 PEER_BLOCKED와 차단 사이 signal 버리기(§11.5)를 빼고 모두 보낸다 — 둘은 신고·차단 단계(BY-1124 6단계)에서 시작한다.
   이 절의 새 필드와 새 메시지 종류는 그룹 공부방에만 나가고, 초대코드 방의 SNAPSHOT·MEMBER_JOINED에서는 새 필드가 빠진다(직렬화에서 생략).
   그룹·신청·멤버 REST는 <a href="/swagger-ui.html">Swagger</a>의 <code>그룹</code> 태그를 본다.
 </div>
@@ -327,6 +327,7 @@ sequenceDiagram
 </table>
 <ul>
   <li>§4.1과 같은 규칙이다. 필드는 모두 선택이고, <strong>바뀐 값만 알리면 된다</strong>. 반영된 필드마다 이벤트가 하나씩 나간다.</li>
+  <li>초대코드 방에서 보낸 <code>micOn</code>·<code>onBreak</code>는 저장하지도 알리지도 않는다. 같이 보낸 다른 필드(<code>cameraOn</code> 등)는 §4.1대로 반영된다.</li>
   <li>소리는 영상처럼 WebRTC P2P로 오가고, 서버는 녹음·저장하지 않는다. 서버가 다루는 것은 <code>micOn</code> 표시값뿐이다.</li>
 </ul>
 
@@ -377,6 +378,7 @@ sequenceDiagram
   <tr><td>2026-10-16</td><td>BY-925</td><td>빈 방 소멸을 600초에서 3600초로 늘림(§8·§10). 방 생성 응답 <code>emptyTtlSeconds</code>도 3600. 소멸한 코드의 ROOM_CLOSED 안내 600초는 그대로</td></tr>
   <tr><td>2026-10-28</td><td>BY-1035</td><td>멤버 객체에 <code>profileImageUrl</code>(string | null) 추가(§5). 입장 시점 값이라 방 안에서 사진을 바꿔도 다음 입장부터 반영</td></tr>
   <tr><td>2026-11-03</td><td>BY-1124</td><td>그룹 공부방 계약(§11) 추가: 멤버 객체 <code>micOn</code>·<code>onBreak</code>·<code>owner</code>, state 보고 <code>micOn</code>·<code>onBreak</code>, 새 type 5개(<code>MIC_CHANGED</code>, <code>BREAK_CHANGED</code>, <code>OWNER_CHANGED</code>, <code>KICKED</code>, <code>PEER_BLOCKED</code>). PEER_BLOCKED를 받으면 기존 P2P 연결도 닫는다. 서버 송신은 4단계부터. 초대코드 방은 변화 없음</td></tr>
+  <tr><td>2026-11-03</td><td>BY-1124</td><td>그룹 공부방 서버 구현(4단계): 자리 잡기·나가기, 멤버 객체 <code>micOn</code>·<code>onBreak</code>·<code>owner</code>, MIC_CHANGED·BREAK_CHANGED·OWNER_CHANGED·KICKED 송신. 계약은 그대로이고, 초대코드 방에서 보낸 <code>micOn</code>·<code>onBreak</code>는 저장·알림 없이 무시한다는 것과 MEMBER_LEFT의 그룹 사유를 적었다(§5·§11.3). PEER_BLOCKED·signal 차단은 신고·차단 단계에서 시작</td></tr>
 </table>
 
 </main>
