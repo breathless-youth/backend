@@ -1,6 +1,7 @@
 package project.study.group.service;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -48,6 +49,12 @@ public class GroupService {
 
     /** 한 사람이 그룹장일 수 있는 그룹 수 상한 */
     static final int MAX_OWNED_GROUPS = 2;
+
+    /** 그룹 멤버 수 상한 — 신청·수락·코드 참여가 본다 */
+    static final int MAX_MEMBERS = 6;
+
+    /** 내보내진 사람이 같은 그룹에 다시 신청·참여할 수 없는 기간 */
+    static final Duration KICK_COOLDOWN = Duration.ofDays(3);
 
     private final GroupRepository groups;
     private final GroupMemberRepository members;

@@ -39,6 +39,16 @@ public class GroupProbe {
             Instant leftAt,
             String leaveReason) {}
 
+    public record ApplicationRow(
+            long id,
+            long groupId,
+            long userId,
+            String introduction,
+            String status,
+            Instant createdAt,
+            Instant expiresAt,
+            Instant answeredAt) {}
+
     private static final RowMapper<GroupRow> GROUP = (rs, n) -> new GroupRow(
             rs.getLong("id"),
             rs.getString("name"),
@@ -59,6 +69,16 @@ public class GroupProbe {
             rs.getBoolean("notify_enabled"),
             instant(rs, "left_at"),
             rs.getString("leave_reason"));
+
+    private static final RowMapper<ApplicationRow> APPLICATION = (rs, n) -> new ApplicationRow(
+            rs.getLong("id"),
+            rs.getLong("group_id"),
+            rs.getLong("user_id"),
+            rs.getString("introduction"),
+            rs.getString("status"),
+            instant(rs, "created_at"),
+            instant(rs, "expires_at"),
+            instant(rs, "answered_at"));
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -184,17 +204,40 @@ public class GroupProbe {
                 .update();
     }
 
-    /** 이 그룹에 {@code userId}가 낸 신청 행. 만든 시각은 기한 3일 전이다. */
-    public void insertApplication(long groupId, long userId, String status, Instant expiresAt) {
-        jdbc.sql("insert into study_group_application "
+    /** 이 그룹에 {@code userId}가 낸 신청 행. 만든 시각은 기한 3일 전이다. 신청 ID를 돌려준다. */
+    public long insertApplication(long groupId, long userId, String status, Instant expiresAt) {
+        return insertApplication(groupId, userId, status, expiresAt.minusSeconds(3 * 24 * 3600), expiresAt);
+    }
+
+    /** 만든 시각까지 정한 신청 행 — 목록의 "신청한 순서"를 ID 순서와 다르게 하려고 쓴다. 신청 ID를 돌려준다. */
+    public long insertApplication(long groupId, long userId, String status, Instant createdAt, Instant expiresAt) {
+        return jdbc.sql("insert into study_group_application "
                         + "(group_id, user_id, introduction, status, created_at, expires_at) "
-                        + "values (:groupId, :userId, '안녕하세요', :status, :createdAt, :expiresAt)")
+                        + "values (:groupId, :userId, '안녕하세요', :status, :createdAt, :expiresAt) returning id")
                 .param("groupId", groupId)
                 .param("userId", userId)
                 .param("status", status)
-                .param("createdAt", Timestamp.from(expiresAt.minusSeconds(3 * 24 * 3600)))
+                .param("createdAt", Timestamp.from(createdAt))
                 .param("expiresAt", Timestamp.from(expiresAt))
-                .update();
+                .query(Long.class)
+                .single();
+    }
+
+    public Optional<ApplicationRow> application(long applicationId) {
+        return jdbc.sql("select * from study_group_application where id = :id")
+                .param("id", applicationId)
+                .query(APPLICATION)
+                .optional();
+    }
+
+    /** 이 사람이 이 그룹에 낸 신청 전부(끝난 것 포함), id 순. */
+    public List<ApplicationRow> applications(long groupId, long userId) {
+        return jdbc.sql("select * from study_group_application "
+                        + "where group_id = :groupId and user_id = :userId order by id")
+                .param("groupId", groupId)
+                .param("userId", userId)
+                .query(APPLICATION)
+                .list();
     }
 
     /** 이미 나간(또는 내보내진) 소속 행. */
@@ -211,16 +254,7 @@ public class GroupProbe {
 
     /** 다른 사람이 그룹장인 새 공개 그룹에 {@code userId}가 낸 신청 행. */
     public void insertApplicationToNewGroup(long userId, String status, Instant expiresAt) {
-        long groupId = insertGroup(insertUser(), "PUBLIC");
-        jdbc.sql("insert into study_group_application "
-                        + "(group_id, user_id, introduction, status, created_at, expires_at) "
-                        + "values (:groupId, :userId, '안녕하세요', :status, :createdAt, :expiresAt)")
-                .param("groupId", groupId)
-                .param("userId", userId)
-                .param("status", status)
-                .param("createdAt", Timestamp.from(expiresAt.minusSeconds(3 * 24 * 3600)))
-                .param("expiresAt", Timestamp.from(expiresAt))
-                .update();
+        insertApplication(insertGroup(insertUser(), "PUBLIC"), userId, status, expiresAt);
     }
 
     /** 그룹을 지운 것으로 표시하고 살아 있는 멤버를 모두 내보낸 것으로(GROUP_DELETED) 닫는다. */

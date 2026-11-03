@@ -12,6 +12,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>락 순서(바꾸지 않는다): ① {@code study_group} 행 → <b>② 이 락</b> → ③ 룸의 사용자 락({@code RoomRepository.lockUser}) → ④ {@code
  * rooms} 행 → ⑤ {@code room_participations} 행. 앞 단계는 건너뛸 수 있어도 거꾸로 잡지 않는다.
  *
+ * <p>{@code study_group_application} 행 락({@code GroupApplicationRepository.lock}·조건부 UPDATE)은 ①②를 쥔 뒤에 잡는다. 취소·만료
+ * 작업은 ①②를 쥐지 않고 신청 행만 잡는다. 신청 행을 쥔 채 ①②를 기다리는 작업이 없으므로 순서가 어긋나지 않는다.
+ *
  * <p>advisory lock 키 공간은 모든 도메인이 DB 하나에서 나눠 쓴다. 지금 쓰는 키(코드에서 {@code pg_advisory}를 찾아 확인):
  *
  * <ul>

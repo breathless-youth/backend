@@ -3,6 +3,13 @@ package project.study.group.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.support.AuthTestSupport.asUser;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
@@ -58,6 +65,37 @@ public final class GroupApiTestSupport {
                 .hasStatus(status)
                 .bodyJson()
                 .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo(code));
+    }
+
+    /** 요청의 상태 코드만 돌려준다 — {@link #race}의 작업으로 쓴다. */
+    public static int status(MockMvcRequestBuilder request) {
+        return request.exchange().getResponse().getStatus();
+    }
+
+    /** 작업을 스레드마다 하나씩 한꺼번에 출발시켜 돌려받은 값을 모은다 — 동시 요청이 한도·자리를 넘는지 보는 테스트용이다. */
+    public static <T> List<T> race(List<Callable<T>> tasks) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(tasks.size());
+        CountDownLatch ready = new CountDownLatch(tasks.size());
+        CountDownLatch go = new CountDownLatch(1);
+        try {
+            List<Future<T>> futures = new ArrayList<>();
+            for (Callable<T> task : tasks) {
+                futures.add(pool.submit(() -> {
+                    ready.countDown();
+                    go.await();
+                    return task.call();
+                }));
+            }
+            ready.await();
+            go.countDown();
+            List<T> results = new ArrayList<>();
+            for (Future<T> future : futures) {
+                results.add(future.get());
+            }
+            return results;
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     private static MockMvcRequestBuilder asV1(MockMvcRequestBuilder builder, long userId) {

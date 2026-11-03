@@ -37,9 +37,6 @@ class GroupContractApiTest {
     private static final String JOIN_BODY = """
             {"inviteCode": "K7M2PQ", "via": "LINK"}""";
 
-    private static final String APPLY_BODY = """
-            {"introduction": "새벽 5시에 일어나는 공시생이에요"}""";
-
     private static final long USER = 1L;
 
     private static final Set<String> HTTP_METHODS = Set.of("get", "put", "post", "delete", "patch");
@@ -213,13 +210,8 @@ class GroupContractApiTest {
     }
 
     @Test
-    void 신청과_차단_경로도_로직_전에는_501이다() {
-        assertNotImplemented(json(v1Post(mvc, "/api/groups/10/applications", USER), APPLY_BODY));
-        assertNotImplemented(v1Get(mvc, "/api/groups/10/applications", USER));
-        assertNotImplemented(v1Get(mvc, "/api/group-applications/me", USER));
-        assertNotImplemented(v1Delete(mvc, "/api/group-applications/55", USER));
-        assertNotImplemented(v1Post(mvc, "/api/group-applications/55/accept", USER));
-        assertNotImplemented(v1Post(mvc, "/api/group-applications/55/decline", USER));
+    void 신청_신고와_차단_경로는_로직_전에는_501이다() {
+        // 신청 보내기·목록·취소·수락·거절은 로직이 채워졌다 — GroupApply·GroupApplicationList·GroupApplicationAnswerApiTest가 본다
         assertNotImplemented(json(v1Post(mvc, "/api/group-applications/55/report", USER), """
                 {"reason": "부적절한 소개 글이에요"}"""));
         assertNotImplemented(v1Get(mvc, "/api/blocks", USER));
@@ -233,9 +225,12 @@ class GroupContractApiTest {
         assertValidationFailed(json(v1Post(mvc, "/api/groups/10/applications", USER), """
                 {"introduction": "%s"}""".formatted("가".repeat(51))));
         assertValidationFailed(json(v1Post(mvc, "/api/groups/10/applications", USER), "{}"));
-        // 경계: 50자는 검증을 통과해 501까지 간다
-        assertNotImplemented(json(v1Post(mvc, "/api/groups/10/applications", USER), """
-                {"introduction": "%s"}""".formatted("가".repeat(50))));
+        // 경계: 50자는 검증을 통과해 서비스까지 가고, 없는 그룹이라 404다
+        assertErrorCode(
+                json(v1Post(mvc, "/api/groups/987654321/applications", USER), """
+                {"introduction": "%s"}""".formatted("가".repeat(50))),
+                HttpStatus.NOT_FOUND,
+                "GROUP_NOT_FOUND");
     }
 
     @Test
