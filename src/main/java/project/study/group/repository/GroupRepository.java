@@ -33,6 +33,9 @@ public class GroupRepository {
             Instant updatedAt,
             Instant deletedAt) {}
 
+    /** 공개 목록 한 줄 — 이름·시험 목표와 지금 멤버 수만 읽는다. */
+    public record PublicGroupRow(long id, String name, StudyCategory category, int memberCount) {}
+
     private static final String COLUMNS =
             "id, name, description, visibility, category, owner_id, invite_code, created_at, updated_at, deleted_at";
 
@@ -87,6 +90,25 @@ public class GroupRepository {
                 .param("id", id)
                 .query(ROW)
                 .optional();
+    }
+
+    /**
+     * 살아 있는 공개 그룹 전부와 지금 멤버 수. 이름 검색·정렬은 호출자가 메모리에서 한다 — 평균이 캐시에 있어 SQL로 정렬할 수 없고, 이름의
+     * {@code LIKE}는 {@code %}·{@code _} 이스케이프와 대소문자 규칙이 얽힌다.
+     */
+    public List<PublicGroupRow> findPublicLive() {
+        return jdbc.sql("""
+                        SELECT g.id, g.name, g.category, count(m.id) AS member_count
+                          FROM study_group g
+                          LEFT JOIN study_group_member m ON m.group_id = g.id AND m.left_at IS NULL
+                         WHERE g.visibility = 'PUBLIC' AND g.deleted_at IS NULL
+                         GROUP BY g.id, g.name, g.category""")
+                .query((rs, n) -> new PublicGroupRow(
+                        rs.getLong("id"),
+                        rs.getString("name"),
+                        StudyCategory.valueOf(rs.getString("category")),
+                        rs.getInt("member_count")))
+                .list();
     }
 
     public List<GroupRow> findLiveByIds(Collection<Long> ids) {

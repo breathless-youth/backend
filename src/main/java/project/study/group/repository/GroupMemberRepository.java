@@ -33,6 +33,9 @@ public class GroupMemberRepository {
     public record MemberRow(
             long id, long groupId, long userId, Instant joinedAt, String joinedVia, boolean notifyEnabled) {}
 
+    /** 공개 그룹의 살아 있는 소속 한 줄 — 이번 주 평균을 한 번에 계산하려고 그룹·사람 쌍만 읽는다. */
+    public record PublicMemberRef(long groupId, long userId) {}
+
     private static final String COLUMNS = "id, group_id, user_id, joined_at, joined_via, notify_enabled";
 
     private static final RowMapper<MemberRow> ROW = (rs, n) -> new MemberRow(
@@ -77,6 +80,17 @@ public class GroupMemberRepository {
                         + " ORDER BY group_id, joined_at, id")
                 .param("groupIds", groupIds)
                 .query(ROW)
+                .list();
+    }
+
+    /** 살아 있는 공개 그룹 전부의 살아 있는 소속 — 공개 그룹 이번 주 평균이 쓴다. */
+    public List<PublicMemberRef> findLiveOfPublicGroups() {
+        return jdbc.sql("""
+                        SELECT m.group_id, m.user_id
+                          FROM study_group_member m
+                          JOIN study_group g ON g.id = m.group_id
+                         WHERE g.visibility = 'PUBLIC' AND g.deleted_at IS NULL AND m.left_at IS NULL""")
+                .query((rs, n) -> new PublicMemberRef(rs.getLong("group_id"), rs.getLong("user_id")))
                 .list();
     }
 

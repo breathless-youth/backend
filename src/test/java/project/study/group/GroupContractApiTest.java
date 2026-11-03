@@ -27,7 +27,7 @@ import project.study.config.ApiVersionConfig;
 /**
  * 그룹 REST 계약 (BY-1124). 로직 전에는 컨트롤러가 501 {@code NOT_IMPLEMENTED}를 주고, FE는 Swagger의 경로·DTO로 타입을 쓴다.
  * 501을 단언하는 엔드포인트는 서비스가 DB를 건드리지 않으므로 {@code asUser}가 가리키는 사용자 행이 필요 없다. 로직이 채워진
- * 엔드포인트(그룹 만들기·내 그룹·그룹 홈·설정·알림)는 각자의 API 테스트가 실제 사용자 행으로 본다.
+ * 엔드포인트(그룹 만들기·내 그룹·그룹 홈·설정·알림·공개 그룹 목록·보기)는 각자의 API 테스트가 실제 사용자 행으로 본다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -45,18 +45,14 @@ class GroupContractApiTest {
     private MockMvcTester mvc;
 
     @Test
-    void 로직_전에는_501과_NOT_IMPLEMENTED다() {
-        // 만들기·내 그룹·그룹 홈·설정 수정·알림 켜기는 로직이 채워졌다 — GroupCreateApiTest·MyGroupsApiTest·GroupDeskApiTest·
-        // GroupSettingsApiTest가 본다
-        assertNotImplemented(v1Get(mvc, "/api/groups/public", USER));
-        assertNotImplemented(v1Get(mvc, "/api/groups/public/10", USER));
-    }
-
-    @Test
     void 고정_경로가_groupId_경로보다_먼저_잡힌다() {
-        // /{groupId}가 먼저 잡혔다면 "me"·"public"을 Long으로 바꾸다 400이 난다
+        // /{groupId}가 먼저 잡혔다면 "me"·"public"을 Long으로 바꾸다 400이 난다. 만들기·내 그룹·그룹 홈·설정 수정·알림 켜기·공개 목록·보기는
+        // 로직이 채워졌다 —
+        // GroupCreateApiTest·MyGroupsApiTest·GroupDeskApiTest·GroupSettingsApiTest·PublicGroups·PublicGroupDetailApiTest가 본다
         assertThat(v1Get(mvc, "/api/groups/me", USER)).hasStatusOk();
-        assertNotImplemented(v1Get(mvc, "/api/groups/public", USER));
+        assertThat(v1Get(mvc, "/api/groups/public", USER)).hasStatusOk();
+        // /public/{groupId}로 잡혔다면 없는 그룹이라 404 GROUP_NOT_FOUND다(/{groupId}였다면 "public"을 Long으로 바꾸다 400)
+        assertErrorCode(v1Get(mvc, "/api/groups/public/987654321", USER), HttpStatus.NOT_FOUND, "GROUP_NOT_FOUND");
     }
 
     @Test
@@ -163,6 +159,22 @@ class GroupContractApiTest {
     @Test
     void 그룹장을_넘길_대상이_없으면_400_VALIDATION_FAILED다() {
         assertValidationFailed(json(v1Put(mvc, "/api/groups/10/owner", USER), "{}"));
+    }
+
+    @Test
+    void Swagger에_공개_그룹_목록의_입력_한도가_실린다() {
+        assertThat(mvc.get().uri("/v3/api-docs"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/public'].get.parameters[?(@.name=='query')].schema.maxLength",
+                        v -> assertThat(v).asList().containsExactly(100))
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/public'].get.parameters[?(@.name=='page')].schema.maximum",
+                        v -> assertThat(v).asList().containsExactly(10000))
+                .hasPathSatisfying(
+                        "$.paths['/api/groups/public'].get.responses['400'].description",
+                        v -> assertThat(v).asString().contains("query가 100자 초과").contains("page가 0~10000 밖"));
     }
 
     @Test

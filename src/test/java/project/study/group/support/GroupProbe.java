@@ -151,14 +151,21 @@ public class GroupProbe {
 
     /** 그룹과 그룹장 멤버 행(CREATED)을 SQL로 만든다. PRIVATE이면 초대코드도 붙는다. */
     public long insertGroup(long ownerId, String visibility) {
+        return insertGroup(
+                ownerId, visibility, "그룹" + UUID.randomUUID().toString().substring(0, 8), "ETC");
+    }
+
+    /** 이름·시험 목표를 정한 그룹 — 목록 검색·거르기 테스트가 자기 그룹만 골라 보려고 쓴다. */
+    public long insertGroup(long ownerId, String visibility, String name, String category) {
         String code = "PRIVATE".equals(visibility) ? InviteCodes.generate(RANDOM) : null;
         Timestamp now = Timestamp.from(Instant.now());
         long groupId = jdbc.sql("""
                         insert into study_group (name, description, visibility, category, owner_id, invite_code,
                                                  created_at, updated_at)
-                        values (:name, null, :visibility, 'ETC', :ownerId, :code, :now, :now) returning id""")
-                .param("name", "그룹" + UUID.randomUUID().toString().substring(0, 8))
+                        values (:name, null, :visibility, :category, :ownerId, :code, :now, :now) returning id""")
+                .param("name", name)
                 .param("visibility", visibility)
+                .param("category", category)
                 .param("ownerId", ownerId)
                 .param("code", code)
                 .param("now", now)
@@ -166,6 +173,14 @@ public class GroupProbe {
                 .single();
         insertMember(groupId, ownerId, "CREATED");
         return groupId;
+    }
+
+    /** 소개를 채운다 — 만든 그룹은 소개가 null이다. */
+    public void setDescription(long groupId, String description) {
+        jdbc.sql("update study_group set description = :description where id = :id")
+                .param("description", description)
+                .param("id", groupId)
+                .update();
     }
 
     /** 다른 사람이 그룹장인 새 공개 그룹을 만들고 {@code userId}를 멤버로 넣는다. 그 그룹 ID를 돌려준다. */

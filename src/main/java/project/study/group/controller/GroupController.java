@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -116,7 +117,8 @@ public class GroupController {
                     공개 그룹을 찾는다. `query`는 이름에 들어간 글자(대소문자 무시), `category`는 시험·목표 하나로 거른다. 둘 다 생략하면 전체다.
 
                     - 정렬: 다 차지 않은 그룹 → 평균 많은 순 → 그룹 ID 작은 순, 쪽마다 순서가 바뀔 수 있어 FE가 groupId로 중복을 거른다
-                    - 쪽 번호 방식 — `page`는 0부터, `size`는 기본 20·최대 50. 응답은 다음 쪽이 있는지(`hasNext`)만 준다
+                    - 쪽 번호 방식 — `page`는 0부터 10000까지, `size`는 기본 20·최대 50. 응답은 다음 쪽이 있는지(`hasNext`)만 준다
+                    - `query`는 앞뒤 공백을 떼고, 비면 검색어가 없는 것으로 본다. `%`·`_`도 그냥 글자다. 100자까지
                     - 카드의 `weeklyAverageFocusSec`: 지금 멤버들의 이번 주(월요일 0시 KST부터) 앱 전체 순공 합 ÷ 지금 멤버 수. \
                     주 중간에 들어온 멤버도 이번 주 순공이 모두 들어가고 나간 멤버는 빠진다. \
                     측정 세션만, 1분 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신
@@ -124,18 +126,24 @@ public class GroupController {
     @ApiResponse(responseCode = "200", description = "조회 성공 — 결과가 없으면 `groups`가 빈 배열")
     @ApiResponse(
             responseCode = "400",
-            description = "`REQUEST_FAILED` page가 음수이거나 size가 1~50 밖, `BAD_REQUEST` 없는 category 값")
+            description =
+                    "`REQUEST_FAILED` query가 100자 초과, page가 0~10000 밖, size가 1~50 밖 / `BAD_REQUEST` 없는 category 값")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @GetMapping(value = "/public", version = "1")
     public PublicGroupPageResponse publicGroups(
             @AuthenticationPrincipal Long userId,
-            @Parameter(description = "그룹 이름 검색어 — 이름에 들어간 것(대소문자 무시). 생략하면 전체", example = "공시")
+            @Parameter(description = "그룹 이름 검색어 — 이름에 들어간 것(대소문자 무시), 100자까지. 생략하거나 공백뿐이면 전체", example = "공시")
                     @RequestParam(required = false)
+                    @Size(max = 100)
                     String query,
             @Parameter(description = "시험·목표로 거르기 — 하나만. 생략하면 전체", example = "CIVIL_SERVICE")
                     @RequestParam(required = false)
                     StudyCategory category,
-            @Parameter(description = "쪽 번호 — 0부터", example = "0") @RequestParam(defaultValue = "0") @Min(0) int page,
+            @Parameter(description = "쪽 번호 — 0부터 10000까지", example = "0")
+                    @RequestParam(defaultValue = "0")
+                    @Min(0)
+                    @Max(10000)
+                    int page,
             @Parameter(description = "쪽 크기 — 1~50", example = "20") @RequestParam(defaultValue = "20") @Min(1) @Max(50)
                     int size) {
         return groupService.publicGroups(userId, query, category, page, size);

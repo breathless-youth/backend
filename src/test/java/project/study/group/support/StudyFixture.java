@@ -5,6 +5,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
@@ -46,6 +47,21 @@ public class StudyFixture {
         draft(userId, reported.minusSeconds(reportedFocusSec + 60), reported, reportedFocusSec, """
                 [{"status":"PAUSE","startedAt":"%s","endedAt":"%s"}]""".formatted(
                         reported.minusSeconds(60), reported));
+    }
+
+    /**
+     * 이 사용자들의 공부 기록(확정 세션·draft)을 지운다. 같은 컨텍스트의 다른 테스트가 전체 draft를 읽을 때 새지 않게 {@code @AfterEach}에서 부른다.
+     */
+    public void clear(Collection<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return;
+        }
+        jdbc.sql("delete from active_study_session where user_id in (:ids)")
+                .param("ids", userIds)
+                .update();
+        jdbc.sql("delete from study_session where user_id in (:ids)")
+                .param("ids", userIds)
+                .update();
     }
 
     /** 마지막 수신 = reportedAt, 총공부는 길이 전체. events는 JSON 배열 문자열 */

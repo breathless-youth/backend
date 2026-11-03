@@ -15,7 +15,6 @@ import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
 import project.study.common.exception.ErrorCode;
 import project.study.common.exception.ForbiddenException;
-import project.study.common.exception.NotImplementedException;
 import project.study.common.text.Graphemes;
 import project.study.group.ContactDetector;
 import project.study.group.GroupRole;
@@ -36,7 +35,7 @@ import project.study.group.repository.GroupRepository;
 import project.study.group.repository.GroupRepository.GroupRow;
 import project.study.group.service.GroupAccess.Membership;
 
-/** 그룹 만들기·내 그룹·그룹 홈·설정·알림은 채웠고, 나머지는 REST 계약만 있는 스텁이다 — 다음 단계에서 채우고 {@link NotImplementedException}을 지운다 (BY-1124). */
+/** 그룹 만들기·내 그룹·그룹 홈·설정·알림, 공개 그룹 목록·보기의 입구 (BY-1124). 공개 그룹 읽기는 {@link PublicGroupService}에 있다. */
 @Service
 @RequiredArgsConstructor
 public class GroupService {
@@ -62,6 +61,7 @@ public class GroupService {
     private final GroupLocks locks;
     private final GroupAccess access;
     private final GroupDeskReader deskReader;
+    private final PublicGroupService publicGroupService;
     private final Clock clock;
 
     /**
@@ -169,12 +169,14 @@ public class GroupService {
         groups.update(groupId, name, request.category(), description, clock.instant());
     }
 
+    /** 공개 그룹 목록 — {@link PublicGroupService}가 읽는다. */
     public PublicGroupPageResponse publicGroups(Long userId, String query, StudyCategory category, int page, int size) {
-        throw new NotImplementedException();
+        return publicGroupService.publicGroups(userId, query, category, page, size);
     }
 
+    /** 공개 그룹 보기 — {@link PublicGroupService}가 읽는다. */
     public PublicGroupDetailResponse publicGroup(Long userId, long groupId) {
-        throw new NotImplementedException();
+        return publicGroupService.publicGroup(userId, groupId);
     }
 
     /** 이 그룹의 멤버 공부 알림을 켜고 끈다. 멤버만 할 수 있고, 같은 값을 다시 보내도 그대로 성공이다. */

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import project.study.common.exception.ErrorCode;
 import project.study.common.exception.ForbiddenException;
 import project.study.common.exception.NotFoundException;
+import project.study.group.GroupVisibility;
 import project.study.group.repository.GroupMemberRepository;
 import project.study.group.repository.GroupMemberRepository.MemberRow;
 import project.study.group.repository.GroupRepository;
@@ -29,6 +30,13 @@ public class GroupAccess {
     /** 없거나 삭제된 그룹이면 404 {@code GROUP_NOT_FOUND}. */
     public GroupRow requireLive(long groupId) {
         return groups.findLive(groupId).orElseThrow(GroupAccess::notFound);
+    }
+
+    /** 공개 그룹만 — 없거나 삭제됐거나 비공개면 모두 같은 404 {@code GROUP_NOT_FOUND}라 비공개 그룹이 있는지도 알려 주지 않는다. */
+    public GroupRow requirePublic(long groupId) {
+        return groups.findLive(groupId)
+                .filter(group -> group.visibility() == GroupVisibility.PUBLIC)
+                .orElseThrow(GroupAccess::notFound);
     }
 
     /** 그룹이 없으면 404, 멤버가 아니면 403 {@code NOT_GROUP_MEMBER}. */
