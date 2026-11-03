@@ -8,6 +8,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -39,6 +40,16 @@ class KakaoTokenVerifierTest {
         assertThat(userInfo.provider()).isEqualTo(Provider.KAKAO);
         assertThat(userInfo.providerUserId()).isEqualTo("kakao-12345");
         assertThat(userInfo.nonce()).isNull();
+    }
+
+    @Test
+    void 숫자로_온_exp를_만료_시각으로_담는다() {
+        server.expect(requestTo(TOKEN_INFO_URL))
+                .andRespond(withSuccess(
+                        "{\"aud\":\"my-kakao-app-key\",\"sub\":\"kakao-12345\",\"exp\":1700000000}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThat(verifier.verify("id-token").expiresAt()).isEqualTo(Instant.ofEpochSecond(1_700_000_000L));
     }
 
     @Test

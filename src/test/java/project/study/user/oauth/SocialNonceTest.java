@@ -70,6 +70,6 @@ class SocialNonceTest {
     }
 
     private static OAuthUserInfo info(Provider provider, String nonce) {
-        return new OAuthUserInfo(provider, "sub-1", "a@example.com", nonce);
+        return new OAuthUserInfo(provider, "sub-1", "a@example.com", nonce, null);
     }
 }

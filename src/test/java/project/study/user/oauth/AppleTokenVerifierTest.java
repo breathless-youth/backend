@@ -11,6 +11,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,15 @@ class AppleTokenVerifierTest {
         assertThat(userInfo.provider()).isEqualTo(Provider.APPLE);
         assertThat(userInfo.providerUserId()).isEqualTo("apple-user-123");
         assertThat(userInfo.nonce()).isNull();
+    }
+
+    @Test
+    void 토큰의_exp를_만료_시각으로_담는다() {
+        Date exp = Date.from(Instant.now().plusSeconds(600).truncatedTo(ChronoUnit.SECONDS));
+        String token = baseJwt("apple-user-123", BUNDLE_ID, ISSUER, exp).compact();
+        stubJwks();
+
+        assertThat(verifier.verify(token).expiresAt()).isEqualTo(exp.toInstant());
     }
 
     @Test

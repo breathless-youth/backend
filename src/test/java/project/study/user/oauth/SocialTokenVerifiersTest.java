@@ -18,7 +18,7 @@ class SocialTokenVerifiersTest {
 
             @Override
             public OAuthUserInfo verify(String idToken) {
-                return new OAuthUserInfo(provider, sub + ":" + idToken, null, null);
+                return new OAuthUserInfo(provider, sub + ":" + idToken, null, null, null);
             }
         };
     }

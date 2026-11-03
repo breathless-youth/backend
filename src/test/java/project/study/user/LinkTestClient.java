@@ -1,6 +1,8 @@
 package project.study.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.when;
 import static project.study.support.AuthTestSupport.TOKEN_API_VERSION;
 
@@ -18,6 +20,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
@@ -37,6 +40,8 @@ import tools.jackson.databind.ObjectMapper;
  * MockMvcTester가 있는 컨텍스트에서만 쓰므로 빈이 아니라 테스트가 직접 만든다.
  */
 final class LinkTestClient {
+
+    private static final AtomicLong SEQ = new AtomicLong();
 
     record Device(long userId, String deviceId, boolean isNew, String accessToken, String refreshToken) {}
 
@@ -70,13 +75,21 @@ final class LinkTestClient {
         return new Device(subOf(body.accessToken()), deviceId, body.isNew(), body.accessToken(), body.refreshToken());
     }
 
-    /** 처음 보는 소셜 ID를 하나 만들어 그 ID 토큰의 검증 결과를 심는다. nonceClaim은 ID 토큰의 nonce 클레임(없으면 null). */
+    /**
+     * 처음 보는 소셜 ID를 하나 만들어 그 계정의 ID 토큰 검증 결과를 심는다. nonceClaim은 ID 토큰의 nonce 클레임(없으면 null). social.idToken()은
+     * 접두사다 — 이것으로 시작하는 토큰은 모두 이 계정으로 검증된다({@link #freshIdToken}).
+     */
     Social stubSocial(Provider provider, String nonceClaim) {
         String sub = provider.name().toLowerCase(Locale.ROOT) + "-" + UUID.randomUUID();
         Social social = new Social(provider, "id-token-" + sub, sub, sub + "@example.com");
-        when(verifiers.verify(provider, social.idToken()))
-                .thenReturn(new OAuthUserInfo(provider, sub, social.email(), nonceClaim));
+        when(verifiers.verify(eq(provider), startsWith(social.idToken())))
+                .thenReturn(new OAuthUserInfo(provider, sub, social.email(), nonceClaim, null));
         return social;
+    }
+
+    /** 이 계정으로 SDK 로그인을 한 번 더 한 것처럼 새 ID 토큰을 만든다 — ID 토큰은 한 번만 받으므로 link마다 새 토큰이 필요하다. */
+    static String freshIdToken(Social social) {
+        return social.idToken() + "." + SEQ.incrementAndGet();
     }
 
     /** 새 경로라 기본버전 1이다 — 실제 Bearer 토큰을 싣는다. */
@@ -88,9 +101,14 @@ final class LinkTestClient {
                 .contentType(MediaType.APPLICATION_JSON);
     }
 
+    /** 매번 새 ID 토큰으로 link한다(실제 앱이 로그인할 때마다 SDK가 새 토큰을 주는 것과 같다). */
     MvcTestResult link(String accessToken, Social social, String nonce) {
-        String body =
-                objectMapper.writeValueAsString(new LinkSocialRequest(social.provider(), social.idToken(), nonce));
+        return linkWithIdToken(accessToken, social.provider(), freshIdToken(social), nonce);
+    }
+
+    /** 정확히 이 ID 토큰으로 link한다 — 같은 토큰을 다시 쓰는 경우를 볼 때. */
+    MvcTestResult linkWithIdToken(String accessToken, Provider provider, String idToken, String nonce) {
+        String body = objectMapper.writeValueAsString(new LinkSocialRequest(provider, idToken, nonce));
         return linkRequest(accessToken).content(body).exchange();
     }
 

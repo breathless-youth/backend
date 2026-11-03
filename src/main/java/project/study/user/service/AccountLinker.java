@@ -13,8 +13,10 @@ import project.study.user.account.AccountData;
 import project.study.user.entity.Provider;
 import project.study.user.entity.User;
 import project.study.user.image.ProfileImageStorage;
+import project.study.user.oauth.InvalidOAuthTokenException;
 import project.study.user.oauth.OAuthUserInfo;
 import project.study.user.repository.RefreshTokenRepository;
+import project.study.user.repository.UsedSocialIdTokenRepository;
 import project.study.user.repository.UserRepository;
 
 /**
@@ -30,6 +32,7 @@ class AccountLinker {
     private final RefreshTokenRepository refreshTokenRepository;
     private final AccountData accountData;
     private final ProfileImageStorage profileImageStorage;
+    private final UsedSocialIdTokenRepository usedSocialIdTokens;
 
     /** 토큰을 받을 사용자, 새로 전환됐는지, 커밋 뒤 지울 옮기는 쪽 사진 키(없으면 null). */
     record Linked(long userId, boolean isNewUser, String discardedImageKey) {}
@@ -54,8 +57,15 @@ class AccountLinker {
         return device && ownerOf(social).filter(ownerId -> ownerId != userId).isPresent();
     }
 
+    /**
+     * idTokenHash는 검증한 ID 토큰의 SHA-256 hex다. 트랜잭션의 첫 문장으로 그 토큰을 사용 처리한다 — 이미 쓴 토큰이면 400이고, 이 트랜잭션이
+     * 롤백되면(전환 경쟁) 사용 처리도 사라져 재시도가 같은 토큰을 쓸 수 있다.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
-    Linked link(long userId, OAuthUserInfo social) {
+    Linked link(long userId, OAuthUserInfo social, String idTokenHash) {
+        if (!usedSocialIdTokens.markUsed(idTokenHash, social.expiresAt())) {
+            throw new InvalidOAuthTokenException("이미 사용한 소셜 ID 토큰입니다");
+        }
         // 잠그기 전에 소셜 ID의 주인부터 본다 — 병합이면 두 행을 ID 작은 쪽부터 잠가야 해서 옮기는 쪽을 먼저 잡을 수 없다
         Optional<Long> owner = ownerOf(social);
         if (owner.isEmpty()) {

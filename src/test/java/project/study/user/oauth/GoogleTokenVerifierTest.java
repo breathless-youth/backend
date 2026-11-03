@@ -8,6 +8,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -58,6 +60,26 @@ class GoogleTokenVerifierTest {
                         MediaType.APPLICATION_JSON));
 
         assertThat(verifier.verify("id-token").nonce()).isEqualTo("abc-nonce");
+    }
+
+    @Test
+    void 문자열로_온_exp를_만료_시각으로_담는다() {
+        server.expect(requestTo(TOKEN_INFO_URL))
+                .andRespond(withSuccess(
+                        "{\"aud\":\"my-client-id\",\"sub\":\"12345\",\"exp\":\"1700000000\"}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThat(verifier.verify("id-token").expiresAt()).isEqualTo(Instant.ofEpochSecond(1_700_000_000L));
+    }
+
+    @Test
+    void exp가_없으면_하루_뒤를_만료_시각으로_둔다() {
+        server.expect(requestTo(TOKEN_INFO_URL))
+                .andRespond(withSuccess("{\"aud\":\"my-client-id\",\"sub\":\"12345\"}", MediaType.APPLICATION_JSON));
+
+        assertThat(verifier.verify("id-token").expiresAt())
+                .isBetween(
+                        Instant.now().plus(Duration.ofHours(23)), Instant.now().plus(Duration.ofHours(25)));
     }
 
     @Test

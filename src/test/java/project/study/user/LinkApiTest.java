@@ -1,6 +1,8 @@
 package project.study.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.when;
 import static project.study.user.LinkTestClient.sha256Hex;
 
@@ -8,12 +10,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +23,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 import project.study.TestcontainersConfiguration;
 import project.study.user.LinkTestClient.Device;
 import project.study.user.LinkTestClient.Social;
@@ -189,7 +184,7 @@ class LinkApiTest {
     void 검증_실패는_400_INVALID_SOCIAL_TOKEN이다() {
         Device device = api.register();
         Social forged = new Social(Provider.GOOGLE, "forged-" + UUID.randomUUID(), null, null);
-        when(verifiers.verify(Provider.GOOGLE, forged.idToken()))
+        when(verifiers.verify(eq(Provider.GOOGLE), startsWith(forged.idToken())))
                 .thenThrow(new InvalidOAuthTokenException("구글 ID 토큰 검증에 실패했습니다"));
 
         assertInvalidSocialToken(api.link(device.accessToken(), forged, null));
@@ -263,43 +258,20 @@ class LinkApiTest {
         Social google = api.stubSocial(Provider.GOOGLE, null);
         Device a = api.register();
         Device b = api.register();
-        CountDownLatch locked = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
-        ExecutorService pool = Executors.newFixedThreadPool(3);
-        try {
-            // a의 refresh 행을 잡아 a의 전환을 "users 행은 바꿨지만 커밋 전"에 세운다. 그동안 b도 소셜 ID가 비었다고 보고 전환하다
-            // unique 인덱스에서 a를 기다린다. 풀면 a가 커밋하고, b는 위반으로 져서 새 트랜잭션의 병합 경로로 다시 한다
-            AtomicLong holderPid = new AtomicLong();
-            Future<?> holder =
-                    pool.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
-                        holderPid.set(jdbc.sql("SELECT pg_backend_pid()")
-                                .query(Long.class)
-                                .single());
-                        jdbc.sql("SELECT id FROM refresh_token WHERE user_id = :u FOR UPDATE")
-                                .param("u", a.userId())
-                                .query()
-                                .listOfRows();
-                        locked.countDown();
-                        await(release);
-                    }));
-            assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
-            Future<MvcTestResult> first = pool.submit(() -> api.link(a.accessToken(), google, null));
-            long firstPid = awaitBlockedBy(holderPid.get()); // a가 holder를 기다린다
-            Future<MvcTestResult> second = pool.submit(() -> api.link(b.accessToken(), google, null));
-            awaitBlockedBy(firstPid); // b가 unique 인덱스에서 a를 기다린다
-            release.countDown();
-            holder.get(10, TimeUnit.SECONDS);
 
-            LinkResponse converted = api.okBody(first.get(10, TimeUnit.SECONDS));
-            LinkResponse merged = api.okBody(second.get(10, TimeUnit.SECONDS));
-            assertThat(converted.isNewUser()).isTrue();
-            assertThat(merged.isNewUser()).isFalse();
-            assertThat(api.subOf(converted.accessToken())).isEqualTo(a.userId());
-            assertThat(api.subOf(merged.accessToken())).isEqualTo(a.userId());
-        } finally {
-            release.countDown();
-            pool.shutdownNow();
-        }
+        ConversionRace.Results results = ConversionRace.run(
+                transactionManager,
+                jdbc,
+                a.userId(),
+                () -> api.link(a.accessToken(), google, null),
+                () -> api.link(b.accessToken(), google, null));
+
+        LinkResponse converted = api.okBody(results.first());
+        LinkResponse merged = api.okBody(results.second());
+        assertThat(converted.isNewUser()).isTrue();
+        assertThat(merged.isNewUser()).isFalse();
+        assertThat(api.subOf(converted.accessToken())).isEqualTo(a.userId());
+        assertThat(api.subOf(merged.accessToken())).isEqualTo(a.userId());
         assertThat(jdbc.sql("SELECT id FROM users WHERE provider = 'GOOGLE' AND provider_user_id = :s")
                         .param("s", google.sub())
                         .query(Long.class)
@@ -314,32 +286,6 @@ class LinkApiTest {
                 .bodyJson()
                 .extractingPath("$.code")
                 .isEqualTo("INVALID_SOCIAL_TOKEN");
-    }
-
-    // blocker를 기다리는 백엔드가 생길 때까지 기다려 그 pid를 돌려준다. 이 테스트가 잡은 잠금에서 시작한 사슬만 보므로, 다른 작업의
-    // 잠금 대기가 있어도 일찍 풀지 않는다
-    private long awaitBlockedBy(long blockerPid) throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (true) {
-            List<Long> blocked = jdbc.sql(
-                            "SELECT pid FROM pg_stat_activity WHERE :blocker = ANY(pg_blocking_pids(pid))")
-                    .param("blocker", (int) blockerPid)
-                    .query(Long.class)
-                    .list();
-            if (!blocked.isEmpty()) {
-                return blocked.get(0);
-            }
-            assertThat(System.nanoTime()).as("pid %d를 기다리는 백엔드", blockerPid).isLessThan(deadline);
-            Thread.sleep(20);
-        }
-    }
-
-    private static void await(CountDownLatch latch) {
-        try {
-            latch.await(10, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     private Map<String, Object> userRow(long userId) {

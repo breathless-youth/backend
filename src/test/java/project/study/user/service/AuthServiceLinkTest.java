@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
@@ -37,6 +39,7 @@ import project.study.user.oauth.InvalidOAuthTokenException;
 import project.study.user.oauth.OAuthUserInfo;
 import project.study.user.oauth.SocialTokenVerifiers;
 import project.study.user.repository.RefreshTokenRepository;
+import project.study.user.repository.UsedSocialIdTokenRepository;
 import project.study.user.repository.UserRepository;
 
 /** link의 트랜잭션 경계·재시도·잠금 순서·방 나가기 시점. DB가 실제로 어떻게 움직이는지는 LinkApiTest·LinkRoomApiTest가 본다. */
@@ -67,6 +70,9 @@ class AuthServiceLinkTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    @Mock
+    private UsedSocialIdTokenRepository usedSocialIdTokens;
+
     private final JwtUtil jwtUtil = new JwtUtil("test-secret-key-that-is-at-least-32-chars-long", 3_600_000L);
 
     private AuthService authService;
@@ -80,10 +86,12 @@ class AuthServiceLinkTest {
                 verifiers,
                 currentRoomLeaver,
                 transactionManager,
-                new AccountLinker(userRepository, refreshTokenRepository, accountData, profileImageStorage));
+                new AccountLinker(
+                        userRepository, refreshTokenRepository, accountData, profileImageStorage, usedSocialIdTokens));
         lenient()
                 .when(verifiers.verify(Provider.GOOGLE, "id-token"))
-                .thenReturn(new OAuthUserInfo(Provider.GOOGLE, "g-sub", "a@example.com", null));
+                .thenReturn(new OAuthUserInfo(Provider.GOOGLE, "g-sub", "a@example.com", null, null));
+        lenient().when(usedSocialIdTokens.markUsed(anyString(), any())).thenReturn(true);
     }
 
     @Test
@@ -137,11 +145,42 @@ class AuthServiceLinkTest {
     @Test
     void nonce가_틀리면_방에서_빼지_않고_트랜잭션도_열지_않는다() {
         when(verifiers.verify(Provider.APPLE, "apple-token"))
-                .thenReturn(new OAuthUserInfo(Provider.APPLE, "a-sub", null, "not-the-hash"));
+                .thenReturn(new OAuthUserInfo(Provider.APPLE, "a-sub", null, "not-the-hash", null));
 
         assertThatThrownBy(() -> authService.link(1L, new LinkSocialRequest(Provider.APPLE, "apple-token", "raw")))
                 .isInstanceOf(InvalidOAuthTokenException.class);
         verifyNoInteractions(currentRoomLeaver, transactionManager, userRepository);
+    }
+
+    @Test
+    void 이미_쓴_ID_토큰이면_트랜잭션_첫_문장에서_400이고_잠그지도_바꾸지도_않는다() {
+        givenDevice(1L, null);
+        givenOwner(Optional.empty());
+        when(usedSocialIdTokens.markUsed(eq(TokenIssuer.sha256("id-token")), any()))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> authService.link(1L, REQUEST)).isInstanceOf(InvalidOAuthTokenException.class);
+        verify(userRepository, never()).findByIdForUpdate(anyLong());
+        verify(userRepository, never()).flush();
+        verify(transactionManager).rollback(any());
+        verifyNoInteractions(accountData, refreshTokenRepository);
+    }
+
+    @Test
+    void 전환_경쟁_재시도도_같은_토큰을_다시_사용_처리한다() {
+        givenDevice(1L, null);
+        when(userRepository.findIdByProviderAndProviderUserId(Provider.GOOGLE, "g-sub"))
+                .thenReturn(Optional.empty(), Optional.empty(), Optional.of(2L));
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(user(2L, Provider.GOOGLE)));
+        doThrow(new DataIntegrityViolationException("duplicate key"))
+                .doNothing()
+                .when(userRepository)
+                .flush();
+
+        authService.link(1L, REQUEST);
+
+        // 첫 시도의 사용 처리는 그 트랜잭션과 함께 롤백되므로 재시도 트랜잭션에서 다시 한다
+        verify(usedSocialIdTokens, times(2)).markUsed(eq(TokenIssuer.sha256("id-token")), any());
     }
 
     @Test

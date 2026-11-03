@@ -1,5 +1,6 @@
 package project.study.user.oauth;
 
+import java.time.Instant;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -37,8 +38,14 @@ public class GoogleTokenVerifier implements OAuthTokenVerifier {
                 || !properties.clientIds().contains(tokenInfo.aud())) {
             throw new InvalidOAuthTokenException("구글 ID 토큰의 대상(aud)이 일치하지 않습니다");
         }
-        return new OAuthUserInfo(Provider.GOOGLE, tokenInfo.sub(), tokenInfo.email(), tokenInfo.nonce());
+        return new OAuthUserInfo(
+                Provider.GOOGLE, tokenInfo.sub(), tokenInfo.email(), tokenInfo.nonce(), tokenInfo.expiresAt());
     }
 
-    record GoogleTokenInfo(String aud, String sub, String email, String nonce) {}
+    /** exp는 epoch 초다(구글은 "1700000000"처럼 문자열로 준다). 없으면 null. */
+    record GoogleTokenInfo(String aud, String sub, String email, String nonce, Long exp) {
+        Instant expiresAt() {
+            return exp == null ? null : Instant.ofEpochSecond(exp);
+        }
+    }
 }

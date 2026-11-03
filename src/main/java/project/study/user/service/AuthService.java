@@ -150,23 +150,26 @@ public class AuthService {
      * <p>트랜잭션이 아니다. 프로바이더 검증(HTTP)과 방 나가기(자체 트랜잭션·브로드캐스트)는 DB 트랜잭션 밖에서 먼저 하고, 잠금·전환·병합·발급만
      * 한 트랜잭션으로 묶는다. 병합으로 버려진 프로필 사진 파일은 커밋 뒤에 지운다.
      *
+     * <p>ID 토큰은 한 번만 받는다 — 같은 토큰이 다시 오면 400 {@code INVALID_SOCIAL_TOKEN}이다({@link AccountLinker#link}).
+     *
      * <p>방 나가기는 병합 규칙이라 병합이 될 때만 한다. 전환은 userId가 그대로라 참가가 그대로 맞고, 409·404는 부작용이 없어야 한다.
      * 미리 보기와 실제가 엇갈려 방에 남은 채 병합되면 병합 처리기가 그 참가를 닫는다(MEMBER_LEFT 없이).
      */
     public LinkResponse link(Long userId, LinkSocialRequest request) {
         OAuthUserInfo social = socialTokenVerifiers.verify(request.provider(), request.idToken());
         SocialNonce.check(social, request.nonce());
+        String idTokenHash = TokenIssuer.sha256(request.idToken());
         if (accountLinker.mergeAhead(userId, social)) {
             currentRoomLeaver.leave(userId);
         }
         LinkOutcome outcome;
         try {
-            outcome = linkInNewTransaction(userId, social);
+            outcome = linkInNewTransaction(userId, social, idTokenHash);
         } catch (ConversionRaceLostException e) {
             // 다른 기기가 같은 소셜 ID로 먼저 전환했다 — 그 사용자가 이제 있으니 새 트랜잭션에서 병합 경로로 한 번 더 한다
             // (제약 위반으로 abort된 트랜잭션 안에서는 다시 할 수 없다). 이번엔 병합이라 방에서 먼저 뺀다. 또 지면 그대로 실패시킨다
             currentRoomLeaver.leave(userId);
-            outcome = linkInNewTransaction(userId, social);
+            outcome = linkInNewTransaction(userId, social, idTokenHash);
         }
         accountLinker.deleteImageQuietly(outcome.linked().discardedImageKey());
         TokenPair tokens = outcome.tokens();
@@ -175,9 +178,9 @@ public class AuthService {
     }
 
     // 전환·병합과 발급을 한 트랜잭션으로 — 발급은 잠금 아래에서, 남는 쪽(병합) 또는 전환된 사용자에게 한다
-    private LinkOutcome linkInNewTransaction(Long userId, OAuthUserInfo social) {
+    private LinkOutcome linkInNewTransaction(Long userId, OAuthUserInfo social, String idTokenHash) {
         return linkTransaction.execute(status -> {
-            Linked linked = accountLinker.link(userId, social);
+            Linked linked = accountLinker.link(userId, social, idTokenHash);
             return new LinkOutcome(linked, tokenIssuer.issue(linked.userId()));
         });
     }

@@ -55,8 +55,15 @@ public class AppleTokenVerifier implements OAuthTokenVerifier {
                 throw new InvalidOAuthTokenException("애플 ID 토큰의 대상(aud)이 일치하지 않습니다");
             }
 
+            Instant expiresAt = claims.getExpiration() == null
+                    ? null
+                    : claims.getExpiration().toInstant();
             return new OAuthUserInfo(
-                    Provider.APPLE, claims.getSubject(), (String) claims.get("email"), (String) claims.get("nonce"));
+                    Provider.APPLE,
+                    claims.getSubject(),
+                    (String) claims.get("email"),
+                    (String) claims.get("nonce"),
+                    expiresAt);
         } catch (InvalidOAuthTokenException e) {
             throw e;
         } catch (Exception e) {
