@@ -95,6 +95,11 @@ class GroupRepositoriesTest {
         assertThat(groups.findLive(id)).isEmpty();
         assertThat(groups.lockLive(id)).isEmpty();
         assertThat(groups.findLiveByIds(List.of(id))).isEmpty();
+        // 지운 그룹의 이름이 필요한 곳(기한 지난 신청의 만료 푸시)은 삭제 표시된 그룹까지 읽는다
+        assertThat(groups.findIncludingDeletedByIds(List.of(id)))
+                .extracting(GroupRow::id)
+                .containsExactly(id);
+        assertThat(groups.findIncludingDeletedByIds(List.of())).isEmpty();
         assertThat(groups.findLiveByInviteCode(code)).isEmpty();
         assertThat(groups.inviteCodeTaken(code)).isFalse();
         assertThat(groups.countOwnedLive(owner)).isZero();

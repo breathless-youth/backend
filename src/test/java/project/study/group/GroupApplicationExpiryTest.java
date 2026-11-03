@@ -9,6 +9,7 @@ import static project.study.group.support.GroupDeskTestConfig.NOW;
 import static project.study.group.support.PushAssert.noPush;
 import static project.study.group.support.PushAssert.pushedOnceTo;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -21,6 +22,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import project.study.TestcontainersConfiguration;
+import project.study.group.repository.GroupApplicationRepository;
 import project.study.group.scheduler.GroupApplicationExpiryScheduler;
 import project.study.group.service.GroupApplicationExpiry;
 import project.study.group.support.GroupDeskTestConfig;
@@ -43,6 +45,9 @@ class GroupApplicationExpiryTest {
     private JdbcClient jdbc;
 
     @Autowired
+    private GroupApplicationRepository applications;
+
+    @Autowired
     private ApplicationContext context;
 
     @MockitoBean
@@ -54,6 +59,11 @@ class GroupApplicationExpiryTest {
 
     @BeforeEach
     void setUp() {
+        // 앞선 테스트가 남긴 기한 지난 신청을 푸시 없이 치운다 — expireDue는 DB 전체를 보므로 남아 있으면 건수·푸시 단언이 어긋난다
+        jdbc.sql("update study_group_application set status = 'EXPIRED' "
+                        + "where status = 'PENDING' and expires_at <= :now")
+                .param("now", Timestamp.from(NOW))
+                .update();
         probe = new GroupProbe(jdbc);
         group = probe.insertGroup(probe.insertUser(), "PUBLIC");
         user = probe.insertUser();
@@ -132,7 +142,7 @@ class GroupApplicationExpiryTest {
     }
 
     @Test
-    void 사라진_그룹의_남은_신청도_조용히_만료로_닫는다() {
+    void 사라진_그룹의_기한_지난_신청도_EXPIRED로_닫고_만료_푸시를_보낸다() {
         long gone = probe.insertGroup(probe.insertUser(), "PUBLIC");
         long id = probe.insertApplication(gone, user, "PENDING", NOW.minusSeconds(30));
         probe.softDeleteGroup(gone);
@@ -140,7 +150,25 @@ class GroupApplicationExpiryTest {
         assertThat(expiry.expireDue(NOW)).isEqualTo(1);
 
         assertThat(statusOf(id)).isEqualTo("EXPIRED");
-        noPush(pushSender);
+        PushMessage message = pushedOnceTo(pushSender, user);
+        assertThat(message.type()).isEqualTo("group_application_expired");
+        assertThat(message.body()).isEqualTo(probe.group(gone).orElseThrow().name() + " 신청은 답이 없어 취소됐어요");
+    }
+
+    @Test
+    void 그룹이_사라질_때_닫히지_않은_기한_지난_신청은_만료_작업이_EXPIRED로_닫고_만료_푸시를_보낸다() {
+        long gone = probe.insertGroup(probe.insertUser(), "PUBLIC");
+        long lapsed = probe.insertApplication(gone, user, "PENDING", NOW.minusSeconds(30));
+        long waiting = probe.insertApplication(gone, probe.insertUser(), "PENDING", FUTURE);
+
+        // 그룹 삭제 단계가 하는 일 — 답을 기다리던 신청만 GROUP_DELETED로 닫는다
+        assertThat(applications.closePendingOfGroup(gone, NOW)).hasSize(1);
+        probe.softDeleteGroup(gone);
+        assertThat(expiry.expireDue(NOW)).isEqualTo(1);
+
+        assertThat(statusOf(lapsed)).isEqualTo("EXPIRED");
+        assertThat(statusOf(waiting)).isEqualTo("GROUP_DELETED");
+        assertThat(pushedOnceTo(pushSender, user).type()).isEqualTo("group_application_expired");
     }
 
     @Test

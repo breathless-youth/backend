@@ -230,13 +230,14 @@ public class GroupApplicationRepository {
     }
 
     /**
-     * 그룹이 사라질 때 이 그룹에 남은 {@code PENDING}을 모두 GROUP_DELETED로 닫고, 바꾼 신청의 신청자 ID를 돌려준다. 기한이 지났지만
-     * 만료 작업이 아직 안 돈 신청도 닫아 그룹 안에 열린 신청이 남지 않게 한다 — 그 신청자도 목록에 들어 있다.
+     * 그룹이 사라질 때 이 그룹에서 <b>기한 안에서 답을 기다리던</b> 신청만 GROUP_DELETED로 닫고, 바꾼 신청의 신청자 ID를 돌려준다.
+     * 기한이 지났지만 만료 작업이 아직 안 닫은 {@code PENDING}은 이미 만료된 신청이라 건드리지도 돌려주지도 않는다 — 그 신청은 만료 작업이
+     * EXPIRED로 닫고 신청자는 "답이 없어 취소됐어요" 푸시를 받는다(사라진 그룹의 이름도 읽는다). 만료 작업과 같은 행을 두고 겹치지 않는다.
      */
     public List<Long> closePendingOfGroup(long groupId, Instant now) {
         return jdbc.sql("""
                         UPDATE study_group_application SET status = 'GROUP_DELETED', answered_at = :now
-                         WHERE group_id = :groupId AND status = 'PENDING'
+                         WHERE group_id = :groupId AND status = 'PENDING' AND expires_at > :now
                          RETURNING user_id""")
                 .param("now", Rows.ts(now))
                 .param("groupId", groupId)

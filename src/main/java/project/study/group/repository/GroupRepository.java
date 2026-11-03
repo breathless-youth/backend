@@ -99,6 +99,20 @@ public class GroupRepository {
                 .list();
     }
 
+    /**
+     * 삭제된 그룹까지 읽는다 — 이미 사라진 그룹에 남은 기한 지난 신청의 만료 푸시처럼 그룹 이름만 필요한 곳이 쓴다. 다른 읽기는 살아 있는
+     * 그룹만 본다.
+     */
+    public List<GroupRow> findIncludingDeletedByIds(Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("SELECT " + COLUMNS + " FROM study_group WHERE id IN (:ids) ORDER BY id")
+                .param("ids", ids)
+                .query(ROW)
+                .list();
+    }
+
     /** 이름·시험·목표·소개 전체 교체. 공개 여부는 바꾸지 않는다. */
     public int update(long id, String name, StudyCategory category, String description, Instant now) {
         return jdbc.sql("""

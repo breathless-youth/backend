@@ -134,7 +134,7 @@ class GroupApplicationRepositoryTest {
     }
 
     @Test
-    void closePendingOfGroup은_답을_기다리던_신청을_GROUP_DELETED로_닫고_사람_ID를_돌려준다() {
+    void closePendingOfGroup은_기한_안에서_답을_기다리던_신청만_GROUP_DELETED로_닫고_사람_ID를_돌려준다() {
         long a = probe.insertUser();
         long b = probe.insertUser();
         long lapsed = probe.insertUser();
@@ -147,14 +147,35 @@ class GroupApplicationRepositoryTest {
 
         List<Long> closed = applications.closePendingOfGroup(group, NOW);
 
-        assertThat(closed).containsExactlyInAnyOrder(a, b, lapsed);
-        for (long id : List.of(idA, idB, idLapsed)) {
+        assertThat(closed).containsExactlyInAnyOrder(a, b);
+        for (long id : List.of(idA, idB)) {
             assertThat(probe.application(id).orElseThrow().status()).isEqualTo("GROUP_DELETED");
             assertThat(probe.application(id).orElseThrow().answeredAt()).isEqualTo(NOW);
         }
+        // 기한이 지난 신청은 닫지도 돌려주지도 않는다 — 이미 만료된 신청이라 만료 푸시를 받아야 한다
+        assertThat(probe.application(idLapsed).orElseThrow().status()).isEqualTo("PENDING");
         assertThat(probe.application(declined).orElseThrow().status()).isEqualTo("DECLINED");
         assertThat(probe.application(otherPending).orElseThrow().status()).isEqualTo("PENDING");
         // 다시 불러도 바꿀 것이 없다
         assertThat(applications.closePendingOfGroup(group, NOW)).isEmpty();
+    }
+
+    @Test
+    void closePendingOfGroup은_기한이_지난_신청을_건드리지_않는다_그건_만료_작업_몫이다() {
+        long lapsed = probe.insertUser();
+        long idLapsed = probe.insertApplication(group, lapsed, "PENDING", PAST);
+        // 기한이 딱 지금인 신청도 이미 지난 것이다
+        long exact = probe.insertUser();
+        long idExact = probe.insertApplication(group, exact, "PENDING", NOW);
+
+        assertThat(applications.closePendingOfGroup(group, NOW)).isEmpty();
+
+        for (long id : List.of(idLapsed, idExact)) {
+            assertThat(probe.application(id).orElseThrow().status()).isEqualTo("PENDING");
+            assertThat(probe.application(id).orElseThrow().answeredAt()).isNull();
+        }
+        // 이 행들은 만료 작업이 EXPIRED로 닫는다
+        assertThat(applications.expireStale(group, lapsed, NOW)).isEqualTo(1);
+        assertThat(probe.application(idLapsed).orElseThrow().status()).isEqualTo("EXPIRED");
     }
 }
