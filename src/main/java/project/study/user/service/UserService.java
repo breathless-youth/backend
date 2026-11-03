@@ -76,6 +76,17 @@ public class UserService {
         throw new IllegalStateException("자동 닉네임 발급에 실패했습니다");
     }
 
+    /**
+     * 사용자가 있는지 확인한다 — 없으면 404 {@code USER_NOT_FOUND}. users를 FK로 가리키지 않는 테이블에 쓰기 전에 부른다: 탈퇴 뒤 남은 옛
+     * access 토큰의 쓰기가 지워진 사람의 행을 다시 만들지 않게 한다 (ADR-0041).
+     */
+    @Transactional(readOnly = true)
+    public void requireExists(Long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new NotFoundException(ErrorCode.USER_NOT_FOUND, "존재하지 않는 사용자입니다");
+        }
+    }
+
     @Transactional(readOnly = true)
     public ProfileResponse getProfile(Long userId) {
         User user = findUser(userId);

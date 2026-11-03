@@ -1,6 +1,8 @@
 package project.study.common.exception;
 
+import java.sql.SQLException;
 import org.springframework.beans.TypeMismatchException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +16,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final String FOREIGN_KEY_VIOLATION = "23503";
+    private static final String MISSING_USER_DETAIL = "is not present in table \"users\"";
 
     @ExceptionHandler(BadRequestException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -57,6 +62,39 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleUnreadable(HttpMessageNotReadableException e) {
         return new ErrorResponse(ErrorCode.BAD_REQUEST, "요청 본문을 읽을 수 없습니다");
+    }
+
+    /**
+     * 지워진 사용자를 가리키는 쓰기의 FK 위반은 404 {@code USER_NOT_FOUND}다 — 탈퇴·병합 뒤 최대 30분 남는 옛 access 토큰(ADR-0041)으로 온
+     * 쓰기라 서버 오류가 아니다. 그 밖의 무결성 위반(다른 FK, unique, users 행을 지우다 걸린 참조)은 지금처럼 500이다.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException e) {
+        if (referencesMissingUser(e)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorResponse(ErrorCode.USER_NOT_FOUND, "존재하지 않는 사용자입니다"));
+        }
+        return handleUnexpected(e);
+    }
+
+    /**
+     * PostgreSQL 외래 키 위반(SQLState 23503) 중 "넣으려는 행이 가리키는 users 행이 없다"인지. 드라이버(pgjdbc)는 런타임 의존성이라 표준
+     * SQLException의 상태와, pgjdbc가 메시지에 붙이는 Detail({@code Key (user_id)=(5) is not present in table "users".})로 가른다. 서버
+     * 메시지 언어가 바뀌어 문구가 달라지면 지금처럼 500으로 남을 뿐이다.
+     */
+    private static boolean referencesMissingUser(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof SQLException sql) {
+                for (SQLException s = sql; s != null; s = s.getNextException()) {
+                    if (FOREIGN_KEY_VIOLATION.equals(s.getSQLState())
+                            && s.getMessage() != null
+                            && s.getMessage().contains(MISSING_USER_DETAIL)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**
