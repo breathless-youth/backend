@@ -28,10 +28,8 @@ public class KakaoTokenVerifier implements OAuthTokenVerifier {
     public KakaoTokenVerifier(
             @Qualifier(SocialProviderHttpConfig.REST_CLIENT) RestClient restClient, OAuthProperties properties) {
         this.restClient = restClient;
+        // 비어 있으면 OAuthConfigCheck가 기동 뒤 로그·Sentry에 남긴다
         this.properties = properties.kakao();
-        if (this.properties.appKeys().isEmpty()) {
-            log.warn("oauth.kakao.app-keys(OAUTH_KAKAO_APP_KEYS)가 비어 있어 카카오 로그인을 모두 거부한다");
-        }
     }
 
     @Override

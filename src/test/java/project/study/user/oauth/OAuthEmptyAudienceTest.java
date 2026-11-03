@@ -8,11 +8,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -20,10 +17,9 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 /**
- * 운영은 로그인 앱보다 그룹 릴리즈가 먼저 나가므로 OAUTH_* 없이도 떠야 한다. 허용 aud 목록이 비면 그 프로바이더 토큰은 모두 400이고, 기동 때
- * 프로바이더마다 경고를 한 번 남긴다.
+ * 운영은 로그인 앱보다 그룹 릴리즈가 먼저 나가므로 OAUTH_* 없이도 떠야 한다. 허용 aud 목록이 비면 그 프로바이더 토큰은 모두 400이다(빈 값
+ * 경고는 {@link OAuthConfigCheckTest}).
  */
-@ExtendWith(OutputCaptureExtension.class)
 class OAuthEmptyAudienceTest {
 
     // application-prod.yaml의 ${OAUTH_GOOGLE_CLIENT_IDS:} 등이 비었을 때와 같은 값
@@ -36,7 +32,7 @@ class OAuthEmptyAudienceTest {
                     "oauth.apple.services-id=");
 
     @Test
-    void 빈_값이면_빈_목록으로_묶이고_기동하며_프로바이더마다_경고를_남긴다(CapturedOutput output) {
+    void 빈_값이면_빈_목록으로_묶이고_기동한다() {
         runner.run(context -> {
             assertThat(context).hasNotFailed();
             OAuthProperties properties = context.getBean(OAuthProperties.class);
@@ -44,10 +40,6 @@ class OAuthEmptyAudienceTest {
             assertThat(properties.kakao().appKeys()).isEmpty();
             assertThat(properties.apple().audiences()).isEmpty();
         });
-        assertThat(output)
-                .contains("oauth.google.client-ids")
-                .contains("oauth.kakao.app-keys")
-                .contains("oauth.apple.bundle-id");
     }
 
     @Test

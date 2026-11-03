@@ -28,10 +28,8 @@ public class GoogleTokenVerifier implements OAuthTokenVerifier {
     public GoogleTokenVerifier(
             @Qualifier(SocialProviderHttpConfig.REST_CLIENT) RestClient restClient, OAuthProperties properties) {
         this.restClient = restClient;
+        // 비어 있으면 OAuthConfigCheck가 기동 뒤 로그·Sentry에 남긴다
         this.properties = properties.google();
-        if (this.properties.clientIds().isEmpty()) {
-            log.warn("oauth.google.client-ids(OAUTH_GOOGLE_CLIENT_IDS)가 비어 있어 구글 로그인을 모두 거부한다");
-        }
     }
 
     @Override

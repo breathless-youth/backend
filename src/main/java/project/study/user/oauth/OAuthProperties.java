@@ -8,7 +8,8 @@ import org.springframework.util.StringUtils;
 
 /**
  * 소셜 로그인 설정. 허용 aud 목록이 비어도 기동한다 — 운영은 로그인 앱보다 그룹 릴리즈가 먼저 나가 OAUTH_* 값이 없을 수 있다. 빈 목록인
- * 프로바이더의 토큰은 모두 400이고, 검증기가 기동 때 경고를 남긴다. 섹션이 통째로 없어도 빈 값으로 채운다.
+ * 프로바이더의 토큰은 모두 400이고, {@link OAuthConfigCheck}가 기동 뒤 로그와 Sentry에 경고를 남긴다. 섹션이 통째로 없어도 빈 값으로
+ * 채운다.
  */
 @ConfigurationProperties("oauth")
 public record OAuthProperties(Google google, Kakao kakao, Apple apple) {
