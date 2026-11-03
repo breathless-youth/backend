@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import project.study.common.category.StudyCategory;
+import project.study.common.tx.AfterCommit;
 import project.study.push.dto.PushMessage;
 import project.study.push.service.PushSender;
 
@@ -155,6 +156,25 @@ class GroupNotificationsTest {
         verifyNoInteractions(pushSender);
         TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
         sentTo(List.of(9L));
+    }
+
+    @Test
+    void 커밋_뒤_작업_안에서_부른_알림도_나간다() {
+        TransactionSynchronizationManager.initSynchronization();
+
+        // 그룹장 넘기기처럼 커밋 뒤 작업 하나가 알림과 다른 발송을 함께 부르는 경우
+        AfterCommit.run(() -> {
+            notifications.ownerTransferred(8L, 10L, "새벽 공시반");
+            notifications.memberKicked(9L, "새벽 공시반");
+        });
+        verifyNoInteractions(pushSender);
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+
+        ArgumentCaptor<PushMessage> message = ArgumentCaptor.forClass(PushMessage.class);
+        verify(pushSender, org.mockito.Mockito.times(2)).send(any(), message.capture());
+        assertThat(message.getAllValues())
+                .extracting(PushMessage::type)
+                .containsExactly("group_owner_transferred", "group_member_kicked");
     }
 
     @Test

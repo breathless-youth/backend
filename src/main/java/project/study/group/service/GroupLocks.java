@@ -12,13 +12,26 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>락 순서(바꾸지 않는다): ① {@code study_group} 행 → <b>② 이 락</b> → ③ 룸의 사용자 락({@code RoomRepository.lockUser}) → ④ {@code
  * rooms} 행 → ⑤ {@code room_participations} 행. 앞 단계는 건너뛸 수 있어도 거꾸로 잡지 않는다.
  *
- * <p>키는 {@code 2^41 + userId}다. 룸의 사용자 락(userId 그대로)·초대코드 락(2^40 + hash)과 같은 키 공간에서 부딪히지 않는다.
+ * <p>advisory lock 키 공간은 모든 도메인이 DB 하나에서 나눠 쓴다. 지금 쓰는 키(코드에서 {@code pg_advisory}를 찾아 확인):
+ *
+ * <ul>
+ *   <li>룸 사용자 락({@code RoomRepository.lockUser}): {@code userId} 그대로
+ *   <li>룸 초대코드 락({@code RoomRepository.lockInviteCode}): {@code 2^40 + hashtext(code)} — {@code hashtext}가 32비트 정수라
+ *       {@code 2^40 ± 2^31}
+ *   <li>수동 기록 락({@code ManualStudySessionLockRepository}): {@code 2^41 + userId}
+ *   <li>과목 락({@code StudySubjectLockRepository}): {@code 9,724,000,000 + userId}
+ *   <li>이 락: {@code 2^42 + userId}
+ * </ul>
+ *
+ * <p>2^41은 수동 기록 락이 이미 쓰고 있어 같은 사용자의 수동 기록 저장과 그룹 만들기가 서로를 기다리게 되므로 2^42를 쓴다. 사용자 ID는
+ * {@code BIGSERIAL}이라 2^40(약 1.1조)에 한참 못 미친다. 그러면 위 다른 키는 모두 {@code 2^41 + 2^40 = 3 × 2^40} 아래에 있고, 이 락은
+ * {@code 2^42 = 4 × 2^40} 이상이라 어느 것과도 겹치지 않는다. 새 advisory 락을 만들면 이 목록에 적고 2^43 이상에서 고른다.
  */
 @Component
 @RequiredArgsConstructor
 public class GroupLocks {
 
-    private static final long USER_LOCK_OFFSET = 1L << 41;
+    private static final long USER_LOCK_OFFSET = 1L << 42;
 
     private final JdbcClient jdbc;
 

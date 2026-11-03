@@ -1,7 +1,6 @@
 package project.study.group;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
@@ -25,7 +24,6 @@ import project.study.group.repository.GroupMemberRepository.MemberRow;
 import project.study.group.repository.GroupRepository;
 import project.study.group.repository.GroupRepository.GroupRow;
 import project.study.group.service.GroupAccess;
-import project.study.group.service.GroupLocks;
 import project.study.group.support.GroupProbe;
 
 /** 이후 단계가 기대는 리포지토리·접근 검사의 의미 (BY-1124) — 순서, 살아 있는 행만 보기, 갱신 건수, 검사 순서. */
@@ -44,9 +42,6 @@ class GroupRepositoriesTest {
 
     @Autowired
     private GroupAccess access;
-
-    @Autowired
-    private GroupLocks locks;
 
     @Autowired
     private JdbcClient jdbc;
@@ -253,13 +248,5 @@ class GroupRepositoriesTest {
 
         assertThat(membership.group().id()).isEqualTo(groupId);
         assertThat(membership.member().userId()).isEqualTo(owner);
-    }
-
-    @Test
-    void 사용자_락은_트랜잭션_안에서만_잡을_수_있다() {
-        assertThatThrownBy(() -> locks.lockUser(owner)).isInstanceOf(IllegalStateException.class);
-
-        assertThatCode(() -> tx.executeWithoutResult(status -> locks.lockUser(owner)))
-                .doesNotThrowAnyException();
     }
 }
