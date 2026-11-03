@@ -79,10 +79,10 @@ app:
     meta-install-referrer-key: ${META_INSTALL_REFERRER_KEY:}
   # 그룹 신고 운영 알림 채널 (BY-1124). 봇 토큰은 일일 지표 리포트와 같은 metrics.slack.bot-token을 쓰고 채널만 다르다 —
   # 봇을 이 채널에도 초대해야 한다. 값이 없으면 기동 로그에 경고 한 줄을 남기고 알림만 꺼진다(신고 기록은 DB에 남는다).
-  # 채널은 팀이 정해 알려 준다 — 출시 전 확인 목록. ECS 태스크 정의가 SSM 값을 GROUP_REPORT_SLACK_CHANNEL_ID로 주입한다
+  # 채널 ID는 비밀이 아니라 기본값으로 둔다(팀이 정한 채널). 바꿀 때만 GROUP_REPORT_SLACK_CHANNEL_ID로 덮어쓴다
   group:
     report:
-      slack-channel-id: ${GROUP_REPORT_SLACK_CHANNEL_ID:}
+      slack-channel-id: ${GROUP_REPORT_SLACK_CHANNEL_ID:C0CE18MJFMM}
   ws:
     stats-logging-period-ms: 1800000   # 30분 (기본)
   cors:
