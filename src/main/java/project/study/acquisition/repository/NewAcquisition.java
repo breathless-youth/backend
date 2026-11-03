@@ -10,5 +10,6 @@ public record NewAcquisition(
         InstallPlatform platform,
         String installReferrer,
         String deepLinkAd,
+        String googleDeepLinkAd,
         Instant capturedAt,
         Attribution attribution) {}

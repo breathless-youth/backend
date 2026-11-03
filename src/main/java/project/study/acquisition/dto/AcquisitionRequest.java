@@ -16,8 +16,15 @@ public record AcquisitionRequest(
         @Size(max = 4096)
         String installReferrer,
 
-        @Schema(description = "딥링크로 들어온 광고 라벨(iOS 등). 없으면 null 또는 빈 문자열", example = "ios_v2") @Size(max = 64)
+        @Schema(description = "메타 지연 딥링크로 들어온 광고 라벨(iOS 등). 없으면 null 또는 빈 문자열", example = "ios_v2") @Size(max = 64)
         String deepLinkAd,
+
+        @Schema(
+                description = "구글 광고 그룹 지연 딥링크의 라벨(fm_ad). 형식은 ^g_[a-z0-9_]{1,30}$이고 없으면 null 또는 빈 문자열. "
+                        + "형식이 틀려도 400이 아니라 GOOGLE_AD로 저장하고 응답 label만 null이다",
+                example = "g_planner")
+        @Size(max = 64)
+        String googleDeepLinkAd,
 
         @Schema(description = "앱이 설치 정보를 읽은 시각(오프셋 포함 ISO-8601)", example = "2026-10-29T10:12:00+09:00") @NotNull
         OffsetDateTime capturedAt) {}
