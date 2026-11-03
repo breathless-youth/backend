@@ -31,6 +31,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import project.study.TestcontainersConfiguration;
 import project.study.group.scheduler.GroupStartAlertScheduler;
 import project.study.group.service.GroupStartAlerts;
+import project.study.group.support.BlockProbe;
 import project.study.group.support.GroupDeskTestConfig;
 import project.study.group.support.GroupProbe;
 import project.study.group.support.StartAlertFixture;
@@ -180,6 +181,24 @@ class GroupStartAlertsTest {
 
         // 받는 사람은 한 그룹에 한 번에 묶여 나간다 — 자리 있는 세 사람은 그 묶음에 없다
         assertThat(sent(1)).extracting(Sent::receivers).containsExactly(List.of(outside, inOtherGroupRoom, left));
+    }
+
+    @Test
+    void 시작한_사람과_어느_쪽이든_차단한_사이는_받지_않는다() {
+        long blockedByStarter = member(group);
+        long blockerOfStarter = member(group);
+        long receiver = member(group);
+        BlockProbe blocks = new BlockProbe(jdbc);
+        blocks.insertBlock(starter, blockedByStarter, NOW);
+        blocks.insertBlock(blockerOfStarter, starter, NOW);
+        firstCheckpoint(starter, SESSION_START);
+
+        assertThat(alerts.process(NOW)).isEqualTo(1);
+
+        assertThat(sent(1)).extracting(Sent::receivers).containsExactly(List.of(receiver));
+        // 걸러진 사람은 "1시간에 한 번" 기록도 쓰지 않는다 — 기록을 잡기 전에 거른다
+        assertThat(fixture.lastSentAt(blockedByStarter, group)).isNull();
+        assertThat(fixture.lastSentAt(blockerOfStarter, group)).isNull();
     }
 
     @Test

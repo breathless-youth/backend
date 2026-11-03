@@ -119,6 +119,20 @@ public class GroupRoomService {
                         roomId, Map.of("type", RoomMessageType.OWNER_CHANGED.name(), "userId", newOwnerId))));
     }
 
+    /**
+     * 두 사람 사이에 막 차단이 생겼다 — 둘 다 같은 그룹 공부방에 자리가 있으면(예약만 한 자리 포함) 커밋 뒤 각자의 모든 세션에 상대를 알리는
+     * {@code PEER_BLOCKED}를 보낸다. 양쪽이 같은 모양이라 누가 차단했는지 드러나지 않는다. 지금 같은 방이 아니면 보내지 않는다 — 나중에 같은 방에
+     * 들어오면 입장 확정 SNAPSHOT 뒤에 나간다. 호출자의 트랜잭션 안에서만 부른다.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void peerBlocked(long userId, long otherUserId) {
+        if (!roomService.inSameGroupRoom(userId, otherUserId)) {
+            return;
+        }
+        AfterCommit.run(() -> messenger.peerBlocked(userId, otherUserId));
+        AfterCommit.run(() -> messenger.peerBlocked(otherUserId, userId));
+    }
+
     private static Map<String, Object> memberLeft(long userId) {
         return Map.of("type", RoomMessageType.MEMBER_LEFT.name(), "userId", userId);
     }

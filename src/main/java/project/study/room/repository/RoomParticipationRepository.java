@@ -325,7 +325,7 @@ public class RoomParticipationRepository {
                 .single();
     }
 
-    /** 시그널 인가용 — 발신자·수신자 라이브 행을 한 번에. */
+    /** 여러 사람의 라이브 행을 한 번에. 시그널 인가는 차단까지 한 문장으로 보는 {@link GroupSeatRepository#signalAllowed}로 옮겼다(BY-1124). */
     public List<Row> findLiveByRoomAndUsers(Long roomId, Collection<Long> userIds) {
         return jdbc.sql("SELECT " + COLUMNS + " FROM room_participations "
                         + "WHERE room_id = :roomId AND user_id IN (:userIds) AND left_at IS NULL")

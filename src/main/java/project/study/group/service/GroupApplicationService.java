@@ -13,7 +13,6 @@ import project.study.common.exception.ConflictException;
 import project.study.common.exception.ErrorCode;
 import project.study.common.exception.ForbiddenException;
 import project.study.common.exception.NotFoundException;
-import project.study.common.exception.NotImplementedException;
 import project.study.common.text.Graphemes;
 import project.study.group.ContactDetector;
 import project.study.group.GroupVisibility;
@@ -25,16 +24,17 @@ import project.study.group.dto.MyApplicationsResponse;
 import project.study.group.dto.MyApplicationsResponse.MyApplicationItem;
 import project.study.group.dto.ReportRequest;
 import project.study.group.push.GroupNotifications;
+import project.study.group.report.GroupReports;
 import project.study.group.repository.GroupApplicationRepository;
 import project.study.group.repository.GroupApplicationRepository.ApplicationRow;
 import project.study.group.repository.GroupMemberRepository;
 import project.study.group.repository.GroupRepository;
 import project.study.group.repository.GroupRepository.GroupRow;
+import project.study.group.repository.ReportRepository;
 import project.study.user.image.ProfileImageUrls;
 
 /**
- * 공개 그룹 신청 보내기·취소·목록·수락·거절 (BY-1124). 신청 신고({@link #report})만 아직 스텁이다 — 다음 단계에서 채우고
- * {@link NotImplementedException}을 지운다.
+ * 공개 그룹 신청 보내기·취소·목록·수락·거절·신고 (BY-1124).
  *
  * <p>락 순서는 그룹 행 → 사용자 락 → 신청 행이다({@link GroupLocks}). 신청 보내기는 그룹 행(신청 대상)과 신청자의 사용자 락을 잡고 센 뒤
  * 넣고, 수락은 신청받은 그룹 행과 <b>신청자</b>의 사용자 락을 잡는다 — 신청이 멤버 자리로 바뀌는 사이에 신청자의 "그룹+신청 5개" 계산이 두 쪽
@@ -58,6 +58,7 @@ public class GroupApplicationService {
     private final GroupLocks locks;
     private final GroupAccess access;
     private final GroupNotifications notifications;
+    private final GroupReports reports;
     private final ProfileImageUrls profileImageUrls;
     private final Clock clock;
 
@@ -191,7 +192,31 @@ public class GroupApplicationService {
     /** 거절한다 — 수락과 같은 권한·상태 검사이고 자리는 보지 않는다. 신청한 사람에게 그 그룹 시험·목표로 거른 거절 푸시가 간다. */
     @Transactional
     public void decline(Long userId, long applicationId) {
+        declineWaiting(userId, applicationId, now());
+    }
+
+    /**
+     * 신청을 신고한다 — 거절과 같은 권한·상태 검사로 거절한 뒤 신고를 남기고 운영 채널에 알린다. 신청한 사람에게는 거절 푸시만 가서 신고됐다는 것이
+     * 드러나지 않는다. 신청한 사람을 차단하지 않는다(설계 — 위키 8절에 차단이 없다).
+     */
+    @Transactional
+    public void report(Long userId, long applicationId, ReportRequest request) {
         Instant now = now();
+        Declined declined = declineWaiting(userId, applicationId, now);
+        reports.record(
+                ReportRepository.APPLICATION,
+                userId,
+                declined.application().userId(),
+                declined.group().id(),
+                declined.application().id(),
+                request.reason(),
+                now);
+    }
+
+    private record Declined(GroupRow group, ApplicationRow application) {}
+
+    /** 거절과 신청 신고가 함께 쓰는 거절: 그룹 행 잠금(그룹장 아님 403) → 신청 행 잠금(기한 안 {@code PENDING} 아님 409) → DECLINED → 거절 푸시. */
+    private Declined declineWaiting(long userId, long applicationId, Instant now) {
         ApplicationRow found =
                 applications.find(applicationId).orElseThrow(GroupApplicationService::applicationNotFound);
         GroupRow group = lockOwnedGroup(userId, found);
@@ -200,10 +225,7 @@ public class GroupApplicationService {
 
         markAnswered(application, GroupApplicationRepository.DECLINED, now);
         notifications.applicationDeclined(application.userId(), group.name(), group.category());
-    }
-
-    public void report(Long userId, long applicationId, ReportRequest request) {
-        throw new NotImplementedException();
+        return new Declined(group, application);
     }
 
     /**

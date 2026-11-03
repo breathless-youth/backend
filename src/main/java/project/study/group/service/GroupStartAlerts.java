@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import project.study.block.service.BlockService;
 import project.study.group.push.GroupNotifications;
 import project.study.group.repository.GroupAlertRepository;
 import project.study.group.repository.GroupDeskQueries;
@@ -46,6 +47,7 @@ public class GroupStartAlerts {
     private final GroupAlertRepository alerts;
     private final GroupDeskQueries deskQueries;
     private final GroupNotifications notifications;
+    private final BlockService blocks;
     private final TransactionTemplate tx;
 
     /** 새 draft를 처리하고 보낸 푸시 수(받는 사람 × 그룹)를 돌려준다. */
@@ -79,13 +81,19 @@ public class GroupStartAlerts {
         }
         List<Long> groupIds = liveGroups.stream().map(GroupRow::id).toList();
         List<MemberRow> everyone = members.findLiveByGroups(groupIds);
-        // 알림은 기본이 꺼짐이라 받을 사람이 아예 없는 시작이 흔하다 — 그럴 땐 자리·닉네임은 읽지 않는다
-        if (everyone.stream().noneMatch(member -> member.notifyEnabled() && member.userId() != starterId)) {
+        // 알림은 기본이 꺼짐이라 받을 사람이 아예 없는 시작이 흔하다 — 그럴 땐 자리·차단·닉네임은 읽지 않는다
+        Set<Long> candidates = everyone.stream()
+                .filter(member -> member.notifyEnabled() && member.userId() != starterId)
+                .map(MemberRow::userId)
+                .collect(Collectors.toSet());
+        if (candidates.isEmpty()) {
             return 0;
         }
         Map<Long, List<MemberRow>> membersByGroup =
                 everyone.stream().collect(Collectors.groupingBy(MemberRow::groupId));
         Map<Long, Set<Long>> seated = alerts.findSeatHolders(groupIds);
+        // 차단은 그룹과 상관없이 사람 사이에 걸려 그룹마다가 아니라 한 번에 읽는다
+        Set<Long> blocked = blocks.blockedPeers(starterId, candidates);
         String nickname = nicknameOf(starterId);
 
         int sent = 0;
@@ -93,7 +101,8 @@ public class GroupStartAlerts {
             List<Long> receivers = receiversOf(
                     starterId,
                     membersByGroup.getOrDefault(group.id(), List.of()),
-                    seated.getOrDefault(group.id(), Set.of()));
+                    seated.getOrDefault(group.id(), Set.of()),
+                    blocked);
             List<Long> claimed =
                     alerts.claim(receivers, group.id(), now).stream().sorted().toList();
             if (claimed.isEmpty()) {
@@ -106,15 +115,17 @@ public class GroupStartAlerts {
     }
 
     /**
-     * 한 그룹에서 받을 사람 후보. 알림을 켠 다른 멤버 중 그 그룹 공부방에 자리가 없는 사람이다. 받을 사람을 거르는 자리는 여기 한 곳이다 — 거르는
-     * 단계는 "1시간에 한 번" 기록을 잡기 전에 끝나야 한다(걸러진 사람이 그 기록만 쓰고 푸시를 못 받는 일이 없게).
+     * 한 그룹에서 받을 사람 후보. 알림을 켠 다른 멤버 중 그 그룹 공부방에 자리가 없고, 시작한 사람과 어느 쪽으로도 차단한 사이가 아닌 사람이다.
+     * 받을 사람을 거르는 자리는 여기 한 곳이다 — 거르는 단계는 "1시간에 한 번" 기록을 잡기 전에 끝나야 한다(걸러진 사람이 그 기록만 쓰고 푸시를
+     * 못 받는 일이 없게).
      */
-    private List<Long> receiversOf(long starterId, List<MemberRow> groupMembers, Set<Long> seated) {
+    private List<Long> receiversOf(long starterId, List<MemberRow> groupMembers, Set<Long> seated, Set<Long> blocked) {
         return groupMembers.stream()
                 .filter(MemberRow::notifyEnabled)
                 .map(MemberRow::userId)
                 .filter(userId -> userId != starterId)
                 .filter(userId -> !seated.contains(userId))
+                .filter(userId -> !blocked.contains(userId))
                 .toList();
     }
 

@@ -275,6 +275,12 @@ public class RoomService {
         return rooms.findOpenByGroup(groupId).map(RoomRow::id);
     }
 
+    /** 두 사람이 같은 그룹 공부방에 자리가 있는가(예약만 한 자리 포함, BY-1124). 잠그지 않는다. 초대코드 방은 세지 않는다. */
+    @Transactional(readOnly = true)
+    public boolean inSameGroupRoom(long userId, long otherUserId) {
+        return groupSeats.shareGroupRoom(userId, otherUserId);
+    }
+
     /**
      * STOMP 구독으로 자리를 확정한다. 0행이면 빈 목록(방·참가자 없음, 또는 더 늦게 열린 세션이 이미 확정됨).
      * 방 락은 잡지 않는다 — 인원이 안 바뀐다. join이 이 행을 잠그고 있으면 그 커밋 뒤에 적용된다.

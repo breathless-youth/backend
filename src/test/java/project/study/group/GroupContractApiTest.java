@@ -2,7 +2,6 @@ package project.study.group;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.group.support.GroupApiTestSupport.assertErrorCode;
-import static project.study.group.support.GroupApiTestSupport.assertNotImplemented;
 import static project.study.group.support.GroupApiTestSupport.assertValidationFailed;
 import static project.study.group.support.GroupApiTestSupport.json;
 import static project.study.group.support.GroupApiTestSupport.v1Delete;
@@ -25,10 +24,9 @@ import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
 
 /**
- * 그룹 REST 계약 (BY-1124). 로직 전에는 컨트롤러가 501 {@code NOT_IMPLEMENTED}를 주고, FE는 Swagger의 경로·DTO로 타입을 쓴다.
- * 501을 단언하는 엔드포인트는 서비스가 DB를 건드리지 않으므로 {@code asUser}가 가리키는 사용자 행이 필요 없다. 로직이 채워진
- * 엔드포인트(그룹 만들기·내 그룹·그룹 홈·설정·알림·공개 그룹 목록·보기·공부방 자리 잡기·나가기·멤버 목록·넘기기·내보내기·그룹 나가기·초대코드
- * 보기·새로 만들기·코드 참여)는 각자의 API 테스트가 실제 사용자 행으로 보고, 여기서는 없는 그룹·없는 코드로 경로가 서비스까지 닿는지만 본다.
+ * 그룹 REST 계약 (BY-1124). FE는 Swagger의 경로·DTO로 타입을 쓴다. 모든 엔드포인트의 로직이 채워졌다 — 동작은 각자의 API 테스트가 실제
+ * 사용자 행으로 보고, 여기서는 없는 그룹·없는 신청·없는 코드로 경로가 검증을 지나 서비스까지 닿는지만 본다. {@code asUser}가 가리키는 사용자
+ * 행이 없어도 되는 요청만 쓴다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -120,9 +118,13 @@ class GroupContractApiTest {
     }
 
     @Test
-    void 공부방_멤버_신고는_로직_전에는_501이다() {
-        assertNotImplemented(json(v1Post(mvc, "/api/groups/10/members/2/report", USER), """
-                {"reason": "욕설을 했어요"}"""));
+    void 공부방_멤버_신고는_없는_그룹이면_404_GROUP_NOT_FOUND다() {
+        // 로직은 GroupReportApiTest·GroupRoomBlockStompTest가 본다
+        assertErrorCode(
+                json(v1Post(mvc, "/api/groups/" + NO_GROUP + "/members/2/report", USER), """
+                {"reason": "욕설을 했어요"}"""),
+                HttpStatus.NOT_FOUND,
+                "GROUP_NOT_FOUND");
     }
 
     @Test
@@ -142,7 +144,15 @@ class GroupContractApiTest {
 
     @Test
     void 신고_사유는_비워도_된다() {
-        assertNotImplemented(json(v1Post(mvc, "/api/groups/1/members/2/report", USER), "{}"));
+        // 검증을 지나 서비스까지 닿는다 — 없는 그룹이라 404다
+        assertErrorCode(
+                json(v1Post(mvc, "/api/groups/" + NO_GROUP + "/members/2/report", USER), "{}"),
+                HttpStatus.NOT_FOUND,
+                "GROUP_NOT_FOUND");
+        assertErrorCode(
+                json(v1Post(mvc, "/api/group-applications/" + NO_GROUP + "/report", USER), "{}"),
+                HttpStatus.NOT_FOUND,
+                "NOT_FOUND");
     }
 
     @Test
@@ -231,12 +241,15 @@ class GroupContractApiTest {
     }
 
     @Test
-    void 신청_신고와_차단_경로는_로직_전에는_501이다() {
-        // 신청 보내기·목록·취소·수락·거절은 로직이 채워졌다 — GroupApply·GroupApplicationList·GroupApplicationAnswerApiTest가 본다
-        assertNotImplemented(json(v1Post(mvc, "/api/group-applications/55/report", USER), """
-                {"reason": "부적절한 소개 글이에요"}"""));
-        assertNotImplemented(v1Get(mvc, "/api/blocks", USER));
-        assertNotImplemented(v1Delete(mvc, "/api/blocks/2", USER));
+    void 신청_신고와_차단_경로가_서비스까지_닿는다() {
+        // 로직은 GroupReportApiTest·BlockApiTest가 본다
+        assertErrorCode(
+                json(v1Post(mvc, "/api/group-applications/" + NO_GROUP + "/report", USER), """
+                {"reason": "부적절한 소개 글이에요"}"""),
+                HttpStatus.NOT_FOUND,
+                "NOT_FOUND");
+        assertThat(v1Get(mvc, "/api/blocks", USER)).hasStatusOk();
+        assertThat(v1Delete(mvc, "/api/blocks/2", USER)).hasStatus(HttpStatus.NO_CONTENT);
     }
 
     @Test

@@ -11,11 +11,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import project.study.block.service.BlockService;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
 import project.study.common.exception.ErrorCode;
 import project.study.common.exception.NotFoundException;
-import project.study.common.exception.NotImplementedException;
 import project.study.group.GroupVisibility;
 import project.study.group.InviteCodes;
 import project.study.group.JoinVia;
@@ -27,6 +27,7 @@ import project.study.group.dto.GroupMembersResponse.GroupMemberItem;
 import project.study.group.dto.GroupRoomJoinResponse;
 import project.study.group.dto.ReportRequest;
 import project.study.group.push.GroupNotifications;
+import project.study.group.report.GroupReports;
 import project.study.group.repository.GroupApplicationRepository;
 import project.study.group.repository.GroupDeskQueries;
 import project.study.group.repository.GroupDeskQueries.MemberProfile;
@@ -34,13 +35,13 @@ import project.study.group.repository.GroupMemberRepository;
 import project.study.group.repository.GroupMemberRepository.MemberRow;
 import project.study.group.repository.GroupRepository;
 import project.study.group.repository.GroupRepository.GroupRow;
+import project.study.group.repository.ReportRepository;
 import project.study.studysession.dto.MemberStudy;
 import project.study.studysession.service.MemberStudySource;
 import project.study.user.image.ProfileImageUrls;
 
 /**
- * 그룹 멤버·초대·공부방 자리·멤버 신고 (BY-1124). 공부방 자리 잡기·나가기는 {@link GroupRoomService}에 맡긴다. 공부방 멤버 신고({@link
- * #reportMember})만 아직 스텁이다 — 다음 단계에서 채우고 {@link NotImplementedException}을 지운다.
+ * 그룹 멤버·초대·공부방 자리·멤버 신고 (BY-1124). 공부방 자리 잡기·나가기와 공부방 메시지는 {@link GroupRoomService}에 맡긴다.
  *
  * <p>락 순서({@link GroupLocks}): 그룹을 바꾸는 작업은 모두 그룹 행(①)을 먼저 {@code FOR UPDATE}로 잡는다. 코드 참여만 한도를 세려고 그 뒤
  * 들어오는 사람의 사용자 락(②)을 잡는다. 내보내기·나가기의 공부방 자리 지우기({@link GroupRoomService#memberRemoved})는 ①을 쥔 채
@@ -63,6 +64,8 @@ public class GroupMemberService {
     private final ProfileImageUrls profileImageUrls;
     private final GroupRoomService groupRooms;
     private final GroupNotifications notifications;
+    private final BlockService blocks;
+    private final GroupReports reports;
     private final Clock clock;
 
     /**
@@ -240,8 +243,27 @@ public class GroupMemberService {
         groupRooms.leave(userId, groupId);
     }
 
+    /**
+     * 공부방 멤버를 신고한다 — 신고하면 차단도 된다. 순서(Swagger): 그룹 없음 404 → 멤버 아님 403 → 자기 자신 400 → 대상이 멤버가 아님 404
+     * {@code GROUP_MEMBER_NOT_FOUND} → 차단(이미 있으면 그대로) → 두 사람이 같은 그룹 공부방에 있으면 커밋 뒤 각자에게 {@code PEER_BLOCKED} → 신고
+     * 기록·운영 알림. 그룹 멤버 자격·책상·순위는 그대로다.
+     *
+     * <p>그룹을 바꾸지 않으므로 그룹 행을 잠그지 않는다. 같은 순간 대상이 내보내져도 신고는 그때의 멤버를 신고한 것으로 남는다(그룹은 지워져도 행이
+     * 남아 신고의 그룹 참조가 깨지지 않는다).
+     */
+    @Transactional
     public void reportMember(Long userId, long groupId, long targetUserId, ReportRequest request) {
-        throw new NotImplementedException();
+        access.requireMember(groupId, userId, false);
+        if (targetUserId == userId) {
+            throw new BadRequestException("자기 자신은 신고할 수 없어요");
+        }
+        if (members.findLive(groupId, targetUserId).isEmpty()) {
+            throw memberNotFound();
+        }
+        Instant now = clock.instant();
+        blocks.block(userId, targetUserId, now);
+        groupRooms.peerBlocked(userId, targetUserId);
+        reports.record(ReportRepository.ROOM_MEMBER, userId, targetUserId, groupId, null, request.reason(), now);
     }
 
     private static String joinedVia(JoinVia via) {

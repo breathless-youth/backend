@@ -29,6 +29,7 @@ public class RoomStompHandler {
     private final RoomStateService roomStateService;
     private final RoomMessenger roomMessenger;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PeerBlocks peerBlocks;
 
     // SNAPSHOT 재요청 — 구독 등록 전에 발사된 SNAPSHOT이 증발하는 레이스를 클라 재시도로 복구한다.
     // body는 무시하고, 방 상태를 바꾸지 않으며, 비멤버·옛 세션은 에러 프레임 없이 조용히 무시한다
@@ -52,6 +53,10 @@ public class RoomStompHandler {
                 principal.getName(),
                 accessor.getSessionId(),
                 Map.of("type", RoomMessageType.SNAPSHOT.name(), "members", members));
+        // 그룹 공부방이면 SNAPSHOT마다 그 세션에 PEER_BLOCKED를 다시 싣는다 — 구독 순서로 놓친 것을 되살린다 (BY-1124, §11.4)
+        if (PeerBlocks.isGroupRoom(members)) {
+            peerBlocks.afterResentSnapshot(principal.getName(), accessor.getSessionId(), userId, members);
+        }
     }
 
     @MessageMapping("/room/{roomId}/signal")
@@ -71,7 +76,8 @@ public class RoomStompHandler {
         }
 
         Long fromUserId = Long.valueOf(principal.getName());
-        // 발신자의 "현재" 세션 + 수신자가 확정 멤버인지를 한 번의 조회로 — 옛 세션·비멤버의 시그널 주입 차단
+        // 발신자의 "현재" 세션 + 수신자가 확정 멤버인지를 한 번의 조회로 — 옛 세션·비멤버의 시그널 주입 차단.
+        // 그룹 공부방에서 차단한 사이(어느 쪽이든)의 시그널도 같은 조회가 거른다 (BY-1124, §11.5)
         if (!roomStateService.authorizeSignal(roomId, fromUserId, accessor.getSessionId(), payload.toUserId())) {
             log.debug("signal 인가 실패: roomId={}, fromUserId={}, toUserId={}", roomId, fromUserId, payload.toUserId());
             return;

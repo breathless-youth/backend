@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
+import project.study.block.service.BlockService;
 import project.study.common.category.StudyCategory;
 import project.study.group.GroupVisibility;
 import project.study.group.push.GroupNotifications;
@@ -45,8 +46,8 @@ class GroupStartAlertsIsolationTest {
     private final GroupDeskQueries deskQueries = mock(GroupDeskQueries.class);
     private final GroupNotifications notifications = mock(GroupNotifications.class);
     private final TransactionTemplate tx = mock(TransactionTemplate.class);
-    private final GroupStartAlerts startAlerts =
-            new GroupStartAlerts(newDrafts, members, groups, alerts, deskQueries, notifications, tx);
+    private final GroupStartAlerts startAlerts = new GroupStartAlerts(
+            newDrafts, members, groups, alerts, deskQueries, notifications, mock(BlockService.class), tx);
 
     @Test
     void 한_사람의_처리가_실패해도_다음_사람의_알림은_나간다() {
