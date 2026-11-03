@@ -27,15 +27,19 @@ import project.study.config.ApiVersionConfig;
 /**
  * 그룹 REST 계약 (BY-1124). 로직 전에는 컨트롤러가 501 {@code NOT_IMPLEMENTED}를 주고, FE는 Swagger의 경로·DTO로 타입을 쓴다.
  * 501을 단언하는 엔드포인트는 서비스가 DB를 건드리지 않으므로 {@code asUser}가 가리키는 사용자 행이 필요 없다. 로직이 채워진
- * 엔드포인트(그룹 만들기·내 그룹·그룹 홈·설정·알림·공개 그룹 목록·보기·공부방 자리 잡기·나가기)는 각자의 API 테스트가 실제 사용자 행으로 본다.
+ * 엔드포인트(그룹 만들기·내 그룹·그룹 홈·설정·알림·공개 그룹 목록·보기·공부방 자리 잡기·나가기·멤버 목록·넘기기·내보내기·그룹 나가기·초대코드
+ * 보기·새로 만들기·코드 참여)는 각자의 API 테스트가 실제 사용자 행으로 보고, 여기서는 없는 그룹·없는 코드로 경로가 서비스까지 닿는지만 본다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class GroupContractApiTest {
 
+    /** 발급 문자에 없는 0이 들어 있어 어떤 그룹의 코드도 될 수 없다 — 늘 404 INVITE_CODE_NOT_FOUND다 */
     private static final String JOIN_BODY = """
-            {"inviteCode": "K7M2PQ", "via": "LINK"}""";
+            {"inviteCode": "K7M2P0", "via": "LINK"}""";
+
+    private static final long NO_GROUP = 987654321L;
 
     private static final long USER = 1L;
 
@@ -103,15 +107,20 @@ class GroupContractApiTest {
     }
 
     @Test
-    void 멤버_초대_경로도_로직_전에는_501이다() {
-        assertNotImplemented(v1Get(mvc, "/api/groups/10/members", USER));
-        assertNotImplemented(json(v1Put(mvc, "/api/groups/10/owner", USER), """
-                {"userId": 2}"""));
-        assertNotImplemented(v1Delete(mvc, "/api/groups/10/members/2", USER));
-        assertNotImplemented(v1Post(mvc, "/api/groups/10/leave", USER));
-        assertNotImplemented(v1Get(mvc, "/api/groups/10/invite", USER));
-        assertNotImplemented(v1Post(mvc, "/api/groups/10/invite", USER));
-        assertNotImplemented(json(v1Post(mvc, "/api/groups/join", USER), JOIN_BODY));
+    void 멤버_초대_경로는_없는_그룹이면_404_GROUP_NOT_FOUND다() {
+        // 로직은 GroupMemberManage·GroupKick·GroupLeave·GroupInviteApiTest가 본다
+        String base = "/api/groups/" + NO_GROUP;
+        assertErrorCode(v1Get(mvc, base + "/members", USER), HttpStatus.NOT_FOUND, "GROUP_NOT_FOUND");
+        assertErrorCode(json(v1Put(mvc, base + "/owner", USER), """
+                {"userId": 2}"""), HttpStatus.NOT_FOUND, "GROUP_NOT_FOUND");
+        assertErrorCode(v1Delete(mvc, base + "/members/2", USER), HttpStatus.NOT_FOUND, "GROUP_NOT_FOUND");
+        assertErrorCode(v1Post(mvc, base + "/leave", USER), HttpStatus.NOT_FOUND, "GROUP_NOT_FOUND");
+        assertErrorCode(v1Get(mvc, base + "/invite", USER), HttpStatus.NOT_FOUND, "GROUP_NOT_FOUND");
+        assertErrorCode(v1Post(mvc, base + "/invite", USER), HttpStatus.NOT_FOUND, "GROUP_NOT_FOUND");
+    }
+
+    @Test
+    void 공부방_멤버_신고는_로직_전에는_501이다() {
         assertNotImplemented(json(v1Post(mvc, "/api/groups/10/members/2/report", USER), """
                 {"reason": "욕설을 했어요"}"""));
     }
@@ -119,7 +128,8 @@ class GroupContractApiTest {
     @Test
     void join은_고정_경로로_잡힌다() {
         // POST /{groupId}/...로 잡혔다면 "join"을 Long으로 바꾸다 400이 나거나 405가 난다
-        assertNotImplemented(json(v1Post(mvc, "/api/groups/join", USER), JOIN_BODY));
+        assertErrorCode(
+                json(v1Post(mvc, "/api/groups/join", USER), JOIN_BODY), HttpStatus.NOT_FOUND, "INVITE_CODE_NOT_FOUND");
     }
 
     @Test
@@ -143,9 +153,10 @@ class GroupContractApiTest {
 
     @Test
     void 초대코드는_형식을_검사하지_않는다() {
-        // 틀린 형식도 3단계에서 404 INVITE_CODE_NOT_FOUND가 되므로 여기서는 400이 아니다
-        assertNotImplemented(json(v1Post(mvc, "/api/groups/join", USER), """
-                {"inviteCode": "12", "via": "CODE"}"""));
+        // 틀린 형식도 400이 아니라 없는 코드와 같은 404다
+        assertErrorCode(
+                json(v1Post(mvc, "/api/groups/join", USER), """
+                {"inviteCode": "12", "via": "CODE"}"""), HttpStatus.NOT_FOUND, "INVITE_CODE_NOT_FOUND");
     }
 
     @Test
