@@ -202,8 +202,8 @@ public class StandingsCalculator {
                     .sum();
             boolean focusing = piece.latest()
                     && piece.focusing()
-                    && TimeSlot.at(asOf) == board.slot()
-                    && within(window, TimeSlot.slotDateOf(asOf));
+                    && TimeSlot.at(asOf, RankingCalendar.KST) == board.slot()
+                    && within(window, TimeSlot.slotDateOf(asOf, RankingCalendar.KST));
             return focus == 0 ? null : new Contribution(focus, 0, piece.achievedAt(), focusing);
         }
         if (!within(window, piece.statDate())) {

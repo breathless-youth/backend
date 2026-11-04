@@ -6,7 +6,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import project.study.metrics.report.fact.ExperimentData;
+import project.study.push.dto.FirstSessionCandidate;
 import project.study.push.dto.PushMessage;
 import project.study.push.dto.PushResult;
 import project.study.push.repository.PushExperimentQueries;
@@ -23,8 +23,9 @@ import project.study.push.repository.PushExperimentQueries;
  * 첫 세션 5분 유도 푸시 A/B 실험 (BY-1070, ADR-0037). 가입했지만 첫 세션을 켜지 않은 사람을 push·control로 반씩 나누고
  * push에게만 가입 N시간 뒤(D0)와 다음 날 20시(D1)에 보낸다. 판정은 일일 리포트가 한다.
  *
- * <p>후보 창이 틱 간격과 같아 한 사람은 한 틱에서만 잡힌다. 서버가 멈춰 창을 놓친 단계는 따라잡지 않는다 — 늦은 알림은 실험
- * 일정을 흐린다.
+ * <p>야간 시간(22~08시), 가입한 날, D1 시각, 발송 날짜는 사용자 현지 시각으로 판단한다(ADR-0041). 틱은 전역 10분 주기이고 틱마다
+ * 이틀 안의 가입자를 읽어 사람마다 이번 틱이 D0·D1 시각인지 본다. D0 시각 창과 D1 시각 창이 틱 간격과 같아 한 단계는 한
+ * 틱에서만 잡힌다. 서버가 멈춰 창을 놓친 단계는 따라잡지 않는다 — 늦은 알림은 실험 일정을 흐린다.
  */
 @Slf4j
 @Service
@@ -42,7 +43,9 @@ public class FirstSessionPushExperiment {
     static final LocalTime QUIET_FROM = LocalTime.of(22, 0);
     static final LocalTime QUIET_UNTIL = LocalTime.of(8, 0);
     static final LocalTime D1_AT = LocalTime.of(20, 0);
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
+    /** 후보를 읽는 가입 창. 현지 20시에 현지 어제 0시 가입자까지 닿으려면 44시간(서머타임 날은 45시간)이 필요하다. */
+    static final Duration CANDIDATE_WINDOW = Duration.ofDays(2);
 
     private static final PushContent D0 = new PushContent("5분 집중 습관 만들기 🔥", "지금 5분만 켜두고 가볍게 시작해보세요!");
     private static final PushContent D1 = new PushContent("딱 5분만 집중해볼까요? 👀", "시작이 반이에요. 오늘 하루 끝나기 전에 가볍게 타이머를 시작해봐요!");
@@ -68,11 +71,6 @@ public class FirstSessionPushExperiment {
         // 틱 시각을 10분 격자로 반올림한다 — 스케줄러가 몇 초~몇 분 늦게 돌아도 창이 빠지거나 겹치지 않는다(5분 넘게 밀리면 깨진다)
         Instant slot =
                 Instant.ofEpochSecond(Math.round(now.getEpochSecond() / (double) TICK.toSeconds()) * TICK.toSeconds());
-        ZonedDateTime kst = slot.atZone(KST);
-        LocalTime time = kst.toLocalTime();
-        if (!time.isBefore(QUIET_FROM) || time.isBefore(QUIET_UNTIL)) {
-            return;
-        }
         // 키가 없으면 발송은 0건인데 배정과 발송 기록만 남아, 알림을 못 받은 사람이 발송 집단에 섞인다
         if (!pushSender.isEnabled()) {
             if (warnedDisabled.compareAndSet(false, true)) {
@@ -80,20 +78,36 @@ public class FirstSessionPushExperiment {
             }
             return;
         }
-        LocalDate today = kst.toLocalDate();
-        Instant startOfToday = today.atStartOfDay(KST).toInstant();
+        // 틱마다 최근 이틀 가입자 중 세션이 없는 사람을 읽는다. 지금 가입 규모면 한 틱에 수십~수백 행이다.
+        // users.created_at에 인덱스가 없어 사용자 표를 훑으므로, 사용자가 수십만을 넘거나 한 틱에 수천 행이 되면
+        // created_at 인덱스를 더하거나 D0(최근 몇 시간)와 D1(어제) 창을 나눠 읽는다
+        for (FirstSessionCandidate candidate : queries.findFirstSessionCandidates(slot.minus(CANDIDATE_WINDOW), slot)) {
+            ZonedDateTime local = slot.atZone(candidate.zone());
+            String type = dueType(candidate, local, slot);
+            if (type != null) {
+                run(candidate.userId(), type, TYPE_D0.equals(type) ? D0 : D1, local.toLocalDate(), now);
+            }
+        }
+    }
 
-        // D0: 가입 + N이 지난 한 틱 안에 들고, 가입일이 오늘인 사람
-        Instant d0To = slot.minus(d0Delay);
-        Instant d0From = max(d0To.minus(TICK), startOfToday);
-        if (d0From.isBefore(d0To)) {
-            run(queries.findFirstSessionCandidates(d0From, d0To), TYPE_D0, D0, today, now);
+    /** 이 틱이 이 사람의 D0·D1 시각이면 그 종류, 아니면 null. */
+    private String dueType(FirstSessionCandidate candidate, ZonedDateTime local, Instant slot) {
+        LocalTime time = local.toLocalTime();
+        if (!time.isBefore(QUIET_FROM) || time.isBefore(QUIET_UNTIL)) {
+            return null;
         }
-        // D1: 20시 틱에 어제 가입한 사람
-        if (time.equals(D1_AT)) {
-            Instant yesterday = today.minusDays(1).atStartOfDay(KST).toInstant();
-            run(queries.findFirstSessionCandidates(yesterday, startOfToday), TYPE_D1, D1, today, now);
+        LocalDate signupDate = candidate.createdAt().atZone(candidate.zone()).toLocalDate();
+        // D0: 가입 + N이 이 틱 창 [slot - TICK, slot) 안에 들고, 가입일이 현지 오늘인 사람
+        Instant due = candidate.createdAt().plus(d0Delay);
+        if (!due.isBefore(slot.minus(TICK)) && due.isBefore(slot) && signupDate.equals(local.toLocalDate())) {
+            return TYPE_D0;
         }
+        // D1: 현지 20시 뒤 첫 틱에 현지 어제 가입한 사람. 30·45분 시간대는 20시 정각 틱이 없어 범위로 본다
+        boolean d1Tick = !time.isBefore(D1_AT) && time.isBefore(D1_AT.plus(TICK));
+        if (d1Tick && signupDate.equals(local.toLocalDate().minusDays(1))) {
+            return TYPE_D1;
+        }
+        return null;
     }
 
     /**
@@ -107,17 +121,15 @@ public class FirstSessionPushExperiment {
     }
 
     // 한 사람의 실패가 나머지를 막지 않는다
-    private void run(List<Long> userIds, String type, PushContent content, LocalDate today, Instant now) {
-        for (long userId : userIds) {
-            try {
-                String arm = queries.assign(EXPERIMENT, userId, RANDOM.nextBoolean() ? ARM_PUSH : ARM_CONTROL, now);
-                if (ARM_PUSH.equals(arm)) {
-                    send(userId, type, content, today, now);
-                }
-            } catch (RuntimeException e) {
-                log.error("첫 세션 실험 처리 실패 (userId={}, type={})", userId, type, e);
-                Sentry.captureException(e);
+    private void run(long userId, String type, PushContent content, LocalDate today, Instant now) {
+        try {
+            String arm = queries.assign(EXPERIMENT, userId, RANDOM.nextBoolean() ? ARM_PUSH : ARM_CONTROL, now);
+            if (ARM_PUSH.equals(arm)) {
+                send(userId, type, content, today, now);
             }
+        } catch (RuntimeException e) {
+            log.error("첫 세션 실험 처리 실패 (userId={}, type={})", userId, type, e);
+            Sentry.captureException(e);
         }
     }
 
@@ -130,10 +142,6 @@ public class FirstSessionPushExperiment {
         PushResult result =
                 pushSender.send(List.of(userId), new PushMessage(content.title(), content.body(), "/", type, pushId));
         queries.recordAccepted(pushId, result.sent());
-    }
-
-    private static Instant max(Instant a, Instant b) {
-        return a.isAfter(b) ? a : b;
     }
 
     private record PushContent(String title, String body) {}

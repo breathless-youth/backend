@@ -6,11 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,8 +22,10 @@ import project.study.common.exception.BadRequestException;
 import project.study.dday.dto.DdayRequest;
 import project.study.dday.dto.DdayResponse;
 import project.study.dday.repository.DdayRepository;
+import project.study.user.repository.UserRepository;
+import project.study.user.service.UserTimeZones;
 
-/** 오늘 경계(Asia/Seoul)와 제목 정리의 순수 규칙 — 저장·동시성은 DdayApiTest가 실제 DB로 검증한다. */
+/** 오늘 경계(사용자 시간대, 기본 Asia/Seoul)와 제목 정리의 순수 규칙 — 저장·동시성은 DdayApiTest가 실제 DB로 검증한다. */
 @ExtendWith(MockitoExtension.class)
 class DdayServiceTest {
 
@@ -33,11 +37,14 @@ class DdayServiceTest {
     @Mock
     private DdayRepository ddayRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
     private DdayService service;
 
     @BeforeEach
     void setUp() {
-        service = new DdayService(ddayRepository, CLOCK);
+        service = new DdayService(ddayRepository, CLOCK, new UserTimeZones(userRepository));
     }
 
     @Test
@@ -49,6 +56,22 @@ class DdayServiceTest {
         assertThatThrownBy(() -> service.save(1L, new DdayRequest("수능", TODAY_KST.minusDays(1))))
                 .isInstanceOf(BadRequestException.class);
         verify(ddayRepository, never()).upsert(any(), any(), eq(TODAY_KST.minusDays(1)));
+    }
+
+    @Test
+    void 오늘은_사용자_시간대의_날짜다() {
+        // NOW는 뉴욕 09-22 12:00, 런던 09-22 17:00 — 둘 다 아직 22일이다
+        LocalDate yesterdayInSeoul = TODAY_KST.minusDays(1);
+        when(userRepository.findTimeZoneById(2L)).thenReturn(Optional.of("America/New_York"));
+        when(userRepository.findTimeZoneById(3L)).thenReturn(Optional.of("Europe/London"));
+
+        assertThat(service.save(2L, new DdayRequest("SAT", yesterdayInSeoul)).targetDate())
+                .isEqualTo(yesterdayInSeoul);
+        assertThat(service.save(3L, new DdayRequest("A-level", yesterdayInSeoul))
+                        .targetDate())
+                .isEqualTo(yesterdayInSeoul);
+        assertThatThrownBy(() -> service.save(2L, new DdayRequest("SAT", yesterdayInSeoul.minusDays(1))))
+                .isInstanceOf(BadRequestException.class);
     }
 
     @Test

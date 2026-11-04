@@ -22,7 +22,7 @@ class RankingExcludesManualApiTest extends RankingIntegrationTestBase {
     private ManualStudySessionService manualStudySessionService;
 
     private void manual(long userId, Instant start, Instant end) {
-        manualStudySessionService.create(userId, new ManualStudySessionRequest(start, end, null));
+        manualStudySessionService.create(userId, new ManualStudySessionRequest(start, end, null, null));
     }
 
     /** 10/6~10/10 닷새를 수동으로 채운다 — 세면 주간·월간 집중률 참가 조건(10·30시간)과 연속 5일을 넘긴다. */

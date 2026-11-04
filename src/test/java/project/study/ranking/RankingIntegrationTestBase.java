@@ -90,7 +90,7 @@ public abstract class RankingIntegrationTestBase {
         Instant end = start.plusSeconds(minutes * 60L);
         studySessionService.create(
                 userId,
-                new StudySessionCreateRequest(start, end, minutes * 60, focusSec, List.of(), null, null),
+                new StudySessionCreateRequest(start, end, minutes * 60, focusSec, List.of(), null, null, null),
                 false);
     }
 

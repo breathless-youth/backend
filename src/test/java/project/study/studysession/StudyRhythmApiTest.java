@@ -60,8 +60,14 @@ class StudyRhythmApiTest {
     }
 
     private void submit(Instant startedAt, int studySec, int focusSec, String eventsJson) {
-        String body = """
-                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": %s}""".formatted(startedAt, startedAt.plusSeconds(studySec), studySec, focusSec, eventsJson);
+        submit(startedAt, studySec, focusSec, eventsJson, null);
+    }
+
+    private void submit(Instant startedAt, int studySec, int focusSec, String eventsJson, String timeZone) {
+        String zoneField = timeZone == null ? "" : ", \"timeZone\": \"%s\"".formatted(timeZone);
+        String body =
+                """
+                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": %s%s}""".formatted(startedAt, startedAt.plusSeconds(studySec), studySec, focusSec, eventsJson, zoneField);
         assertThat(mvc.post()
                         .uri("/api/study-sessions")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -150,6 +156,24 @@ class StudyRhythmApiTest {
                 .hasPathSatisfying(
                         "$.focusSecByWeekdayHour",
                         v -> assertThat(v).extracting(StudyRhythmApiTest::sum).isEqualTo(7201));
+    }
+
+    @Test
+    void 요일과_시각_칸은_그_세션의_시간대로_정한다() {
+        // 뉴욕에서 어제 20:30~22:00 공부했다. 서울 시각으로는 다음 날 오전이지만, 공부한 곳의 시각인 20·21시 칸에 칠한다
+        ZoneId newYork = ZoneId.of("America/New_York");
+        LocalDate newYorkYesterday = LocalDate.now(newYork).minusDays(1);
+        int row = newYorkYesterday.getDayOfWeek().getValue() - 1;
+        submit(newYorkYesterday.atTime(20, 30).atZone(newYork).toInstant(), 5400, 3600, "[]", newYork.getId());
+
+        assertThat(rhythm(userId))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(cell(row, 20), v -> assertThat(v).isEqualTo(1200))
+                .hasPathSatisfying(cell(row, 21), v -> assertThat(v).isEqualTo(2400))
+                .hasPathSatisfying(
+                        "$.focusSecByWeekdayHour",
+                        v -> assertThat(v).extracting(StudyRhythmApiTest::sum).isEqualTo(3600));
     }
 
     @Test

@@ -64,7 +64,13 @@ public record StudySessionCreateRequest(
                         + "(위반 400) 세션 중 지운 할 일은 허용된다. 중복은 한 번으로 본다. 자정을 넘는 세션은 각 할 일이 "
                         + "완료 시각(doneAt)이 속한 조각 하나에만 붙고, 완료 시각이 없거나 세션 밖이면 마지막 조각에 붙는다",
                 example = "[12, 15]")
-        List<@NotNull Long> completedTaskIds) {
+        List<@NotNull Long> completedTaskIds,
+
+        @Schema(
+                description = "기기의 IANA 시간대 이름(선택). 자정 분할·statDate·시간대 구간을 이 시간대의 현지 날짜로 정하고, "
+                        + "사용자 시간대로도 저장한다. 없거나 읽을 수 없는 값이면 거절하지 않고 저장된 사용자 시간대(기본 Asia/Seoul)를 쓴다",
+                example = "Asia/Seoul")
+        String timeZone) {
     public List<StatusEvent> getStatusEventList() {
         return this.events().stream().map(StatusEventRequest::toEntity).toList();
     }

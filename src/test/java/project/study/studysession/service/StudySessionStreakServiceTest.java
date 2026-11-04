@@ -2,6 +2,8 @@ package project.study.studysession.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -9,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +21,8 @@ import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
+import project.study.user.repository.UserRepository;
+import project.study.user.service.UserTimeZones;
 
 @ExtendWith(MockitoExtension.class)
 class StudySessionStreakServiceTest {
@@ -33,6 +38,9 @@ class StudySessionStreakServiceTest {
     @Mock
     private ActiveStudySessionRepository activeStudySessionRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
     private StudySessionService service;
 
     @BeforeEach
@@ -41,7 +49,8 @@ class StudySessionStreakServiceTest {
                 studySessionRepository,
                 activeStudySessionRepository,
                 CLOCK,
-                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY,
+                new UserTimeZones(userRepository));
     }
 
     @Test
@@ -53,6 +62,27 @@ class StudySessionStreakServiceTest {
 
         assertThat(response.streak()).isEqualTo(3);
         assertThat(response.maxStreak()).isEqualTo(3);
+    }
+
+    @Test
+    void 오늘은_사용자_시간대의_날짜다() {
+        // 2026-07-24T02:00Z — 서울·런던은 24일, 뉴욕은 아직 23일 22:00
+        StudySessionService atNight = new StudySessionService(
+                studySessionRepository,
+                activeStudySessionRepository,
+                Clock.fixed(Instant.parse("2026-07-24T02:00:00Z"), ZoneOffset.UTC),
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY,
+                new UserTimeZones(userRepository));
+        List<LocalDate> dates = List.of(TODAY, TODAY.minusDays(1), TODAY.minusDays(2));
+        when(studySessionRepository.findDistinctStatDates(anyLong(), eq(300))).thenReturn(dates);
+        when(userRepository.findTimeZoneById(1L)).thenReturn(Optional.of("Asia/Seoul"));
+        when(userRepository.findTimeZoneById(2L)).thenReturn(Optional.of("America/New_York"));
+        when(userRepository.findTimeZoneById(3L)).thenReturn(Optional.of("Europe/London"));
+
+        assertThat(atNight.streak(1L, null, null).streak()).isEqualTo(3);
+        // 뉴욕의 오늘(23일)보다 뒤인 24일은 아직 세지 않는다
+        assertThat(atNight.streak(2L, null, null).streak()).isEqualTo(2);
+        assertThat(atNight.streak(3L, null, null).streak()).isEqualTo(3);
     }
 
     @Test

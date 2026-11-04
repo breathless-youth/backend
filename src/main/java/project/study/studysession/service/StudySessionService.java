@@ -22,6 +22,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.NotFoundException;
+import project.study.common.time.DefaultTimeZone;
 import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.DaySubjectResponse;
 import project.study.studysession.dto.StudyDaysResponse;
@@ -40,12 +41,11 @@ import project.study.studysession.entity.StudySession;
 import project.study.studysession.entity.StudySessionSubjectSegment;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
+import project.study.user.service.UserTimeZones;
 
 @Service
 @RequiredArgsConstructor
 public class StudySessionService {
-
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     static final String STARTED_AT_UNIQUE_CONSTRAINT = "uq_study_session_user_started_at";
     // V1이 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
@@ -55,6 +55,7 @@ public class StudySessionService {
     private final ActiveStudySessionRepository activeStudySessionRepository;
     private final Clock clock;
     private final SubjectLookupProvider subjectLookupProvider;
+    private final UserTimeZones userTimeZones;
 
     /** autoFinalized=true는 확정 스케줄러 전용 — 저장되는 세션에 자동 확정 표시를 남긴다. 완료 할 일은 없다 (ADR-0022). */
     @Transactional
@@ -69,6 +70,8 @@ public class StudySessionService {
     @Transactional
     public List<StudySessionResponse> create(
             Long userId, StudySessionCreateRequest request, List<CompletedTask> completedTasks, boolean autoFinalized) {
+        // 멱등 반환보다 먼저 해석한다. 재전송도 기기의 지금 시간대를 알려 주므로 사용자 시간대는 갱신하되 저장된 조각은 다시 나누지 않는다
+        ZoneId zone = userTimeZones.resolve(userId, request.timeZone());
         List<StudySession> existing = studySessionRepository.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
                 userId, request.startedAt());
         if (!existing.isEmpty()) {
@@ -83,7 +86,7 @@ public class StudySessionService {
         List<StatusEvent> events = request.getStatusEventList();
 
         List<StudySession> sessions = validateAndBuildSessions(
-                userId,
+                new SessionOwner(userId, zone),
                 request.startedAt(),
                 request.endedAt(),
                 request.studySec(),
@@ -228,14 +231,20 @@ public class StudySessionService {
     }
 
     /**
-     * 세션을 KST 자정 경계로 분할해 생성한다 — 안 넘으면 1개, 걸친 이벤트는 시각 기준으로 각 세션에 귀속.
+     * 세션을 기본 시간대(서울) 자정 경계로 분할해 생성한다 — 안 넘으면 1개, 걸친 이벤트는 시각 기준으로 각 세션에 귀속.
      * studySec/focusSec은 제출값을 조각 길이 비례로 배분한다. PAUSE는 총공부·순공 타이머를 모두 멈추므로
      * 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY/SLEEP)는 순공 타이머만 멈추므로 focusSec 배분에서만 빠진다.
      */
     List<StudySession> validateAndBuildSessions(
             Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
         return validateAndBuildSessions(
-                userId, startedAt, endedAt, studySec, focusSec, events, SessionAttachments.NONE);
+                new SessionOwner(userId, DefaultTimeZone.ZONE),
+                startedAt,
+                endedAt,
+                studySec,
+                focusSec,
+                events,
+                SessionAttachments.NONE);
     }
 
     /** 과목 구간(subjectSegments)도 함께 검증하고 조각마다 잘라 그 조각의 이벤트로 과목별 시간을 계산한다 (ADR-0023). */
@@ -248,7 +257,7 @@ public class StudySessionService {
             List<StatusEvent> events,
             List<SubjectSegmentRequest> subjectSegments) {
         return validateAndBuildSessions(
-                userId,
+                new SessionOwner(userId, DefaultTimeZone.ZONE),
                 startedAt,
                 endedAt,
                 studySec,
@@ -257,9 +266,12 @@ public class StudySessionService {
                 new SessionAttachments(subjectSegments, List.of()));
     }
 
-    /** 완료 할 일(attachments.completedTasks)은 배분하지 않고 완료 시각이 속한 조각에 붙인다 (ADR-0022). */
+    /**
+     * 완료 할 일(attachments.completedTasks)은 배분하지 않고 완료 시각이 속한 조각에 붙인다 (ADR-0022).
+     * 자정과 구간 경계는 owner 시간대의 현지 시각이다 (ADR-0041).
+     */
     List<StudySession> validateAndBuildSessions(
-            Long userId,
+            SessionOwner owner,
             Instant startedAt,
             Instant endedAt,
             int studySec,
@@ -274,7 +286,7 @@ public class StudySessionService {
                 .toList();
         validateEvents(startedAt, endedAt, sorted);
 
-        List<Instant> cuts = computeCuts(startedAt, endedAt);
+        List<Instant> cuts = computeCuts(startedAt, endedAt, owner.zone());
         SegmentWeights weights = computeSegmentWeights(cuts, sorted);
 
         // 조각 이후에 검증
@@ -285,7 +297,7 @@ public class StudySessionService {
                 .toList();
         validateSubjectSegments(startedAt, endedAt, sortedSegments);
 
-        return buildSessions(userId, cuts, weights, studySec, focusSec, sortedSegments, attachments.completedTasks());
+        return buildSessions(owner, cuts, weights, studySec, focusSec, sortedSegments, attachments.completedTasks());
     }
 
     /**
@@ -298,7 +310,7 @@ public class StudySessionService {
     @Transactional(readOnly = true)
     public StudySessionStreakResponse streak(Long userId, LocalDate from, LocalDate to) {
         StudySessionValidator.validateDateRange(from, to);
-        LocalDate today = clock.instant().atZone(KST).toLocalDate();
+        LocalDate today = clock.instant().atZone(userTimeZones.zoneOf(userId)).toLocalDate();
 
         // 시계 오차 허용(5분) 탓에 자정 직후 조각이 내일 날짜로 저장될 수 있다 — 공부일은 오늘까지만 센다
         List<LocalDate> statDates = studySessionRepository.findDistinctStatDates(userId, MIN_STREAK_FOCUS_SEC).stream()
@@ -314,26 +326,25 @@ public class StudySessionService {
 
     /**
      * 누적 공부일 — 가입 이후 순공시간 1분 이상 세션이 하루라도 있었던 날의 수. 목록 조회와 같은 기준(ADR-0009)이라
-     * "목록에 세션이 보이는 날"과 일치한다. 스트릭과 같은 이유로 오늘(KST)까지만 센다.
+     * "목록에 세션이 보이는 날"과 일치한다. 스트릭과 같은 이유로 사용자 시간대의 오늘까지만 센다.
      */
     @Transactional(readOnly = true)
     public StudyDaysResponse studyDays(Long userId) {
-        LocalDate today = clock.instant().atZone(KST).toLocalDate();
+        LocalDate today = clock.instant().atZone(userTimeZones.zoneOf(userId)).toLocalDate();
         return new StudyDaysResponse(studySessionRepository.countDistinctStatDates(userId, MIN_LIST_FOCUS_SEC, today));
     }
 
     /**
-     * 공부 리듬 — 누적 공부일(study-days와 같은 1분 기준)과 요일 × 시각별 누적 순공. 조각마다 정시 경계로 잘라
+     * 공부 리듬 — 누적 공부일(study-days와 같은 1분 기준)과 요일 × 시각별 누적 순공. 조각마다 그 세션 시간대의 정시 경계로 잘라
      * 배분하므로(RhythmSplitter) 자정 분할 조각도 그대로 더하면 된다. 노출 기준(며칠부터 보여줄지)은 앱이 정한다.
      */
     @Transactional(readOnly = true)
     public StudyRhythmResponse rhythm(Long userId) {
-        LocalDate today = clock.instant().atZone(KST).toLocalDate();
+        LocalDate today = clock.instant().atZone(userTimeZones.zoneOf(userId)).toLocalDate();
         long studyDays = studySessionRepository.countDistinctStatDates(userId, MIN_LIST_FOCUS_SEC, today);
         int[][] grid = RhythmSplitter.emptyGrid();
         for (StudySession session : studySessionRepository.findAllMeasuredWithMinFocusSec(userId, MIN_LIST_FOCUS_SEC)) {
-            RhythmSplitter.accumulate(
-                    grid, session.getStartedAt(), session.getEndedAt(), session.getFocusSec(), session.getEvents());
+            RhythmSplitter.accumulate(grid, session);
         }
         return new StudyRhythmResponse(studyDays, grid);
     }

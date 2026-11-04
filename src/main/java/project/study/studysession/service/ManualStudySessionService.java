@@ -21,6 +21,7 @@ import project.study.studysession.entity.StudySessionSource;
 import project.study.studysession.entity.StudySessionSubjectSegment;
 import project.study.studysession.repository.ManualStudySessionLockRepository;
 import project.study.studysession.repository.StudySessionRepository;
+import project.study.user.service.UserTimeZones;
 
 /**
  * 사용자가 직접 넣는 수동 기록 (ADR-0031).
@@ -35,7 +36,6 @@ import project.study.studysession.repository.StudySessionRepository;
 @RequiredArgsConstructor
 public class ManualStudySessionService {
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final Duration MAX_DURATION = Duration.ofHours(24);
     private static final Duration MIN_PIECE = Duration.ofMinutes(1);
 
@@ -44,6 +44,7 @@ public class ManualStudySessionService {
     private final StudySessionService studySessionService;
     private final SubjectLookupProvider subjectLookupProvider;
     private final Clock clock;
+    private final UserTimeZones userTimeZones;
 
     private record Span(Instant start, Instant end) {}
 
@@ -53,7 +54,7 @@ public class ManualStudySessionService {
         lockRepository.lockUser(userId);
         Span requested = validatedSpan(request);
         assertSelectable(request.subjectId(), null);
-        return save(userId, requested, request.subjectId());
+        return save(userId, requested, request.subjectId(), userTimeZones.resolve(userId, request.timeZone()));
     }
 
     /** 묶음을 지우고 다시 만든다 — 조각 id가 바뀔 수 있다. 지운 묶음은 겹침 계산에서 자연히 빠진다. */
@@ -66,7 +67,7 @@ public class ManualStudySessionService {
         assertSelectable(request.subjectId(), subjectOf(bundle));
         studySessionRepository.deleteAll(bundle);
         studySessionRepository.flush();
-        return save(userId, requested, request.subjectId());
+        return save(userId, requested, request.subjectId(), userTimeZones.resolve(userId, request.timeZone()));
     }
 
     @Transactional
@@ -124,7 +125,7 @@ public class ManualStudySessionService {
                 .orElse(null);
     }
 
-    private List<StudySessionResponse> save(Long userId, Span requested, Long subjectId) {
+    private List<StudySessionResponse> save(Long userId, Span requested, Long subjectId, ZoneId zone) {
         List<Span> free = freeSpans(userId, requested);
         if (free.isEmpty()) {
             throw new DuplicateSessionException("이미 기록이 있는 시간이에요");
@@ -132,9 +133,9 @@ public class ManualStudySessionService {
         Instant bundleKey = free.getFirst().start();
         List<StudySession> sessions = new ArrayList<>();
         for (Span span : free) {
-            List<Instant> cuts = StudySessionSplitter.computeCuts(span.start(), span.end());
+            List<Instant> cuts = StudySessionSplitter.computeCuts(span.start(), span.end(), zone);
             for (int i = 0; i < cuts.size() - 1; i++) {
-                sessions.add(manualPiece(userId, cuts.get(i), cuts.get(i + 1), subjectId, bundleKey));
+                sessions.add(manualPiece(userId, zone, cuts.get(i), cuts.get(i + 1), subjectId, bundleKey));
             }
         }
         try {
@@ -182,10 +183,9 @@ public class ManualStudySessionService {
     }
 
     private static StudySession manualPiece(
-            Long userId, Instant start, Instant end, Long subjectId, Instant submissionStartedAt) {
+            Long userId, ZoneId zone, Instant start, Instant end, Long subjectId, Instant submissionStartedAt) {
         int sec = (int) Duration.between(start, end).toSeconds();
-        StudySession session =
-                new StudySession(userId, start.atZone(KST).toLocalDate(), start, end, sec, sec, List.of());
+        StudySession session = new StudySession(userId, zone, start, end, sec, sec, List.of());
         if (subjectId != null) {
             session.attachSubjectSegments(List.of(new StudySessionSubjectSegment(subjectId, start, end, sec, sec)));
         }

@@ -391,6 +391,6 @@ class ManualStudySessionApiTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(e);
         }
-        manualStudySessionService.create(userId, new ManualStudySessionRequest(from, to, null));
+        manualStudySessionService.create(userId, new ManualStudySessionRequest(from, to, null, null));
     }
 }

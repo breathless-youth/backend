@@ -17,7 +17,7 @@ public record SubjectDayResponse(
         @Schema(description = "지금 지운 과목이면 true — 그날에는 있었던 과목이라 실린다", example = "false")
         boolean deleted,
 
-        @Schema(description = "그날(05시~다음 날 05시 KST) 이 과목의 총 공부 시간(초) — 세션 과목 구간을 그 창으로 잘라 합산", example = "3600")
+        @Schema(description = "그날(사용자 시간대 05시~다음 날 05시) 이 과목의 총 공부 시간(초) — 세션 과목 구간을 그 창으로 잘라 합산", example = "3600")
         long studySec,
 
         @Schema(description = "그날 이 과목의 순공 시간(초)", example = "3300")

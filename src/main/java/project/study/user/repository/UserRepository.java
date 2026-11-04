@@ -2,6 +2,7 @@ package project.study.user.repository;
 
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -56,6 +57,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select u from User u where u.id = :id and u.provider = :provider and u.providerUserId = :providerUserId")
     Optional<User> findByIdAndIdentityForUpdate(
             @Param("id") Long id, @Param("provider") Provider provider, @Param("providerUserId") String providerUserId);
+
+    @Query("select u.timeZone from User u where u.id = :id")
+    Optional<String> findTimeZoneById(@Param("id") Long id);
+
+    // [id, timeZone] 쌍. 엔티티를 읽지 않아 진행 중 세션 집계마다 사용자 행 전체를 불러오지 않는다
+    @Query("select u.id, u.timeZone from User u where u.id in :ids")
+    List<Object[]> findTimeZonesByIdIn(@Param("ids") Collection<Long> ids);
+
+    // 같은 값이면 행을 건드리지 않는다. 세션 제출마다 불려 사용자 행 잠금을 쓸데없이 잡지 않게 한다
+    @Modifying
+    @Query("update User u set u.timeZone = :zone where u.id = :id and u.timeZone <> :zone")
+    int updateTimeZone(@Param("id") Long id, @Param("zone") String zone);
 
     // 일일 리포트 v2 — 이 시각 이후 가입자 (BY-904)
     List<User> findByCreatedAtGreaterThanEqual(Instant from);

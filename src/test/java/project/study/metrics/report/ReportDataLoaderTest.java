@@ -76,7 +76,7 @@ class ReportDataLoaderTest {
     void 정해진_기간을_읽어_유저별_타임라인으로_묶는다() {
         Instant signup = Kst.startOf(A.minusDays(3)).plusSeconds(3600);
         when(sessionMetricsService.findSessionFacts(A.minusDays(61), A.plusDays(1)))
-                .thenReturn(List.of(new SessionFact(1, A, Kst.startOf(A), 900, 0, false)));
+                .thenReturn(List.of(new SessionFact(1, Kst.startOf(A), 900, 0, false)));
         when(userService.findReportUsers(Kst.startOf(A.minusDays(68)), Set.of(1L)))
                 .thenReturn(List.of(new UserFact(1, "곰", signup, "CSAT", null)));
         when(roomMetricsService.findJoins(FACT_FROM, FACT_TO))
@@ -111,8 +111,8 @@ class ReportDataLoaderTest {
         Instant signup = Kst.startOf(A.minusDays(1));
         when(sessionMetricsService.findSessionFacts(A.minusDays(61), A.plusDays(1)))
                 .thenReturn(List.of(
-                        new SessionFact(1, A, Kst.startOf(A), 900, 0, false),
-                        new SessionFact(7, A, Kst.startOf(A), 900, 0, false)));
+                        new SessionFact(1, Kst.startOf(A), 900, 0, false),
+                        new SessionFact(7, Kst.startOf(A), 900, 0, false)));
         when(userService.findReportUsers(Kst.startOf(A.minusDays(68)), Set.of(1L)))
                 .thenReturn(
                         List.of(new UserFact(1, "곰", signup, null, null), new UserFact(7, "운영자", signup, null, null)));

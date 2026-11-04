@@ -133,6 +133,35 @@ class StudySubjectDayApiTest {
     }
 
     @Test
+    void 시간대를_바꾼_사용자의_예전_세션도_시각이_05시_창에_걸치면_그날_시간에_든다() {
+        Long math = insertSubject(userId, "수학", dayStart.minusSeconds(86_400), null);
+        // 서울 그날 06:00~07:00 = 뉴욕 전날 오후 — 뉴욕 시간대로 저장되어 stat_date가 서울 날짜보다 하루 앞선다
+        Instant start = dayStart.plusSeconds(3600);
+        Instant end = dayStart.plusSeconds(2 * 3600);
+        String body = """
+                {"startedAt": "%s", "endedAt": "%s", "studySec": 3600, "focusSec": 3600, "events": [],
+                 "subjectSegments": [{"subjectId": %d, "startedAt": "%s", "endedAt": "%s"}],
+                 "timeZone": "America/New_York"}""".formatted(start, end, math, start, end);
+        assertThat(mvc.post()
+                        .uri("/api/study-sessions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(asUser(userId)))
+                .hasStatus(HttpStatus.CREATED);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT stat_date FROM study_session WHERE user_id = ?", LocalDate.class, userId))
+                .isEqualTo(day.minusDays(1));
+        jdbcTemplate.update("UPDATE users SET time_zone = 'Asia/Seoul' WHERE id = ?", userId);
+
+        assertThat(dayList(day))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$[0].id", v -> assertThat(v).isEqualTo(math.intValue()))
+                .hasPathSatisfying("$[0].studySec", v -> assertThat(v).isEqualTo(3600))
+                .hasPathSatisfying("$[0].focusSec", v -> assertThat(v).isEqualTo(3600));
+    }
+
+    @Test
     void 과목_시간은_05시_창으로_잘려_그날과_다음_날에_나뉜다() {
         Long math = insertSubject(userId, "수학", dayStart.minusSeconds(86_400), null);
         // 그날 안 12:00~13:00 KST: 통째로 그날
