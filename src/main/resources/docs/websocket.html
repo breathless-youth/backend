@@ -336,7 +336,7 @@ sequenceDiagram
   <tr><th>type</th><th>어디로</th><th>필드</th><th>언제</th></tr>
   <tr><td><code>MIC_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>, <code>micOn</code></td><td>누군가의 state 보고에 <code>micOn</code>이 있을 때(마이크를 켜고 끌 때)</td></tr>
   <tr><td><code>BREAK_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>, <code>onBreak</code></td><td>뽀모도로 휴식이 시작되거나 끝날 때</td></tr>
-  <tr><td><code>OWNER_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>(새 그룹장)</td><td>공부방이 열려 있는 동안 그룹장이 바뀔 때</td></tr>
+  <tr><td><code>OWNER_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>(새 그룹장)</td><td>공부방이 열려 있는 동안 그룹장이 바뀔 때(그룹장 넘기기, 그룹장 탈퇴, 그룹장 계정이 다른 계정으로 병합될 때)</td></tr>
   <tr><td><code>KICKED</code></td><td>내보내진 당사자의 내 큐</td><td><code>groupId</code></td><td>공부방에 있던 사람이 그룹에서 내보내질 때. 이어서 방 토픽에 MEMBER_LEFT가 간다</td></tr>
   <tr><td><code>PEER_BLOCKED</code></td><td>차단 관계인 두 사람 각자의 내 큐</td><td><code>userId</code>(연결하지 말 상대)</td><td>차단 관계인 두 사람이 같은 방에 있게 될 때(입장 확정 시)와, 공부방에서 신고·차단하는 순간. <strong>SNAPSHOT을 보낼 때마다</strong> 그 세션에 해당하는 PEER_BLOCKED를 상대마다 하나씩 이어서 다시 보낸다. PEER_BLOCKED를 받으면 그 상대와의 기존 연결을 즉시 닫고 새로 맺지 않는다(§11.5). 보내는 때는 §11.5 표를 본다</td></tr>
 </table>
@@ -389,6 +389,7 @@ sequenceDiagram
   <tr><td>2026-11-03</td><td>BY-1124</td><td>그룹 공부방 계약(§11) 추가: 멤버 객체 <code>micOn</code>·<code>onBreak</code>·<code>owner</code>, state 보고 <code>micOn</code>·<code>onBreak</code>, 새 type 5개(<code>MIC_CHANGED</code>, <code>BREAK_CHANGED</code>, <code>OWNER_CHANGED</code>, <code>KICKED</code>, <code>PEER_BLOCKED</code>). PEER_BLOCKED를 받으면 기존 P2P 연결도 닫는다. 서버 송신은 4단계부터. 초대코드 방은 변화 없음</td></tr>
   <tr><td>2026-11-03</td><td>BY-1124</td><td>그룹 공부방 서버 구현(4단계): 자리 잡기·나가기, 멤버 객체 <code>micOn</code>·<code>onBreak</code>·<code>owner</code>, MIC_CHANGED·BREAK_CHANGED·OWNER_CHANGED·KICKED 송신. 계약은 그대로이고, 초대코드 방에서 보낸 <code>micOn</code>·<code>onBreak</code>는 저장·알림 없이 무시한다는 것과 MEMBER_LEFT의 그룹 사유를 적었다(§5·§11.3). PEER_BLOCKED·signal 차단은 신고·차단 단계에서 시작</td></tr>
   <tr><td>2026-11-03</td><td>BY-1124</td><td>신고·차단 서버 구현(6단계): 그룹 공부방에서 차단 관계(어느 쪽이든)인 두 사람 사이 signal을 버리고 PEER_BLOCKED를 보내기 시작한다(§11.5 표). 메시지 모양은 그대로다. 보내는 때·세션 범위를 표로 적고, 차단 해제는 알림 없이 다음 입장부터라는 것과 받은 PEER_BLOCKED를 방에서 나갈 때까지 기억한다는 것을 더했다. 초대코드 방은 변화 없음</td></tr>
+  <tr><td>2026-11-04</td><td>BY-1126</td><td>OWNER_CHANGED(§11.4)가 그룹장 넘기기 말고도 그룹장이 탈퇴할 때(가장 먼저 들어온 멤버가 새 그룹장)와 그룹장 계정이 소셜 로그인으로 다른 계정에 병합될 때(남는 계정이 새 그룹장)도 온다. 탈퇴 때는 이어서 방 토픽에 탈퇴한 사람의 MEMBER_LEFT가 올 수 있다. 메시지 모양은 그대로다</td></tr>
 </table>
 
 </main>
