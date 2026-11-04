@@ -43,6 +43,10 @@ public class UserAcquisition {
     @Column(name = "deep_link_ad")
     private String deepLinkAd;
 
+    /** 앱이 보낸 구글 딥링크 값 원문. 형식 검사 전 값이라 응답 라벨은 GoogleAdLabel로 거른다. */
+    @Column(name = "google_deep_link_ad")
+    private String googleDeepLinkAd;
+
     @Column(name = "utm_source")
     private String utmSource;
 

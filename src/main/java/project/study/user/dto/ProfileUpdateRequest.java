@@ -21,6 +21,19 @@ public record ProfileUpdateRequest(
         @Schema(
                 description = "변경할 카테고리. 생략하면 미변경",
                 example = "JOB",
-                allowableValues = {"PROFESSIONAL", "CSAT", "JOB", "CERTIFICATE", "CIVIL_SERVICE", "LANGUAGE", "ETC"})
-        @Pattern(regexp = "PROFESSIONAL|CSAT|JOB|CERTIFICATE|CIVIL_SERVICE|LANGUAGE|ETC", message = "정의되지 않은 카테고리입니다")
+                allowableValues = {
+                    "CSAT",
+                    "SCHOOL_EXAM",
+                    "UNIVERSITY_EXAM",
+                    "CIVIL_SERVICE",
+                    "CERTIFICATE",
+                    "LANGUAGE",
+                    "JOB",
+                    "PROFESSIONAL",
+                    "ETC"
+                })
+        // 값은 StudyCategory와 같아야 한다 — 애노테이션 상수라 enum에서 만들 수 없고 StudyCategoryTest가 어긋남을 잡는다
+        @Pattern(
+                regexp = "CSAT|SCHOOL_EXAM|UNIVERSITY_EXAM|CIVIL_SERVICE|CERTIFICATE|LANGUAGE|JOB|PROFESSIONAL|ETC",
+                message = "정의되지 않은 카테고리입니다")
         String category) {}

@@ -32,6 +32,10 @@ app:
       enabled: false
     lease:
       observation-seconds: 0
+  # BY-1124 그룹 스케줄러(신청 만료 등) — 테스트는 서비스 메서드를 직접 부른다 (백그라운드 만료가 테스트 데이터를 건드리는 경합 방지)
+  group:
+    scheduler:
+      enabled: false
   # BY-828 랭킹 마감 스케줄러 — 테스트는 RankingCloser.closeDue를 직접 부른다 (매분 백그라운드 마감이 테스트 데이터를 건드리는 경합 방지)
   ranking:
     close:
