@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import project.study.group.support.BlockProbe;
 
 /** 계정 병합·탈퇴 테스트용 시드. 테이블마다 seedXxx를 두고, 처리기가 책임지는 컬럼 전부의 행 수를 센다. */
 @Component
@@ -250,6 +251,17 @@ public class UserDataFixture {
                 .update();
     }
 
+    /**
+     * 차단 — user가 other를 차단하고, 새로 만든 사람이 user를 차단한다. 양쪽 컬럼에 user의 행이 생긴다. other와 자리를 바꿔 한 번 더 불러도
+     * 기본 키가 부딪히지 않고, 두 번 부르면 user와 other 사이에 양쪽 방향 차단이 생긴다.
+     */
+    public void seedBlocks(long user, long other) {
+        BlockProbe blocks = new BlockProbe(jdbc);
+        Instant now = Instant.now();
+        blocks.insertBlock(user, other, now);
+        blocks.insertBlock(seedUser(), user, now);
+    }
+
     /** 모든 처리기가 책임지는 컬럼에서 userId를 가리키는 행의 합. */
     public long countRowsReferencing(long userId) {
         return countRowsReferencing(userId, Set.of());
@@ -315,5 +327,6 @@ public class UserDataFixture {
         seedRtcStat(room, user, other);
         seedRankingRecord(user, "board-" + user, day, 1);
         seedRankingBest(user, 1, "b", day);
+        seedBlocks(user, other);
     }
 }
