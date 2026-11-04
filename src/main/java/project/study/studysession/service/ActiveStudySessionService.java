@@ -4,13 +4,17 @@ import io.sentry.Sentry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.NotFoundException;
+import project.study.common.time.DefaultTimeZone;
 import project.study.studysession.buffer.ActiveSnapshotBuffer;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.dto.ActiveSessionSnapshotResponse;
@@ -22,6 +26,7 @@ import project.study.studysession.entity.ActiveStudySession;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
 import project.study.studysession.repository.ActiveStudySessionRepository;
+import project.study.user.service.UserTimeZones;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -38,18 +43,21 @@ public class ActiveStudySessionService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final ActiveSnapshotBuffer buffer;
+    private final UserTimeZones userTimeZones;
 
     public ActiveStudySessionService(
             ActiveStudySessionRepository activeStudySessionRepository,
             StudySessionService studySessionService,
             ObjectMapper objectMapper,
             Clock clock,
-            ActiveSnapshotBuffer buffer) {
+            ActiveSnapshotBuffer buffer,
+            UserTimeZones userTimeZones) {
         this.activeStudySessionRepository = activeStudySessionRepository;
         this.studySessionService = studySessionService;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.buffer = buffer;
+        this.userTimeZones = userTimeZones;
     }
 
     /**
@@ -62,13 +70,13 @@ public class ActiveStudySessionService {
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
         // 요청 검증에 활용
         studySessionService.validateAndBuildSessions(
-                userId,
+                new SessionOwner(userId, userTimeZones.zoneOf(userId)),
                 request.startedAt(),
                 request.reportedAt(),
                 request.studySec(),
                 request.focusSec(),
                 events,
-                request.subjectSegmentsOrEmpty());
+                new SessionAttachments(request.subjectSegmentsOrEmpty(), List.of()));
 
         // 코얼레싱 버퍼에 넣고 즉시 반환 — 주기적 벌크 flush로 DB·CPU 부하를 낮춘다 (BY-470).
         // events JSON 직렬화·DB 쓰기는 flush 시점에 세션당 1번만 일어난다.
@@ -134,7 +142,8 @@ public class ActiveStudySessionService {
                 draft.getFocusSec(),
                 events,
                 parseSubjectSegments(draft),
-                null); // 자동 확정본에는 완료 할 일이 없다 — 앱이 최종 제출에만 싣는다 (ADR-0022)
+                null, // 자동 확정본에는 완료 할 일이 없다 — 앱이 최종 제출에만 싣는다 (ADR-0022)
+                null); // 시간대가 없으면 사용자 시간대 — 하트비트 검증과 같은 기준이다
         try {
             studySessionService.create(draft.getUserId(), request, true);
         } catch (DuplicateSessionException e) {
@@ -179,9 +188,13 @@ public class ActiveStudySessionService {
     @Transactional(readOnly = true)
     public List<LivePiece> livePieces(Instant asOf, boolean extendFocusing) {
         List<LivePiece> pieces = new ArrayList<>();
-        for (ActiveStudySession draft : activeStudySessionRepository.findAll()) {
+        List<ActiveStudySession> drafts = activeStudySessionRepository.findAll();
+        Map<Long, ZoneId> zones = userTimeZones.zonesOf(
+                drafts.stream().map(ActiveStudySession::getUserId).collect(Collectors.toSet()));
+        for (ActiveStudySession draft : drafts) {
             try {
-                pieces.addAll(toLivePieces(draft, asOf, extendFocusing));
+                ZoneId zone = zones.getOrDefault(draft.getUserId(), DefaultTimeZone.ZONE);
+                pieces.addAll(toLivePieces(draft, zone, asOf, extendFocusing));
             } catch (RuntimeException e) {
                 log.warn("랭킹 집계에서 draft를 건너뜀: draftId={}", draft.getId(), e);
                 Sentry.captureException(e);
@@ -190,7 +203,7 @@ public class ActiveStudySessionService {
         return pieces;
     }
 
-    private List<LivePiece> toLivePieces(ActiveStudySession draft, Instant asOf, boolean extendFocusing) {
+    private List<LivePiece> toLivePieces(ActiveStudySession draft, ZoneId zone, Instant asOf, boolean extendFocusing) {
         List<StatusEvent> events =
                 objectMapper.readValue(draft.getEvents(), new TypeReference<List<StatusEventRequest>>() {}).stream()
                         .map(StatusEventRequest::toEntity)
@@ -202,9 +215,9 @@ public class ActiveStudySessionService {
                         0, Duration.between(draft.getLastSeenAt(), asOf).toSeconds())
                 : 0;
         List<Instant> cuts = StudySessionSplitter.computeCuts(
-                draft.getStartedAt(), draft.getReportedAt().plusSeconds(extendSec));
+                draft.getStartedAt(), draft.getReportedAt().plusSeconds(extendSec), zone);
         List<StudySession> sessions = StudySessionSplitter.buildSessions(
-                draft.getUserId(),
+                new SessionOwner(draft.getUserId(), zone),
                 cuts,
                 StudySessionSplitter.computeSegmentWeights(cuts, events),
                 draft.getStudySec() + extendSec,

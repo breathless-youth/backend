@@ -2,11 +2,13 @@ package project.study.user.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.ZoneId;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import project.study.common.BaseTimeEntity;
 import project.study.common.exception.ConflictException;
+import project.study.common.time.DefaultTimeZone;
 import project.study.user.nickname.Nicknames;
 
 @Table(
@@ -49,6 +51,9 @@ public class User extends BaseTimeEntity {
     private boolean notifyEnabled;
     private Instant deleteAt;
 
+    @Column(nullable = false)
+    private String timeZone = DefaultTimeZone.ZONE.getId();
+
     public User(Provider provider, String providerUserId) {
         this.provider = provider;
         this.providerUserId = providerUserId;
@@ -81,6 +86,10 @@ public class User extends BaseTimeEntity {
         if (category != null) {
             this.category = category;
         }
+    }
+
+    public void changeTimeZone(ZoneId zone) {
+        this.timeZone = zone.getId();
     }
 
     // 이전 키를 돌려준다 — 호출자가 커밋 뒤 그 파일을 지운다

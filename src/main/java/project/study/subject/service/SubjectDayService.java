@@ -26,16 +26,15 @@ import project.study.subject.entity.StudySubject;
 import project.study.subject.repository.DailyCompletionRepository;
 import project.study.subject.repository.StudySubjectLockRepository;
 import project.study.subject.repository.StudySubjectRepository;
+import project.study.user.service.UserTimeZones;
 
 /**
- * 날짜 기준 과목 목록과 날짜별 과목 완료 (BY-1053, ADR-0038). 홈 날짜 줄의 하루는 그 달력 날짜의 05시부터 다음 날 05시(KST)다 —
+ * 날짜 기준 과목 목록과 날짜별 과목 완료 (BY-1053, ADR-0038). 홈 날짜 줄의 하루는 그 달력 날짜의 05시부터 다음 날 05시(사용자 시간대)다 —
  * 플래너와 같다(위키 BY-949 §7). 과목 자체의 생성·이름·순서·할 일은 {@link StudySubjectService}다.
  */
 @Service
 @RequiredArgsConstructor
 public class SubjectDayService {
-
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     /** 홈 날짜의 하루가 시작하는 시각. */
     static final LocalTime HOME_DAY_START = LocalTime.of(5, 0);
@@ -45,17 +44,19 @@ public class SubjectDayService {
     private final StudySessionRepository sessionRepository;
     private final DailyCompletionRepository completionRepository;
     private final Clock clock;
+    private final UserTimeZones userTimeZones;
 
     /**
      * 그날 있던 과목에 그날의 과목별 시간과 완료 여부를 붙인다. 있었는지는 {@link StudySubject#existedDuring} 한 곳이 판단한다.
-     * 순서는 살아있는 과목(저장된 순서) → 지운 과목(id). 시간은 그 창에 걸치는 세션(통계 날짜가 그날·다음 날인 것, 길이 무관)의
-     * 과목 구간을 창으로 잘라 합산한다 — 자정 분할이라 전날 세션은 창에 닿지 않는다. 할 일은 싣지 않는다(일간 조회의
-     * subjects[].tasks가 출처).
+     * 순서는 살아있는 과목(저장된 순서) → 지운 과목(id). 시간은 그 창과 시각이 겹치는 세션(길이 무관)의
+     * 과목 구간을 창으로 잘라 합산한다. 세션은 통계 날짜가 아니라 시각으로 고른다 — 시간대를 바꾼 사용자의 예전 세션은 예전
+     * 시간대의 통계 날짜라 지금 시간대의 날짜와 하루 어긋날 수 있다. 할 일은 싣지 않는다(일간 조회의 subjects[].tasks가 출처).
      */
     @Transactional(readOnly = true)
     public List<SubjectDayResponse> subjectsOn(Long userId, LocalDate date) {
-        Instant dayStart = homeDayStart(date);
-        Instant dayEnd = homeDayStart(date.plusDays(1));
+        ZoneId zone = userTimeZones.zoneOf(userId);
+        Instant dayStart = homeDayStart(date, zone);
+        Instant dayEnd = homeDayStart(date.plusDays(1), zone);
         List<StudySubject> live =
                 subjectRepository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscIdAsc(userId).stream()
                         .filter(subject -> subject.existedDuring(dayStart, dayEnd))
@@ -64,7 +65,7 @@ public class SubjectDayService {
                 .filter(subject -> subject.existedDuring(dayStart, dayEnd))
                 .sorted(Comparator.comparing(StudySubject::getId))
                 .toList();
-        List<StudySession> sessions = sessionRepository.findInPeriodWithMinFocusSec(userId, date, date.plusDays(1), 0);
+        List<StudySession> sessions = sessionRepository.findOverlapping(userId, dayStart, dayEnd);
         Map<Long, SubjectTimeSum> times = DaySubjectTimes.sum(sessions, dayStart, dayEnd);
         Map<Long, Instant> completedAt =
                 completionRepository
@@ -90,7 +91,7 @@ public class SubjectDayService {
 
     /**
      * 과목을 그 날짜에 완료한 것으로 기록한다 — 이미 기록돼 있으면 그대로 둔다(멱등). 지운 과목도 그날에 있었으면 된다.
-     * 미래 날짜(오늘 KST 달력 날짜보다 뒤)와 그날 없던 과목은 400, 내 과목이 아니면 404.
+     * 미래 날짜(사용자 시간대의 오늘 달력 날짜보다 뒤)와 그날 없던 과목은 400, 내 과목이 아니면 404.
      */
     @Transactional
     public void complete(Long userId, Long subjectId, LocalDate date) {
@@ -110,19 +111,20 @@ public class SubjectDayService {
     }
 
     private void assertSubjectOn(Long userId, Long subjectId, LocalDate date) {
-        if (date.isAfter(clock.instant().atZone(KST).toLocalDate())) {
+        ZoneId zone = userTimeZones.zoneOf(userId);
+        if (date.isAfter(clock.instant().atZone(zone).toLocalDate())) {
             throw new BadRequestException("미래 날짜에는 완료를 기록할 수 없습니다");
         }
         StudySubject subject = subjectRepository
                 .findByIdAndUserId(subjectId, userId)
                 .orElseThrow(() -> new NotFoundException("과목을 찾을 수 없습니다"));
-        if (!subject.existedDuring(homeDayStart(date), homeDayStart(date.plusDays(1)))) {
+        if (!subject.existedDuring(homeDayStart(date, zone), homeDayStart(date.plusDays(1), zone))) {
             throw new BadRequestException("그날에 없던 과목입니다");
         }
     }
 
-    /** 홈 날짜의 하루 시작 — 그 달력 날짜의 05:00 KST. */
-    static Instant homeDayStart(LocalDate date) {
-        return date.atTime(HOME_DAY_START).atZone(KST).toInstant();
+    /** 홈 날짜의 하루 시작 — 그 달력 날짜의 현지 05:00. */
+    static Instant homeDayStart(LocalDate date, ZoneId zone) {
+        return date.atTime(HOME_DAY_START).atZone(zone).toInstant();
     }
 }

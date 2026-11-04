@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -13,8 +14,8 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+import project.study.common.time.DefaultTimeZone;
 import project.study.studysession.entity.StudySession;
-import project.study.studysession.entity.TimeSlot;
 import project.study.studysession.repository.StudySessionRepository;
 
 /**
@@ -55,7 +56,11 @@ public class SessionSlotBackfill implements ApplicationRunner {
         for (StudySession session : sessions) {
             try {
                 session.attachSlots(SlotSplitter.split(
-                        session.getStartedAt(), session.getEndedAt(), session.getFocusSec(), session.getEvents()));
+                        session.getStartedAt(),
+                        session.getEndedAt(),
+                        session.getFocusSec(),
+                        session.getEvents(),
+                        ZoneId.of(session.getTimeZone())));
                 filled++;
             } catch (RuntimeException e) {
                 log.warn("시간대 구간 백필에서 세션을 건너뜀: sessionId={}", session.getId(), e);
@@ -66,10 +71,10 @@ public class SessionSlotBackfill implements ApplicationRunner {
     }
 
     /**
-     * 백필을 시작할 날짜 — 지난 주 월요일. 이번 주 판과 직전 주(offset=-1) 판이 모두 덮인다.
+     * 백필을 시작할 날짜 — 지난 주 월요일(KST). 이번 주 판과 직전 주(offset=-1) 판이 모두 덮인다.
      */
     static LocalDate fromDate(Instant now) {
-        return TimeSlot.slotDateOf(now)
+        return LocalDate.ofInstant(now, DefaultTimeZone.ZONE)
                 .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
                 .minusDays(7);
     }

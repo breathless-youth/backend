@@ -27,6 +27,7 @@ import project.study.studysession.entity.TimeSlot;
 /**
  * 랭킹 집계 전용 읽기 쿼리 (BY-828) — 전체 사용자의 기간·구간·누적 값을 사용자별 한 줄로 낸다.
  * userId를 주면 그 사용자 한 줄만 계산한다(내 값은 캐시와 상관없이 매번 새로 읽는다). 탈퇴(DELETE) 사용자는 뺀다.
+ * 사용자 시간대가 서울인 사용자만 센다(ADR-0041) — 랭킹 창이 KST라 다른 시간대의 stat_date·slot_date가 섞이면 하루가 어긋난다.
  * 기준은 다른 화면과 같다 — 순공 1분 미만 조각 제외(ADR-0009), 연속 일수는 세션 5분 기준.
  * 측정한 세션만 센다 — 수동 기록은 개인 기록에만 더한다(ADR-0031).
  */
@@ -34,7 +35,7 @@ import project.study.studysession.entity.TimeSlot;
 @RequiredArgsConstructor
 public class StudySessionRankingQueries {
 
-    private static final String NOT_WITHDRAWN = "u.status IS DISTINCT FROM 'DELETE'";
+    private static final String RANKED_USER = "u.status IS DISTINCT FROM 'DELETE' AND u.time_zone = 'Asia/Seoul'";
 
     private static final RowMapper<RankingTotalRow> TOTAL_ROW = (rs, i) -> new RankingTotalRow(
             rs.getLong("user_id"),
@@ -64,7 +65,7 @@ public class StudySessionRankingQueries {
                   AND s.focus_sec >= :minFocusSec
                   AND s.source = 'MEASURED'
                   AND %s%s
-                GROUP BY s.user_id, u.nickname, u.profile_image""".formatted(NOT_WITHDRAWN, userFilter(userId) + excludeFilter(excludeSubmission));
+                GROUP BY s.user_id, u.nickname, u.profile_image""".formatted(RANKED_USER, userFilter(userId) + excludeFilter(excludeSubmission));
         return jdbc.sql(sql)
                 .paramSource(exclude(range(userId, from, to), excludeSubmission))
                 .query(TOTAL_ROW)
@@ -91,7 +92,7 @@ public class StudySessionRankingQueries {
                   AND s.focus_sec >= :minFocusSec
                   AND s.source = 'MEASURED'
                   AND %s%s
-                GROUP BY s.user_id, u.nickname, u.profile_image""".formatted(NOT_WITHDRAWN, userFilter(userId) + excludeFilter(excludeSubmission));
+                GROUP BY s.user_id, u.nickname, u.profile_image""".formatted(RANKED_USER, userFilter(userId) + excludeFilter(excludeSubmission));
         return jdbc.sql(sql)
                 .paramSource(exclude(range(userId, from, to).addValue("slot", slot.name()), excludeSubmission))
                 .query(TOTAL_ROW)
@@ -121,7 +122,7 @@ public class StudySessionRankingQueries {
                 FROM days d
                 JOIN users u ON u.id = d.user_id
                 WHERE %s
-                GROUP BY d.user_id, u.nickname, u.profile_image""".formatted(userFilter(userId) + excludeFilter(excludeSubmission), NOT_WITHDRAWN);
+                GROUP BY d.user_id, u.nickname, u.profile_image""".formatted(userFilter(userId) + excludeFilter(excludeSubmission), RANKED_USER);
         MapSqlParameterSource params = params(userId)
                 .addValue("focusFrom", focusFrom)
                 .addValue("today", today)
@@ -170,7 +171,7 @@ public class StudySessionRankingQueries {
                 FROM best b
                 JOIN runs r ON r.user_id = b.user_id AND r.stat_date = b.end_date
                 JOIN users u ON u.id = b.user_id
-                WHERE %s""".formatted(userFilter(userId) + excludeFilter(excludeSubmission), NOT_WITHDRAWN);
+                WHERE %s""".formatted(userFilter(userId) + excludeFilter(excludeSubmission), RANKED_USER);
         MapSqlParameterSource params =
                 params(userId).addValue("today", today).addValue("minFocusSec", MIN_STREAK_FOCUS_SEC);
         return jdbc.sql(sql)
@@ -192,7 +193,7 @@ public class StudySessionRankingQueries {
             return Map.of();
         }
         String sql = "SELECT u.id, u.nickname, u.profile_image FROM users u WHERE u.id IN (:ids) "
-                + "AND u.nickname IS NOT NULL AND " + NOT_WITHDRAWN;
+                + "AND u.nickname IS NOT NULL AND " + RANKED_USER;
         return jdbc
                 .sql(sql)
                 .paramSource(new MapSqlParameterSource("ids", userIds))

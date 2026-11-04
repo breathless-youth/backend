@@ -50,7 +50,7 @@ class SessionSlotPersistTest {
         int length = (int) Duration.between(start, end).toSeconds();
         studySessionService.create(
                 userId,
-                new StudySessionCreateRequest(start, end, length, focusSec, List.of(), null, null),
+                new StudySessionCreateRequest(start, end, length, focusSec, List.of(), null, null, null),
                 autoFinalized);
     }
 

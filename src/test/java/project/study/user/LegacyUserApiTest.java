@@ -11,6 +11,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
@@ -30,6 +31,9 @@ class LegacyUserApiTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private MvcTestResult register(String deviceId) {
         return mvc.post()
@@ -92,6 +96,21 @@ class LegacyUserApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.goal", v -> assertThat(v).isEqualTo("올해 안에 이직 성공"));
+    }
+
+    @Test
+    void 경로_userId로_시간대를_보내면_저장한다() {
+        long userId = registerUser();
+
+        assertThat(mvc.patch()
+                        .uri("/api/users/" + userId + "/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"timeZone\": \"Europe/London\"}"))
+                .hasStatusOk()
+                .bodyJson()
+                .doesNotHavePath("$.timeZone");
+        assertThat(jdbc.queryForObject("SELECT time_zone FROM users WHERE id = ?", String.class, userId))
+                .isEqualTo("Europe/London");
     }
 
     @Test

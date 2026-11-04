@@ -3,6 +3,7 @@ package project.study.studysession.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -20,6 +21,8 @@ import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
+import project.study.user.repository.UserRepository;
+import project.study.user.service.UserTimeZones;
 
 /** StudySessionServiceTest에서 자정 분할·배분 관련 테스트만 분리 — 파일 길이 제한(400줄) 준수 목적. */
 @ExtendWith(MockitoExtension.class)
@@ -52,7 +55,8 @@ class StudySessionMidnightSplitTest {
                 studySessionRepository,
                 activeStudySessionRepository,
                 CLOCK,
-                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY,
+                new UserTimeZones(mock(UserRepository.class)));
     }
 
     private StatusEvent event(EventStatus status, String startedAt, String endedAt) {

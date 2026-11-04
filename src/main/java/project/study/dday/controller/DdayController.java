@@ -51,7 +51,7 @@ public class DdayController {
     @ApiResponse(responseCode = "200", description = "저장된 D-Day")
     @ApiResponse(
             responseCode = "400",
-            description = "제목 누락·공백·10자 초과, 날짜 누락, 또는 오늘(Asia/Seoul)보다 이른 날짜",
+            description = "제목 누락·공백·10자 초과, 날짜 누락, 또는 오늘(사용자 시간대, 기본 Asia/Seoul)보다 이른 날짜",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,

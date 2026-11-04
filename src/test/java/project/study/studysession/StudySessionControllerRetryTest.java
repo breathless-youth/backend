@@ -48,7 +48,7 @@ class StudySessionControllerRetryTest {
     private StudySessionController controller;
 
     private final StudySessionCreateRequest request = new StudySessionCreateRequest(
-            STARTED_AT, STARTED_AT.plusSeconds(3600), 3600, 3400, List.of(), null, List.of(9L));
+            STARTED_AT, STARTED_AT.plusSeconds(3600), 3600, 3400, List.of(), null, List.of(9L), null);
 
     /** 소유 검증이 돌려준 완료 할 일 — 재시도·폴백 어느 경로든 첫 검증 결과가 그대로 create에 실려야 한다. */
     private static final List<CompletedTask> COMPLETED = List.of(new CompletedTask(9L, null));

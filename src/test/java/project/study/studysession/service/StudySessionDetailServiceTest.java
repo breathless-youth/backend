@@ -2,6 +2,7 @@ package project.study.studysession.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -23,6 +24,8 @@ import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
+import project.study.user.repository.UserRepository;
+import project.study.user.service.UserTimeZones;
 
 @ExtendWith(MockitoExtension.class)
 class StudySessionDetailServiceTest {
@@ -43,7 +46,8 @@ class StudySessionDetailServiceTest {
                 studySessionRepository,
                 activeStudySessionRepository,
                 CLOCK,
-                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY,
+                new UserTimeZones(mock(UserRepository.class)));
     }
 
     @Test

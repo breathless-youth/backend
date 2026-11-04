@@ -12,7 +12,8 @@ public final class RankingCalendar {
     /** 명예의 전당 집계 시작일 — 서비스 시작 전이라 모든 기록을 포함한다. */
     public static final LocalDate ALL_TIME_START = LocalDate.of(2000, 1, 1);
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    /** 랭킹판의 날짜와 구간은 사용자 시간대와 상관없이 KST로 센다 (ADR-0041). */
+    public static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private RankingCalendar() {}
 

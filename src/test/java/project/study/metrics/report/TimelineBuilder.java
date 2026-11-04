@@ -74,12 +74,12 @@ public final class TimelineBuilder {
     }
 
     public TimelineBuilder session(LocalDate statDate, int startHour, int minutes, int pauses, boolean social) {
-        sessions.add(new SessionFact(userId, statDate, at(statDate, startHour), minutes * 60, pauses, social));
+        sessions.add(new SessionFact(userId, at(statDate, startHour), minutes * 60, pauses, social));
         return this;
     }
 
-    public TimelineBuilder sessionAt(Instant startedAt, LocalDate statDate, int focusSec) {
-        sessions.add(new SessionFact(userId, statDate, startedAt, focusSec, 0, false));
+    public TimelineBuilder sessionAt(Instant startedAt, int focusSec) {
+        sessions.add(new SessionFact(userId, startedAt, focusSec, 0, false));
         return this;
     }
 

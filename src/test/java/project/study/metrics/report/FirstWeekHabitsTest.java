@@ -16,7 +16,7 @@ class FirstWeekHabitsTest {
         UserTimeline timeline = user(1, D0)
                 .session(D0, 22, 60, 1, true)
                 .session(D0.plusDays(1), 22, 30, 0, false)
-                .sessionAt(TimelineBuilder.at(D0, 9), D0, 30) // 30초 — 습관에서 빠진다
+                .sessionAt(TimelineBuilder.at(D0, 9), 30) // 30초 — 습관에서 빠진다
                 .session(D0.plusDays(7), 7, 90, 5, false) // 둘째 주 — 빠진다
                 .build();
 

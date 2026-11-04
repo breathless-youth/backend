@@ -39,8 +39,8 @@ class UserTimelineTest {
     void 자정_분할로_조각난_세션은_각_조각이_5분_미만이면_공부한_날이_아니다() {
         // ADR-0012 결정 3 — 23:56~00:04 8분 세션이 4분·4분 두 조각이면 어느 날도 공부한 날이 아니다
         UserTimeline timeline = user(1, D0)
-                .sessionAt(at(D0, 23).plusSeconds(56 * 60), D0, 240)
-                .sessionAt(at(D0.plusDays(1), 0), D0.plusDays(1), 240)
+                .sessionAt(at(D0, 23).plusSeconds(56 * 60), 240)
+                .sessionAt(at(D0.plusDays(1), 0), 240)
                 .build();
 
         assertThat(timeline.studyDays(D0, D0.plusDays(1))).isZero();
@@ -106,8 +106,8 @@ class UserTimelineTest {
         // 23시 가입 → 00:30 시작 세션은 다음 날 stat_date지만 3시간 안이다
         UserTimeline timeline = user(1, D0)
                 .signupHour(23)
-                .sessionAt(at(D0.plusDays(1), 0).plusSeconds(1800), D0.plusDays(1), 700)
-                .sessionAt(at(D0.plusDays(1), 2).plusSeconds(1), D0.plusDays(1), 900)
+                .sessionAt(at(D0.plusDays(1), 0).plusSeconds(1800), 700)
+                .sessionAt(at(D0.plusDays(1), 2).plusSeconds(1), 900)
                 .build();
 
         assertThat(timeline.focusStartedWithin(Duration.ofHours(3))).isEqualTo(700);

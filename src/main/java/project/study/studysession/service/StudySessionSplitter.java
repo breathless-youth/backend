@@ -2,7 +2,6 @@ package project.study.studysession.service;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -15,15 +14,13 @@ import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
 
 /**
- * 세션을 KST 자정 경계로 분할하고, studySec/focusSec을 조각별로 배분하는 순수 로직 (BY-447, BY-471).
+ * 세션을 세션 시간대의 현지 자정 경계로 분할하고, studySec/focusSec을 조각별로 배분하는 순수 로직 (BY-447, BY-471).
  *
  * <p>안 넘으면 조각 1개, 걸친 이벤트는 시각 기준으로 각 조각에 귀속된다. PAUSE는 총공부·순공 타이머를
  * 모두 멈추므로 두 배분 가중치에서 다 빠지고, 나머지 이벤트(PHONE/DEVICE/AWAY/SLEEP)는 순공 타이머만 멈추므로
  * focusSec 배분에서만 빠진다.
  */
 final class StudySessionSplitter {
-
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private StudySessionSplitter() {}
 
@@ -35,13 +32,13 @@ final class StudySessionSplitter {
             long totalStudyActiveSec,
             long totalFocusActiveSec) {}
 
-    /** 조각 경계를 확정한다 (KST 자정 기준 — 24시간 한도 덕에 조각은 최대 2개). */
-    static List<Instant> computeCuts(Instant startedAt, Instant endedAt) {
+    /** 조각 경계를 확정한다 (현지 자정 기준 — 24시간 한도라 조각은 보통 2개, 23시간인 날을 끼면 3개까지). */
+    static List<Instant> computeCuts(Instant startedAt, Instant endedAt, ZoneId zone) {
         List<Instant> cuts = new ArrayList<>();
         cuts.add(startedAt);
-        for (Instant boundary = nextKstMidnight(startedAt);
+        for (Instant boundary = nextMidnight(startedAt, zone);
                 boundary.isBefore(endedAt);
-                boundary = nextKstMidnight(boundary)) {
+                boundary = nextMidnight(boundary, zone)) {
             cuts.add(boundary);
         }
         cuts.add(endedAt);
@@ -118,7 +115,7 @@ final class StudySessionSplitter {
      * 조각에 붙인다.
      */
     static List<StudySession> buildSessions(
-            Long userId,
+            SessionOwner owner,
             List<Instant> cuts,
             SegmentWeights weights,
             int studySec,
@@ -134,8 +131,9 @@ final class StudySessionSplitter {
             boolean last = i == segmentCount - 1;
             long segmentStudySec = last ? studySec - allocatedStudySec : studyShare(weights, i, studySec);
             long segmentFocusSec = last ? focusSec - allocatedFocusSec : focusShare(weights, i, focusSec);
-            StudySession session = buildSession(
-                    userId,
+            StudySession session = new StudySession(
+                    owner.userId(),
+                    owner.zone(),
                     cuts.get(i),
                     cuts.get(i + 1),
                     (int) segmentStudySec,
@@ -148,7 +146,8 @@ final class StudySessionSplitter {
                     cuts.get(i),
                     cuts.get(i + 1),
                     (int) segmentFocusSec,
-                    weights.segmentEvents().get(i)));
+                    weights.segmentEvents().get(i),
+                    owner.zone()));
             sessions.add(session);
             allocatedStudySec += segmentStudySec;
             allocatedFocusSec += segmentFocusSec;
@@ -201,12 +200,6 @@ final class StudySessionSplitter {
         return value == 0 ? 0 : value * weight / total;
     }
 
-    private static StudySession buildSession(
-            Long userId, Instant startedAt, Instant endedAt, int studySec, int focusSec, List<StatusEvent> events) {
-        LocalDate statDate = startedAt.atZone(KST).toLocalDate();
-        return new StudySession(userId, statDate, startedAt, endedAt, studySec, focusSec, events);
-    }
-
     private static long sumDuration(List<StatusEvent> events) {
         return events.stream()
                 .mapToLong(
@@ -222,8 +215,8 @@ final class StudySessionSplitter {
                 .sum();
     }
 
-    private static Instant nextKstMidnight(Instant instant) {
-        return instant.atZone(KST).toLocalDate().plusDays(1).atStartOfDay(KST).toInstant();
+    private static Instant nextMidnight(Instant instant, ZoneId zone) {
+        return instant.atZone(zone).toLocalDate().plusDays(1).atStartOfDay(zone).toInstant();
     }
 
     /** 이벤트들을 [segmentStart, segmentEnd) 구간으로 잘라낸다. 0초 조각은 버린다. */

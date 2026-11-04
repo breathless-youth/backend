@@ -52,7 +52,7 @@ public class StudySessionStatsController {
                     **살아있는 과목은 전부** `GET /api/subjects`와 같은 순서로 실린다 — 그날 공부하지 않았어도, 할 일이 없어도. \
                     그 뒤에 **지운 과목**(deleted=true)이 id 오름차순으로 붙는데, 그날 세션이 참조했거나 그날의 할 일이 있는 것만이다. \
                     sessions[].subjectSegments[].subjectId와 completedTasks[].subjectId는 항상 여기서 찾을 수 있다
-                    - `subjects[].tasks` — 그 과목의 그날(KST 자정 기준) 할 일, id 오름차순. 그날이 끝나기 전에 만들었고 그날 시작 전에 \
+                    - `subjects[].tasks` — 그 과목의 그날(사용자 시간대 자정 기준) 할 일, id 오름차순. 그날이 끝나기 전에 만들었고 그날 시작 전에 \
                     완료하거나 지우지 않은 것이다 — 미완료도, 세션 없이 체크한 것도 실린다. \
                     `done`·`doneAt`·`deleted`는 **지금** 값이다: 그날 뒤에 완료한 할 일은 `done: true`와 그날보다 뒤의 `doneAt`으로 \
                     실리므로, 그날 완료했는지는 앱이 `doneAt`으로 판단한다(미완료면 `doneAt: null`). 그날 이후에 지운 할 일은 \
@@ -82,7 +82,7 @@ public class StudySessionStatsController {
                     그날은 공부한 날로 친다 (하루 합계가 아니라 세션 단위 기준). 유저에 저장된 값이 아니라 세션 \
                     이력에서 매번 계산한다.
 
-                    - `streak` — 오늘(오늘 기록이 아직 없으면 어제)부터 거꾸로 이어진 연속 공부일. \
+                    - `streak` — 사용자 시간대의 오늘(오늘 기록이 아직 없으면 어제)부터 거꾸로 이어진 연속 공부일. \
                     오늘 기록이 없어도 어제까지 이어졌으면 유지 중으로 본다 — 오늘이 지나기 전엔 끊긴 게 아니다. \
                     어제도 오늘도 기록이 없으면 0
                     - `maxStreak` — 전체 이력에서 가장 길었던 연속 공부일
@@ -107,10 +107,10 @@ public class StudySessionStatsController {
     }
 
     @Operation(summary = "누적 공부일 조회", description = """
-                    가입 이후 공부한 날이 총 며칠인지 반환한다. 그날(KST) 순공시간(focusSec)이 1분 이상인 세션이 \
+                    가입 이후 공부한 날이 총 며칠인지 반환한다. 그날(통계 날짜) 순공시간(focusSec)이 1분 이상인 세션이 \
                     하나라도 있으면 공부한 날로 센다 — 일별 목록 조회에 세션이 보이는 날과 같은 기준이며, \
                     스트릭 기준(5분)과는 다르다. 자정을 걸친 세션은 날짜별 조각으로 나뉘어 저장되며 각 조각의 순공시간이 \
-                    1분 이상일 때 그 날짜가 각각 인정된다. 오늘(KST)까지만 센다.
+                    1분 이상일 때 그 날짜가 각각 인정된다. 사용자 시간대의 오늘까지만 센다.
 
                     기록이 없거나 존재하지 않는 userId면 totalDays는 0이다 (다른 통계 조회와 같은 계약).""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 누적 공부일 수")

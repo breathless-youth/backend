@@ -45,7 +45,7 @@ public class ManualStudySessionController {
             끝이 닿는 것은 겹침이 아니다. 남는 조각의 경계는 분 단위로 안쪽에 맞추고 1분 미만 조각은 버린다. \
             남는 조각이 없으면 `409`다.
 
-            묶음 — 겹침으로 잘리거나 한국 시간 자정을 넘겨 나뉜 조각은 모두 첫 조각의 시작 시각을 공유하는 한 묶음이다. \
+            묶음 — 겹침으로 잘리거나 세션 시간대의 자정을 넘겨 나뉜 조각은 모두 첫 조각의 시작 시각을 공유하는 한 묶음이다. \
             응답은 조각 배열이고 `source`는 `MANUAL`, `studySec = focusSec`, `events`는 비어 있다.""";
 
     private final ManualStudySessionService manualStudySessionService;

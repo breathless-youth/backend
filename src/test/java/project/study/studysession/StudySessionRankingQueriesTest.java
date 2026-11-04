@@ -224,4 +224,33 @@ class StudySessionRankingQueriesTest {
                 .containsExactly(key);
         assertThat(source.activeProfiles(List.of(a))).containsEntry(a, new RankingProfile(nickname(a), key));
     }
+
+    @Test
+    void 서울_시간대가_아닌_사용자는_기간_구간_누적_연속_진행_중_프로필_모두에서_빠진다() {
+        long seoul = user();
+        long newYork = user();
+        jdbc.update("UPDATE users SET time_zone = 'America/New_York' WHERE id = ?", newYork);
+        for (long userId : List.of(seoul, newYork)) {
+            long id = session(userId, FROM.plusDays(1), 9, 60, 3000);
+            slot(id, TimeSlot.MORNING, FROM.plusDays(1), 3000);
+        }
+
+        assertThat(source.periodTotals(FROM, TO, null))
+                .extracting(RankingTotalRow::userId)
+                .contains(seoul)
+                .doesNotContain(newYork);
+        assertThat(source.slotTotals(TimeSlot.MORNING, FROM, TO, null))
+                .extracting(RankingTotalRow::userId)
+                .contains(seoul)
+                .doesNotContain(newYork);
+        assertThat(source.studyDays(ALL_TIME_START, TODAY, null))
+                .extracting(RankingDaysRow::userId)
+                .contains(seoul)
+                .doesNotContain(newYork);
+        assertThat(source.maxStreaks(TODAY, null))
+                .extracting(RankingStreakRow::userId)
+                .contains(seoul)
+                .doesNotContain(newYork);
+        assertThat(source.activeProfiles(List.of(seoul, newYork))).containsOnlyKeys(seoul);
+    }
 }
