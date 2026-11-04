@@ -224,4 +224,60 @@ class StudySessionRankingQueriesTest {
                 .containsExactly(key);
         assertThat(source.activeProfiles(List.of(a))).containsEntry(a, new RankingProfile(nickname(a), key));
     }
+
+    @Test
+    void 서울_사용자라도_해외에서_기록한_세션은_기간_구간_누적_연속에_넣지_않는다() {
+        long traveler = user();
+        long seoulSession = session(traveler, FROM.plusDays(1), 9, 60, 3000);
+        slot(seoulSession, TimeSlot.MORNING, FROM.plusDays(1), 3000);
+        long abroadSession = session(traveler, FROM.plusDays(2), 9, 60, 3000);
+        slot(abroadSession, TimeSlot.MORNING, FROM.plusDays(2), 3000);
+        jdbc.update("UPDATE study_session SET time_zone = 'America/New_York' WHERE id = ?", abroadSession);
+
+        assertThat(source.periodTotals(FROM, TO, traveler))
+                .singleElement()
+                .extracting(RankingTotalRow::focusSec)
+                .isEqualTo(3000L);
+        assertThat(source.slotTotals(TimeSlot.MORNING, FROM, TO, traveler))
+                .singleElement()
+                .extracting(RankingTotalRow::focusSec)
+                .isEqualTo(3000L);
+        assertThat(source.studyDays(ALL_TIME_START, TODAY, traveler))
+                .singleElement()
+                .extracting(RankingDaysRow::days)
+                .isEqualTo(1);
+        assertThat(source.maxStreaks(TODAY, traveler))
+                .singleElement()
+                .extracting(RankingStreakRow::days)
+                .isEqualTo(1);
+    }
+
+    @Test
+    void 서울_시간대가_아닌_사용자는_기간_구간_누적_연속_진행_중_프로필_모두에서_빠진다() {
+        long seoul = user();
+        long newYork = user();
+        jdbc.update("UPDATE users SET time_zone = 'America/New_York' WHERE id = ?", newYork);
+        for (long userId : List.of(seoul, newYork)) {
+            long id = session(userId, FROM.plusDays(1), 9, 60, 3000);
+            slot(id, TimeSlot.MORNING, FROM.plusDays(1), 3000);
+        }
+
+        assertThat(source.periodTotals(FROM, TO, null))
+                .extracting(RankingTotalRow::userId)
+                .contains(seoul)
+                .doesNotContain(newYork);
+        assertThat(source.slotTotals(TimeSlot.MORNING, FROM, TO, null))
+                .extracting(RankingTotalRow::userId)
+                .contains(seoul)
+                .doesNotContain(newYork);
+        assertThat(source.studyDays(ALL_TIME_START, TODAY, null))
+                .extracting(RankingDaysRow::userId)
+                .contains(seoul)
+                .doesNotContain(newYork);
+        assertThat(source.maxStreaks(TODAY, null))
+                .extracting(RankingStreakRow::userId)
+                .contains(seoul)
+                .doesNotContain(newYork);
+        assertThat(source.activeProfiles(List.of(seoul, newYork))).containsOnlyKeys(seoul);
+    }
 }

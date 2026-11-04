@@ -12,7 +12,7 @@ import project.study.subject.entity.StudyTask;
 
 public interface StudyTaskRepository extends JpaRepository<StudyTask, Long> {
 
-    // 목록에 보이는 할 일 — 미완료 전부 + 완료 시각이 오늘(KST 자정 이후)인 것. 어제 완료한 것은 숨는다(삭제 아님)
+    // 목록에 보이는 할 일 — 미완료 전부 + 완료 시각이 오늘(사용자 시간대 자정 이후)인 것. 어제 완료한 것은 숨는다(삭제 아님)
     @Query("""
             select t
             from StudyTask t

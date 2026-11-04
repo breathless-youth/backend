@@ -16,6 +16,7 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -25,6 +26,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.BatchSize;
+import project.study.common.time.DefaultTimeZone;
 
 @Entity
 @Table(name = "study_session")
@@ -41,6 +43,10 @@ public class StudySession {
 
     @Column(name = "stat_date", nullable = false)
     private LocalDate statDate;
+
+    // 자정 분할·statDate·구간 날짜를 정한 시간대. 사용자가 시간대를 바꿔도 지난 기록은 이 값 그대로 둔다
+    @Column(name = "time_zone", nullable = false)
+    private String timeZone;
 
     // (userId, startedAt)이 멱등 키다 — 재전송 중복 저장은 DB 유니크 제약(uq_study_session_user_started_at)이 막는다
     @Column(name = "started_at", nullable = false)
@@ -102,7 +108,25 @@ public class StudySession {
     @Column(name = "source", nullable = false)
     private StudySessionSource source = StudySessionSource.MEASURED;
 
-    // 검증·계산은 StudySessionService.validateAndBuildSessions가 담당한다 — 엔티티는 저장 데이터만 보관
+    /**
+     * 시간대 기준 세션 조각.
+     *
+     * statDate는 시작 시각의 현지 날짜다.
+     * 검증·분할은 StudySessionService.validateAndBuildSessions가 하고 엔티티는 저장 데이터만 보관한다.
+     */
+    public StudySession(
+            Long userId,
+            ZoneId zone,
+            Instant startedAt,
+            Instant endedAt,
+            int studySec,
+            int focusSec,
+            List<StatusEvent> events) {
+        this(userId, startedAt.atZone(zone).toLocalDate(), startedAt, endedAt, studySec, focusSec, events);
+        this.timeZone = zone.getId();
+    }
+
+    /** statDate를 직접 정하는 세션 조각 — 시간대는 기본값(서울)이다. */
     public StudySession(
             Long userId,
             LocalDate statDate,
@@ -119,6 +143,7 @@ public class StudySession {
         this.studySec = studySec;
         this.focusSec = focusSec;
         this.events = new ArrayList<>(events);
+        this.timeZone = DefaultTimeZone.ZONE.getId();
     }
 
     /** 자정 분할 조각을 루트 제출에 귀속시킨다 — 분할 직후 서비스만 호출한다 (기본값은 자신의 시작 시각 = 단독 세션). */

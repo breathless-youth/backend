@@ -10,6 +10,6 @@ public record TaskResponse(
         String name,
 
         @Schema(
-                description = "완료 시각 (UTC, ISO-8601) — 미완료면 null. 완료한 날(KST)이 지나면 목록에서 빠진다",
+                description = "완료 시각 (UTC, ISO-8601) — 미완료면 null. 완료한 날(사용자 시간대)이 지나면 목록에서 빠진다",
                 example = "2026-09-20T05:12:00Z")
         Instant doneAt) {}

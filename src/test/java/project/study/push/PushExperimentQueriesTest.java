@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.TestcontainersConfiguration;
 import project.study.metrics.report.fact.ExperimentFact;
+import project.study.push.dto.FirstSessionCandidate;
 import project.study.push.repository.PushExperimentQueries;
 
 /** 첫 세션 실험의 대상 판정·배정·첫 세션 채우기·발송 자리 (BY-1070). */
@@ -98,9 +100,13 @@ class PushExperimentQueriesTest {
         long deleted = eligibleUser(T0.plusSeconds(6));
         jdbcTemplate.update("update users set status = 'DELETE' where id = ?", deleted);
         long outside = eligibleUser(T1);
+        jdbcTemplate.update("update users set time_zone = 'America/New_York' where id = ?", manualOnly);
 
         assertThat(queries.findFirstSessionCandidates(T0, T1))
-                .containsExactly(eligible, manualOnly)
+                .containsExactly(
+                        new FirstSessionCandidate(eligible, T0, ZoneId.of("Asia/Seoul")),
+                        new FirstSessionCandidate(manualOnly, T0.plusSeconds(1), ZoneId.of("America/New_York")))
+                .extracting(FirstSessionCandidate::userId)
                 .doesNotContain(measured, active, noToken, disabled, deleted, outside);
     }
 

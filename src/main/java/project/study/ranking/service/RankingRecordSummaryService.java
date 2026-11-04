@@ -88,9 +88,9 @@ public class RankingRecordSummaryService {
         if (board.type() != RankingBoardType.TIME_SLOT) {
             return true;
         }
-        for (Instant t = now; t.isBefore(window.closesAt()); t = TimeSlot.nextBoundary(t)) {
-            LocalDate slotDate = TimeSlot.slotDateOf(t);
-            if (TimeSlot.at(t) == board.slot()
+        for (Instant t = now; t.isBefore(window.closesAt()); t = TimeSlot.nextBoundary(t, RankingCalendar.KST)) {
+            LocalDate slotDate = TimeSlot.slotDateOf(t, RankingCalendar.KST);
+            if (TimeSlot.at(t, RankingCalendar.KST) == board.slot()
                     && !slotDate.isBefore(window.start())
                     && !slotDate.isAfter(window.end())) {
                 return true;

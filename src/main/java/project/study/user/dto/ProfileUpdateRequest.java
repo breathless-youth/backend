@@ -36,4 +36,10 @@ public record ProfileUpdateRequest(
         @Pattern(
                 regexp = "CSAT|SCHOOL_EXAM|UNIVERSITY_EXAM|CIVIL_SERVICE|CERTIFICATE|LANGUAGE|JOB|PROFESSIONAL|ETC",
                 message = "정의되지 않은 카테고리입니다")
-        String category) {}
+        String category,
+
+        @Schema(
+                description = "기기의 IANA 시간대 이름. 스트릭·그날 할 일·05시 하루·D-Day의 오늘을 이 시간대로 정한다. "
+                        + "생략하면 미변경이고, 읽을 수 없는 값이면 거절하지 않고 무시한다(저장된 값 유지, 기본 Asia/Seoul). 응답에는 싣지 않는다",
+                example = "Asia/Seoul")
+        String timeZone) {}

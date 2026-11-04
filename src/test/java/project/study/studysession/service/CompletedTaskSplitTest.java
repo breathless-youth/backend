@@ -1,6 +1,7 @@
 package project.study.studysession.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -11,11 +12,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import project.study.common.time.DefaultTimeZone;
 import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.entity.StudySession;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
+import project.study.user.repository.UserRepository;
+import project.study.user.service.UserTimeZones;
 
 /** 완료 할 일의 자정 분할 귀속 (ADR-0022) — 비례 배분이 아니라 완료 시각이 속한 조각 하나에 붙는지. */
 @ExtendWith(MockitoExtension.class)
@@ -46,7 +50,8 @@ class CompletedTaskSplitTest {
                 studySessionRepository,
                 activeStudySessionRepository,
                 CLOCK,
-                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY,
+                new UserTimeZones(mock(UserRepository.class)));
     }
 
     private static CompletedTask task(long id, Instant doneAt) {
@@ -60,7 +65,7 @@ class CompletedTaskSplitTest {
     @Test
     void 자정을_넘지_않으면_완료_시각이_없어도_전부_한_조각에_붙는다() {
         List<StudySession> sessions = service.validateAndBuildSessions(
-                1L,
+                new SessionOwner(1L, DefaultTimeZone.ZONE),
                 START,
                 END,
                 7200,
@@ -82,8 +87,14 @@ class CompletedTaskSplitTest {
                 task(5, CROSS_START.minusSeconds(3600)), // 세션 시작 전 → 마지막 조각
                 task(6, CROSS_END)); // 종료 시각과 같음 → 범위 밖 → 마지막 조각
 
-        List<StudySession> sessions =
-                service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 7200, 6000, List.of(), completed(tasks));
+        List<StudySession> sessions = service.validateAndBuildSessions(
+                new SessionOwner(1L, DefaultTimeZone.ZONE),
+                CROSS_START,
+                CROSS_END,
+                7200,
+                6000,
+                List.of(),
+                completed(tasks));
 
         assertThat(sessions).hasSize(2);
         assertThat(sessions.get(0).getCompletedTaskIds()).containsExactly(1L);

@@ -4,12 +4,14 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.metrics.report.fact.ExperimentFact;
+import project.study.push.dto.FirstSessionCandidate;
 
 /**
  * 푸시 실험의 배정·발송 기록 (BY-1070, ADR-0037). 대상 판정은 사용자·세션 테이블을 테이블명으로만 읽는다 — 엔티티를 참조하지
@@ -23,11 +25,11 @@ public class PushExperimentQueries {
 
     /**
      * 가입 시각이 {@code [from, to)}이고, 측정 세션도 진행 중인 세션도 없으며, 알림 권한이 켜진 토큰이 있는 활성 사용자.
-     * 수동 기록은 첫 세션으로 치지 않는다.
+     * 수동 기록은 첫 세션으로 치지 않는다. 언제 보낼지는 가입 시각과 시간대로 호출자가 판단한다.
      */
-    public List<Long> findFirstSessionCandidates(Instant from, Instant to) {
+    public List<FirstSessionCandidate> findFirstSessionCandidates(Instant from, Instant to) {
         return jdbc.sql("""
-                        SELECT u.id FROM users u
+                        SELECT u.id, u.created_at, u.time_zone FROM users u
                         WHERE u.created_at >= :from AND u.created_at < :to
                           AND u.status = 'ACTIVE'
                           AND NOT EXISTS (SELECT 1 FROM study_session s
@@ -38,7 +40,10 @@ public class PushExperimentQueries {
                         ORDER BY u.id""")
                 .param("from", Timestamp.from(from))
                 .param("to", Timestamp.from(to))
-                .query(Long.class)
+                .query((rs, rowNum) -> new FirstSessionCandidate(
+                        rs.getLong("id"),
+                        rs.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        ZoneId.of(rs.getString("time_zone"))))
                 .list();
     }
 
@@ -89,7 +94,7 @@ public class PushExperimentQueries {
                         WHERE a.experiment = :experiment AND a.user_id = g.user_id AND a.first_session_id IS NULL""").param("experiment", experiment).update();
     }
 
-    /** 그날(KST) 발송 자리를 잡는다. 이미 그날 보낸 기록이 있으면(다른 태스크 포함) false — 보내지 않는다. */
+    /** 그날(사용자 현지 날짜) 발송 자리를 잡는다. 이미 그날 보낸 기록이 있으면(다른 태스크 포함) false — 보내지 않는다. */
     public boolean reserveSend(UUID pushId, long userId, String type, LocalDate sendDate, Instant at) {
         return jdbc.sql("""
                                 INSERT INTO push_send (push_id, user_id, type, send_date, sent_at)

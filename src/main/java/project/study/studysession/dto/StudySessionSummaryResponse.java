@@ -14,7 +14,7 @@ public record StudySessionSummaryResponse(
         @Schema(description = "세션 ID", example = "10") Long id,
 
         @Schema(
-                description = "통계 귀속 날짜 — 한국 시간 기준 시작 날짜 (자정을 넘는 세션은 날짜별로 분할 저장되어 각각의 statDate를 가진다)",
+                description = "통계 귀속 날짜 — 세션 시간대 기준 시작 날짜 (자정을 넘는 세션은 날짜별로 분할 저장되어 각각의 statDate를 가진다)",
                 example = "2026-07-24")
         LocalDate statDate,
 

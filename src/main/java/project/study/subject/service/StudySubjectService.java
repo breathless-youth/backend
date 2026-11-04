@@ -42,6 +42,7 @@ import project.study.subject.entity.StudyTask;
 import project.study.subject.repository.StudySubjectLockRepository;
 import project.study.subject.repository.StudySubjectRepository;
 import project.study.subject.repository.StudyTaskRepository;
+import project.study.user.service.UserTimeZones;
 
 /** 과목 > 할 일 관리와, 세션이 보내는 과목 구간의 소유 검증 (BY-698, ADR-0021·0023). 순서·색은 ADR-0022. */
 @Service
@@ -56,17 +57,16 @@ public class StudySubjectService implements SubjectLookupProvider {
     /** 색 팔레트 크기 — 앱이 colorIndex를 팔레트에 매핑한다. 과목 상한과 같아 덜 쓴 색 배정이면 20개가 전부 다른 색이다. */
     public static final int SUBJECT_COLOR_COUNT = 20;
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-
     private final StudySubjectRepository subjectRepository;
     private final StudySubjectLockRepository lockRepository;
     private final StudyTaskRepository taskRepository;
     private final StudySessionSubjectSegmentRepository subjectSegmentRepository;
     private final Clock clock;
+    private final UserTimeZones userTimeZones;
 
     @Transactional(readOnly = true)
     public List<SubjectResponse> list(Long userId) {
-        return toResponses(liveSubjects(userId));
+        return toResponses(userId, liveSubjects(userId));
     }
 
     /**
@@ -98,7 +98,7 @@ public class StudySubjectService implements SubjectLookupProvider {
             boolean colorTaken = Stream.concat(live.stream(), others.stream())
                     .anyMatch(subject -> subject.getColorIndex() == oldColor);
             deleted.restore(nextSortOrder(live), colorTaken ? leastUsedColor(live, others) : oldColor);
-            return toResponses(List.of(deleted)).get(0);
+            return toResponses(userId, List.of(deleted)).get(0);
         }
         StudySubject subject = subjectRepository.save(
                 new StudySubject(userId, stripped, nextSortOrder(live), leastUsedColor(live, gone)));
@@ -115,7 +115,7 @@ public class StudySubjectService implements SubjectLookupProvider {
             assertNameFree(liveSubjects(userId), stripped);
         }
         subject.rename(stripped);
-        return toResponses(List.of(subject)).get(0);
+        return toResponses(userId, List.of(subject)).get(0);
     }
 
     /**
@@ -141,7 +141,7 @@ public class StudySubjectService implements SubjectLookupProvider {
         for (int i = 0; i < ordered.size(); i++) {
             ordered.get(i).changeSortOrder(i);
         }
-        return toResponses(ordered);
+        return toResponses(userId, ordered);
     }
 
     /** soft delete — 하위 할 일도 함께 숨긴다. 세션에 쌓인 시간 기록은 그대로 남는다. */
@@ -259,17 +259,18 @@ public class StudySubjectService implements SubjectLookupProvider {
     /**
      * 일간 조회의 subjects (ADR-0026) — 살아있는 과목은 그날 공부하지 않았어도 목록 순서대로 전부, 지운 과목은 그날 세션이
      * 참조했거나 그날의 할 일이 있을 때만 뒤에 id 순으로 싣는다. 그날의 할 일은 그날이 끝나기 전에 만들었고 그날 시작 전에
-     * 완료하거나 지우지 않은 것이다. 날짜는 KST 자정 기준이고, 완료 여부·시각은 지금 값 그대로다.
+     * 완료하거나 지우지 않은 것이다. 날짜는 사용자 시간대의 자정 기준이고, 완료 여부·시각은 지금 값 그대로다.
      */
     @Override
     @Transactional(readOnly = true)
     public List<DaySubjectResponse> daySubjects(Long userId, LocalDate date, Collection<Long> referencedSubjectIds) {
         List<StudySubject> live = liveSubjects(userId);
+        ZoneId zone = userTimeZones.zoneOf(userId);
         Map<Long, List<DayTaskResponse>> tasksBySubject = taskRepository
                 .findOfDay(
                         userId,
-                        date.atStartOfDay(KST).toInstant(),
-                        date.plusDays(1).atStartOfDay(KST).toInstant())
+                        date.atStartOfDay(zone).toInstant(),
+                        date.plusDays(1).atStartOfDay(zone).toInstant())
                 .stream()
                 .collect(groupingBy(
                         StudyTask::getSubjectId,
@@ -351,14 +352,15 @@ public class StudySubjectService implements SubjectLookupProvider {
                 .orElseThrow(() -> new NotFoundException("할 일을 찾을 수 없습니다"));
     }
 
-    /** 과목별 응답 조립 — 오늘(KST) 기준으로 보이는 할 일과 과목 누적 시간을 붙인다. 입력 순서를 그대로 지킨다. */
-    private List<SubjectResponse> toResponses(List<StudySubject> subjects) {
+    /** 과목별 응답 조립 — 사용자 시간대의 오늘 기준으로 보이는 할 일과 과목 누적 시간을 붙인다. 입력 순서를 그대로 지킨다. */
+    private List<SubjectResponse> toResponses(Long userId, List<StudySubject> subjects) {
         if (subjects.isEmpty()) {
             return List.of();
         }
         List<Long> subjectIds = subjects.stream().map(StudySubject::getId).toList();
+        ZoneId zone = userTimeZones.zoneOf(userId);
         Instant todayStart =
-                clock.instant().atZone(KST).toLocalDate().atStartOfDay(KST).toInstant();
+                clock.instant().atZone(zone).toLocalDate().atStartOfDay(zone).toInstant();
         Map<Long, List<StudyTask>> tasksBySubject = taskRepository.findVisible(subjectIds, todayStart).stream()
                 .collect(groupingBy(StudyTask::getSubjectId));
         Map<Long, SubjectTimeSum> subjectSums = index(subjectSegmentRepository.sumBySubjectIds(subjectIds));

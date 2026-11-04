@@ -31,6 +31,8 @@ import project.study.subject.entity.StudyTask;
 import project.study.subject.repository.StudySubjectLockRepository;
 import project.study.subject.repository.StudySubjectRepository;
 import project.study.subject.repository.StudyTaskRepository;
+import project.study.user.repository.UserRepository;
+import project.study.user.service.UserTimeZones;
 
 /** 상한·소유 검증·완료 토글·순서·색 배정의 순수 규칙 — 저장 경로와 누적 합산은 StudySubjectApiTest가 검증한다. */
 @ExtendWith(MockitoExtension.class)
@@ -52,12 +54,20 @@ class StudySubjectServiceTest {
     @Mock
     private StudySessionSubjectSegmentRepository subjectSegmentRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
     private StudySubjectService service;
 
     @BeforeEach
     void setUp() {
         service = new StudySubjectService(
-                subjectRepository, lockRepository, taskRepository, subjectSegmentRepository, CLOCK);
+                subjectRepository,
+                lockRepository,
+                taskRepository,
+                subjectSegmentRepository,
+                CLOCK,
+                new UserTimeZones(userRepository));
     }
 
     /** 엔티티에 id setter를 두지 않으므로 테스트에서만 리플렉션으로 채운다. */
@@ -232,5 +242,20 @@ class StudySubjectServiceTest {
 
         assertThat(subject.getDeletedAt()).isEqualTo(NOW);
         verify(taskRepository).softDeleteBySubjectId(5L, NOW);
+    }
+
+    @Test
+    void 보이는_할_일과_그날_할_일은_사용자_시간대의_자정으로_자른다() {
+        // NOW는 뉴욕 09-19 23:00 — 뉴욕의 오늘은 09-19T04:00Z부터다
+        when(userRepository.findTimeZoneById(2L)).thenReturn(Optional.of("America/New_York"));
+        when(subjectRepository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscIdAsc(2L))
+                .thenReturn(List.of(subject(1, 0, 0)));
+
+        service.list(2L);
+        service.daySubjects(2L, java.time.LocalDate.of(2026, 9, 19), List.of());
+
+        verify(taskRepository).findVisible(List.of(1L), Instant.parse("2026-09-19T04:00:00Z"));
+        verify(taskRepository)
+                .findOfDay(2L, Instant.parse("2026-09-19T04:00:00Z"), Instant.parse("2026-09-20T04:00:00Z"));
     }
 }

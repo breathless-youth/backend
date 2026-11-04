@@ -9,7 +9,7 @@ import java.time.LocalDate;
  * 자정을 걸친 세션은 조각들을 한 건으로 집계해 내려준다(시작=최소, 종료=최대, 시간=합).
  */
 public record SessionRecoveryResponse(
-        @Schema(description = "통계 귀속 날짜 — 한국 시간 기준 시작 날짜", example = "2026-08-27")
+        @Schema(description = "통계 귀속 날짜 — 세션 시간대 기준 시작 날짜", example = "2026-08-27")
         LocalDate statDate,
 
         @Schema(description = "세션 시작 시각 (UTC, ISO-8601)", example = "2026-08-27T01:00:00Z")

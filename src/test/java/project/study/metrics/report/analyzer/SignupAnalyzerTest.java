@@ -26,7 +26,7 @@ class SignupAnalyzerTest {
         // 23시 가입 → 다음 날 00:30 시작 세션도 3시간 안이다
         UserTimeline lateNight = user(510, A)
                 .signupHour(23)
-                .sessionAt(at(A.plusDays(1), 0).plusSeconds(1800), A.plusDays(1), 900)
+                .sessionAt(at(A.plusDays(1), 0).plusSeconds(1800), 900)
                 .build();
         UserTimeline idle = user(520, A).signupHour(10).build();
         UserTimeline older = user(400, A.minusDays(7)).build();

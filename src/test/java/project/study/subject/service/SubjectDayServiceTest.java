@@ -9,8 +9,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +31,8 @@ import project.study.subject.entity.StudySubject;
 import project.study.subject.repository.DailyCompletionRepository;
 import project.study.subject.repository.StudySubjectLockRepository;
 import project.study.subject.repository.StudySubjectRepository;
+import project.study.user.repository.UserRepository;
+import project.study.user.service.UserTimeZones;
 
 /** 그날 있던 과목 판단과 완료 표시의 거절·멱등 규칙 — 시간 합산은 DaySubjectTimesTest, 저장 경로는 StudySubjectDayApiTest. */
 @ExtendWith(MockitoExtension.class)
@@ -53,12 +57,20 @@ class SubjectDayServiceTest {
     @Mock
     private DailyCompletionRepository completionRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
     private SubjectDayService service;
 
     @BeforeEach
     void setUp() {
         service = new SubjectDayService(
-                subjectRepository, lockRepository, sessionRepository, completionRepository, CLOCK);
+                subjectRepository,
+                lockRepository,
+                sessionRepository,
+                completionRepository,
+                CLOCK,
+                new UserTimeZones(userRepository));
     }
 
     /** 엔티티에 id·createdAt setter가 없으므로 테스트에서만 리플렉션으로 채운다. */
@@ -82,7 +94,8 @@ class SubjectDayServiceTest {
         StudySubject goneInDay = subjectAt(5, "2026-09-10T00:00:00Z", "2026-09-19T03:00:00Z"); // 19일 12:00 KST에 지움
         StudySubject goneBeforeDay = subjectAt(4, "2026-09-10T00:00:00Z", "2026-09-18T19:59:59Z"); // 19일 04:59 KST
         when(subjectRepository.findByUserIdAndDeletedAtIsNotNull(1L)).thenReturn(List.of(goneInDay, goneBeforeDay));
-        when(sessionRepository.findInPeriodWithMinFocusSec(1L, DAY, DAY.plusDays(1), 0))
+        when(sessionRepository.findOverlapping(
+                        1L, Instant.parse("2026-09-18T20:00:00Z"), Instant.parse("2026-09-19T20:00:00Z")))
                 .thenReturn(List.of());
         when(completionRepository.findByUserIdAndCompletedDateAndTargetType(1L, DAY, CompletionTarget.SUBJECT))
                 .thenReturn(List.of());
@@ -104,6 +117,55 @@ class SubjectDayServiceTest {
         assertThatThrownBy(() -> service.complete(1L, 1L, LocalDate.of(2026, 9, 21)))
                 .isInstanceOf(BadRequestException.class);
         verify(completionRepository, never()).save(any());
+    }
+
+    @Test
+    void 미래_날짜는_사용자_시간대의_오늘로_판단한다() {
+        // NOW는 뉴욕 09-19 23:00 — 서울에선 오늘인 20일이 뉴욕에선 미래다
+        when(userRepository.findTimeZoneById(1L)).thenReturn(Optional.of("Asia/Seoul"));
+        when(userRepository.findTimeZoneById(2L)).thenReturn(Optional.of("America/New_York"));
+
+        assertThatThrownBy(() -> service.complete(2L, 1L, LocalDate.of(2026, 9, 20)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("미래");
+        assertThatThrownBy(() -> service.complete(1L, 1L, LocalDate.of(2026, 9, 20)))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void 홈_하루는_현지_05시부터이고_서머타임이_바뀌는_날은_23시간이나_25시간이다() {
+        ZoneId newYork = ZoneId.of("America/New_York");
+
+        assertThat(SubjectDayService.homeDayStart(LocalDate.of(2026, 3, 8), newYork))
+                .isEqualTo(Instant.parse("2026-03-08T09:00:00Z"));
+        assertThat(Duration.between(
+                        SubjectDayService.homeDayStart(LocalDate.of(2026, 3, 7), newYork),
+                        SubjectDayService.homeDayStart(LocalDate.of(2026, 3, 8), newYork)))
+                .isEqualTo(Duration.ofHours(23));
+        assertThat(Duration.between(
+                        SubjectDayService.homeDayStart(LocalDate.of(2026, 10, 31), newYork),
+                        SubjectDayService.homeDayStart(LocalDate.of(2026, 11, 1), newYork)))
+                .isEqualTo(Duration.ofHours(25));
+    }
+
+    @Test
+    void 뉴욕_사용자의_그날_과목은_뉴욕_05시_창으로_판단한다() {
+        when(userRepository.findTimeZoneById(2L)).thenReturn(Optional.of("America/New_York"));
+        // 03-07 05:00 EST(10:00Z) ~ 03-08 05:00 EDT(09:00Z)
+        StudySubject lastMinute = subjectAt(1, "2026-03-08T08:59:59Z", null);
+        StudySubject nextDay = subjectAt(2, "2026-03-08T09:00:00Z", null);
+        LocalDate day = LocalDate.of(2026, 3, 7);
+        when(subjectRepository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscIdAsc(2L))
+                .thenReturn(List.of(lastMinute, nextDay));
+        when(subjectRepository.findByUserIdAndDeletedAtIsNotNull(2L)).thenReturn(List.of());
+        when(sessionRepository.findOverlapping(
+                        2L, Instant.parse("2026-03-07T10:00:00Z"), Instant.parse("2026-03-08T09:00:00Z")))
+                .thenReturn(List.of());
+        when(completionRepository.findByUserIdAndCompletedDateAndTargetType(2L, day, CompletionTarget.SUBJECT))
+                .thenReturn(List.of());
+
+        assertThat(service.subjectsOn(2L, day).stream().map(SubjectDayResponse::id))
+                .containsExactly(1L);
     }
 
     @Test

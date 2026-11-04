@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component;
 import project.study.push.service.FirstSessionPushExperiment;
 
 /**
- * 첫 세션 5분 유도 푸시 실험의 발송 틱 (BY-1070) — 10분마다(KST). 실제 사용자에게 보내는 기능이라 값이 없으면 꺼지고, 실험을
- * 시작할 때 환경별 yaml에서 켠다. 예외를 직접 잡아 Sentry로 올린다 — @Scheduled 밖으로 나가면 Spring이 로그만 남기고 삼킨다.
+ * 첫 세션 5분 유도 푸시 실험의 발송 틱 (BY-1070) — 10분마다. 야간 시간과 D1 시각은 실험이 사용자 현지 시각으로 판단한다.
+ * 실제 사용자에게 보내는 기능이라 값이 없으면 꺼지고, 실험을 시작할 때 환경별 yaml에서 켠다. 예외를 직접 잡아 Sentry로 올린다 — @Scheduled 밖으로 나가면 Spring이 로그만 남기고 삼킨다.
  */
 @Slf4j
 @Component
@@ -22,7 +22,7 @@ public class FirstSessionPushScheduler {
     private final FirstSessionPushExperiment experiment;
     private final Clock clock;
 
-    @Scheduled(cron = "0 */10 * * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 */10 * * * *", zone = "UTC")
     public void tick() {
         try {
             experiment.tick(clock.instant());
