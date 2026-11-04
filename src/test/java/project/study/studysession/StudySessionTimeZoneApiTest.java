@@ -22,7 +22,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester.MockMvcRequest
 import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
 
-/** 세션 제출·수동 기록의 timeZone (ADR-0041) — 현지 자정 분할, 사용자 시간대 저장, 잘못된 값은 저장된 시간대로. */
+/** 세션 제출·수동 기록의 timeZone (ADR-0042) — 현지 자정 분할, 사용자 시간대 저장, 잘못된 값은 저장된 시간대로. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)

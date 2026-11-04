@@ -25,7 +25,7 @@ public class MemberStudyQueries {
     /** 확정 세션 순공 합 — 오늘(today 하루)과 이번 주(monday~today). */
     public record FocusTotals(long todaySec, long weekSec) {}
 
-    /** 그룹은 오늘·이번 주를 KST 날짜로 센다(ADR-0041 결정 11). */
+    /** 그룹은 오늘·이번 주를 KST 날짜로 센다(ADR-0042 결정 11). */
     private static final ZoneId GROUP_DAY_ZONE = ZoneId.of("Asia/Seoul");
 
     private final JdbcClient jdbc;

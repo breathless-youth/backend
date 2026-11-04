@@ -17,7 +17,7 @@ public class SessionFactQueries {
 
     private final JdbcClient jdbc;
 
-    // 리포트 날짜는 KST다. stat_date는 사용자 시간대 날짜라 시작 시각의 KST 날짜 범위로 읽는다(ADR-0041)
+    // 리포트 날짜는 KST다. stat_date는 사용자 시간대 날짜라 시작 시각의 KST 날짜 범위로 읽는다(ADR-0042)
     // 소셜 = 세션 [started_at, ended_at]이 그 유저의 방 참여 [joined_at, left_at]와 조금이라도 겹침. left_at NULL은 진행 중
     // 참여라 now()까지로 본다(BY-626). joined_at NULL(확정 없는 예약)은 비교식이 NULL이라 빠진다. room 엔티티를 참조하지
     // 않도록 테이블명으로만 조인한다. status_event(session_id)에 인덱스가 있어 세션별 일시정지 수는 인덱스로 센다

@@ -22,7 +22,7 @@ import project.study.studysession.repository.StudySessionRepository;
 import project.study.user.repository.UserRepository;
 import project.study.user.service.UserTimeZones;
 
-/** 세션 시간대의 현지 자정·구간 경계로 나누는지 (ADR-0041). 서울은 예전과 같은 결과여야 한다. */
+/** 세션 시간대의 현지 자정·구간 경계로 나누는지 (ADR-0042). 서울은 예전과 같은 결과여야 한다. */
 class StudySessionTimeZoneSplitTest {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");

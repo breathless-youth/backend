@@ -13,7 +13,7 @@ import project.study.common.time.DefaultTimeZone;
 import project.study.user.repository.UserRepository;
 
 /**
- * 사용자 하루를 정하는 시간대의 조회와 해석 (ADR-0041).
+ * 사용자 하루를 정하는 시간대의 조회와 해석 (ADR-0042).
  *
  * 앱이 보낸 IANA 이름을 읽을 수 있으면 그 값을 쓰고 사용자에게 저장한다.
  * 없거나 읽을 수 없으면 거절하지 않고 저장된 시간대를 쓴다. 시간대 때문에 세션 저장이 실패하면 공부 기록을 잃는다.

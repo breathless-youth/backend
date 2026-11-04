@@ -268,7 +268,7 @@ public class StudySessionService {
 
     /**
      * 완료 할 일(attachments.completedTasks)은 배분하지 않고 완료 시각이 속한 조각에 붙인다 (ADR-0022).
-     * 자정과 구간 경계는 owner 시간대의 현지 시각이다 (ADR-0041).
+     * 자정과 구간 경계는 owner 시간대의 현지 시각이다 (ADR-0042).
      */
     List<StudySession> validateAndBuildSessions(
             SessionOwner owner,
