@@ -99,7 +99,7 @@ class LegacyUserApiTest {
     }
 
     @Test
-    void 경로_userId로_시간대를_보내면_저장한다() {
+    void 경로_userId로_보낸_시간대는_저장하지_않는다() {
         long userId = registerUser();
 
         assertThat(mvc.patch()
@@ -109,8 +109,9 @@ class LegacyUserApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .doesNotHavePath("$.timeZone");
+        // 토큰 없이 경로의 userId만으로 부르는 경로라 남의 시간대를 바꿔 랭킹에서 뺄 수 있어 무시한다
         assertThat(jdbc.queryForObject("SELECT time_zone FROM users WHERE id = ?", String.class, userId))
-                .isEqualTo("Europe/London");
+                .isEqualTo("Asia/Seoul");
     }
 
     @Test
