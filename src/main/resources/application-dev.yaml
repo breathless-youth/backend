@@ -44,8 +44,9 @@ decorator:
 
 oauth:
   google:
-    # 허용하는 ID 토큰 aud 목록(쉼표 구분) — 웹(서버) 클라이언트 ID, iOS 클라이언트 ID. 시크릿 아님
-    client-ids: ${OAUTH_GOOGLE_CLIENT_IDS:${OAUTH_GOOGLE_CLIENT_ID:320200622450-5bqjf3j6lu8akp20p4oikiio7t8brjtd.apps.googleusercontent.com,320200622450-npt1a7o4bpd6ois9tkld1qnn3l2sdi9u.apps.googleusercontent.com}}
+    # 허용하는 ID 토큰 aud 목록(쉼표 구분) — 웹(서버) 클라이언트 ID, staging·dev iOS 클라이언트 ID. 시크릿 아님
+    # 안드로이드 토큰의 aud는 웹 클라이언트 ID라 안드로이드 클라이언트 ID는 넣지 않는다
+    client-ids: ${OAUTH_GOOGLE_CLIENT_IDS:${OAUTH_GOOGLE_CLIENT_ID:320200622450-5bqjf3j6lu8akp20p4oikiio7t8brjtd.apps.googleusercontent.com,320200622450-1cbim0i0qvvk94msh2hqc20milaqpckn.apps.googleusercontent.com,320200622450-7n4tsnasdc036knt49sgs66pigb2o2sg.apps.googleusercontent.com}}
   kakao:
     # 네이티브 앱 키 — 앱 SDK가 받는 ID 토큰의 aud다(REST API 키가 아니다). 앱에 실리는 값이라 시크릿 아님
     # 콘솔이 키 하나에 패키지·번들을 하나씩만 받아 앱 변형마다 키가 따로다: staging, dev
