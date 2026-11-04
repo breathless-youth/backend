@@ -163,6 +163,35 @@ class LinkTokenReplayApiTest {
         assertThat(usedRows(live)).isEqualTo(1);
     }
 
+    @Test
+    void link가_404로_끝나면_ID_토큰을_쓰지_않아_다시_등록한_뒤_같은_토큰으로_로그인된다() {
+        // 앱은 404면 다시 등록한다 — 그때 SDK 로그인을 다시 하지 않고 받아 둔 토큰을 그대로 보내도 된다
+        Social google = api.stubSocial(Provider.GOOGLE, null);
+        api.linkOk(api.register(), google);
+        Device merged = api.register();
+        api.linkOk(merged, google);
+        String idToken = LinkTestClient.freshIdToken(google);
+
+        assertThat(api.linkWithIdToken(merged.accessToken(), Provider.GOOGLE, idToken, null))
+                .hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(usedRows(usedKey(idToken))).isZero();
+
+        Device again = api.register();
+        assertThat(api.linkWithIdToken(again.accessToken(), Provider.GOOGLE, idToken, null))
+                .hasStatusOk();
+    }
+
+    @Test
+    void link가_409로_끝나도_ID_토큰을_쓰지_않는다() {
+        Social google = api.stubSocial(Provider.GOOGLE, null);
+        LinkResponse linked = api.linkOk(api.register(), google);
+        String idToken = LinkTestClient.freshIdToken(google);
+
+        assertThat(api.linkWithIdToken(linked.accessToken(), Provider.GOOGLE, idToken, null))
+                .hasStatus(HttpStatus.CONFLICT);
+        assertThat(usedRows(usedKey(idToken))).isZero();
+    }
+
     private void insertUsed(String tokenHash, Instant expiresAt) {
         jdbc.sql("INSERT INTO used_social_id_token (token_hash, expires_at) VALUES (:h, :e)")
                 .param("h", tokenHash)
