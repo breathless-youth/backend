@@ -63,6 +63,7 @@ public class GroupMemberService {
     private final MemberStudySource studySource;
     private final ProfileImageUrls profileImageUrls;
     private final GroupRoomService groupRooms;
+    private final GroupOwnership ownership;
     private final GroupNotifications notifications;
     private final BlockService blocks;
     private final GroupReports reports;
@@ -109,9 +110,7 @@ public class GroupMemberService {
         if (members.findLive(groupId, targetUserId).isEmpty()) {
             throw memberNotFound();
         }
-        requireUpdated(groups.updateOwner(groupId, targetUserId, clock.instant()), groupId);
-        groupRooms.ownerChanged(groupId, targetUserId);
-        notifications.ownerTransferred(targetUserId, groupId, group.name());
+        ownership.handOver(group, targetUserId, clock.instant());
     }
 
     /**
@@ -158,10 +157,7 @@ public class GroupMemberService {
         if (!owner) {
             return;
         }
-        requireUpdated(groups.softDelete(groupId, now), groupId);
-        for (long applicantId : applications.closePendingOfGroup(groupId, now)) {
-            notifications.applicationRoomClosed(applicantId, group.name());
-        }
+        ownership.closeAbandoned(group, now);
     }
 
     /** 초대코드 보기 — 멤버만(없음 404, 멤버 아님 403). 공개 그룹에는 코드가 없어 400이다. */
