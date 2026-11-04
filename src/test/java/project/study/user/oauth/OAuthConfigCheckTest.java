@@ -15,7 +15,7 @@ import org.mockito.MockedStatic;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 
-/** 운영에 OAUTH_* 값을 빠뜨리면 로그인이 400만 내고 조용히 막히므로, 기동 뒤 한 번 Sentry에 남는지 본다 (ADR-0041). */
+/** 운영에 OAUTH_* 값을 빠뜨리면 로그인이 400만 내고 조용히 막히므로, 기동 뒤 한 번 Sentry에 남는지 본다 (ADR-0042). */
 @ExtendWith(OutputCaptureExtension.class)
 class OAuthConfigCheckTest {
 

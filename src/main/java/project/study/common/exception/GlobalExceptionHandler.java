@@ -72,7 +72,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 지워진 사용자를 가리키는 쓰기의 FK 위반은 404 {@code USER_NOT_FOUND}다 — 탈퇴·병합 뒤 최대 30분 남는 옛 access 토큰(ADR-0041)으로 온
+     * 지워진 사용자를 가리키는 쓰기의 FK 위반은 404 {@code USER_NOT_FOUND}다 — 탈퇴·병합 뒤 최대 30분 남는 옛 access 토큰(ADR-0042)으로 온
      * 쓰기라 서버 오류가 아니다. 그 밖의 무결성 위반(다른 FK, unique, users 행을 지우다 걸린 참조)은 지금처럼 500이다.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)

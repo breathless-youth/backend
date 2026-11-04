@@ -34,7 +34,7 @@ import project.study.user.oauth.OAuthUserInfo;
 import project.study.user.oauth.SocialTokenVerifiers;
 import tools.jackson.databind.ObjectMapper;
 
-/** link의 ID 토큰 1회 사용 (ADR-0041) — 새어 나간 토큰을 다른 비회원이 다시 넣어 그 계정 토큰을 받지 못하게 한다. */
+/** link의 ID 토큰 1회 사용 (ADR-0042) — 새어 나간 토큰을 다른 비회원이 다시 넣어 그 계정 토큰을 받지 못하게 한다. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)

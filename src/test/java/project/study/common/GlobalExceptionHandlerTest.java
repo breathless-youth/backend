@@ -133,7 +133,7 @@ class GlobalExceptionHandlerTest {
                 .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("서버 오류가 발생했습니다"));
     }
 
-    /** 탈퇴·병합 뒤 남은 옛 access 토큰의 쓰기가 지워진 users 행을 가리키면 FK 위반이 난다 — 서버 오류가 아니라 없는 사용자다 (ADR-0041) */
+    /** 탈퇴·병합 뒤 남은 옛 access 토큰의 쓰기가 지워진 users 행을 가리키면 FK 위반이 난다 — 서버 오류가 아니라 없는 사용자다 (ADR-0042) */
     @Test
     void users를_가리키는_FK_위반은_404_USER_NOT_FOUND다() {
         assertThat(mvc.get().uri("/test/fk-users").exchange())

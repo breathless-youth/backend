@@ -70,7 +70,7 @@ class StudyRecordLookupBoundaryApiTest {
         jdbcTemplate.update("UPDATE study_task SET deleted_at = now() WHERE id = ?", deletedTask);
     }
 
-    // 구 앱 경로(익명 userId)도 부르므로 구 앱 사용자처럼 비회원(DEVICE)으로 만든다 — 그 경로는 비회원만 받는다 (ADR-0041)
+    // 구 앱 경로(익명 userId)도 부르므로 구 앱 사용자처럼 비회원(DEVICE)으로 만든다 — 그 경로는 비회원만 받는다 (ADR-0042)
     private Long insertUser() {
         return jdbcTemplate.queryForObject(
                 "INSERT INTO users (provider, provider_user_id, nickname) VALUES ('DEVICE', ?, ?) RETURNING id",

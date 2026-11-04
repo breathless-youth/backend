@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * 비어 있는 소셜 로그인 설정을 기동이 끝난 뒤 한 번 로그와 Sentry에 남긴다 (ADR-0041). 값이 비어도 기동은 되고(그룹 릴리즈가 로그인 앱보다
+ * 비어 있는 소셜 로그인 설정을 기동이 끝난 뒤 한 번 로그와 Sentry에 남긴다 (ADR-0042). 값이 비어도 기동은 되고(그룹 릴리즈가 로그인 앱보다
  * 먼저 나간다) 그 프로바이더 로그인만 400이 되는데, 로그인 앱은 그룹 탭에서 로그인을 요구하므로 놓치면 그룹 탭이 통째로 막힌다.
  * sentry-logback이 없어 로그만으로는 아무도 모르므로 Sentry에 직접 남긴다. Sentry가 확실히 초기화된 뒤에 보내도록 빈 생성자가 아니라
  * {@link ApplicationReadyEvent}에서 본다. 값은 싣지 않고 빈 항목의 환경변수 이름만 싣는다.

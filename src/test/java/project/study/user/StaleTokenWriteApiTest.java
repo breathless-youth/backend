@@ -25,7 +25,7 @@ import project.study.user.oauth.SocialTokenVerifiers;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 탈퇴·병합 뒤 최대 30분 남는 옛 access 토큰(ADR-0041)으로 오는 쓰기 — 지워진 사용자를 가리키는 FK 위반은 500이 아니라 404
+ * 탈퇴·병합 뒤 최대 30분 남는 옛 access 토큰(ADR-0042)으로 오는 쓰기 — 지워진 사용자를 가리키는 FK 위반은 500이 아니라 404
  * {@code USER_NOT_FOUND}이고, FK가 없는 RTC 통계는 지워진 사람의 행을 다시 만들지 않는다.
  */
 @SpringBootTest
