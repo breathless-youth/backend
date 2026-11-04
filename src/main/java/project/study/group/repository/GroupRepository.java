@@ -100,32 +100,45 @@ public class GroupRepository {
     }
 
     /**
-     * 이 사람과 얽힌 살아 있는 그룹(살아 있는 멤버·그룹장·{@code PENDING} 신청)을 ID 순으로 잠그고 그 ID를 돌려준다 — 계정 병합·탈퇴가 users 행보다
+     * 이 사람과 얽힌 살아 있는 그룹(살아 있는 멤버·{@code PENDING} 신청·그룹장)을 ID 순으로 잠그고 그 ID를 돌려준다 — 계정 병합·탈퇴가 users 행보다
      * 먼저 잡는 락 순서 ①이다(BY-1126). 여러 그룹을 잡으므로 늘 ID 순으로 잡는다. 고르는 조건(멤버·신청)은 잠그지 않고 이 문장의 스냅샷으로 읽는다.
+     * 대상은 사용자별 부분 인덱스({@code sgm_live_user_idx}·{@code sga_pending_user_idx}·{@code study_group_owner_idx})로 찾는다.
+     *
+     * <p>{@code FOR UPDATE}가 아니라 {@code FOR NO KEY UPDATE}다 — {@link #lockLive}({@code FOR UPDATE})·{@link #shareLive}({@code FOR
+     * SHARE})와는 그대로 막히지만, 그룹을 가리키는 행(신고·알림 기록)을 넣는 FK 검사({@code FOR KEY SHARE})는 막지 않아 그 트랜잭션이 users 행
+     * 잠금을 쥔 채 이 그룹 행을 기다리는 교착이 생기지 않는다.
      */
     public List<Long> lockLiveInvolving(long userId) {
         return jdbc.sql("""
                         SELECT g.id FROM study_group g
-                         WHERE g.deleted_at IS NULL
-                           AND (g.owner_id = :userId
-                                OR EXISTS (SELECT 1 FROM study_group_member m
-                                            WHERE m.group_id = g.id AND m.user_id = :userId AND m.left_at IS NULL)
-                                OR EXISTS (SELECT 1 FROM study_group_application a
-                                            WHERE a.group_id = g.id AND a.user_id = :userId AND a.status = 'PENDING'))
+                         WHERE g.id IN (SELECT m.group_id FROM study_group_member m
+                                         WHERE m.user_id = :userId AND m.left_at IS NULL
+                                        UNION
+                                        SELECT a.group_id FROM study_group_application a
+                                         WHERE a.user_id = :userId AND a.status = 'PENDING'
+                                        UNION
+                                        SELECT o.id FROM study_group o
+                                         WHERE o.owner_id = :userId AND o.deleted_at IS NULL)
+                           AND g.deleted_at IS NULL
                          ORDER BY g.id
-                           FOR UPDATE OF g""").param("userId", userId).query(Long.class).list();
+                           FOR NO KEY UPDATE OF g""").param("userId", userId).query(Long.class).list();
     }
 
-    /** 이 사람이 살아 있는 멤버이거나 그룹장인 살아 있는 그룹을 ID 순으로 잠그고 읽는다 — 탈퇴가 그룹마다 다음 그룹장을 정한다(BY-1126). */
+    /**
+     * 이 사람이 살아 있는 멤버이거나 그룹장인 살아 있는 그룹을 ID 순으로 잠그고 읽는다 — 탈퇴가 그룹마다 다음 그룹장을 정한다(BY-1126). 잠금 모드와
+     * 그 이유는 {@link #lockLiveInvolving}과 같다({@code FOR NO KEY UPDATE}).
+     */
     public List<GroupRow> lockLiveOfMemberOrOwner(long userId) {
         return jdbc.sql("SELECT " + COLUMNS + """
                          FROM study_group g
-                        WHERE g.deleted_at IS NULL
-                          AND (g.owner_id = :userId
-                               OR EXISTS (SELECT 1 FROM study_group_member m
-                                           WHERE m.group_id = g.id AND m.user_id = :userId AND m.left_at IS NULL))
+                        WHERE g.id IN (SELECT m.group_id FROM study_group_member m
+                                        WHERE m.user_id = :userId AND m.left_at IS NULL
+                                       UNION
+                                       SELECT o.id FROM study_group o
+                                        WHERE o.owner_id = :userId AND o.deleted_at IS NULL)
+                          AND g.deleted_at IS NULL
                         ORDER BY g.id
-                          FOR UPDATE OF g""")
+                          FOR NO KEY UPDATE OF g""")
                 .param("userId", userId)
                 .query(ROW)
                 .list();

@@ -16,7 +16,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 작업은 ①②를 쥐지 않고 신청 행만 잡는다. 신청 행을 쥔 채 ①②를 기다리는 작업이 없으므로 순서가 어긋나지 않는다.
  *
  * <p>계정 병합·탈퇴(BY-1126)는 users 행을 {@code FOR UPDATE}로 잡기 전에 그 사람과 얽힌 ① 여러 개를 ID 순으로 먼저 잡는다({@link
- * GroupUserDataHandler#lockBeforeUsers}). ①을 쥔 뒤 멤버·신청 행을 넣으면 FK가 users 행을 잡으므로, users 행을 먼저 잡으면 거꾸로다.
+ * GroupUserDataHandler#lockBeforeUsers}). ①을 쥔 뒤 멤버·신청 행을 넣으면 FK가 users 행을 잡으므로, users 행을 먼저 잡으면 거꾸로다. 이때 ①은
+ * {@code FOR UPDATE}가 아니라 {@code FOR NO KEY UPDATE}로 잡는다 — ①을 잡지 않고 users 행 다음에 그룹 행을 FK로 확인하는 신고·알림 기록
+ * 넣기({@code FOR KEY SHARE})를 막으면 그쪽과 교착한다.
  *
  * <p>advisory lock 키 공간은 모든 도메인이 DB 하나에서 나눠 쓴다. 지금 쓰는 키(코드에서 {@code pg_advisory}를 찾아 확인):
  *

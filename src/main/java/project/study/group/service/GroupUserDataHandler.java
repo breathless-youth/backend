@@ -27,8 +27,9 @@ import project.study.user.account.UserDataHandler;
  * API와 같은 {@link GroupOwnership}을 쓴다.
  *
  * <p><b>락 순서</b>: 그룹 쪽은 그룹 행(①)을 잡은 뒤 users를 가리키는 행을 넣는다(FK가 users 행에 {@code FOR KEY SHARE}). 병합·탈퇴는 users
- * 행을 {@code FOR UPDATE}로 잡으므로 그보다 먼저 {@link #lockBeforeUsers}로 이 사람과 얽힌 그룹 행을 ID 순으로 잡는다. 푸시·공부방 메시지는
- * 모두 커밋 뒤에 나간다.
+ * 행을 {@code FOR UPDATE}로 잡으므로 그보다 먼저 {@link #lockBeforeUsers}로 이 사람과 얽힌 그룹 행을 ID 순으로 잡는다. 그룹 행은 {@code FOR
+ * NO KEY UPDATE}로 잡는다 — 그룹 쪽 ①({@code FOR UPDATE}·{@code FOR SHARE})과는 막히지만, users 행 다음에 그룹 행을 FK로 확인하는 신고·알림
+ * 기록 넣기({@code FOR KEY SHARE})는 막지 않아 교착하지 않는다. 푸시·공부방 메시지는 모두 커밋 뒤에 나간다.
  */
 @Component
 @RequiredArgsConstructor
@@ -60,7 +61,8 @@ public class GroupUserDataHandler implements UserDataHandler {
     }
 
     /**
-     * 이 사람이 살아 있는 멤버이거나 그룹장이거나 {@code PENDING} 신청을 낸 살아 있는 그룹을 ID 순으로 잠근다. 대상을 고르는 읽기는 잠그지 않으므로,
+     * 이 사람이 살아 있는 멤버이거나 그룹장이거나 {@code PENDING} 신청을 낸 살아 있는 그룹을 ID 순으로 {@code FOR NO KEY UPDATE}로 잠근다(모드의
+     * 이유는 {@link GroupRepository#lockLiveInvolving}). 대상을 고르는 읽기는 잠그지 않으므로,
      * 이 문장과 users 행 잠금 사이에 새로 들어간 그룹은 여기서 잡히지 않는다. 그래도 병합 SQL은 그룹 목록이 아니라 조건으로 행을 고르므로 그 그룹의
      * 행도 처리하고, 탈퇴는 그룹마다 다시 잠그며 읽는다(그때는 users 행 뒤라 순서가 거꾸로다 — 드문 경쟁이라 교착이면 DB가 한쪽을 실패시키고 다시
      * 시도하지 않는다).
