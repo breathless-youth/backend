@@ -27,7 +27,8 @@ import project.study.studysession.entity.TimeSlot;
 /**
  * 랭킹 집계 전용 읽기 쿼리 (BY-828) — 전체 사용자의 기간·구간·누적 값을 사용자별 한 줄로 낸다.
  * userId를 주면 그 사용자 한 줄만 계산한다(내 값은 캐시와 상관없이 매번 새로 읽는다). 탈퇴(DELETE) 사용자는 뺀다.
- * 사용자 시간대가 서울인 사용자만 센다(ADR-0041) — 랭킹 창이 KST라 다른 시간대의 stat_date·slot_date가 섞이면 하루가 어긋난다.
+ * 사용자 시간대가 서울인 사용자의, 서울에서 기록한 세션만 센다(ADR-0041) — 랭킹 창이 KST라 다른 시간대의 stat_date·slot_date가
+ * 섞이면 하루가 어긋난다. 여행에서 돌아온 사용자의 해외 세션도 그래서 뺀다.
  * 기준은 다른 화면과 같다 — 순공 1분 미만 조각 제외(ADR-0009), 연속 일수는 세션 5분 기준.
  * 측정한 세션만 센다 — 수동 기록은 개인 기록에만 더한다(ADR-0031).
  */
@@ -36,6 +37,8 @@ import project.study.studysession.entity.TimeSlot;
 public class StudySessionRankingQueries {
 
     private static final String RANKED_USER = "u.status IS DISTINCT FROM 'DELETE' AND u.time_zone = 'Asia/Seoul'";
+
+    private static final String SEOUL_SESSION = "s.time_zone = 'Asia/Seoul'";
 
     private static final RowMapper<RankingTotalRow> TOTAL_ROW = (rs, i) -> new RankingTotalRow(
             rs.getLong("user_id"),
@@ -64,8 +67,9 @@ public class StudySessionRankingQueries {
                 WHERE s.stat_date BETWEEN :from AND :to
                   AND s.focus_sec >= :minFocusSec
                   AND s.source = 'MEASURED'
+                  AND %s
                   AND %s%s
-                GROUP BY s.user_id, u.nickname, u.profile_image""".formatted(RANKED_USER, userFilter(userId) + excludeFilter(excludeSubmission));
+                GROUP BY s.user_id, u.nickname, u.profile_image""".formatted(SEOUL_SESSION, RANKED_USER, userFilter(userId) + excludeFilter(excludeSubmission));
         return jdbc.sql(sql)
                 .paramSource(exclude(range(userId, from, to), excludeSubmission))
                 .query(TOTAL_ROW)
@@ -91,8 +95,9 @@ public class StudySessionRankingQueries {
                   AND sl.slot_date BETWEEN :from AND :to
                   AND s.focus_sec >= :minFocusSec
                   AND s.source = 'MEASURED'
+                  AND %s
                   AND %s%s
-                GROUP BY s.user_id, u.nickname, u.profile_image""".formatted(RANKED_USER, userFilter(userId) + excludeFilter(excludeSubmission));
+                GROUP BY s.user_id, u.nickname, u.profile_image""".formatted(SEOUL_SESSION, RANKED_USER, userFilter(userId) + excludeFilter(excludeSubmission));
         return jdbc.sql(sql)
                 .paramSource(exclude(range(userId, from, to).addValue("slot", slot.name()), excludeSubmission))
                 .query(TOTAL_ROW)
@@ -114,7 +119,8 @@ public class StudySessionRankingQueries {
                     SELECT s.user_id, s.stat_date, COALESCE(MIN(s.ended_at), MIN(s.started_at)) AS first_done,
                            SUM(s.focus_sec) FILTER (WHERE s.stat_date >= :focusFrom) AS focus_sec
                     FROM study_session s
-                    WHERE s.focus_sec >= :minFocusSec AND s.source = 'MEASURED' AND s.stat_date <= :today%s
+                    WHERE s.focus_sec >= :minFocusSec AND s.source = 'MEASURED' AND s.stat_date <= :today
+                      AND s.time_zone = 'Asia/Seoul'%s
                     GROUP BY s.user_id, s.stat_date
                 )
                 SELECT d.user_id, u.nickname, u.profile_image, COUNT(*) AS days, COALESCE(SUM(d.focus_sec), 0) AS focus_sec,
@@ -152,7 +158,8 @@ public class StudySessionRankingQueries {
                 WITH days AS (
                     SELECT s.user_id, s.stat_date, COALESCE(MIN(s.ended_at), MIN(s.started_at)) AS first_done
                     FROM study_session s
-                    WHERE s.focus_sec >= :minFocusSec AND s.source = 'MEASURED' AND s.stat_date <= :today%s
+                    WHERE s.focus_sec >= :minFocusSec AND s.source = 'MEASURED' AND s.stat_date <= :today
+                      AND s.time_zone = 'Asia/Seoul'%s
                     GROUP BY s.user_id, s.stat_date
                 ), runs AS (
                     SELECT user_id, stat_date, first_done,
