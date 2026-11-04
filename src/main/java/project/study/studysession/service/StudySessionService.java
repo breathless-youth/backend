@@ -27,6 +27,7 @@ import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.DaySubjectResponse;
 import project.study.studysession.dto.StudyDaysResponse;
 import project.study.studysession.dto.StudyPeriodStatsResponse;
+import project.study.studysession.dto.StudyRhythmResponse;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionResponse;
@@ -331,6 +332,22 @@ public class StudySessionService {
     public StudyDaysResponse studyDays(Long userId) {
         LocalDate today = clock.instant().atZone(userTimeZones.zoneOf(userId)).toLocalDate();
         return new StudyDaysResponse(studySessionRepository.countDistinctStatDates(userId, MIN_LIST_FOCUS_SEC, today));
+    }
+
+    /**
+     * 공부 리듬 — 누적 공부일(study-days와 같은 1분 기준)과 요일 × 시각별 누적 순공. 조각마다 정시 경계로 잘라
+     * 배분하므로(RhythmSplitter) 자정 분할 조각도 그대로 더하면 된다. 노출 기준(며칠부터 보여줄지)은 앱이 정한다.
+     */
+    @Transactional(readOnly = true)
+    public StudyRhythmResponse rhythm(Long userId) {
+        LocalDate today = clock.instant().atZone(userTimeZones.zoneOf(userId)).toLocalDate();
+        long studyDays = studySessionRepository.countDistinctStatDates(userId, MIN_LIST_FOCUS_SEC, today);
+        int[][] grid = RhythmSplitter.emptyGrid();
+        for (StudySession session : studySessionRepository.findAllMeasuredWithMinFocusSec(userId, MIN_LIST_FOCUS_SEC)) {
+            RhythmSplitter.accumulate(
+                    grid, session.getStartedAt(), session.getEndedAt(), session.getFocusSec(), session.getEvents());
+        }
+        return new StudyRhythmResponse(studyDays, grid);
     }
 
     /** 오늘(기록이 아직 없으면 어제)부터 거꾸로 이어진 연속 공부일. 오늘이 지나기 전엔 스트릭이 끊긴 게 아니다. */

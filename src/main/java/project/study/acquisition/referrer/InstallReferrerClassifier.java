@@ -16,13 +16,16 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 앱이 보낸 설치 정보(Play 설치 리퍼러 문자열)와 딥링크 광고 값으로 유입 경로를 판별한다. 위에서부터 먼저 맞는 규칙이 이긴다.
+ * 앱이 보낸 설치 정보(Play 설치 리퍼러 문자열)와 딥링크 광고 값(메타·구글)으로 유입 경로를 판별한다. 위에서부터 먼저 맞는 규칙이 이긴다.
  *
  * <ol>
  *   <li>utm_content 안에 메타 암호문(source.data·nonce)이 있다 → META_AD. utm_source는 보지 않는다. 메타 문서가 utm_source를
  *       보장하지 않는다고 밝혔기 때문이다.
  *   <li>code가 숫자 4자리 → INVITE. 딥링크보다 앞에 두는 이유는 Play 리퍼러가 스토어에 들어가기 직전에 누른 링크(마지막 클릭)이고, 메타 딥링크는 메타가 자기 기여 기간 안에서 붙여 주는 값이기 때문이다.
- *   <li>딥링크 광고 값이 있다 → META_AD (상세 없음).
+ *   <li>gclid 값이 있거나 구글 딥링크 값이 있다 → GOOGLE_AD. 구글 딥링크는 형식이 틀려도 구글로 본다(라벨만 GoogleAdLabel이 거른다).
+ *       메타 딥링크보다 앞에 두는 이유는 초대와 같다. gclid는 플레이 설치 정보(마지막 클릭)에 붙어 오고, 메타 딥링크는 메타 기여 기간
+ *       안에서 붙는 값이다(ADR-0036 7번).
+ *   <li>메타 딥링크 광고 값이 있다 → META_AD (상세 없음).
  *   <li>utm_source=google-play, utm_medium=organic → ORGANIC.
  *   <li>그 밖에 비어 있지 않은 설치 정보 → OTHER_LINK.
  *   <li>아무것도 없다 → UNKNOWN.
@@ -40,7 +43,7 @@ public class InstallReferrerClassifier {
 
     private final MetaReferrerDecryptor decryptor;
 
-    public Attribution classify(String installReferrer, String deepLinkAd) {
+    public Attribution classify(String installReferrer, String deepLinkAd, String googleDeepLinkAd) {
         Map<String, String> params = parseQuery(installReferrer);
         Utm utm = new Utm(
                 blankToNull(params.get("utm_source")),
@@ -54,6 +57,9 @@ public class InstallReferrerClassifier {
         String code = params.get("code");
         if (code != null && INVITE_CODE.matcher(code).matches()) {
             return new Attribution(AcquisitionSource.INVITE, utm, code, null);
+        }
+        if (!isBlank(params.get("gclid")) || !isBlank(googleDeepLinkAd)) {
+            return new Attribution(AcquisitionSource.GOOGLE_AD, utm, null, null);
         }
         if (!isBlank(deepLinkAd)) {
             return new Attribution(AcquisitionSource.META_AD, utm, null, null);

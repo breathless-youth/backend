@@ -25,10 +25,11 @@ public class AcquisitionService {
     public AcquisitionResponse record(Long userId, AcquisitionRequest request) {
         String installReferrer = blankToNull(request.installReferrer());
         String deepLinkAd = blankToNull(request.deepLinkAd());
-        Attribution attribution = classifier.classify(installReferrer, deepLinkAd);
+        String googleDeepLinkAd = blankToNull(request.googleDeepLinkAd());
+        Attribution attribution = classifier.classify(installReferrer, deepLinkAd, googleDeepLinkAd);
         Instant capturedAt = request.capturedAt().toInstant();
-        repository.insertIfAbsent(
-                new NewAcquisition(userId, request.platform(), installReferrer, deepLinkAd, capturedAt, attribution));
+        repository.insertIfAbsent(new NewAcquisition(
+                userId, request.platform(), installReferrer, deepLinkAd, googleDeepLinkAd, capturedAt, attribution));
         return AcquisitionResponse.from(repository.findById(userId).orElseThrow());
     }
 

@@ -12,5 +12,11 @@ public enum RoomMessageType {
     FOCUS_CHANGED,
     STUDY_TIME,
     SIGNAL,
-    ROOM_UNAVAILABLE
+    ROOM_UNAVAILABLE,
+    // 그룹 공부방에만 나간다 (BY-1124, websocket.html §11.4)
+    MIC_CHANGED,
+    BREAK_CHANGED,
+    OWNER_CHANGED,
+    KICKED,
+    PEER_BLOCKED
 }

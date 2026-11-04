@@ -30,12 +30,16 @@ public class AcquisitionController {
     private final AcquisitionService acquisitionService;
 
     @Operation(summary = "첫 유입 경로 저장", description = """
-                    Android는 Play 설치 정보 문자열을, iOS는 딥링크로 받은 광고 라벨을 보낸다. 서버가 메타 광고·친구 초대·오가닉 등으로 판별해 저장한다. \
-                    처음 저장한 값만 남고 다시 보내도 처음 값을 돌려준다(멱등). 메타 설치 정보 암호문을 풀지 못해도 원문은 저장하고 200으로 답한다.""")
+                    Android는 Play 설치 정보 문자열을, iOS는 딥링크로 받은 광고 라벨을 보낸다. 구글 광고 그룹 딥링크 라벨은 googleDeepLinkAd로 따로 보낸다. \
+                    서버가 메타 광고·구글 광고·친구 초대·오가닉 등으로 판별해 저장한다. \
+                    판별 순서는 메타 암호문 → 친구 초대 → 구글(설치 정보의 gclid 또는 googleDeepLinkAd) → 메타 딥링크 → 오가닉 → 그 밖의 링크다. \
+                    처음 저장한 값만 남고 다시 보내도 처음 값을 돌려준다(멱등). 메타 설치 정보 암호문을 풀지 못해도 원문은 저장하고 200으로 답한다. \
+                    형식이 틀린 googleDeepLinkAd도 200이고 googleAd.label만 null이다.""")
     @ApiResponse(responseCode = "200", description = "저장됐거나, 이미 저장돼 있던 첫 값")
     @ApiResponse(
             responseCode = "400",
-            description = "IOS·ANDROID 밖이거나 누락된 플랫폼, 누락된 capturedAt, 4096자를 넘는 installReferrer, 64자를 넘는 deepLinkAd",
+            description =
+                    "IOS·ANDROID 밖이거나 누락된 플랫폼, 누락된 capturedAt, 4096자를 넘는 installReferrer, 64자를 넘는 deepLinkAd·googleDeepLinkAd",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,

@@ -64,9 +64,18 @@ public class RoomParticipationRepository {
     private static final String EXPIRED =
             "((NOT stomp_confirmed AND reserved_at < :reservationDeadline) " + "OR disconnected_at < :graceDeadline)";
 
-    private static final String MEMBER_COLUMNS =
-            "user_id, nickname, goal, category, profile_image, camera_on, focus_state, focus_sec, "
-                    + "(disconnected_at IS NOT NULL) AS disconnected";
+    // 멤버 객체 조회. 그룹 공부방 값(micOn·onBreak·owner)은 그룹 공부방에서만 채우고 초대코드 방은 NULL이라 직렬화에서 빠진다(BY-1124).
+    // owner는 입장 때 굳은 값이 아니라 지금 그룹장이다. study_group에도 category가 있어 참가자 컬럼은 모두 p.로 가린다
+    private static final String MEMBER_SELECT = """
+            SELECT p.user_id, p.nickname, p.goal, p.category, p.profile_image, p.camera_on, p.focus_state,
+                   p.focus_sec, (p.disconnected_at IS NOT NULL) AS disconnected,
+                   CASE WHEN r.group_id IS NOT NULL THEN p.mic_on END AS mic_on,
+                   CASE WHEN r.group_id IS NOT NULL THEN p.on_break END AS on_break,
+                   CASE WHEN r.group_id IS NOT NULL THEN g.owner_id = p.user_id END AS is_owner
+              FROM room_participations p
+              JOIN rooms r ON r.id = p.room_id
+              LEFT JOIN study_group g ON g.id = r.group_id
+            """;
 
     // 사진 키는 프로필 응답에 경로로만 실리므로 입장하는 같은 문장에서 users에서 복사한다
     private static final String CURRENT_PROFILE_IMAGE =
@@ -111,7 +120,10 @@ public class RoomParticipationRepository {
                 rs.getBoolean("camera_on"),
                 rs.getString("focus_state"),
                 rs.getInt("focus_sec"),
-                rs.getBoolean("disconnected"));
+                rs.getBoolean("disconnected"),
+                rs.getObject("mic_on", Boolean.class),
+                rs.getObject("on_break", Boolean.class),
+                rs.getObject("is_owner", Boolean.class));
     }
 
     public Optional<Long> findLiveRoomIdOfUser(Long userId) {
@@ -262,8 +274,8 @@ public class RoomParticipationRepository {
     }
 
     public List<RoomMember> findConfirmedMembers(Long roomId) {
-        return jdbc.sql("SELECT " + MEMBER_COLUMNS + " FROM room_participations "
-                        + "WHERE room_id = :roomId AND left_at IS NULL AND stomp_confirmed ORDER BY id")
+        return jdbc.sql(MEMBER_SELECT
+                        + "WHERE p.room_id = :roomId AND p.left_at IS NULL AND p.stomp_confirmed ORDER BY p.id")
                 .param("roomId", roomId)
                 .query(this::toMember)
                 .list();
@@ -271,11 +283,11 @@ public class RoomParticipationRepository {
 
     /** 스냅샷 재요청 — 인가(요청자가 현재 세션의 확정 멤버)와 조회를 한 문장으로. */
     public List<RoomMember> findConfirmedMembersForActiveSession(Long roomId, Long userId, String sessionId) {
-        return jdbc.sql("SELECT " + MEMBER_COLUMNS + " FROM room_participations "
-                        + "WHERE room_id = :roomId AND left_at IS NULL AND stomp_confirmed "
+        return jdbc.sql(MEMBER_SELECT
+                        + "WHERE p.room_id = :roomId AND p.left_at IS NULL AND p.stomp_confirmed "
                         + "AND EXISTS (SELECT 1 FROM room_participations me WHERE me.room_id = :roomId "
                         + "AND me.user_id = :userId AND me.left_at IS NULL AND me.stomp_confirmed "
-                        + "AND me.stomp_session_id = :sessionId) ORDER BY id")
+                        + "AND me.stomp_session_id = :sessionId) ORDER BY p.id")
                 .param("roomId", roomId)
                 .param("userId", userId)
                 .param("sessionId", sessionId)
@@ -313,7 +325,7 @@ public class RoomParticipationRepository {
                 .single();
     }
 
-    /** 시그널 인가용 — 발신자·수신자 라이브 행을 한 번에. */
+    /** 여러 사람의 라이브 행을 한 번에. 시그널 인가는 차단까지 한 문장으로 보는 {@link GroupSeatRepository#signalAllowed}로 옮겼다(BY-1124). */
     public List<Row> findLiveByRoomAndUsers(Long roomId, Collection<Long> userIds) {
         return jdbc.sql("SELECT " + COLUMNS + " FROM room_participations "
                         + "WHERE room_id = :roomId AND user_id IN (:userIds) AND left_at IS NULL")

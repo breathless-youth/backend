@@ -231,9 +231,10 @@ Table push_token {
 Table user_acquisition {
   user_id bigint [primary key, ref: - users.id] // 사용자당 한 행, 처음 저장한 값만 남는다 (V33, ADR-0036)
   platform varchar        // IOS, ANDROID
-  source varchar          // META_AD, INVITE, ORGANIC, OTHER_LINK, UNKNOWN
-  install_referrer text   // 앱이 읽은 Play 설치 정보 원문 (빈 값은 null)
-  deep_link_ad varchar    // 딥링크 광고 라벨 (iOS 등)
+  source varchar          // META_AD, GOOGLE_AD(V40), INVITE, ORGANIC, OTHER_LINK, UNKNOWN
+  install_referrer text   // 앱이 읽은 Play 설치 정보 원문 (빈 값은 null). 구글 gclid도 여기에만 있다
+  deep_link_ad varchar    // 메타 딥링크 광고 라벨 (iOS 등)
+  google_deep_link_ad varchar // 구글 광고 그룹 딥링크 값 원문 (V40, BY-1138). 형식 g_[a-z0-9_]{1,30}인 값만 응답 라벨로 나간다
   utm_source varchar
   utm_medium varchar
   utm_campaign varchar

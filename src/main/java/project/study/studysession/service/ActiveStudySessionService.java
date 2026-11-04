@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import project.study.common.time.DefaultTimeZone;
 import project.study.studysession.buffer.ActiveSnapshotBuffer;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.dto.ActiveSessionSnapshotResponse;
+import project.study.studysession.dto.LiveDraft;
 import project.study.studysession.dto.LivePiece;
 import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.dto.StudySessionCreateRequest;
@@ -37,6 +39,9 @@ public class ActiveStudySessionService {
 
     // V12가 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
     private static final String USER_FK_CONSTRAINT = "active_study_session_user_id_fkey";
+
+    /** 그룹 책상은 오늘·이번 주를 KST 날짜로 센다(MemberStudySource와 같은 경계)라서 진행 중 조각도 KST로 나눈다. */
+    private static final ZoneId GROUP_DAY_ZONE = ZoneId.of("Asia/Seoul");
 
     private final ActiveStudySessionRepository activeStudySessionRepository;
     private final StudySessionService studySessionService;
@@ -194,7 +199,7 @@ public class ActiveStudySessionService {
         for (ActiveStudySession draft : drafts) {
             try {
                 ZoneId zone = zones.getOrDefault(draft.getUserId(), DefaultTimeZone.ZONE);
-                pieces.addAll(toLivePieces(draft, zone, asOf, extendFocusing));
+                pieces.addAll(toLivePieces(draft, sortedEvents(draft), zone, asOf, extendFocusing));
             } catch (RuntimeException e) {
                 log.warn("랭킹 집계에서 draft를 건너뜀: draftId={}", draft.getId(), e);
                 Sentry.captureException(e);
@@ -203,12 +208,46 @@ public class ActiveStudySessionService {
         return pieces;
     }
 
-    private List<LivePiece> toLivePieces(ActiveStudySession draft, ZoneId zone, Instant asOf, boolean extendFocusing) {
-        List<StatusEvent> events =
-                objectMapper.readValue(draft.getEvents(), new TypeReference<List<StatusEventRequest>>() {}).stream()
-                        .map(StatusEventRequest::toEntity)
-                        .sorted(Comparator.comparing(StatusEvent::getStartedAt))
-                        .toList();
+    /**
+     * 사람 집합의 진행 중 draft (BY-1124 멤버 책상) — {@link #livePieces(Instant)}와 같은 분할을 그 사람들 draft에만 하고, 같은 읽기에서 지금
+     * 상태(마지막 수신·진행 중 이벤트·집중 중)를 함께 낸다. 사람 수와 상관없이 draft를 한 번만 읽는다. 이미 확정된 draft를 거르는 것은
+     * 랭킹처럼 호출자 몫이다. 읽지 못하는 draft는 건너뛴다 — 폐기는 확정 스케줄러 몫이다.
+     */
+    @Transactional(readOnly = true)
+    public List<LiveDraft> liveDraftsOf(Collection<Long> userIds, Instant asOf) {
+        if (userIds.isEmpty()) {
+            return List.of();
+        }
+        List<LiveDraft> drafts = new ArrayList<>();
+        for (ActiveStudySession draft : activeStudySessionRepository.findByUserIdIn(userIds)) {
+            try {
+                List<StatusEvent> events = sortedEvents(draft);
+                StatusEvent open = openEvent(draft, events);
+                drafts.add(new LiveDraft(
+                        draft.getId(),
+                        draft.getUserId(),
+                        draft.getLastSeenAt(),
+                        open == null ? null : open.getStatus(),
+                        isFocusing(draft, events, asOf),
+                        toLivePieces(draft, events, GROUP_DAY_ZONE, asOf, true)));
+            } catch (RuntimeException e) {
+                // 그룹 책상은 홈·내 그룹이 30초마다 읽는다 — 읽지 못하는 draft 하나가 읽을 때마다 Sentry에 쌓이지 않게 경고 로그만 남긴다.
+                // 같은 draft는 랭킹 집계(livePieces)가 Sentry로 알리고, 확정 스케줄러가 폐기한다
+                log.warn("멤버 공부 상태에서 draft를 건너뜀: draftId={}", draft.getId(), e);
+            }
+        }
+        return drafts;
+    }
+
+    private List<StatusEvent> sortedEvents(ActiveStudySession draft) {
+        return objectMapper.readValue(draft.getEvents(), new TypeReference<List<StatusEventRequest>>() {}).stream()
+                .map(StatusEventRequest::toEntity)
+                .sorted(Comparator.comparing(StatusEvent::getStartedAt))
+                .toList();
+    }
+
+    private List<LivePiece> toLivePieces(
+            ActiveStudySession draft, List<StatusEvent> events, ZoneId zone, Instant asOf, boolean extendFocusing) {
         boolean focusing = extendFocusing && isFocusing(draft, events, asOf);
         int extendSec = focusing
                 ? (int) Math.max(
@@ -247,6 +286,15 @@ public class ActiveStudySessionService {
         if (draft.getLastSeenAt().isBefore(asOf.minus(FOCUSING_WINDOW))) {
             return false;
         }
-        return sortedEvents.isEmpty() || !sortedEvents.getLast().getEndedAt().equals(draft.getReportedAt());
+        return openEvent(draft, sortedEvents) == null;
+    }
+
+    /** 지금 진행 중인 이벤트 — 시작 순으로 정렬한 마지막 이벤트가 reportedAt에서 닫혀 있으면 그것이다. 없으면 null. */
+    private static StatusEvent openEvent(ActiveStudySession draft, List<StatusEvent> sortedEvents) {
+        if (sortedEvents.isEmpty()) {
+            return null;
+        }
+        StatusEvent last = sortedEvents.getLast();
+        return last.getEndedAt().equals(draft.getReportedAt()) ? last : null;
     }
 }
