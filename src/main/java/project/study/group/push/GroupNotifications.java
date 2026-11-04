@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import project.study.common.category.StudyCategory;
 import project.study.common.tx.AfterCommit;
 import project.study.push.dto.PushMessage;
+import project.study.push.dto.PushText;
 import project.study.push.service.PushSender;
 
 /**
@@ -41,8 +42,8 @@ public class GroupNotifications {
     public void applicationReceived(long ownerId, long groupId, String groupName, String applicantNickname) {
         send(
                 List.of(ownerId),
-                "새 신청을 확인해 볼까요?",
-                applicantNickname + "님이 " + groupName + "에 신청했어요",
+                new PushText("새 신청을 확인해 볼까요?", applicantNickname + "님이 " + groupName + "에 신청했어요"),
+                new PushText("New request to join your group", applicantNickname + " wants to join " + groupName + "."),
                 GroupPushLinks.applications(groupId),
                 APPLICATION_RECEIVED);
     }
@@ -51,8 +52,8 @@ public class GroupNotifications {
     public void ownerTransferred(long newOwnerId, long groupId, String groupName) {
         send(
                 List.of(newOwnerId),
-                "그룹장이 됐어요",
-                groupName + "의 그룹장을 넘겨받았어요",
+                new PushText("그룹장이 됐어요", groupName + "의 그룹장을 넘겨받았어요"),
+                new PushText("You're now the group owner", "Ownership of " + groupName + " was transferred to you."),
                 GroupPushLinks.group(groupId),
                 OWNER_TRANSFERRED);
     }
@@ -61,8 +62,8 @@ public class GroupNotifications {
     public void applicationAccepted(long userId, long groupId, String groupName) {
         send(
                 List.of(userId),
-                "새로운 그룹에서 공부를 시작해 볼까요?",
-                groupName + "의 멤버가 됐어요",
+                new PushText("새로운 그룹에서 공부를 시작해 볼까요?", groupName + "의 멤버가 됐어요"),
+                new PushText("Start studying with your new group", "You're now a member of " + groupName + "."),
                 GroupPushLinks.group(groupId),
                 APPLICATION_ACCEPTED);
     }
@@ -71,8 +72,8 @@ public class GroupNotifications {
     public void applicationDeclined(long userId, String groupName, StudyCategory category) {
         send(
                 List.of(userId),
-                "비슷한 그룹에 신청해 볼까요?",
-                groupName + " 신청이 거절됐어요",
+                new PushText("비슷한 그룹에 신청해 볼까요?", groupName + " 신청이 거절됐어요"),
+                new PushText("Find a similar group to join", "Your request to join " + groupName + " wasn't accepted."),
                 GroupPushLinks.publicTab(category),
                 APPLICATION_DECLINED);
     }
@@ -81,8 +82,9 @@ public class GroupNotifications {
     public void applicationExpired(long userId, String groupName) {
         send(
                 List.of(userId),
-                "다른 그룹에 신청해 볼까요?",
-                groupName + " 신청은 답이 없어 취소됐어요",
+                new PushText("다른 그룹에 신청해 볼까요?", groupName + " 신청은 답이 없어 취소됐어요"),
+                new PushText(
+                        "Find another group to join", "Your request to join " + groupName + " expired with no reply."),
                 GroupPushLinks.publicTab(),
                 APPLICATION_EXPIRED);
     }
@@ -91,8 +93,9 @@ public class GroupNotifications {
     public void applicationRoomClosed(long userId, String groupName) {
         send(
                 List.of(userId),
-                "다른 그룹을 찾아볼까요?",
-                groupName + " 그룹이 사라져 신청이 취소됐어요",
+                new PushText("다른 그룹을 찾아볼까요?", groupName + " 그룹이 사라져 신청이 취소됐어요"),
+                new PushText(
+                        "Look for another group", groupName + " is no longer available, so your request was canceled."),
                 GroupPushLinks.publicTab(),
                 APPLICATION_ROOM_CLOSED);
     }
@@ -101,24 +104,29 @@ public class GroupNotifications {
     public void memberStarted(Collection<Long> receiverIds, long groupId, String groupName, String starterNickname) {
         send(
                 receiverIds,
-                starterNickname + "님이 공부를 시작했어요",
-                groupName + "에 같이 공부하러 가 볼까요?",
+                new PushText(starterNickname + "님이 공부를 시작했어요", groupName + "에 같이 공부하러 가 볼까요?"),
+                new PushText(starterNickname + " started studying", "Study together in " + groupName + "."),
                 GroupPushLinks.group(groupId),
                 MEMBER_STARTED);
     }
 
     /** 내보내진 사람에게. */
     public void memberKicked(long userId, String groupName) {
-        send(List.of(userId), "다른 그룹과 다시 시작해 볼까요?", groupName + "에서 내보내졌어요", GroupPushLinks.publicTab(), MEMBER_KICKED);
+        send(
+                List.of(userId),
+                new PushText("다른 그룹과 다시 시작해 볼까요?", groupName + "에서 내보내졌어요"),
+                new PushText("Start fresh with another group", "You're no longer a member of " + groupName + "."),
+                GroupPushLinks.publicTab(),
+                MEMBER_KICKED);
     }
 
-    private void send(Collection<Long> receiverIds, String title, String body, String link, String type) {
+    private void send(Collection<Long> receiverIds, PushText ko, PushText en, String link, String type) {
         if (receiverIds.isEmpty()) {
             return;
         }
         // 커밋 뒤에 실행기가 읽는 동안 호출자가 컬렉션을 바꾸지 못하게 복사해 둔다
         List<Long> receivers = List.copyOf(receiverIds);
-        PushMessage message = new PushMessage(title, body, link, type, UUID.randomUUID());
+        PushMessage message = new PushMessage(ko, en, link, type, UUID.randomUUID());
         AfterCommit.run(() -> executor.execute(() -> deliver(receivers, message)));
     }
 

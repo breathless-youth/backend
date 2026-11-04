@@ -53,8 +53,10 @@ class PushTestSendApiTest {
         ArgumentCaptor<PushMessage> message = ArgumentCaptor.forClass(PushMessage.class);
         verify(pushSender).send(org.mockito.ArgumentMatchers.eq(List.of(42L)), message.capture());
         assertThat(message.getValue().type()).isEqualTo("test");
-        assertThat(message.getValue().title()).isEqualTo("안녕");
+        assertThat(message.getValue().ko().title()).isEqualTo("안녕");
         assertThat(message.getValue().link()).isEqualTo("/records");
-        assertThat(message.getValue().body()).isNotBlank();
+        assertThat(message.getValue().ko().body()).isNotBlank();
+        // 테스트 발송은 기기 언어와 상관없이 입력한 문구 그대로 나가야 한다
+        assertThat(message.getValue().en()).isEqualTo(message.getValue().ko());
     }
 }

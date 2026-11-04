@@ -17,16 +17,21 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import project.study.push.dto.PushMessage;
 import project.study.push.dto.PushResult;
+import project.study.push.dto.PushText;
 import project.study.push.repository.PushTokenRepository;
+import project.study.push.repository.PushTokenRepository.TokenLocale;
 
 /**
  * 사용자 ID로 기기 토큰을 찾아 FCM으로 보낸다 — 시나리오 잡이 부르는 유일한 입구다. 빈은 FcmConfig가 만든다.
  *
  * <p>토큰은 UNREGISTERED일 때만 지운다. INVALID_ARGUMENT·SENDER_ID_MISMATCH 등은 메시지 형식이나 자격증명(dev에 운영 키 등)
  * 같은 우리 쪽 문제로도 나서, 지우면 멀쩡한 토큰이 통째로 사라진다. 토큰 값은 로그·Sentry 어디에도 남기지 않는다.
+ *
+ * <p>문구 언어는 여기서만 고른다. 기기 언어의 첫 부분이 ko면 한국어, 나머지는 모두 영어다. 한 멀티캐스트는 문구가 하나라 언어별로 나눠 보낸다.
  */
 @Slf4j
 public class PushSender {
@@ -53,34 +58,20 @@ public class PushSender {
         if (messaging == null || userIds.isEmpty()) {
             return PushResult.NONE;
         }
-        List<String> tokens = pushTokenRepository.findTokensByUserIdIn(userIds);
+        Map<Boolean, List<String>> tokensByKorean = pushTokenRepository.findTokenLocalesByUserIdIn(userIds).stream()
+                .collect(Collectors.partitioningBy(
+                        token -> isKorean(token.locale()),
+                        Collectors.mapping(TokenLocale::token, Collectors.toList())));
         int sent = 0;
         List<String> unregistered = new ArrayList<>();
         Map<String, Integer> failures = new TreeMap<>();
 
-        for (int from = 0; from < tokens.size(); from += MAX_TOKENS_PER_CALL) {
-            List<String> chunk = tokens.subList(from, Math.min(from + MAX_TOKENS_PER_CALL, tokens.size()));
-            BatchResponse batch;
-            try {
-                batch = messaging.sendEachForMulticast(toMulticast(chunk, message));
-            } catch (FirebaseMessagingException e) {
-                // 토큰별 오류는 응답 안에 온다 — 여기로 오는 건 호출 자체가 실패한 경우라 묶음 전체를 실패로 센다
-                failures.merge(codeName(e.getMessagingErrorCode()), chunk.size(), Integer::sum);
-                continue;
-            }
-            List<SendResponse> responses = batch.getResponses();
-            for (int i = 0; i < responses.size(); i++) {
-                SendResponse response = responses.get(i);
-                if (response.isSuccessful()) {
-                    sent++;
-                    continue;
-                }
-                MessagingErrorCode code = response.getException().getMessagingErrorCode();
-                if (code == MessagingErrorCode.UNREGISTERED) {
-                    unregistered.add(chunk.get(i));
-                } else {
-                    failures.merge(codeName(code), 1, Integer::sum);
-                }
+        for (Map.Entry<Boolean, List<String>> group : tokensByKorean.entrySet()) {
+            PushText text = group.getKey() ? message.ko() : message.en();
+            List<String> tokens = group.getValue();
+            for (int from = 0; from < tokens.size(); from += MAX_TOKENS_PER_CALL) {
+                List<String> chunk = tokens.subList(from, Math.min(from + MAX_TOKENS_PER_CALL, tokens.size()));
+                sent += sendChunk(chunk, message, text, unregistered, failures);
             }
         }
 
@@ -95,15 +86,53 @@ public class PushSender {
         return new PushResult(sent, failed, unregistered.size());
     }
 
-    private static MulticastMessage toMulticast(List<String> tokens, PushMessage message) {
+    /** 500개 이하 한 묶음을 보내고 접수 수를 돌려준다. 지울 토큰과 실패 코드는 넘겨받은 목록에 쌓는다. */
+    private int sendChunk(
+            List<String> chunk,
+            PushMessage message,
+            PushText text,
+            List<String> unregistered,
+            Map<String, Integer> failures) {
+        BatchResponse batch;
+        try {
+            batch = messaging.sendEachForMulticast(toMulticast(chunk, message, text));
+        } catch (FirebaseMessagingException e) {
+            // 토큰별 오류는 응답 안에 온다 — 여기로 오는 건 호출 자체가 실패한 경우라 묶음 전체를 실패로 센다
+            failures.merge(codeName(e.getMessagingErrorCode()), chunk.size(), Integer::sum);
+            return 0;
+        }
+        int sent = 0;
+        List<SendResponse> responses = batch.getResponses();
+        for (int i = 0; i < responses.size(); i++) {
+            SendResponse response = responses.get(i);
+            if (response.isSuccessful()) {
+                sent++;
+                continue;
+            }
+            MessagingErrorCode code = response.getException().getMessagingErrorCode();
+            if (code == MessagingErrorCode.UNREGISTERED) {
+                unregistered.add(chunk.get(i));
+            } else {
+                failures.merge(codeName(code), 1, Integer::sum);
+            }
+        }
+        return sent;
+    }
+
+    // ko-KR처럼 지역이 붙어도 한국어다. 언어를 더하면 문구 하나와 여기 분기 하나를 더한다
+    private static boolean isKorean(String locale) {
+        return locale.split("-", 2)[0].equalsIgnoreCase("ko");
+    }
+
+    private static MulticastMessage toMulticast(List<String> tokens, PushMessage message, PushText text) {
         MulticastMessage.Builder builder = MulticastMessage.builder();
         if (message.pushId() != null) {
             builder.putData("push_id", message.pushId().toString());
         }
         return builder.addAllTokens(tokens)
                 .setNotification(Notification.builder()
-                        .setTitle(message.title())
-                        .setBody(message.body())
+                        .setTitle(text.title())
+                        .setBody(text.body())
                         .build())
                 .putData("link", message.link())
                 .putData("type", message.type())

@@ -17,6 +17,7 @@ import project.study.metrics.report.fact.ExperimentData;
 import project.study.push.dto.FirstSessionCandidate;
 import project.study.push.dto.PushMessage;
 import project.study.push.dto.PushResult;
+import project.study.push.dto.PushText;
 import project.study.push.repository.PushExperimentQueries;
 
 /**
@@ -47,8 +48,14 @@ public class FirstSessionPushExperiment {
     /** 후보를 읽는 가입 창. 현지 20시에 현지 어제 0시 가입자까지 닿으려면 44시간(서머타임 날은 45시간)이 필요하다. */
     static final Duration CANDIDATE_WINDOW = Duration.ofDays(2);
 
-    private static final PushContent D0 = new PushContent("5분 집중 습관 만들기 🔥", "지금 5분만 켜두고 가볍게 시작해보세요!");
-    private static final PushContent D1 = new PushContent("딱 5분만 집중해볼까요? 👀", "시작이 반이에요. 오늘 하루 끝나기 전에 가볍게 타이머를 시작해봐요!");
+    private static final PushContent D0 = new PushContent(
+            new PushText("5분 집중 습관 만들기 🔥", "지금 5분만 켜두고 가볍게 시작해보세요!"),
+            new PushText("Build a 5-minute focus habit 🔥", "Just turn on the timer for 5 minutes and start small."));
+    private static final PushContent D1 = new PushContent(
+            new PushText("딱 5분만 집중해볼까요? 👀", "시작이 반이에요. 오늘 하루 끝나기 전에 가볍게 타이머를 시작해봐요!"),
+            new PushText(
+                    "How about just 5 minutes? 👀",
+                    "Getting started is the hardest part. Try the timer before today ends."));
 
     // 집단 배정용 — 예측 가능한 배정이 실험을 기울이지 않게 RoomService 초대 코드와 같은 생성기를 쓴다
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -140,9 +147,9 @@ public class FirstSessionPushExperiment {
             return;
         }
         PushResult result =
-                pushSender.send(List.of(userId), new PushMessage(content.title(), content.body(), "/", type, pushId));
+                pushSender.send(List.of(userId), new PushMessage(content.ko(), content.en(), "/", type, pushId));
         queries.recordAccepted(pushId, result.sent());
     }
 
-    private record PushContent(String title, String body) {}
+    private record PushContent(PushText ko, PushText en) {}
 }

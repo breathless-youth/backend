@@ -125,8 +125,9 @@ class GroupKickApiTest {
         assertThat(row.leaveReason()).isEqualTo("KICKED");
         PushMessage message = pushedOnceTo(pushSender, member);
         assertThat(message.type()).isEqualTo("group_member_kicked");
-        assertThat(message.title()).isEqualTo("다른 그룹과 다시 시작해 볼까요?");
-        assertThat(message.body()).isEqualTo(probe.group(group).orElseThrow().name() + "에서 내보내졌어요");
+        assertThat(message.ko().title()).isEqualTo("다른 그룹과 다시 시작해 볼까요?");
+        assertThat(message.ko().body())
+                .isEqualTo(probe.group(group).orElseThrow().name() + "에서 내보내졌어요");
         assertThat(message.link()).isEqualTo("/groups?tab=public");
         notPushedTo(pushSender, owner);
         assertErrorCode(v1Get(mvc, "/api/groups/" + group, member), HttpStatus.FORBIDDEN, "NOT_GROUP_MEMBER");
