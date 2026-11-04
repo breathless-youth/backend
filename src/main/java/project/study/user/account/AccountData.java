@@ -18,6 +18,14 @@ public class AccountData {
                 .toList();
     }
 
+    /** users 행을 잠그기 전에 부른다 — {@link UserDataHandler#lockBeforeUsers}. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockBeforeUsers(long userId) {
+        for (UserDataHandler handler : handlers) {
+            handler.lockBeforeUsers(userId);
+        }
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void merge(long sourceUserId, long targetUserId) {
         // 같으면 처리기마다 "남는 쪽으로 옮긴 뒤 옮기는 쪽 행 삭제"가 자기 데이터를 지운다

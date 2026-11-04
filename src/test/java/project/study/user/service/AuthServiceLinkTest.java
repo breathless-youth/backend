@@ -129,7 +129,9 @@ class AuthServiceLinkTest {
         when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user(1L, Provider.KAKAO)));
 
         assertThatThrownBy(() -> authService.link(1L, REQUEST)).isInstanceOf(AlreadyLinkedException.class);
-        verifyNoInteractions(currentRoomLeaver, accountData);
+        verifyNoInteractions(currentRoomLeaver);
+        // 그룹 행 잠금은 users 행을 잡기 전이라 이 판정보다 먼저 일어난다 — 병합만 하지 않으면 된다(롤백으로 풀린다)
+        verify(accountData, never()).merge(anyLong(), anyLong());
     }
 
     @Test
@@ -261,6 +263,30 @@ class AuthServiceLinkTest {
     }
 
     @Test
+    void 병합은_두_사용자_행보다_옮기는_쪽의_다른_도메인_잠금을_먼저_잡는다() {
+        givenDevice(9L, null);
+        givenSocialUser(3L);
+
+        authService.link(9L, REQUEST);
+
+        InOrder order = inOrder(accountData, userRepository);
+        order.verify(accountData).lockBeforeUsers(9L);
+        order.verify(userRepository).findByIdForUpdate(3L);
+        order.verify(userRepository).findByIdForUpdate(9L);
+        order.verify(accountData).merge(9L, 3L);
+    }
+
+    @Test
+    void 전환은_userId가_그대로라_다른_도메인_잠금을_따로_잡지_않는다() {
+        givenDevice(1L, null);
+        givenOwner(Optional.empty());
+
+        authService.link(1L, REQUEST);
+
+        verify(accountData, never()).lockBeforeUsers(anyLong());
+    }
+
+    @Test
     void 남는_쪽이_잠그기_전에_사라졌으면_전환한다() {
         // 조회와 잠금 사이에 그 소셜 계정이 탈퇴했다 — 소셜 ID가 비었으니 새 가입이다
         givenDevice(1L, null);
@@ -271,7 +297,8 @@ class AuthServiceLinkTest {
 
         assertThat(response.isNewUser()).isTrue();
         assertThat(jwtUtil.getUserId(response.accessToken())).isEqualTo("1");
-        verifyNoInteractions(accountData);
+        // 그룹 행 잠금은 병합 경로에 들어서며 먼저 잡는다 — 남는 쪽이 사라졌으면 병합만 하지 않는다
+        verify(accountData, never()).merge(anyLong(), anyLong());
         verify(userRepository, never()).delete(any());
     }
 

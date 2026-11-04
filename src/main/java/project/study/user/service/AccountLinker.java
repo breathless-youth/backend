@@ -116,6 +116,8 @@ class AccountLinker {
     }
 
     private Linked merge(long sourceId, long targetId, OAuthUserInfo social) {
+        // 옮기는 쪽이 얽힌 다른 도메인 행(그룹 행 등)을 users 행보다 먼저 잡는다 — 그 도메인이 잡는 순서와 같아야 교착하지 않는다
+        accountData.lockBeforeUsers(sourceId);
         // 두 사용자 행을 ID 작은 쪽부터 잠근다 — 같은 두 행을 반대 순서로 잡는 요청과 교착하지 않게
         Optional<User> lower = userRepository.findByIdForUpdate(Math.min(sourceId, targetId));
         Optional<User> higher = userRepository.findByIdForUpdate(Math.max(sourceId, targetId));
