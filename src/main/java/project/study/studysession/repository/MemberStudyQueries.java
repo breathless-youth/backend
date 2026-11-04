@@ -5,6 +5,8 @@ import static project.study.studysession.StudySessionThresholds.MIN_LIST_FOCUS_S
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,9 +25,16 @@ public class MemberStudyQueries {
     /** 확정 세션 순공 합 — 오늘(today 하루)과 이번 주(monday~today). */
     public record FocusTotals(long todaySec, long weekSec) {}
 
+    /** 그룹은 오늘·이번 주를 KST 날짜로 센다(ADR-0041 결정 11). */
+    private static final ZoneId GROUP_DAY_ZONE = ZoneId.of("Asia/Seoul");
+
     private final JdbcClient jdbc;
 
-    /** stat_date가 monday~today인 조각만 읽는다 — (user_id, stat_date) 인덱스 범위다. */
+    /**
+     * 시작 시각이 KST monday 0시~today 다음 날 0시인 조각만 읽는다 — (user_id, started_at) 인덱스 범위다.
+     *
+     * <p>stat_date는 세션 시간대의 날짜라 해외에서 한 공부는 KST 날짜와 다를 수 있어 쓰지 않는다. 조각은 시작 시각의 KST 날짜에 넣는다.
+     */
     public Map<Long, FocusTotals> focusTotals(Collection<Long> userIds, LocalDate monday, LocalDate today) {
         if (userIds.isEmpty()) {
             return Map.of();
@@ -33,17 +42,19 @@ public class MemberStudyQueries {
         Map<Long, FocusTotals> totals = new HashMap<>();
         jdbc.sql("""
                         SELECT s.user_id,
-                               COALESCE(SUM(s.focus_sec) FILTER (WHERE s.stat_date = :today), 0) AS today_sec,
+                               COALESCE(SUM(s.focus_sec) FILTER (WHERE s.started_at >= :todayStart), 0) AS today_sec,
                                SUM(s.focus_sec) AS week_sec
                         FROM study_session s
                         WHERE s.user_id IN (:userIds)
-                          AND s.stat_date BETWEEN :monday AND :today
+                          AND s.started_at >= :weekStart
+                          AND s.started_at < :tomorrowStart
                           AND s.source = 'MEASURED'
                           AND s.focus_sec >= :minFocusSec
                         GROUP BY s.user_id""")
                 .param("userIds", userIds)
-                .param("monday", monday)
-                .param("today", today)
+                .param("weekStart", startOf(monday))
+                .param("todayStart", startOf(today))
+                .param("tomorrowStart", startOf(today.plusDays(1)))
                 .param("minFocusSec", MIN_LIST_FOCUS_SEC)
                 .query(rs -> {
                     totals.put(rs.getLong("user_id"), new FocusTotals(rs.getLong("today_sec"), rs.getLong("week_sec")));
@@ -91,5 +102,9 @@ public class MemberStudyQueries {
                     }
                 });
         return lastEnded;
+    }
+
+    private static OffsetDateTime startOf(LocalDate date) {
+        return date.atStartOfDay(GROUP_DAY_ZONE).toInstant().atOffset(ZoneOffset.UTC);
     }
 }

@@ -90,6 +90,20 @@ class MemberStudyQueriesTest {
     }
 
     @Test
+    void 오늘과_이번_주_합계는_통계_날짜가_아니라_시작_시각의_KST_날짜로_센다() {
+        // 뉴욕 11월 1일(일) 10:30에 시작한 공부는 KST로 11월 2일(월) 00:30이라 그룹의 오늘·이번 주에 든다
+        insertSession(
+                LocalDate.of(2026, 11, 1),
+                Instant.parse("2026-11-01T15:30:00Z"),
+                Instant.parse("2026-11-01T16:30:00Z"),
+                "America/New_York");
+
+        assertThat(memberStudyQueries.focusTotals(
+                        List.of(userId), LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 2)))
+                .containsEntry(userId, new MemberStudyQueries.FocusTotals(3000, 3000));
+    }
+
+    @Test
     void 측정_세션이_없으면_결과에_넣지_않는다() {
         assertThat(memberStudyQueries.lastMeasuredEndedAt(List.of(userId))).doesNotContainKey(userId);
     }
