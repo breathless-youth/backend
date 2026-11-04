@@ -3,6 +3,7 @@ package project.study.group.support;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -58,6 +59,28 @@ public class BlockProbe {
                 .param("blocked", blockedId)
                 .query((rs, n) -> rs.getTimestamp("created_at").toInstant())
                 .optional();
+    }
+
+    /** 신고 행을 바로 만든다. 신청 ID는 신청 신고(APPLICATION)에만 넣는다. 신고 ID를 돌려준다. */
+    public long insertReport(long reporterId, long targetUserId, String type, long groupId, Long applicationId) {
+        return jdbc.sql("""
+                        insert into user_report (reporter_id, target_user_id, type, group_id, application_id, created_at)
+                        values (:reporter, :target, :type, :groupId, :applicationId, now()) returning id""")
+                .param("reporter", reporterId)
+                .param("target", targetUserId)
+                .param("type", type)
+                .param("groupId", groupId)
+                .param("applicationId", applicationId, Types.BIGINT)
+                .query(Long.class)
+                .single();
+    }
+
+    /** 이 사람이 받은 신고 전부, id 순. */
+    public List<ReportRow> reportsAbout(long targetUserId) {
+        return jdbc.sql("select * from user_report where target_user_id = :target order by id")
+                .param("target", targetUserId)
+                .query(REPORT)
+                .list();
     }
 
     /** 이 사람이 낸 신고 전부, id 순. */

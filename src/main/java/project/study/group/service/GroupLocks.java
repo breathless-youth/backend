@@ -15,6 +15,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>{@code study_group_application} 행 락({@code GroupApplicationRepository.lock}·조건부 UPDATE)은 ①②를 쥔 뒤에 잡는다. 취소·만료
  * 작업은 ①②를 쥐지 않고 신청 행만 잡는다. 신청 행을 쥔 채 ①②를 기다리는 작업이 없으므로 순서가 어긋나지 않는다.
  *
+ * <p>계정 병합·탈퇴(BY-1126)는 users 행을 {@code FOR UPDATE}로 잡기 전에 그 사람과 얽힌 ① 여러 개를 ID 순으로 먼저 잡는다({@link
+ * GroupUserDataHandler#lockBeforeUsers}). ①을 쥔 뒤 멤버·신청 행을 넣으면 FK가 users 행을 잡으므로, users 행을 먼저 잡으면 거꾸로다.
+ *
  * <p>advisory lock 키 공간은 모든 도메인이 DB 하나에서 나눠 쓴다. 지금 쓰는 키(코드에서 {@code pg_advisory}를 찾아 확인):
  *
  * <ul>

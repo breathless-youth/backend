@@ -78,6 +78,15 @@ public class StartAlertFixture {
         roomIds.clear();
     }
 
+    /** (받는 사람, 그룹)의 알림 기록을 바로 만든다 — 계정 병합·탈퇴 테스트가 쓴다. */
+    public void insertAlert(long receiverId, long groupId, Instant lastSentAt) {
+        jdbc.sql("insert into group_study_alert (receiver_id, group_id, last_sent_at) values (:r, :g, :at)")
+                .param("r", receiverId)
+                .param("g", groupId)
+                .param("at", Timestamp.from(lastSentAt))
+                .update();
+    }
+
     /** (받는 사람, 그룹)의 마지막으로 보낸 때 — 기록이 없으면 null. */
     public Instant lastSentAt(long receiverId, long groupId) {
         return jdbc.sql("select last_sent_at from group_study_alert where receiver_id = :r and group_id = :g")

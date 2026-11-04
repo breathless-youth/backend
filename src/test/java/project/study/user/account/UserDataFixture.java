@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import project.study.group.support.BlockProbe;
+import project.study.group.support.GroupProbe;
+import project.study.group.support.StartAlertFixture;
 
 /** 계정 병합·탈퇴 테스트용 시드. 테이블마다 seedXxx를 두고, 처리기가 책임지는 컬럼 전부의 행 수를 센다. */
 @Component
@@ -252,6 +254,25 @@ public class UserDataFixture {
     }
 
     /**
+     * 그룹 — user가 그룹장인 그룹(other도 멤버)과 other가 그룹장인 그룹(user는 나간 이력·답을 기다리는 신청·거절된 신청)을 만들고, 알림 기록과
+     * 양쪽 신고(신청 신고는 user의 신청을 가리킨다)를 심는다. other와 자리를 바꿔 한 번 더 부르면 서로의 그룹에 살아 있는 멤버로 겹친다.
+     */
+    public void seedGroups(long user, long other) {
+        GroupProbe groups = new GroupProbe(jdbc);
+        BlockProbe reports = new BlockProbe(jdbc);
+        Instant now = Instant.now();
+        long owned = groups.insertGroup(user, "PUBLIC");
+        groups.insertMember(owned, other, "APPLICATION");
+        long othersGroup = groups.insertGroup(other, "PUBLIC");
+        groups.insertLeftMember(othersGroup, user, "LEFT", now.minusSeconds(60));
+        long pending = groups.insertApplication(othersGroup, user, "PENDING", now.plus(Duration.ofDays(3)));
+        groups.insertApplication(othersGroup, user, "DECLINED", now.plus(Duration.ofDays(3)));
+        new StartAlertFixture(jdbc, groups).insertAlert(user, owned, now);
+        reports.insertReport(user, other, "ROOM_MEMBER", owned, null);
+        reports.insertReport(other, user, "APPLICATION", othersGroup, pending);
+    }
+
+    /**
      * 차단 — user가 other를 차단하고, 새로 만든 사람이 user를 차단한다. 양쪽 컬럼에 user의 행이 생긴다. other와 자리를 바꿔 한 번 더 불러도
      * 기본 키가 부딪히지 않고, 두 번 부르면 user와 other 사이에 양쪽 방향 차단이 생긴다.
      */
@@ -327,6 +348,7 @@ public class UserDataFixture {
         seedRtcStat(room, user, other);
         seedRankingRecord(user, "board-" + user, day, 1);
         seedRankingBest(user, 1, "b", day);
+        seedGroups(user, other);
         seedBlocks(user, other);
     }
 }

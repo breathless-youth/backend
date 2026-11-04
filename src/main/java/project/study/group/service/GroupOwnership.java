@@ -10,7 +10,7 @@ import project.study.group.repository.GroupRepository.GroupRow;
 
 /**
  * 그룹장이 바뀌는 일과 혼자 남은 그룹장이 떠나 그룹이 사라지는 일 (BY-1124·BY-1126). 그룹장 넘기기·나가기({@link GroupMemberService})와
- * 탈퇴({@code GroupUserDataHandler})가 같은 처리를 하도록 한 곳에 둔다.
+ * 탈퇴({@link GroupUserDataHandler})가 같은 처리를 하도록 한 곳에 둔다.
  *
  * <p>호출자가 이 그룹 행을 {@code FOR UPDATE}로 잠근 트랜잭션 안에서만 부른다. 푸시·공부방 메시지는 모두 커밋 뒤에 나간다.
  */

@@ -27,6 +27,8 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
+import project.study.group.support.GroupProbe;
+import project.study.group.support.GroupProbe.MemberRow;
 import project.study.user.LinkTestClient.Device;
 import project.study.user.LinkTestClient.Social;
 import project.study.user.account.UserDataFixture;
@@ -201,6 +203,22 @@ class AccountDeletionApiTest {
                 .listOfRows();
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0)).containsEntry("user_id", other.userId()).containsEntry("left_room", false);
+        assertThat(countUser(me.userId())).isZero();
+    }
+
+    @Test
+    void 그룹장이_탈퇴하면_204이고_다른_멤버가_그룹장이_된다() {
+        Device me = api.register();
+        Device other = api.register();
+        GroupProbe groups = new GroupProbe(jdbc);
+        long group = groups.insertGroup(me.userId(), "PUBLIC");
+        groups.insertMember(group, other.userId(), "APPLICATION");
+
+        assertThat(deleteMe(me.accessToken())).hasStatus(204);
+
+        assertThat(groups.group(group).orElseThrow().ownerId()).isEqualTo(other.userId());
+        assertThat(groups.group(group).orElseThrow().deletedAt()).isNull();
+        assertThat(groups.members(group)).extracting(MemberRow::userId).containsExactly(other.userId());
         assertThat(countUser(me.userId())).isZero();
     }
 
