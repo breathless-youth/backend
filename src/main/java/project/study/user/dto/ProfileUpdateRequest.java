@@ -21,6 +21,25 @@ public record ProfileUpdateRequest(
         @Schema(
                 description = "변경할 카테고리. 생략하면 미변경",
                 example = "JOB",
-                allowableValues = {"PROFESSIONAL", "CSAT", "JOB", "CERTIFICATE", "CIVIL_SERVICE", "LANGUAGE", "ETC"})
-        @Pattern(regexp = "PROFESSIONAL|CSAT|JOB|CERTIFICATE|CIVIL_SERVICE|LANGUAGE|ETC", message = "정의되지 않은 카테고리입니다")
-        String category) {}
+                allowableValues = {
+                    "CSAT",
+                    "SCHOOL_EXAM",
+                    "UNIVERSITY_EXAM",
+                    "CIVIL_SERVICE",
+                    "CERTIFICATE",
+                    "LANGUAGE",
+                    "JOB",
+                    "PROFESSIONAL",
+                    "ETC"
+                })
+        // 값은 StudyCategory와 같아야 한다 — 애노테이션 상수라 enum에서 만들 수 없고 StudyCategoryTest가 어긋남을 잡는다
+        @Pattern(
+                regexp = "CSAT|SCHOOL_EXAM|UNIVERSITY_EXAM|CIVIL_SERVICE|CERTIFICATE|LANGUAGE|JOB|PROFESSIONAL|ETC",
+                message = "정의되지 않은 카테고리입니다")
+        String category,
+
+        @Schema(
+                description = "기기의 IANA 시간대 이름. 스트릭·그날 할 일·05시 하루·D-Day의 오늘을 이 시간대로 정한다. "
+                        + "생략하면 미변경이고, 읽을 수 없는 값이면 거절하지 않고 무시한다(저장된 값 유지, 기본 Asia/Seoul). 응답에는 싣지 않는다",
+                example = "Asia/Seoul")
+        String timeZone) {}

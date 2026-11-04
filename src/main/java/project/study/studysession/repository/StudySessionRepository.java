@@ -1,5 +1,6 @@
 package project.study.studysession.repository;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -41,14 +42,22 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
     List<StudySession> findByUserIdAndSubmissionStartedAtAndSourceOrderByStartedAtAsc(
             Long userId, Instant submissionStartedAt, StudySessionSource source);
 
-    // 수동 기록의 겹침 계산 — [from, to)와 조금이라도 겹치는 세션(출처 무관).
-    // 단, 끝이 닿는 것은 겹침이 아니다
+    // [from, to)와 조금이라도 겹치는 세션(출처 무관) — 수동 기록의 겹침 계산과 홈 05시 하루의 과목 시간이 쓴다.
+    // 끝이 닿는 것은 겹침이 아니다. 조각은 24시간을 넘지 않아 from 24시간 전보다 먼저 시작한 조각은 창에 닿지 않는다.
+    // 그 하한이 있어야 (user_id, started_at) 유니크 인덱스를 양쪽이 닫힌 범위로 읽는다
+    default List<StudySession> findOverlapping(Long userId, Instant from, Instant to) {
+        return findOverlappingStartedFrom(userId, from.minus(Duration.ofHours(24)), from, to);
+    }
+
     @Query("""
             select s from StudySession s
-            where s.userId = :userId and s.startedAt < :to and s.endedAt > :from
+            where s.userId = :userId and s.startedAt >= :earliest and s.startedAt < :to and s.endedAt > :from
             order by s.startedAt""")
-    List<StudySession> findOverlapping(
-            @Param("userId") Long userId, @Param("from") Instant from, @Param("to") Instant to);
+    List<StudySession> findOverlappingStartedFrom(
+            @Param("userId") Long userId,
+            @Param("earliest") Instant earliest,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
 
     // dev 목데이터 시더가 재시작마다 데모 유저의 세션을 갈아끼울 때 사용
     void deleteByUserId(Long userId);

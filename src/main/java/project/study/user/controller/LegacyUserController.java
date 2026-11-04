@@ -48,8 +48,10 @@ public class LegacyUserController {
         return userController.getProfile(userId);
     }
 
+    /** 토큰 없이 경로의 userId만으로 부르는 경로라, 남의 시간대를 바꿔 랭킹에서 빼지 못하게 시간대는 받지 않는다. */
     @PatchMapping("/{userId}/profile")
     public ProfileResponse updateProfile(@PathVariable Long userId, @Valid @RequestBody ProfileUpdateRequest request) {
-        return userController.updateProfile(userId, request);
+        return userController.updateProfile(
+                userId, new ProfileUpdateRequest(request.nickname(), request.goal(), request.category(), null));
     }
 }

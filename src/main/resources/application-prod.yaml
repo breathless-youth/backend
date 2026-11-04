@@ -25,11 +25,12 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
-  # 5초 룸 정리 스윕이 일일 리포트·세션 확정 스케줄러와 스레드를 나눠 쓰지 않게 (기본 풀 크기 1)
+  # 5초 룸 정리 스윕이 일일 리포트·세션 확정 스케줄러와 스레드를 나눠 쓰지 않게 (기본 풀 크기 1).
+  # 그룹 공부방(BY-1124)이 10초 멤버 시작 알림·60초 신청 만료 작업을 더해 2에서 3으로 올렸다
   task:
     scheduling:
       pool:
-        size: 2
+        size: 3
 
 # p6spy는 classpath에는 있지만 prod에서는 DataSource 래핑 자체를 끈다 —
 # 쿼리마다 프록시가 끼는 오버헤드·로그 볼륨을 피하기 위함 (local/dev에서만 켠다).
@@ -76,6 +77,12 @@ app:
   # 메타 설치 정보 복호화 키 (BY-1066, ADR-0036). 값이 없으면 복호화만 꺼진 채 기동한다 — 운영은 ECS가 SSM meta/install-referrer-key를 주입
   acquisition:
     meta-install-referrer-key: ${META_INSTALL_REFERRER_KEY:}
+  # 그룹 신고 운영 알림 채널 (BY-1124). 봇 토큰은 일일 지표 리포트와 같은 metrics.slack.bot-token을 쓰고 채널만 다르다 —
+  # 봇을 이 채널에도 초대해야 한다. 값이 없으면 기동 로그에 경고 한 줄을 남기고 알림만 꺼진다(신고 기록은 DB에 남는다).
+  # 채널 ID는 비밀이 아니라 기본값으로 둔다(팀이 정한 채널). 바꿀 때만 GROUP_REPORT_SLACK_CHANNEL_ID로 덮어쓴다
+  group:
+    report:
+      slack-channel-id: ${GROUP_REPORT_SLACK_CHANNEL_ID:C0CE18MJFMM}
   ws:
     stats-logging-period-ms: 1800000   # 30분 (기본)
   cors:

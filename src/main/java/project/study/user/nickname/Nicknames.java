@@ -1,10 +1,7 @@
 package project.study.user.nickname;
 
-import java.text.BreakIterator;
-import java.text.Normalizer;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import project.study.common.text.Graphemes;
 
 /**
  * 닉네임 규칙 (BY-647): 한글·영문·숫자·이모지·띄어쓰기만 허용, 앞뒤 공백을 잘라낸 뒤 글자 단위(확장 자소 클러스터, grapheme)로 2~12자.
@@ -34,9 +31,7 @@ public final class Nicknames {
 
     /** NFC 합성 + 앞뒤 공백 제거. null은 null(부분 수정에서 미변경). 저장 직전에도 같은 정규화를 적용한다. */
     public static String normalize(String raw) {
-        return raw == null
-                ? null
-                : Normalizer.normalize(raw, Normalizer.Form.NFC).strip();
+        return Graphemes.normalize(raw);
     }
 
     /** 원문 상한 → 정규화 → 코드포인트 상한 → 글자 단위 2~12자 → 모든 글자가 허용 목록 안. */
@@ -48,7 +43,7 @@ public final class Nicknames {
         if (normalized.codePointCount(0, normalized.length()) > MAX_CODE_POINTS) {
             return false;
         }
-        List<String> graphemes = graphemes(normalized);
+        List<String> graphemes = Graphemes.split(normalized);
         if (graphemes.size() < MIN_LENGTH || graphemes.size() > MAX_LENGTH) {
             return false;
         }
@@ -57,27 +52,12 @@ public final class Nicknames {
 
     /** 눈에 보이는 글자 단위(grapheme) 개수. */
     public static int length(String nickname) {
-        return graphemes(nickname).size();
+        return Graphemes.count(nickname);
     }
 
     /** 아바타 이니셜 — 첫 글자 단위. 이모지가 앞에 와도 서로게이트 절반이 잘리지 않는다. */
     public static String initialOf(String nickname) {
-        List<String> graphemes = graphemes(nickname);
-        return graphemes.isEmpty() ? "" : graphemes.get(0);
-    }
-
-    private static List<String> graphemes(String text) {
-        List<String> result = new ArrayList<>();
-        if (text.isEmpty()) {
-            return result;
-        }
-        BreakIterator iterator = BreakIterator.getCharacterInstance(Locale.ROOT);
-        iterator.setText(text);
-        int start = iterator.first();
-        for (int end = iterator.next(); end != BreakIterator.DONE; start = end, end = iterator.next()) {
-            result.add(text.substring(start, end));
-        }
-        return result;
+        return Graphemes.first(nickname);
     }
 
     // 한 글자 단위가 허용 목록 안인가 — 단일 코드포인트면 한글·영문·숫자·스페이스·그림 이모지, 여러 개면 이모지 조합

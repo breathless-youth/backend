@@ -12,7 +12,9 @@ public record StudySessionResponse(
         @Schema(description = "세션 ID", example = "10") Long id,
         @Schema(description = "세션 주인의 유저 ID", example = "1") Long userId,
 
-        @Schema(description = "통계 귀속 날짜 — 한국 시간 기준 (자정을 넘는 제출은 날짜별 세션으로 분할되어 각각 귀속)", example = "2026-07-24")
+        @Schema(
+                description = "통계 귀속 날짜 — 세션 시간대(제출한 timeZone, 없으면 사용자 시간대) 기준 (자정을 넘는 제출은 날짜별 세션으로 분할되어 각각 귀속)",
+                example = "2026-07-24")
         LocalDate statDate,
 
         @Schema(description = "세션 시작 시각 (UTC, ISO-8601)", example = "2026-07-24T01:00:00Z")

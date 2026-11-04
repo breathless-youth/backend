@@ -11,6 +11,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
@@ -26,6 +27,9 @@ class ProfileApiTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private long registerUser() {
         MvcTestResult result = mvc.post()
@@ -71,6 +75,44 @@ class ProfileApiTest {
                 .bodyJson()
                 .hasPathSatisfying("$.goal", v -> assertThat(v).isEqualTo("올해 안에 이직 성공"))
                 .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"));
+    }
+
+    private String timeZoneOf(long userId) {
+        return jdbc.queryForObject("SELECT time_zone FROM users WHERE id = ?", String.class, userId);
+    }
+
+    private org.springframework.test.web.servlet.assertj.MockMvcTester.MockMvcRequestBuilder patchProfile(
+            long userId, String body) {
+        return mvc.patch()
+                .uri("/api/users/me/profile")
+                .with(asUser(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body);
+    }
+
+    @Test
+    void 시간대만_보내도_저장하고_응답에는_싣지_않는다() {
+        long userId = registerUser();
+        assertThat(timeZoneOf(userId)).isEqualTo("Asia/Seoul");
+
+        assertThat(patchProfile(userId, "{\"timeZone\": \"America/New_York\"}"))
+                .hasStatusOk()
+                .bodyJson()
+                .doesNotHavePath("$.timeZone")
+                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"));
+        assertThat(timeZoneOf(userId)).isEqualTo("America/New_York");
+    }
+
+    @Test
+    void 읽을_수_없는_시간대는_거절하지_않고_저장된_값을_둔다() {
+        long userId = registerUser();
+        assertThat(patchProfile(userId, "{\"timeZone\": \"Europe/London\"}")).hasStatusOk();
+
+        assertThat(patchProfile(userId, "{\"timeZone\": \"Mars/Olympus\", \"goal\": \"합격\"}"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.goal", v -> assertThat(v).isEqualTo("합격"));
+        assertThat(timeZoneOf(userId)).isEqualTo("Europe/London");
     }
 
     @Test
@@ -179,6 +221,25 @@ class ProfileApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"category\": \"UNKNOWN\"}"))
                 .hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void 카테고리를_내신과_대학_시험으로_바꿀_수_있다() {
+        long userId = registerUser();
+
+        for (String category : new String[] {"SCHOOL_EXAM", "UNIVERSITY_EXAM"}) {
+            assertThat(mvc.patch()
+                            .uri("/api/users/me/profile")
+                            .with(asUser(userId))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"category\": \"" + category + "\"}"))
+                    .as("category=%s", category)
+                    .hasStatusOk();
+            assertThat(mvc.get().uri("/api/users/me/profile").with(asUser(userId)))
+                    .hasStatusOk()
+                    .bodyJson()
+                    .hasPathSatisfying("$.category", v -> assertThat(v).isEqualTo(category));
+        }
     }
 
     @Test

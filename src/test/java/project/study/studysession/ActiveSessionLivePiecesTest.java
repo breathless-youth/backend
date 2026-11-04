@@ -100,6 +100,19 @@ class ActiveSessionLivePiecesTest {
     }
 
     @Test
+    void 조각은_사용자에게_저장된_시간대의_자정에서_나눈다() {
+        jdbc.update("UPDATE users SET time_zone = 'America/New_York' WHERE id = ?", userId);
+        ZoneId newYork = ZoneId.of("America/New_York");
+        Instant start = ZonedDateTime.of(2026, 9, 14, 23, 0, 0, 0, newYork).toInstant();
+        Instant reported = start.plusSeconds(7200);
+        draft(userId, start, reported, 7200, "[]");
+
+        assertThat(mine(reported.plusSeconds(3600), userId))
+                .extracting(LivePiece::statDate, LivePiece::focusSec)
+                .containsExactly(tuple(LocalDate.of(2026, 9, 14), 3600), tuple(LocalDate.of(2026, 9, 15), 3600));
+    }
+
+    @Test
     void 진행_중인_이벤트가_있으면_집중_중이_아니고_늘리지_않는다() {
         Instant asOf = at(15, 15, 0, 0);
         Instant reported = asOf.minusSeconds(10);

@@ -3,6 +3,7 @@ package project.study.studysession.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -21,6 +22,8 @@ import project.study.studysession.entity.StudySession;
 import project.study.studysession.entity.StudySessionSubjectSegment;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
+import project.study.user.repository.UserRepository;
+import project.study.user.service.UserTimeZones;
 
 /** 과목 구간의 검증·자정 절단·파생 계산 (ADR-0023) — 이벤트 겹침이 총공부·순공에 정확히 빠지는지, 자정 절단과 초 미만 절삭이 규칙대로인지. */
 @ExtendWith(MockitoExtension.class)
@@ -52,7 +55,8 @@ class SubjectSegmentSplitTest {
                 studySessionRepository,
                 activeStudySessionRepository,
                 CLOCK,
-                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY,
+                new UserTimeZones(mock(UserRepository.class)));
     }
 
     private static SubjectSegmentRequest seg(long subjectId, String start, String end) {

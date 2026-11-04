@@ -15,6 +15,7 @@ import project.study.room.dto.RoomMember;
 import project.study.room.dto.SignalPayload;
 import project.study.room.dto.StateUpdatePayload;
 import project.study.room.service.RoomStateService;
+import project.study.room.service.RoomStateService.StateUpdate;
 
 @Controller
 @RequiredArgsConstructor
@@ -28,6 +29,7 @@ public class RoomStompHandler {
     private final RoomStateService roomStateService;
     private final RoomMessenger roomMessenger;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PeerBlocks peerBlocks;
 
     // SNAPSHOT 재요청 — 구독 등록 전에 발사된 SNAPSHOT이 증발하는 레이스를 클라 재시도로 복구한다.
     // body는 무시하고, 방 상태를 바꾸지 않으며, 비멤버·옛 세션은 에러 프레임 없이 조용히 무시한다
@@ -51,6 +53,10 @@ public class RoomStompHandler {
                 principal.getName(),
                 accessor.getSessionId(),
                 Map.of("type", RoomMessageType.SNAPSHOT.name(), "members", members));
+        // 그룹 공부방이면 SNAPSHOT마다 그 세션에 PEER_BLOCKED를 다시 싣는다 — 구독 순서로 놓친 것을 되살린다 (BY-1124, §11.4)
+        if (PeerBlocks.isGroupRoom(members)) {
+            peerBlocks.afterResentSnapshot(principal.getName(), accessor.getSessionId(), userId, members);
+        }
     }
 
     @MessageMapping("/room/{roomId}/signal")
@@ -70,7 +76,8 @@ public class RoomStompHandler {
         }
 
         Long fromUserId = Long.valueOf(principal.getName());
-        // 발신자의 "현재" 세션 + 수신자가 확정 멤버인지를 한 번의 조회로 — 옛 세션·비멤버의 시그널 주입 차단
+        // 발신자의 "현재" 세션 + 수신자가 확정 멤버인지를 한 번의 조회로 — 옛 세션·비멤버의 시그널 주입 차단.
+        // 그룹 공부방에서 차단한 사이(어느 쪽이든)의 시그널도 같은 조회가 거른다 (BY-1124, §11.5)
         if (!roomStateService.authorizeSignal(roomId, fromUserId, accessor.getSessionId(), payload.toUserId())) {
             log.debug("signal 인가 실패: roomId={}, fromUserId={}, toUserId={}", roomId, fromUserId, payload.toUserId());
             return;
@@ -83,7 +90,9 @@ public class RoomStompHandler {
                 "payload", payload.payload()));
     }
 
-    // 필드별 검증은 SQL 전에 지금처럼 한다 — 무효한 필드만 무시(null)하고 나머지는 반영한다 (스펙 §2.7)
+    // 필드별 검증은 SQL 전에 지금처럼 한다 — 무효한 필드만 무시(null)하고 나머지는 반영한다 (스펙 §2.7).
+    // 그룹 공부방 필드(micOn·onBreak)가 없으면 지금 문장 그대로 간다 — 초대코드 방·옛 앱의 핫패스는 바뀌지 않는다.
+    // 있으면 저장 문장이 방 종류도 함께 돌려주고, 그룹 공부방일 때만 두 필드를 저장·방송한다 (BY-1124, websocket.html §11.3)
     @MessageMapping("/room/{roomId}/state")
     public void handleState(
             @DestinationVariable Long roomId,
@@ -93,27 +102,41 @@ public class RoomStompHandler {
         if (principal == null || payload == null) return;
 
         Long userId = Long.valueOf(principal.getName());
-        StateChange change = sanitize(payload);
-        // 갱신 1행 = 현재 세션의 확정 멤버 인가 + 저장. 저장이 성공했을 때만 브로드캐스트한다
-        if (!roomStateService.updateState(
-                roomId, userId, accessor.getSessionId(), change.cameraOn(), change.focusState(), change.focusSec())) {
-            log.debug("state 인가 실패 또는 갱신 없음: roomId={}, userId={}", roomId, userId);
-            return;
+        StateUpdatePayload change = sanitize(payload);
+        boolean groupRoom = false;
+        if (change.micOn() == null && change.onBreak() == null) {
+            // 갱신 1행 = 현재 세션의 확정 멤버 인가 + 저장. 저장이 성공했을 때만 브로드캐스트한다
+            if (!roomStateService.updateState(
+                    roomId,
+                    userId,
+                    accessor.getSessionId(),
+                    change.cameraOn(),
+                    change.focusState(),
+                    change.focusSec())) {
+                log.debug("state 인가 실패 또는 갱신 없음: roomId={}, userId={}", roomId, userId);
+                return;
+            }
+        } else {
+            StateUpdate result = roomStateService.updateState(roomId, userId, accessor.getSessionId(), change);
+            if (!result.saved()) {
+                log.debug("state 인가 실패 또는 갱신 없음: roomId={}, userId={}", roomId, userId);
+                return;
+            }
+            groupRoom = result.groupRoom();
         }
-        broadcastChanges(roomId, userId, change);
+        broadcastChanges(roomId, userId, change, groupRoom);
     }
 
-    private record StateChange(Boolean cameraOn, String focusState, Integer focusSec) {}
-
-    private static StateChange sanitize(StateUpdatePayload payload) {
+    private static StateUpdatePayload sanitize(StateUpdatePayload payload) {
         String focusState = payload.focusState() != null && FOCUS_STATES.contains(payload.focusState())
                 ? payload.focusState()
                 : null;
         Integer focusSec = payload.focusSec() != null && payload.focusSec() >= 0 ? payload.focusSec() : null;
-        return new StateChange(payload.cameraOn(), focusState, focusSec);
+        return new StateUpdatePayload(payload.cameraOn(), focusState, focusSec, payload.micOn(), payload.onBreak());
     }
 
-    private void broadcastChanges(Long roomId, Long userId, StateChange change) {
+    // 초대코드 방에서 온 micOn·onBreak는 저장하지 않았으므로 알리지도 않는다
+    private void broadcastChanges(Long roomId, Long userId, StateUpdatePayload change, boolean groupRoom) {
         String topic = "/topic/room/" + roomId;
         if (change.cameraOn() != null) {
             messagingTemplate.convertAndSend(topic, (Object) Map.of(
@@ -126,6 +149,14 @@ public class RoomStompHandler {
         if (change.focusSec() != null) {
             messagingTemplate.convertAndSend(topic, (Object)
                     Map.of("type", RoomMessageType.STUDY_TIME.name(), "userId", userId, "focusSec", change.focusSec()));
+        }
+        if (groupRoom && change.micOn() != null) {
+            messagingTemplate.convertAndSend(topic, (Object)
+                    Map.of("type", RoomMessageType.MIC_CHANGED.name(), "userId", userId, "micOn", change.micOn()));
+        }
+        if (groupRoom && change.onBreak() != null) {
+            messagingTemplate.convertAndSend(topic, (Object) Map.of(
+                    "type", RoomMessageType.BREAK_CHANGED.name(), "userId", userId, "onBreak", change.onBreak()));
         }
     }
 }

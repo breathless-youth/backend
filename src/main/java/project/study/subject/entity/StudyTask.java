@@ -14,7 +14,7 @@ import project.study.common.BaseTimeEntity;
 
 /**
  * 할 일 — 과목의 하위 항목. 완료 체크와 시간이 모두 붙는다. 마감일이 없어 완료 전까지 남고,
- * 완료 시각이 오늘(KST)인 것만 목록에 보인다 (ADR-0021).
+ * 완료 시각이 오늘(사용자 시간대)인 것만 목록에 보인다 (ADR-0021).
  */
 @Entity
 @Table(name = "study_task")

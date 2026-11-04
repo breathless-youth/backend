@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,6 +29,8 @@ import project.study.studysession.dto.SubjectLookup;
 import project.study.studysession.entity.StudySession;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
+import project.study.user.repository.UserRepository;
+import project.study.user.service.UserTimeZones;
 
 /** 재전송(강제종료 후 복구 등) 멱등 처리 — 멱등 키는 (userId, startedAt) 루트 제출, 중복이면 저장 없이 기존 결과를 반환한다. */
 @ExtendWith(MockitoExtension.class)
@@ -59,11 +62,12 @@ class StudySessionIdempotencyServiceTest {
                 studySessionRepository,
                 activeStudySessionRepository,
                 CLOCK,
-                (subjectIds, taskIds) -> SubjectLookup.EMPTY);
+                (subjectIds, taskIds) -> SubjectLookup.EMPTY,
+                new UserTimeZones(mock(UserRepository.class)));
     }
 
     private static StudySessionCreateRequest request(Instant startedAt, Instant endedAt) {
-        return new StudySessionCreateRequest(startedAt, endedAt, 7200, 6600, List.of(), null, null);
+        return new StudySessionCreateRequest(startedAt, endedAt, 7200, 6600, List.of(), null, null, null);
     }
 
     private static StudySession session(Instant startedAt, Instant endedAt) {

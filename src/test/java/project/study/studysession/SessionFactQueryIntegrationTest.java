@@ -109,10 +109,21 @@ class SessionFactQueryIntegrationTest {
         insertSession(userId, DAY.plusDays(1), at(25), at(26), 900);
 
         assertThat(factsOf(userId))
-                .extracting(SessionFact::statDate, SessionFact::startedAt, SessionFact::focusSec)
+                .extracting(SessionFact::startedAt, SessionFact::focusSec)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(DAY, at(1), 299),
-                        org.assertj.core.groups.Tuple.tuple(DAY, at(3), 1200));
+                        org.assertj.core.groups.Tuple.tuple(at(1), 299),
+                        org.assertj.core.groups.Tuple.tuple(at(3), 1200));
+    }
+
+    @Test
+    void 리포트_날짜는_stat_date가_아니라_시작_시각의_KST_날짜다() {
+        long userId = insertUser();
+        // 뉴욕 사용자의 조각 — 뉴욕 날짜(전날)로 저장됐지만 KST로는 DAY 10시에 시작했다
+        insertSession(userId, DAY.minusDays(1), at(10), at(11), 900);
+        // KST로는 다음 날 01시 시작이지만 stat_date는 DAY다
+        insertSession(userId, DAY, at(25), at(26), 900);
+
+        assertThat(factsOf(userId)).extracting(SessionFact::startedAt).containsExactly(at(10));
     }
 
     @Test

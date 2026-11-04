@@ -31,6 +31,7 @@ public class StompEventListener {
     private final RoomMessenger messenger;
     private final SessionRegistry sessionRegistry;
     private final TaskIdentity taskIdentity;
+    private final PeerBlocks peerBlocks;
 
     @EventListener
     public void handleConnect(SessionConnectEvent event) {
@@ -92,10 +93,15 @@ public class StompEventListener {
 
         messenger.toSession(
                 principal.getName(), sessionId, Map.of("type", RoomMessageType.SNAPSHOT.name(), "members", members));
+        // 그룹 공부방만 차단한 사이를 본다(BY-1124) — 초대코드 방은 조회도 메시지도 없이 지금 그대로다.
+        // 상대에게도 MEMBER_JOINED보다 먼저 알린다 (서버가 둘 사이 SIGNAL을 버리므로 순서가 어긋나도 연결은 맺어지지 않는다)
+        if (PeerBlocks.isGroupRoom(members)) {
+            peerBlocks.afterConfirmSnapshot(principal.getName(), sessionId, userId, members);
+        }
         RoomMember self = members.stream()
                 .filter(m -> m.userId().equals(userId))
                 .findFirst()
-                .orElse(new RoomMember(userId, null, null, null, null, false, "FOCUS", 0, false));
+                .orElse(new RoomMember(userId, null, null, null, null, false, "FOCUS", 0, false, null, null, null));
         messenger.broadcast(roomId, Map.of("type", RoomMessageType.MEMBER_JOINED.name(), "member", self));
     }
 

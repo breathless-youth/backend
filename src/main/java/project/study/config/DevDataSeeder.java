@@ -16,6 +16,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import project.study.common.time.DefaultTimeZone;
 import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.SubjectSegmentRequest;
@@ -45,7 +46,8 @@ public class DevDataSeeder implements ApplicationRunner {
     /** 데모 유저의 고정 deviceId — POST /api/users 에 이 값으로 등록하면 같은 userId를 돌려받는다(멱등). */
     public static final String DEMO_DEVICE_ID = "00000000-0000-0000-0000-000000000001";
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    // 시드 사용자는 시간대를 보낸 적이 없어 기본 시간대로 기록된다
+    private static final ZoneId ZONE = DefaultTimeZone.ZONE;
 
     /** 랜덤 세션을 채울 기간(오늘 포함 최근 N일)과 하루 최대 세션 수. */
     private static final int SEED_DAYS = 60;
@@ -73,7 +75,7 @@ public class DevDataSeeder implements ApplicationRunner {
 
         // 서브초를 버려야 세션 1이 자정에 걸릴 때(01~03시 기동) 조각별 내림 초 합계가 원본 총초와 같아진다
         Instant now = clock.instant().truncatedTo(ChronoUnit.SECONDS);
-        LocalDate today = now.atZone(KST).toLocalDate();
+        LocalDate today = now.atZone(ZONE).toLocalDate();
 
         List<Range> curatedRanges = seedCuratedSessions(userId, now, today, subjectIds);
         int generated = seedRandomDays(userId, today, curatedRanges);
@@ -134,7 +136,7 @@ public class DevDataSeeder implements ApplicationRunner {
                         segment(subjects.get(0), s3.plus(Duration.ofMinutes(45)), s3.plus(Duration.ofMinutes(90)))));
 
         // 4) 3일 전 23시~2일 전 1시: 자정을 넘겨 두 세션으로 분할 저장, PHONE 20분이 자정에 10분씩 걸침
-        Instant midnight = today.minusDays(2).atStartOfDay(KST).toInstant();
+        Instant midnight = today.minusDays(2).atStartOfDay(ZONE).toInstant();
         submit(
                 userId,
                 midnight.minus(Duration.ofHours(1)),
@@ -234,10 +236,10 @@ public class DevDataSeeder implements ApplicationRunner {
         return events;
     }
 
-    /** 해당 날짜(KST)에 걸치는 구간 수 — 자정을 넘는 구간은 양쪽 날짜에서 각각 센다(자정 분할 저장과 동일 기준). */
+    /** 해당 날짜(기본 시간대)에 걸치는 구간 수 — 자정을 넘는 구간은 양쪽 날짜에서 각각 센다(자정 분할 저장과 동일 기준). */
     private static int countPortionsOn(List<Range> ranges, LocalDate date) {
-        Instant dayStart = date.atStartOfDay(KST).toInstant();
-        Instant dayEnd = date.plusDays(1).atStartOfDay(KST).toInstant();
+        Instant dayStart = date.atStartOfDay(ZONE).toInstant();
+        Instant dayEnd = date.plusDays(1).atStartOfDay(ZONE).toInstant();
         return (int) ranges.stream()
                 .filter(range -> range.start().isBefore(dayEnd) && dayStart.isBefore(range.end()))
                 .count();
@@ -274,7 +276,7 @@ public class DevDataSeeder implements ApplicationRunner {
         int focusSec = (int) (totalSec - nonFocusSec);
         studySessionService.create(
                 userId,
-                new StudySessionCreateRequest(startedAt, endedAt, studySec, focusSec, events, segments, null),
+                new StudySessionCreateRequest(startedAt, endedAt, studySec, focusSec, events, segments, null, null),
                 false);
     }
 
@@ -287,6 +289,6 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     private static Instant kst(LocalDate date, int hour) {
-        return date.atStartOfDay(KST).plusHours(hour).toInstant();
+        return date.atStartOfDay(ZONE).plusHours(hour).toInstant();
     }
 }

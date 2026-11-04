@@ -19,5 +19,5 @@ public record SubjectResponse(
         @Schema(description = "이 과목에서 잰 누적 순공 시간(초)", example = "4200")
         long focusSec,
 
-        @Schema(description = "보이는 할 일 목록 — 미완료 전부 + 오늘(KST) 완료한 것, id 오름차순")
+        @Schema(description = "보이는 할 일 목록 — 미완료 전부 + 오늘(사용자 시간대) 완료한 것, id 오름차순")
         List<TaskResponse> tasks) {}

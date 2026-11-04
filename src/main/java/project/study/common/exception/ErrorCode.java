@@ -36,6 +36,48 @@ public enum ErrorCode {
     /** 특정 코드를 부여하지 않은 409 */
     CONFLICT,
 
+    /** 이 그룹에서 내보내진 지 3일이 안 됐다 (409) */
+    RECENTLY_KICKED,
+
+    /** 들어간 그룹과 답을 기다리는 신청이 합쳐 5개다 (409) */
+    GROUP_SLOT_LIMIT,
+
+    /** 답을 기다리는 신청이 3곳이다 (409) */
+    APPLICATION_LIMIT,
+
+    /** 그룹 멤버가 6명이다 (409) */
+    GROUP_FULL,
+
+    /** 그룹장인 그룹이 2개다 (409) */
+    OWNED_GROUP_LIMIT,
+
+    /** 이름·소개·신청 소개 글에 연락처나 링크가 있다 (400) */
+    CONTACT_NOT_ALLOWED,
+
+    /** 다른 멤버가 있는 그룹장은 나갈 수 없다 (409) */
+    OWNER_CANNOT_LEAVE,
+
+    /** 이 그룹에 답을 기다리는 신청이 이미 있다 (409) */
+    ALREADY_APPLIED,
+
+    /** 신청하려는 그룹에 이미 멤버로 들어가 있다 (409) */
+    ALREADY_MEMBER,
+
+    /** 이미 답했거나 취소·만료된 신청이다 (409) */
+    APPLICATION_NOT_PENDING,
+
+    /** 없거나 사라진 그룹, 또는 비공개 그룹을 공개 그룹 보기로 열었다 (404) */
+    GROUP_NOT_FOUND,
+
+    /** 그 사람은 이 그룹 멤버가 아니다 — 넘기기·내보내기·신고 대상 (404) */
+    GROUP_MEMBER_NOT_FOUND,
+
+    /** 그룹 멤버만 할 수 있다 (403) */
+    NOT_GROUP_MEMBER,
+
+    /** 그룹장만 할 수 있다 (403) */
+    NOT_GROUP_OWNER,
+
     /** Spring MVC 표준 4xx (405·415 등) */
     REQUEST_FAILED,
 

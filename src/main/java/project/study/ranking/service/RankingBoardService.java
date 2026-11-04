@@ -77,7 +77,7 @@ public class RankingBoardService {
     }
 
     private static TimeSlot resolveSlot(RankingBoardType type, TimeSlot slot, Instant now) {
-        return type == RankingBoardType.TIME_SLOT && slot == null ? TimeSlot.at(now) : slot;
+        return type == RankingBoardType.TIME_SLOT && slot == null ? TimeSlot.at(now, RankingCalendar.KST) : slot;
     }
 
     private static LocalDate periodStart(RankingBoard board, Window window) {

@@ -55,9 +55,10 @@ public final class UserTimeline {
                 .sorted(Comparator.comparing(SessionFact::startedAt))
                 .toList();
         for (SessionFact session : this.sessions) {
-            focusByDate.merge(session.statDate(), session.focusSec(), Integer::sum);
+            LocalDate date = Kst.date(session.startedAt());
+            focusByDate.merge(date, session.focusSec(), Integer::sum);
             if (session.focusSec() >= StudySessionThresholds.MIN_STREAK_FOCUS_SEC) {
-                studyDates.add(session.statDate());
+                studyDates.add(date);
             }
         }
         activities.forEach((activity, times) ->
@@ -149,8 +150,8 @@ public final class UserTimeline {
 
     public List<SessionFact> sessions(LocalDate from, LocalDate to) {
         return sessions.stream()
-                .filter(session -> !session.statDate().isBefore(from)
-                        && !session.statDate().isAfter(to))
+                .filter(session -> !Kst.date(session.startedAt()).isBefore(from)
+                        && !Kst.date(session.startedAt()).isAfter(to))
                 .toList();
     }
 

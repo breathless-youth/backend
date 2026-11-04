@@ -114,4 +114,21 @@ class SessionSlotBackfillTest {
                         id))
                 .containsExactly("MORNING 1800", "NIGHT 1800");
     }
+
+    @Test
+    void 세션에_저장된_시간대의_경계로_나눈다() {
+        ZoneId newYork = ZoneId.of("America/New_York");
+        LocalDate today = clock.instant().atZone(newYork).toLocalDate();
+        Instant start = today.atTime(5, 30).atZone(newYork).toInstant();
+        long id = legacySession(start, start.plusSeconds(3600), 3600);
+        jdbc.update("UPDATE study_session SET time_zone = 'America/New_York', stat_date = ? WHERE id = ?", today, id);
+
+        backfill.run(new DefaultApplicationArguments());
+
+        assertThat(jdbc.queryForList(
+                        "SELECT slot || ' ' || slot_date || ' ' || focus_sec FROM study_session_slot WHERE session_id = ? ORDER BY slot",
+                        String.class,
+                        id))
+                .containsExactly("MORNING " + today + " 1800", "NIGHT " + today + " 1800");
+    }
 }
