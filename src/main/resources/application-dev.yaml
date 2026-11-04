@@ -44,12 +44,14 @@ decorator:
 
 oauth:
   google:
-    # 허용하는 ID 토큰 aud 목록(쉼표 구분) — 웹(서버) 클라이언트 ID 등. 시크릿 아님
-    client-ids: ${OAUTH_GOOGLE_CLIENT_IDS:${OAUTH_GOOGLE_CLIENT_ID:320200622450-5bqjf3j6lu8akp20p4oikiio7t8brjtd.apps.googleusercontent.com}}
+    # 허용하는 ID 토큰 aud 목록(쉼표 구분) — 웹(서버) 클라이언트 ID, iOS 클라이언트 ID. 시크릿 아님
+    client-ids: ${OAUTH_GOOGLE_CLIENT_IDS:${OAUTH_GOOGLE_CLIENT_ID:320200622450-5bqjf3j6lu8akp20p4oikiio7t8brjtd.apps.googleusercontent.com,320200622450-npt1a7o4bpd6ois9tkld1qnn3l2sdi9u.apps.googleusercontent.com}}
   kakao:
-    app-keys: ${OAUTH_KAKAO_APP_KEYS:${OAUTH_KAKAO_APP_KEY:4c3e41ef0da3566b0ca844c6546457ba}}
+    # 네이티브 앱 키 — 앱 SDK가 받는 ID 토큰의 aud다(REST API 키가 아니다). 앱에 실리는 값이라 시크릿 아님
+    app-keys: ${OAUTH_KAKAO_APP_KEYS:${OAUTH_KAKAO_APP_KEY:31b5a6b5a878defcff1e99d69391649e}}
   apple:
-    bundle-id: ${OAUTH_APPLE_BUNDLE_ID:${OAUTH_APPLE_CLIENT_ID:com.breathlessyouth.mobile}}
+    # 개발 서버를 쓰는 앱 변형의 번들 ID — staging·dev
+    bundle-ids: ${OAUTH_APPLE_BUNDLE_IDS:${OAUTH_APPLE_BUNDLE_ID:${OAUTH_APPLE_CLIENT_ID:com.breathlessyouth.mobile.staging,com.breathlessyouth.mobile.dev}}}
     services-id: ${OAUTH_APPLE_SERVICES_ID:}
     team-id: ${OAUTH_APPLE_TEAM_ID:}
     key-id: ${OAUTH_APPLE_KEY_ID:}

@@ -33,7 +33,7 @@ class OAuthConfigCheckTest {
         sentry.verify(() -> Sentry.captureMessage(
                 argThat(message -> message.contains("OAUTH_GOOGLE_CLIENT_IDS")
                         && message.contains("OAUTH_KAKAO_APP_KEYS")
-                        && message.contains("OAUTH_APPLE_BUNDLE_ID")
+                        && message.contains("OAUTH_APPLE_BUNDLE_IDS")
                         && message.contains("OAUTH_APPLE_SERVICES_ID")
                         && message.contains("OAUTH_APPLE_ANDROID_CALLBACK_REDIRECT")
                         && message.contains("OAUTH_APPLE_TEAM_ID")
@@ -47,14 +47,14 @@ class OAuthConfigCheckTest {
         OAuthProperties properties = new OAuthProperties(
                 new OAuthProperties.Google(List.of("google-web-id")),
                 new OAuthProperties.Kakao(List.of("kakao-key")),
-                new OAuthProperties.Apple("com.example.app", null, null, null, null, null, null));
+                new OAuthProperties.Apple(List.of("com.example.app"), null, null, null, null, null, null));
 
         new OAuthConfigCheck(properties).reportMissing();
 
         sentry.verify(() -> Sentry.captureMessage(
                 argThat(message -> !message.contains("OAUTH_GOOGLE_CLIENT_IDS")
                         && !message.contains("OAUTH_KAKAO_APP_KEYS")
-                        && !message.contains("OAUTH_APPLE_BUNDLE_ID")
+                        && !message.contains("OAUTH_APPLE_BUNDLE_IDS")
                         && message.contains("OAUTH_APPLE_SERVICES_ID")
                         && !message.contains("google-web-id")
                         && !message.contains("com.example.app")),
@@ -67,7 +67,7 @@ class OAuthConfigCheckTest {
                 new OAuthProperties.Google(List.of("google-web-id")),
                 new OAuthProperties.Kakao(List.of("kakao-key")),
                 new OAuthProperties.Apple(
-                        "com.example.app",
+                        List.of("com.example.app"),
                         "com.example.web",
                         "TEAM",
                         "KEY",

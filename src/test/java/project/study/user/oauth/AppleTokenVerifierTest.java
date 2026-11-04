@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -26,6 +27,7 @@ import project.study.user.entity.Provider;
 class AppleTokenVerifierTest {
 
     private static final String BUNDLE_ID = "com.example.app";
+    private static final String OTHER_BUNDLE_ID = "com.example.app.staging";
     private static final String SERVICES_ID = "com.example.web";
     private static final String ISSUER = "https://appleid.apple.com";
     private static final String JWKS_URL = "https://appleid.apple.com/auth/keys";
@@ -37,7 +39,10 @@ class AppleTokenVerifierTest {
             MockRestServiceServer.bindTo(builder).build();
     private final AppleTokenVerifier verifier = new AppleTokenVerifier(
             builder.build(),
-            new OAuthProperties(null, null, new OAuthProperties.Apple(BUNDLE_ID, SERVICES_ID, "", "", "", "", "")));
+            new OAuthProperties(
+                    null,
+                    null,
+                    new OAuthProperties.Apple(List.of(BUNDLE_ID, OTHER_BUNDLE_ID), SERVICES_ID, "", "", "", "", "")));
 
     @Test
     void 유효한_ID_토큰이면_유저정보를_반환한다() {
@@ -59,6 +64,16 @@ class AppleTokenVerifierTest {
         stubJwks();
 
         assertThat(verifier.verify(token).expiresAt()).isEqualTo(exp.toInstant());
+    }
+
+    @Test
+    void 목록의_다른_번들_ID로_발급된_토큰도_통과한다() {
+        // 개발 서버는 staging·dev 앱이 함께 쓴다 — 번들마다 aud가 다르다
+        String token =
+                baseJwt("apple-user-123", OTHER_BUNDLE_ID, ISSUER, futureDate()).compact();
+        stubJwks();
+
+        assertThat(verifier.verify(token).providerUserId()).isEqualTo("apple-user-123");
     }
 
     @Test

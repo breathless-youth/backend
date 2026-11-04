@@ -19,6 +19,7 @@ import io.sentry.SentryLevel;
 import java.security.KeyPairGenerator;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Base64;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -139,6 +140,60 @@ class AppleTokenRevokerTest {
         assertSentry(SentryLevel.ERROR, "IOS");
     }
 
+    @Test
+    void 번들_ID가_여럿이면_400이_난_다음_번들로_교환해_해지한다() {
+        // 개발 서버는 staging·dev 앱이 함께 쓰는데 요청은 어느 앱의 코드인지 알려 주지 않는다
+        server.expect(requestTo(TOKEN_URL))
+                .andExpect(content().string(containsString("client_id=com.example.app&")))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST));
+        server.expect(requestTo(TOKEN_URL))
+                .andExpect(content().string(containsString("client_id=com.example.app.dev")))
+                .andRespond(withSuccess("{\"refresh_token\":\"r-token\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(REVOKE_URL))
+                .andExpect(content().string(containsString("client_id=com.example.app.dev")))
+                .andRespond(withSuccess());
+
+        revoker(true, List.of("com.example.app", "com.example.app.dev")).revoke("the-code", AppleClient.IOS);
+
+        server.verify();
+        sentry.verifyNoInteractions();
+    }
+
+    @Test
+    void 교환이_500이면_다음_번들로_넘어가지_않는다() {
+        // 코드가 틀린 게 아니라 애플 장애다 — 다른 번들로 다시 해 봐야 소용없다
+        server.expect(requestTo(TOKEN_URL)).andRespond(withServerError());
+
+        assertThatCode(() -> revoker(true, List.of("com.example.app", "com.example.app.dev"))
+                        .revoke("the-code", AppleClient.IOS))
+                .doesNotThrowAnyException();
+
+        server.verify();
+        assertSentry(SentryLevel.ERROR, "IOS");
+    }
+
+    @Test
+    void 번들_ID가_다_400이면_Sentry에_한_번_남긴다() {
+        server.expect(requestTo(TOKEN_URL)).andRespond(withStatus(HttpStatus.BAD_REQUEST));
+        server.expect(requestTo(TOKEN_URL)).andRespond(withStatus(HttpStatus.BAD_REQUEST));
+        server.expect(never(), requestTo(REVOKE_URL)).andRespond(withSuccess());
+
+        revoker(true, List.of("com.example.app", "com.example.app.dev")).revoke("the-code", AppleClient.IOS);
+
+        server.verify();
+        assertSentry(SentryLevel.ERROR, "IOS");
+    }
+
+    @Test
+    void 이_앱_종류의_클라이언트_ID가_없으면_교환하지_않는다() {
+        server.expect(never(), requestTo(TOKEN_URL)).andRespond(withSuccess());
+
+        revoker(true, List.of()).revoke("the-code", AppleClient.IOS);
+
+        server.verify();
+        assertSentry(SentryLevel.ERROR, "IOS");
+    }
+
     // 고정 문구 + 앱 종류만 — 인가 코드·client secret·애플 토큰은 싣지 않는다
     private void assertSentry(SentryLevel level, String client) {
         sentry.verify(() -> Sentry.captureMessage(
@@ -150,8 +205,12 @@ class AppleTokenRevokerTest {
     }
 
     private AppleTokenRevoker revoker(boolean configured) {
+        return revoker(configured, List.of("com.example.app"));
+    }
+
+    private AppleTokenRevoker revoker(boolean configured, List<String> bundleIds) {
         OAuthProperties.Apple apple = new OAuthProperties.Apple(
-                "com.example.app",
+                bundleIds,
                 "com.example.web",
                 configured ? "TEAMID1234" : "",
                 configured ? "KEYID12345" : "",

@@ -32,8 +32,9 @@ public record OAuthProperties(Google google, Kakao kakao, Apple apple) {
         }
     }
 
+    /** bundleIds는 iOS 앱 번들 ID 목록이다 — 한 서버를 쓰는 앱 변형(개발 서버의 staging·dev 앱)마다 하나. */
     public record Apple(
-            String bundleId,
+            List<String> bundleIds,
             String servicesId,
             String teamId,
             String keyId,
@@ -41,9 +42,14 @@ public record OAuthProperties(Google google, Kakao kakao, Apple apple) {
             String webRedirectUri,
             String androidCallbackRedirect) {
 
-        /** ID 토큰의 aud로 허용하는 값: 앱(bundleId)과 웹(servicesId) 중 비어 있지 않은 것. */
+        public Apple {
+            bundleIds = audienceList(bundleIds);
+        }
+
+        /** ID 토큰의 aud로 허용하는 값: 앱 번들 ID들과 웹(servicesId) 중 비어 있지 않은 것. */
         public List<String> audiences() {
-            return Stream.of(bundleId, servicesId).filter(StringUtils::hasText).toList();
+            return Stream.concat(bundleIds.stream(), Stream.of(servicesId).filter(StringUtils::hasText))
+                    .toList();
         }
 
         /** 애플 연결 해제(revoke)에 필요한 키 3종이 모두 있는지. */

@@ -5,7 +5,7 @@ oauth:
   kakao:
     app-keys: test-kakao-app-key
   apple:
-    bundle-id: test-apple-bundle-id
+    bundle-ids: test-apple-bundle-id
     services-id: ""
     team-id: ""
     key-id: ""

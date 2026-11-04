@@ -32,7 +32,7 @@ class OAuthEmptyAudienceTest {
             .withPropertyValues(
                     "oauth.google.client-ids=",
                     "oauth.kakao.app-keys=",
-                    "oauth.apple.bundle-id=",
+                    "oauth.apple.bundle-ids=",
                     "oauth.apple.services-id=");
 
     @Test
@@ -64,11 +64,15 @@ class OAuthEmptyAudienceTest {
         old.setProperty("OAUTH_APPLE_CLIENT_ID", "com.example.app");
         assertThat(old.getProperty("oauth.google.client-ids")).isEqualTo("old-web-id");
         assertThat(old.getProperty("oauth.kakao.app-keys")).isEqualTo("old-kakao-key");
-        assertThat(old.getProperty("oauth.apple.bundle-id")).isEqualTo("com.example.app");
+        assertThat(old.getProperty("oauth.apple.bundle-ids")).isEqualTo("com.example.app");
 
         // 목록형 이름이 있으면 그쪽이 이긴다
         old.setProperty("OAUTH_GOOGLE_CLIENT_IDS", "web-id,ios-id");
         assertThat(old.getProperty("oauth.google.client-ids")).isEqualTo("web-id,ios-id");
+        old.setProperty("OAUTH_APPLE_BUNDLE_ID", "com.example.single");
+        assertThat(old.getProperty("oauth.apple.bundle-ids")).isEqualTo("com.example.single");
+        old.setProperty("OAUTH_APPLE_BUNDLE_IDS", "com.example.app,com.example.app.dev");
+        assertThat(old.getProperty("oauth.apple.bundle-ids")).isEqualTo("com.example.app,com.example.app.dev");
 
         // 둘 다 없으면 빈 값 — 기동은 되고 그 로그인만 막힌다
         assertThat(prodYaml().getProperty("oauth.google.client-ids")).isEmpty();

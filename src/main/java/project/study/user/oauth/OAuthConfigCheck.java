@@ -45,8 +45,8 @@ public class OAuthConfigCheck {
         if (properties.kakao().appKeys().isEmpty()) {
             missing.add("OAUTH_KAKAO_APP_KEYS(카카오 로그인)");
         }
-        if (!StringUtils.hasText(apple.bundleId())) {
-            missing.add("OAUTH_APPLE_BUNDLE_ID(iOS 애플 로그인)");
+        if (apple.bundleIds().isEmpty()) {
+            missing.add("OAUTH_APPLE_BUNDLE_IDS(iOS 애플 로그인)");
         }
         if (!StringUtils.hasText(apple.servicesId())) {
             missing.add("OAUTH_APPLE_SERVICES_ID(안드로이드 애플 로그인)");

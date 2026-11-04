@@ -9,6 +9,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Base64;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class AppleClientSecretTest {
@@ -50,7 +51,9 @@ class AppleClientSecretTest {
 
     private AppleClientSecret secretFor(String privateKey) {
         return new AppleClientSecret(new OAuthProperties(
-                null, null, new OAuthProperties.Apple("b", "s", "TEAMID1234", "KEYID12345", privateKey, "", "")));
+                null,
+                null,
+                new OAuthProperties.Apple(List.of("b"), "s", "TEAMID1234", "KEYID12345", privateKey, "", "")));
     }
 
     private String pem(boolean escaped) {
