@@ -78,10 +78,15 @@ class AcquisitionApiTest {
     }
 
     private static String body(String platform, String installReferrer, String deepLinkAd) {
+        return body(platform, installReferrer, deepLinkAd, null);
+    }
+
+    private static String body(String platform, String installReferrer, String deepLinkAd, String googleDeepLinkAd) {
         Map<String, Object> map = new HashMap<>();
         map.put("platform", platform);
         map.put("installReferrer", installReferrer);
         map.put("deepLinkAd", deepLinkAd);
+        map.put("googleDeepLinkAd", googleDeepLinkAd);
         map.put("capturedAt", CAPTURED_AT);
         return JSON.writeValueAsString(map);
     }
@@ -101,6 +106,7 @@ class AcquisitionApiTest {
                     assertThat(json).extractingPath("$.metaAd.adsetId").isEqualTo("987654");
                     assertThat(json).extractingPath("$.metaAd.adId").isEqualTo("54321");
                     assertThat(json).extractingPath("$.metaAd.label").isEqualTo("aos_v3");
+                    assertThat(json).extractingPath("$.googleAd").isNull();
                     assertThat(json).extractingPath("$.firstTouchAt").isEqualTo("2026-10-29T01:12:00Z");
                 });
         Map<String, Object> saved = row(userId);
@@ -108,6 +114,67 @@ class AcquisitionApiTest {
         // jsonb는 키 순서·공백을 바꿔 저장하므로 문자열이 아니라 JSON 값으로 비교한다.
         assertThat(JSON.readTree(saved.get("meta_payload").toString())).isEqualTo(JSON.readTree(PLAIN));
         assertThat(output).doesNotContain(KEY);
+    }
+
+    @Test
+    void 구글_광고를_라벨과_함께_저장하고_돌려준다() throws Exception {
+        String referrer = "gclid=Cj0KCQiAgoogleclick&gbraid=0AAAAAgbraid";
+
+        MvcTestResult result = post(userId, body("ANDROID", referrer, null, "g_planner"));
+        // gclid는 설치 정보 원문(install_referrer)에만 두고 응답에 따로 싣지 않는다. 로그는 확인하지 않는다 — 테스트·dev는
+        // p6spy가 SQL 파라미터를 그대로 찍고(prod는 꺼짐, application-prod.yaml), 애플리케이션 로그는 설치 정보를 남기지 않는다.
+        assertThat(result.getResponse().getContentAsString()).doesNotContain("Cj0KCQiAgoogleclick");
+        assertThat(result).hasStatusOk().bodyJson().satisfies(json -> {
+            assertThat(json).extractingPath("$.source").isEqualTo("GOOGLE_AD");
+            assertThat(json).extractingPath("$.googleAd.label").isEqualTo("g_planner");
+            assertThat(json).extractingPath("$.metaAd").isNull();
+            assertThat(json).extractingPath("$.inviteCode").isNull();
+        });
+        assertThat(row(userId))
+                .containsEntry("source", "GOOGLE_AD")
+                .containsEntry("install_referrer", referrer)
+                .containsEntry("google_deep_link_ad", "g_planner")
+                .containsEntry("deep_link_ad", null);
+    }
+
+    @Test
+    void gclid만_있으면_구글이고_라벨은_null() {
+        assertThat(post(userId, body("ANDROID", "gclid=Cj0KCQiA", null, null)))
+                .hasStatusOk()
+                .bodyJson()
+                .satisfies(json -> {
+                    assertThat(json).extractingPath("$.source").isEqualTo("GOOGLE_AD");
+                    assertThat(json)
+                            .hasPathSatisfying("$.googleAd", v -> assertThat(v).isNotNull());
+                    assertThat(json).extractingPath("$.googleAd.label").isNull();
+                });
+        assertThat(row(userId)).containsEntry("google_deep_link_ad", null);
+    }
+
+    @Test
+    void 형식이_틀린_구글_라벨도_200이고_원문은_남고_라벨은_null() {
+        assertThat(post(userId, body("IOS", null, null, "G_Planner!")))
+                .hasStatusOk()
+                .bodyJson()
+                .satisfies(json -> {
+                    assertThat(json).extractingPath("$.source").isEqualTo("GOOGLE_AD");
+                    assertThat(json).extractingPath("$.googleAd.label").isNull();
+                });
+        assertThat(row(userId)).containsEntry("google_deep_link_ad", "G_Planner!");
+    }
+
+    @Test
+    void 구글_라벨이_메타_딥링크보다_먼저고_둘_다_저장한다() {
+        assertThat(post(userId, body("ANDROID", null, "aos_v1", "g_planner")))
+                .hasStatusOk()
+                .bodyJson()
+                .satisfies(json -> {
+                    assertThat(json).extractingPath("$.source").isEqualTo("GOOGLE_AD");
+                    assertThat(json).extractingPath("$.metaAd").isNull();
+                });
+        assertThat(row(userId))
+                .containsEntry("deep_link_ad", "aos_v1")
+                .containsEntry("google_deep_link_ad", "g_planner");
     }
 
     @Test
@@ -119,6 +186,7 @@ class AcquisitionApiTest {
                     assertThat(json).extractingPath("$.source").isEqualTo("INVITE");
                     assertThat(json).extractingPath("$.inviteCode").isEqualTo("0123");
                     assertThat(json).extractingPath("$.metaAd").isNull();
+                    assertThat(json).extractingPath("$.googleAd").isNull();
                 });
         assertThat(row(userId)).containsEntry("source", "INVITE").containsEntry("invite_code", "0123");
     }
@@ -166,7 +234,20 @@ class AcquisitionApiTest {
                 .bodyJson()
                 .extractingPath("$.source")
                 .isEqualTo("UNKNOWN");
-        assertThat(row(userId)).containsEntry("install_referrer", null).containsEntry("deep_link_ad", null);
+        assertThat(row(userId))
+                .containsEntry("install_referrer", null)
+                .containsEntry("deep_link_ad", null)
+                .containsEntry("google_deep_link_ad", null);
+    }
+
+    @Test
+    void 빈_구글_라벨은_없음과_같다() {
+        assertThat(post(userId, body("IOS", null, null, " ")))
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.source")
+                .isEqualTo("UNKNOWN");
+        assertThat(row(userId)).containsEntry("google_deep_link_ad", null);
     }
 
     @Test
@@ -179,6 +260,35 @@ class AcquisitionApiTest {
                 .extractingPath("$.source")
                 .isEqualTo("INVITE");
         assertThat(row(userId)).containsEntry("install_referrer", "code=1234");
+    }
+
+    @Test
+    void 구글_첫값도_두번째_요청으로_바뀌지_않는다() {
+        post(userId, body("ANDROID", "gclid=Cj0KCQiA", null, "g_planner"));
+
+        assertThat(post(userId, body("ANDROID", "gclid=Cj0KCQiB", "aos_v1", "g_group")))
+                .hasStatusOk()
+                .bodyJson()
+                .satisfies(json -> {
+                    assertThat(json).extractingPath("$.source").isEqualTo("GOOGLE_AD");
+                    assertThat(json).extractingPath("$.googleAd.label").isEqualTo("g_planner");
+                });
+        assertThat(row(userId))
+                .containsEntry("install_referrer", "gclid=Cj0KCQiA")
+                .containsEntry("google_deep_link_ad", "g_planner")
+                .containsEntry("deep_link_ad", null);
+    }
+
+    @Test
+    void googleDeepLinkAd_키가_없는_구_앱_요청도_예전대로_판별한다() {
+        String oldAppBody = """
+                {"platform": "ANDROID", "installReferrer": "code=1234", "deepLinkAd": null, "capturedAt": "%s"}""".formatted(CAPTURED_AT);
+
+        assertThat(post(userId, oldAppBody)).hasStatusOk().bodyJson().satisfies(json -> {
+            assertThat(json).extractingPath("$.source").isEqualTo("INVITE");
+            assertThat(json).extractingPath("$.googleAd").isNull();
+        });
+        assertThat(row(userId)).containsEntry("google_deep_link_ad", null);
     }
 
     @Test
@@ -248,6 +358,12 @@ class AcquisitionApiTest {
     }
 
     @Test
+    void googleDeepLinkAd가_64자를_넘으면_400() {
+        assertThat(post(userId, body("ANDROID", null, null, "g_" + "a".repeat(63))))
+                .hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
     void 토큰이_없으면_401() {
         assertThat(mvc.post()
                         .uri(URI)
@@ -267,6 +383,15 @@ class AcquisitionApiTest {
                         v -> assertThat(v).asList().containsExactly("1"))
                 .hasPathSatisfying(
                         "$.paths['/api/users/me/acquisition'].post.requestBody",
-                        v -> assertThat(v).isNotNull());
+                        v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.components.schemas.AcquisitionRequest.properties.googleDeepLinkAd",
+                        v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.components.schemas.AcquisitionResponse.properties.googleAd",
+                        v -> assertThat(v).isNotNull())
+                .hasPathSatisfying(
+                        "$.components.schemas.AcquisitionResponse.properties.source.enum",
+                        v -> assertThat(v).asList().contains("GOOGLE_AD"));
     }
 }

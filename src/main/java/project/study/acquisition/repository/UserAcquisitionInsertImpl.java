@@ -13,12 +13,12 @@ public class UserAcquisitionInsertImpl implements UserAcquisitionInsert {
 
     private static final String INSERT = """
             INSERT INTO user_acquisition (
-                user_id, platform, source, install_referrer, deep_link_ad,
+                user_id, platform, source, install_referrer, deep_link_ad, google_deep_link_ad,
                 utm_source, utm_medium, utm_campaign, invite_code,
                 meta_campaign_id, meta_campaign_name, meta_adset_id, meta_adset_name,
                 meta_ad_id, meta_ad_name, meta_payload, captured_at, created_at)
             VALUES (
-                :userId, :platform, :source, :installReferrer, :deepLinkAd,
+                :userId, :platform, :source, :installReferrer, :deepLinkAd, :googleDeepLinkAd,
                 :utmSource, :utmMedium, :utmCampaign, :inviteCode,
                 :metaCampaignId, :metaCampaignName, :metaAdsetId, :metaAdsetName,
                 :metaAdId, :metaAdName, cast(:metaPayload as jsonb), :capturedAt, now())
@@ -37,6 +37,7 @@ public class UserAcquisitionInsertImpl implements UserAcquisitionInsert {
                 .param("source", attribution.source().name())
                 .param("installReferrer", row.installReferrer())
                 .param("deepLinkAd", row.deepLinkAd())
+                .param("googleDeepLinkAd", row.googleDeepLinkAd())
                 .param("utmSource", utm.source())
                 .param("utmMedium", utm.medium())
                 .param("utmCampaign", utm.campaign())
