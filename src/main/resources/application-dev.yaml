@@ -23,6 +23,10 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres/study}
     username: ${SPRING_DATASOURCE_USERNAME:study}
     password: ${SPRING_DATASOURCE_PASSWORD}
+  flyway:
+    # 레인마다 번호를 예약해(V36~39, V40~43, V50~54) 머지 순서가 번호 순서와 다를 수 있다. 끄면 늦게 머지된 낮은 번호를
+    # Flyway가 검증 오류로 보고 기동을 막는다. 운영과 같은 설정이다
+    out-of-order: true
   # 5초 룸 정리 스윕이 일일 리포트·세션 확정 스케줄러와 스레드를 나눠 쓰지 않게 (기본 풀 크기 1)
   task:
     scheduling:
