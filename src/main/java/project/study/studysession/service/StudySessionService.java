@@ -335,7 +335,7 @@ public class StudySessionService {
     }
 
     /**
-     * 공부 리듬 — 누적 공부일(study-days와 같은 1분 기준)과 요일 × 시각별 누적 순공. 조각마다 정시 경계로 잘라
+     * 공부 리듬 — 누적 공부일(study-days와 같은 1분 기준)과 요일 × 시각별 누적 순공. 조각마다 그 세션 시간대의 정시 경계로 잘라
      * 배분하므로(RhythmSplitter) 자정 분할 조각도 그대로 더하면 된다. 노출 기준(며칠부터 보여줄지)은 앱이 정한다.
      */
     @Transactional(readOnly = true)
@@ -344,8 +344,7 @@ public class StudySessionService {
         long studyDays = studySessionRepository.countDistinctStatDates(userId, MIN_LIST_FOCUS_SEC, today);
         int[][] grid = RhythmSplitter.emptyGrid();
         for (StudySession session : studySessionRepository.findAllMeasuredWithMinFocusSec(userId, MIN_LIST_FOCUS_SEC)) {
-            RhythmSplitter.accumulate(
-                    grid, session.getStartedAt(), session.getEndedAt(), session.getFocusSec(), session.getEvents());
+            RhythmSplitter.accumulate(grid, session);
         }
         return new StudyRhythmResponse(studyDays, grid);
     }
