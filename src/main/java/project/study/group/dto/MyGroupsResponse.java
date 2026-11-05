@@ -40,6 +40,9 @@ public record MyGroupsResponse(
             @Schema(description = "내가 이 그룹의 그룹장이면 true", example = "true")
             boolean owner,
 
+            @Schema(description = "답을 기다리는 새 신청 수 — 공개 그룹 그룹장에게만 값이 있고 나머지는 null", example = "2", nullable = true)
+            Integer newApplicationCount,
+
             @Schema(description = "멤버 책상 — 들어간 순서. 정렬은 FE가 한다")
             List<GroupMemberDesk> members) {}
 
