@@ -1,0 +1,528 @@
+{
+  "lang": "en",
+  "joiner": " ",
+  "modifiers": [
+    "Cramming",
+    "Last-Minute",
+    "Highlighting",
+    "Note-Taking",
+    "Page-Turning",
+    "Book-Loving",
+    "Well-Read",
+    "Reading",
+    "Tea-Sipping",
+    "Caffeinated",
+    "Coffee-Powered",
+    "Snacking",
+    "Yawning",
+    "Stretching",
+    "Daydreaming",
+    "Doodling",
+    "Scribbling",
+    "Journaling",
+    "Pondering",
+    "Deep-Thinking",
+    "Dream-Chasing",
+    "Napping",
+    "Late-Night",
+    "Midnight",
+    "Sleepless",
+    "Sleepy",
+    "Early-Rising",
+    "Wide-Awake",
+    "Bright-Eyed",
+    "Well-Rested",
+    "Refreshed",
+    "Phone-Free",
+    "Unplugged",
+    "Lo-Fi",
+    "Library",
+    "Pen-Spinning",
+    "Pencil-Chewing",
+    "Puzzle-Solving",
+    "Goal-Setting",
+    "Goal-Crushing",
+    "List-Making",
+    "Skill-Building",
+    "Habit-Building",
+    "Self-Taught",
+    "Exam-Ready",
+    "Perfect-Score",
+    "Award-Winning",
+    "Certified",
+    "Typing",
+    "Listening",
+    "Laser-Focused",
+    "Focused",
+    "Deep-Breathing",
+    "Thriving",
+    "Striving",
+    "Growing",
+    "Diligent",
+    "Studious",
+    "Curious",
+    "Patient",
+    "Steady",
+    "Persistent",
+    "Mindful",
+    "Calm",
+    "Clever",
+    "Wise",
+    "Brilliant",
+    "Bright",
+    "Smart",
+    "Sharp",
+    "Thoughtful",
+    "Motivated",
+    "Inspired",
+    "Ambitious",
+    "Dedicated",
+    "Eager",
+    "Keen",
+    "Humble",
+    "Cheerful",
+    "Hopeful",
+    "Brave",
+    "Bold",
+    "Resilient",
+    "Hard-Working",
+    "Determined",
+    "Tireless",
+    "Unstoppable",
+    "Consistent",
+    "Creative",
+    "Bookish",
+    "Brainy",
+    "Scholarly",
+    "Quick-Witted",
+    "Open-Minded",
+    "Clear-Headed",
+    "Fearless",
+    "Witty",
+    "Logical",
+    "Attentive",
+    "Thorough"
+  ],
+  "animals": [
+    "Cat",
+    "Kitten",
+    "Tabby Cat",
+    "Lion",
+    "Lion Cub",
+    "Tiger",
+    "Tiger Cub",
+    "White Tiger",
+    "Leopard",
+    "Snow Leopard",
+    "Cheetah",
+    "Bear",
+    "Polar Bear",
+    "Brown Bear",
+    "Panda",
+    "Panda Cub",
+    "Red Panda",
+    "Koala",
+    "Kangaroo",
+    "Wallaby",
+    "Platypus",
+    "Squirrel",
+    "Chipmunk",
+    "Hamster",
+    "Rabbit",
+    "Hedgehog",
+    "Raccoon",
+    "Meerkat",
+    "Chinchilla",
+    "Capybara",
+    "Porcupine",
+    "Mongoose",
+    "Fox",
+    "Arctic Fox",
+    "Fennec Fox",
+    "Wolf",
+    "Arctic Wolf",
+    "Elephant",
+    "Giraffe",
+    "Zebra",
+    "Horse",
+    "Deer",
+    "Reindeer",
+    "Gazelle",
+    "Antelope",
+    "Llama",
+    "Alpaca",
+    "Lamb",
+    "Dinosaur",
+    "Otter",
+    "Sea Otter",
+    "Seal",
+    "Seal Pup",
+    "Dolphin",
+    "Orca",
+    "Beluga",
+    "Narwhal",
+    "Penguin",
+    "Seahorse",
+    "Octopus",
+    "Pufferfish",
+    "Turtle",
+    "Sea Turtle",
+    "Goldfish",
+    "Koi",
+    "Angelfish",
+    "Shark",
+    "Tiger Shark",
+    "Swordfish",
+    "Manta Ray",
+    "Whale Shark",
+    "Eagle",
+    "Golden Eagle",
+    "Hawk",
+    "Falcon",
+    "Sparrow",
+    "Robin",
+    "Bluebird",
+    "Blue Jay",
+    "Finch",
+    "Hummingbird",
+    "Swan",
+    "Flamingo",
+    "Stork",
+    "Pelican",
+    "Puffin",
+    "Toucan",
+    "Duckling",
+    "Dove",
+    "Lovebird",
+    "Parakeet",
+    "Nightingale",
+    "Songbird",
+    "Butterfly",
+    "Honeybee",
+    "Bumblebee",
+    "Ladybug",
+    "Firefly",
+    "Dragonfly",
+    "Ant"
+  ],
+  "examples": [
+    {
+      "nickname": "Caffeinated Capybara",
+      "korean": "카페인 충전한 카피바라"
+    },
+    {
+      "nickname": "Last-Minute Otter",
+      "korean": "벼락치기하는 수달"
+    },
+    {
+      "nickname": "Pen-Spinning Panda",
+      "korean": "펜 돌리는 판다"
+    },
+    {
+      "nickname": "Curious Hedgehog",
+      "korean": "호기심 많은 고슴도치"
+    },
+    {
+      "nickname": "Phone-Free Penguin",
+      "korean": "폰 내려놓은 펭귄"
+    },
+    {
+      "nickname": "Early-Rising Sparrow",
+      "korean": "일찍 일어난 참새"
+    }
+  ],
+  "excluded": [
+    {
+      "word": "Dog / Puppy / 개 품종 전부(Corgi, Husky, Poodle, Beagle 등)",
+      "reason": "힌디어 kutta·'kutte ka pilla'(개새끼)가 대표 욕이고 이슬람권에서도 비하. 영어 bitch 연상, Husky는 '뚱뚱한 체형' 완곡어, Poodle은 '남의 앞잡이' 뜻"
+    },
+    {
+      "word": "Pig / Boar / Piglet / Guinea Pig",
+      "reason": "힌디어 suar는 욕(이슬람 금기와 겹침), 영어 pig는 뚱보·경찰 비하. Guinea Pig는 '실험 대상', Piglet은 캐릭터 이름"
+    },
+    {
+      "word": "Cow / Calf / Bull / Ox",
+      "reason": "인도에서 소는 힌두교 신성 동물이라 종교적으로 민감(쇠고기 논쟁). 영어 cow는 여성 비하, bull은 bullshit 연상"
+    },
+    {
+      "word": "Buffalo / Bison / Yak",
+      "reason": "힌디어 bhains는 둔하다·뚱뚱하다는 놀림이고 'kale akshar bhains barabar'(글자를 소처럼 모름=문맹) 속담이 있어 공부 앱에 특히 나쁨. Bison은 인도 영어에서 들소(gaur)를 가리켜 같은 연상, Yak는 영어로 '수다 떨다'"
+    },
+    {
+      "word": "Monkey / Ape / Gorilla / Chimp / Orangutan / Lemur",
+      "reason": "힌디어 bandar는 놀림, 영어에서는 인종차별 비하로 쓰임. Lemur는 원숭이로 보일 수 있고 덜 알려짐"
+    },
+    {
+      "word": "Owl / Owlet / Snowy Owl",
+      "reason": "힌디어 ullu는 '바보', 'ullu ka pattha'(부엉이 새끼)는 흔한 욕"
+    },
+    {
+      "word": "Donkey / Mule / Ass",
+      "reason": "힌디어 gadha는 '멍청이'. 영어 ass는 엉덩이·욕, mule은 마약 운반책·고집쟁이"
+    },
+    {
+      "word": "Goat / Sheep / Ram",
+      "reason": "힌디어 'bakra banana'는 '호구로 만들다', 'bhed chaal'은 무리 따라가기. Ram은 힌두교 라마 신 이름이라 종교 문제"
+    },
+    {
+      "word": "Crow / Raven / Magpie",
+      "reason": "'jhooth bole kauva kaate'(거짓말하면 까마귀가 문다) 등 거짓말·불길함 연상. Magpie는 영어로 '물건 모으는 도둑', 불운 동요"
+    },
+    {
+      "word": "Crocodile / Alligator",
+      "reason": "'magarmachh ke aansu'(악어의 눈물)=위선. 귀여운 동물도 아님"
+    },
+    {
+      "word": "Chameleon",
+      "reason": "힌디어 'girgit ki tarah rang badalna'=변절자·지조 없는 사람"
+    },
+    {
+      "word": "Heron / Egret / Crane",
+      "reason": "힌디어 'bagula bhagat'=경건한 척하는 위선자(강한 욕). 인도 영어에서 bagula를 crane으로도 번역하고, 판차탄트라 '두루미와 게'의 교활한 악당이라 Crane도 뺌"
+    },
+    {
+      "word": "Parrot / Macaw",
+      "reason": "영어 to parrot=뜻 모르고 따라 말하다, 힌디어 'tote ki tarah ratna'=앵무새처럼 뜻 모르고 외우기. 공부 앱에서는 '주입식 암기쟁이' 놀림이 됨"
+    },
+    {
+      "word": "Jackal / Hyena",
+      "reason": "힌디어 geedad(자칼)는 겁쟁이·교활, 하이에나는 영어에서도 비열함 상징"
+    },
+    {
+      "word": "Beaver",
+      "reason": "북미 속어로 여성 성기"
+    },
+    {
+      "word": "Cougar",
+      "reason": "연하 남성을 찾는 중년 여성을 가리키는 비하 속어"
+    },
+    {
+      "word": "Pussycat / Kitty / Tomcat",
+      "reason": "pussy·kitty는 여성 성기 속어, tomcat은 '바람둥이 짓 하다'"
+    },
+    {
+      "word": "Bunny",
+      "reason": "Playboy Bunny(상표·성적 이미지), snow/beach/gym bunny 같은 여성 비하 표현. 대신 Rabbit을 씀"
+    },
+    {
+      "word": "Chicken / Hen / Rooster / Chick",
+      "reason": "chicken=겁쟁이, rooster=cock(성기 속어), chick=여성 비하, hen party 등"
+    },
+    {
+      "word": "Turkey",
+      "reason": "영어로 '멍청이·실패작', 나라 이름(튀르키예)과도 겹침"
+    },
+    {
+      "word": "Peacock / Cockatoo / Cockatiel / Woodpecker",
+      "reason": "글자 안에 cock·pecker(성기 속어)가 들어 있음. Peacock은 '허세꾼' 뜻도 있음(인도 국조라 아쉽지만 제외)"
+    },
+    {
+      "word": "Booby / Blue Tit / Great Tit / Shag",
+      "reason": "boob·tit은 가슴 속어, shag는 영국 속어로 성관계"
+    },
+    {
+      "word": "Swallow",
+      "reason": "성적 연상이 있는 동사와 같은 철자"
+    },
+    {
+      "word": "Weasel / Rat / Mouse / Snake / Skunk",
+      "reason": "weasel·rat·snake=배신자·비열한 사람, mouse=소심한 사람(힌디어 chuha=겁쟁이), skunk=역겨운 사람"
+    },
+    {
+      "word": "Frog / Toad",
+      "reason": "frog는 프랑스인을 낮잡는 민족 비하어, 영어 속어로 성관계 뜻도 있음"
+    },
+    {
+      "word": "Kiwi",
+      "reason": "뉴질랜드 사람을 부르는 말(민족 지칭)이고 고환 속어 뜻도 있음. 과일과도 헷갈림"
+    },
+    {
+      "word": "Moose",
+      "reason": "Wiktionary에 '못생긴 사람', '연인으로 둔 아시아 여성'(군대 비하 은어) 뜻이 있음. 한국 회사 앱이라 특히 피함"
+    },
+    {
+      "word": "Pony",
+      "reason": "미국 속어로 '시험 커닝 페이퍼', 런던 속어로 crap(쓰레기) 뜻. 공부 앱에서 커닝 연상은 나쁨"
+    },
+    {
+      "word": "Sea Lion",
+      "reason": "sealioning(예의 바른 척 끈질기게 따지는 인터넷 트롤링)과 그런 사람을 sea lion이라 부름"
+    },
+    {
+      "word": "Canary",
+      "reason": "밀고자(sing like a canary), 마약 알약 은어"
+    },
+    {
+      "word": "Panther",
+      "reason": "나이 많은 남성을 쫓는 젊은 여성(cougar의 짝) 은어, Black Panther(정치 단체·마블 캐릭터)와 겹침"
+    },
+    {
+      "word": "Bear Cub / Wolf Pup",
+      "reason": "bear·cub는 게이 문화 은어로 짝을 이루는 말이고 pup은 pet play 은어. 단독 Bear, Lion Cub·Seal Pup처럼 의미가 분명한 것만 남김"
+    },
+    {
+      "word": "Whale / Blue Whale / Humpback / Walrus / Manatee / Dugong / Rhino / Hippo",
+      "reason": "whale·walrus는 뚱뚱한 사람 비하, Blue Whale은 자살 유도 챌린지 이름, humpback=곱사등, manatee·dugong은 sea cow(소), rhino는 힌디어 gainda(뚱보) 놀림. Hippo는 경쟁 앱 이름(브리프)"
+    },
+    {
+      "word": "Starfish / Jellyfish / Crab / Clam / Shrimp / Squid",
+      "reason": "starfish=성적 은어, jellyfish=줏대 없는 사람, crabs=사면발니·투덜이, clam=성적 은어, shrimp=키 작은 사람 비하, squid=해군 비하·Squid Game 연상"
+    },
+    {
+      "word": "Clownfish",
+      "reason": "clown=멍청이 놀림. 특히 'Certified Clownfish'가 인터넷 욕 'certified clown'처럼 읽힘"
+    },
+    {
+      "word": "Sloth",
+      "reason": "단어 뜻 자체가 '나태'(7대 죄악). 공부 앱에서 놀림"
+    },
+    {
+      "word": "Bat / Mole / Pigeon / Goose / Duck",
+      "reason": "old bat·batty=노망, mole=스파이, stool pigeon=밀고자, silly goose=바보·goosing=엉덩이 찌르기, duck=크리켓에서 0점 아웃(인도 사용자에게 바로 떠오름). 대신 Duckling을 씀"
+    },
+    {
+      "word": "Hare / Fawn / Quail / Skylark",
+      "reason": "hare-brained=경솔한, fawn=아첨하다, quail=겁먹고 움츠리다, skylark=장난치며 놀다"
+    },
+    {
+      "word": "Gerbil / Ferret / Possum",
+      "reason": "gerbil은 성적 도시전설, ferret-faced·playing possum 등 부정적 표현"
+    },
+    {
+      "word": "Camel",
+      "reason": "camel jockey(아랍인 비하어), camel toe 은어, 담배 상표"
+    },
+    {
+      "word": "Ostrich / Albatross / Seagull",
+      "reason": "ostrich=현실 회피, albatross=짐·족쇄, seagull manager=시끄럽게 굴고 떠나는 상사"
+    },
+    {
+      "word": "Puma / Jaguar / Lynx / Kingfisher / Mustang / Beetle / Caterpillar",
+      "reason": "상표가 더 먼저 떠오름(Puma 운동화, Jaguar·Mustang·Beetle 자동차, 영국 Lynx 데오드란트, 인도 Kingfisher 맥주·항공, Caterpillar 중장비)"
+    },
+    {
+      "word": "Pomeranian",
+      "reason": "앱 이름 '포메'와 혼동(브리프). 개 품종이기도 함"
+    },
+    {
+      "word": "Unicorn / Dragon / Phoenix / Pegasus",
+      "reason": "실제 동물이 아님. unicorn은 데이팅 은어, Pegasus는 스파이웨어 이름"
+    },
+    {
+      "word": "Quokka / Wombat / Axolotl / Kookaburra / Emu / Ibex",
+      "reason": "인도·비영어권 사용자에게 덜 알려진 동물(호주·특정 지역 위주)"
+    },
+    {
+      "word": "Peafowl / Goldfinch / Grizzly / Red Fox",
+      "reason": "같은 종류가 이미 있어 중복(Finch, Brown Bear, Fox)"
+    },
+    {
+      "word": "Coffee-Fueled",
+      "reason": "미국 철자(fueled)와 영국·인도·호주 철자(fuelled)가 달라 한쪽에선 오타처럼 보임. Coffee-Powered로 대체"
+    },
+    {
+      "word": "Cozy / Organized / Practicing / Summarizing / Colorful",
+      "reason": "미국·영국 철자가 다른 단어(cosy, organised, practising, summarising, colourful)라 뺌"
+    },
+    {
+      "word": "Studying / Memorizing / Reviewing / Planning / Underlining",
+      "reason": "타동사라 'Studying Panda'가 '판다를 연구하는'처럼 목적어로 읽힘. 자동사 분사나 Note-Taking 같은 합성어를 씀"
+    },
+    {
+      "word": "Strolling",
+      "reason": "stroll에 '거리에서 호객하는 성매매' 은어가 있음"
+    },
+    {
+      "word": "Disciplined",
+      "reason": "'벌받은'으로도 읽히고 Kitten과 붙으면 성적 연상"
+    },
+    {
+      "word": "Driven",
+      "reason": "'Driven Horse/Reindeer'가 '(마차를) 끄는/몰린'으로 읽힘"
+    },
+    {
+      "word": "Passionate / Hot / Wild / Frisky / Naughty",
+      "reason": "성적 연상(Passionate Kitten 등)"
+    },
+    {
+      "word": "Top-Scoring / Gold-Star",
+      "reason": "top·score는 성적 은어, gold star는 성소수자 은어(gold star lesbian). Perfect-Score·Award-Winning으로 대체"
+    },
+    {
+      "word": "Up-All-Night",
+      "reason": "'up all night to get lucky'(성적 가사) 연상. Late-Night·Sleepless로 대체"
+    },
+    {
+      "word": "Hustling / Grinding",
+      "reason": "hustler=사기꾼·성매매, grinding=성적인 춤"
+    },
+    {
+      "word": "Genius / Nerdy / Geeky",
+      "reason": "genius는 비꼬는 말('nice job, genius'), nerdy·geeky는 놀림으로 들릴 수 있음"
+    },
+    {
+      "word": "Offline / Busy / Away / Online",
+      "reason": "그룹 공부방 타일에서 접속·상태 표시로 착각될 수 있음"
+    },
+    {
+      "word": "Hydrated / Humming / Dreaming",
+      "reason": "Hydrated는 물고기·고래류와 붙으면 이상, Humming은 Hummingbird와 중복('Humming Hummingbird'), Dreaming은 Dream-Chasing과 중복"
+    },
+    {
+      "word": "Questioning",
+      "reason": "LGBTQ+의 Q(성 정체성 탐색 중)를 뜻하는 말"
+    },
+    {
+      "word": "Homework / Semester / Straight-A / Pomodoro",
+      "reason": "학생 전용 상황(브리프 기준), Straight-A는 straight 연상. Pomodoro Technique은 등록 상표"
+    }
+  ],
+  "conventions": "영어권 앱의 자동 별명은 Google Docs 익명 동물('Anonymous Capybara')과 Kahoot 별명 생성기('Kind Tiger', 'Charming Cheetah')처럼 '형용사 + 동물' 두 단어를 띄어 쓰고 각 단어 첫 글자를 대문자로 쓰는 Title Case가 표준이라 그대로 따랐다(joiner는 띄어쓰기). Reddit식 Familiar_Tip_8451이나 붙여 쓴 SleepyOtter는 아이디처럼 보이고 비원어민이 읽기 어려워 쓰지 않았다. 하이픈 합성어는 Coffee-Powered처럼 양쪽 모두 대문자로 쓰고, 미국·영국 철자가 갈리는 단어(fueled/fuelled, cozy/cosy 등)와 'Studying Panda'처럼 목적어로 오독되는 타동사 분사는 피했다. 인도·스페인어권 사용자도 받으므로 쉬운 단어와 Sea Turtle·Angelfish처럼 뜻이 그대로 보이는 합성어를 우선했고, 힌디어 욕·놀림 동물과 영어 성적 은어는 Wiktionary·Rekhta 사전으로 확인해 뺐다.",
+  "sources": [
+    "https://www.mentalfloss.com/article/545860/wild-things-why-google-docs-feature-anonymous-animals",
+    "https://www.popsci.com/google-docs-anonymous-animals/",
+    "https://thesmartlocal.com/read/google-docs-anonymous-animals/",
+    "https://kahoot.com/blog/2017/11/09/generate-funny-nicknames-players-live-kahoots/",
+    "https://kahoot.com/blog/2019/03/08/tips-keep-kahoot-nicknames-appropriate/",
+    "https://redship.io/free-tools/reddit-username-generator",
+    "https://scroll.in/article/764132/scroll_in",
+    "https://folklore.usc.edu/?p=60283",
+    "https://www.hindipod101.com/lesson/mustknow-hindi-slang-words-phrases-5-expressions-related-to-animals-part-2",
+    "https://trykaiwa.com/blog/hindi-common-idioms-expressions-guide",
+    "https://sublearn.com/learn/hi/phrases/hi-kal-akashhara-bhasa-brabra-2",
+    "https://rekhtadictionary.com/meaning-of-tote-kii-tarah-padhaanaa",
+    "https://www.rekhtadictionary.com/meaning-of-girgit-kii-tarah-rang-badalnaa",
+    "https://rekhtadictionary.com/meaning-of-lomdii",
+    "https://www.rekhtadictionary.com/meaning-of-bagula-bhagat",
+    "https://sublearn.com/learn/hi/phrases/hi-bgal-bhagata",
+    "https://en.wikipedia.org/wiki/Sealioning",
+    "https://en.wikipedia.org/wiki/Duck_(cricket)",
+    "https://en.wikipedia.org/wiki/Blue_Whale_Challenge",
+    "https://en.wikipedia.org/wiki/Kiwi_(people)",
+    "https://en.wikipedia.org/wiki/Bear_(gay_culture)",
+    "https://en.wikipedia.org/wiki/Pomodoro_Technique",
+    "https://en.wikipedia.org/wiki/Lynx_(brand)",
+    "https://en.wikipedia.org/wiki/Kingfisher_(beer)",
+    "https://en.wikipedia.org/wiki/List_of_ethnic_slurs",
+    "https://en.wiktionary.org/wiki/beaver",
+    "https://en.wiktionary.org/wiki/cougar",
+    "https://en.wiktionary.org/wiki/starfish",
+    "https://en.wiktionary.org/wiki/otter",
+    "https://en.wiktionary.org/wiki/cub",
+    "https://en.wiktionary.org/wiki/pup",
+    "https://en.wiktionary.org/wiki/moose",
+    "https://en.wiktionary.org/wiki/pony",
+    "https://en.wiktionary.org/wiki/canary",
+    "https://en.wiktionary.org/wiki/panther",
+    "https://en.wiktionary.org/wiki/parrot",
+    "https://en.wiktionary.org/wiki/poodle",
+    "https://en.wiktionary.org/wiki/frog",
+    "https://en.wiktionary.org/wiki/kiwi",
+    "https://en.wiktionary.org/wiki/goose",
+    "https://en.wiktionary.org/wiki/fawn",
+    "https://en.wiktionary.org/wiki/skylark",
+    "https://en.wiktionary.org/wiki/stroll",
+    "https://en.wiktionary.org/wiki/fuelled",
+    "https://en.wiktionary.org/wiki/cosy"
+  ]
+}
