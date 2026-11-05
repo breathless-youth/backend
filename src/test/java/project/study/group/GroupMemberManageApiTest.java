@@ -214,8 +214,9 @@ class GroupMemberManageApiTest {
         assertThat(probe.group(group).orElseThrow().updatedAt()).isEqualTo(NOW);
         PushMessage message = pushedOnceTo(pushSender, member);
         assertThat(message.type()).isEqualTo("group_owner_transferred");
-        assertThat(message.title()).isEqualTo("그룹장이 됐어요");
-        assertThat(message.body()).isEqualTo(probe.group(group).orElseThrow().name() + "의 그룹장을 넘겨받았어요");
+        assertThat(message.ko().title()).isEqualTo("그룹장이 됐어요");
+        assertThat(message.ko().body())
+                .isEqualTo(probe.group(group).orElseThrow().name() + "의 그룹장을 넘겨받았어요");
         assertThat(message.link()).isEqualTo("/groups/" + group);
         notPushedTo(pushSender, owner);
         // 넘긴 사람은 일반 멤버로 남는다
@@ -234,7 +235,7 @@ class GroupMemberManageApiTest {
     }
 
     @Test
-    void 새_그룹장은_그룹장인_그룹이_이미_2개여도_넘겨받는다() {
+    void 새_그룹장은_그룹장인_그룹이_이미_있어도_넘겨받는다() {
         probe.insertGroup(member, "PUBLIC");
         probe.insertGroup(member, "PRIVATE");
 

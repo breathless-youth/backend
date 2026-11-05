@@ -14,4 +14,11 @@ public record PushTokenRequest(
         PushPlatform platform,
 
         @Schema(description = "지금 OS 알림 권한이 켜져 있는지", example = "true") @NotNull
-        Boolean notificationsEnabled) {}
+        Boolean notificationsEnabled,
+
+        @Schema(
+                description =
+                        "앱 언어, `ko`·`en`·`ja`·`zh-Hant` 등. 보낸 값 그대로 35자 이하(앞뒤 공백 포함)이고, 저장할 때 앞뒤 공백을 지운다. 없거나 빈 값이면 ko",
+                example = "en")
+        @Size(max = 35)
+        String locale) {}

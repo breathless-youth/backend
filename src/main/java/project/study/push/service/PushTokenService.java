@@ -16,6 +16,13 @@ public class PushTokenService {
     /** 다른 사용자에게 붙어 있던 토큰이면 지금 사용자로 옮긴다 — 같은 기기에서 다른 계정으로 로그인한 경우다. */
     @Transactional
     public void register(Long userId, PushTokenRequest request) {
-        pushTokenRepository.upsert(userId, request.token(), request.platform().name(), request.notificationsEnabled());
+        pushTokenRepository.upsert(
+                userId, request.token(), request.platform().name(), request.notificationsEnabled(), locale(request));
+    }
+
+    // 언어를 보내지 않는 구 앱은 지금까지처럼 한국어 알림을 받아야 한다
+    private static String locale(PushTokenRequest request) {
+        String locale = request.locale();
+        return locale == null || locale.isBlank() ? "ko" : locale.strip();
     }
 }

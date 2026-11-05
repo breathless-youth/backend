@@ -15,12 +15,14 @@ import project.study.room.dto.LegacyRoomCreateRequest;
 import project.study.room.dto.LegacyRoomJoinRequest;
 import project.study.room.dto.RoomCreateResponse;
 import project.study.room.dto.RoomJoinResponse;
+import project.study.user.service.LegacyGuestGuard;
 
 /**
  * 구 앱(v1.2.x) 전용 룸 API — API-Version 헤더가 없거나 1인 요청만 여기로 온다 (ADR-0020).
  *
  * <p>v1.2.1 계약 그대로 본문·쿼리의 userId로 식별하고, 토큰 계약 핸들러({@link RoomController})에 userId만 바꿔
- * 위임하는 어댑터라 로직이 없다. 강제 업데이트(BY-531) 뒤 contract 시 이 클래스와 Legacy DTO를 삭제한다.
+ * 위임하는 어댑터라 로직이 없다. userId는 비회원만 받는다({@link LegacyGuestGuard}). 강제 업데이트(BY-531) 뒤 contract 시 이 클래스와
+ * Legacy DTO를 삭제한다.
  */
 // Swagger에 싣지 않는다 — springdoc은 같은 경로+메서드를 하나로 합쳐 토큰 계약(v2) 문서를 덮어쓴다.
 // 구 앱 계약은 v1.2.1 그대로이며 ADR-0020의 표가 명세다
@@ -31,21 +33,25 @@ import project.study.room.dto.RoomJoinResponse;
 public class LegacyRoomController {
 
     private final RoomController roomController;
+    private final LegacyGuestGuard legacyGuestGuard;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoomCreateResponse create(@Valid @RequestBody LegacyRoomCreateRequest request) {
+        legacyGuestGuard.requireGuest(request.userId());
         return roomController.create(request.userId());
     }
 
     @PostMapping("/join")
     public RoomJoinResponse join(@Valid @RequestBody LegacyRoomJoinRequest request) {
+        legacyGuestGuard.requireGuest(request.userId());
         return roomController.join(request.userId(), request.toRequest());
     }
 
     @PostMapping("/{roomId}/leave")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void leave(@PathVariable Long roomId, @RequestParam Long userId) {
+        legacyGuestGuard.requireGuest(userId);
         roomController.leave(userId, roomId);
     }
 }

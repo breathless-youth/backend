@@ -113,8 +113,9 @@ class GroupApplicationAnswerApiTest {
 
         PushMessage message = pushedOnceTo(pushSender, applicant);
         assertThat(message.type()).isEqualTo("group_application_accepted");
-        assertThat(message.title()).isEqualTo("새로운 그룹에서 공부를 시작해 볼까요?");
-        assertThat(message.body()).isEqualTo(probe.group(group).orElseThrow().name() + "의 멤버가 됐어요");
+        assertThat(message.ko().title()).isEqualTo("새로운 그룹에서 공부를 시작해 볼까요?");
+        assertThat(message.ko().body())
+                .isEqualTo(probe.group(group).orElseThrow().name() + "의 멤버가 됐어요");
         assertThat(message.link()).isEqualTo("/groups/" + group);
         notPushedTo(pushSender, owner);
     }
@@ -296,8 +297,9 @@ class GroupApplicationAnswerApiTest {
 
         PushMessage message = pushedOnceTo(pushSender, applicant);
         assertThat(message.type()).isEqualTo("group_application_declined");
-        assertThat(message.title()).isEqualTo("비슷한 그룹에 신청해 볼까요?");
-        assertThat(message.body()).isEqualTo(probe.group(group).orElseThrow().name() + " 신청이 거절됐어요");
+        assertThat(message.ko().title()).isEqualTo("비슷한 그룹에 신청해 볼까요?");
+        assertThat(message.ko().body())
+                .isEqualTo(probe.group(group).orElseThrow().name() + " 신청이 거절됐어요");
         assertThat(message.link()).isEqualTo("/groups?tab=public&category=CIVIL_SERVICE");
         notPushedTo(pushSender, owner);
     }

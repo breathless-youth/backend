@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import project.study.common.category.StudyCategory;
 import project.study.common.tx.AfterCommit;
 import project.study.push.dto.PushMessage;
+import project.study.push.dto.PushText;
 import project.study.push.service.PushSender;
 
 /** 푸시 문구는 BY-1124 표 그대로여야 한다 — type·제목·본문·link를 글자까지 맞춰 본다. 동기 실행기를 쓴다. */
@@ -46,8 +47,9 @@ class GroupNotificationsTest {
 
         PushMessage message = sentTo(List.of(7L));
         assertThat(message.type()).isEqualTo("group_application_received");
-        assertThat(message.title()).isEqualTo("새 신청을 확인해 볼까요?");
-        assertThat(message.body()).isEqualTo("포메님이 새벽 공시반에 신청했어요");
+        assertThat(message.ko().title()).isEqualTo("새 신청을 확인해 볼까요?");
+        assertThat(message.ko().body()).isEqualTo("포메님이 새벽 공시반에 신청했어요");
+        assertThat(message.en()).isEqualTo(new PushText("New request to join your group", "포메 wants to join 새벽 공시반."));
         assertThat(message.link()).isEqualTo("/groups/10/applications");
     }
 
@@ -57,8 +59,10 @@ class GroupNotificationsTest {
 
         PushMessage message = sentTo(List.of(8L));
         assertThat(message.type()).isEqualTo("group_owner_transferred");
-        assertThat(message.title()).isEqualTo("그룹장이 됐어요");
-        assertThat(message.body()).isEqualTo("새벽 공시반의 그룹장을 넘겨받았어요");
+        assertThat(message.ko().title()).isEqualTo("그룹장이 됐어요");
+        assertThat(message.ko().body()).isEqualTo("새벽 공시반의 그룹장을 넘겨받았어요");
+        assertThat(message.en())
+                .isEqualTo(new PushText("You're now the group owner", "Ownership of 새벽 공시반 was transferred to you."));
         assertThat(message.link()).isEqualTo("/groups/10");
     }
 
@@ -68,8 +72,10 @@ class GroupNotificationsTest {
 
         PushMessage message = sentTo(List.of(9L));
         assertThat(message.type()).isEqualTo("group_application_accepted");
-        assertThat(message.title()).isEqualTo("새로운 그룹에서 공부를 시작해 볼까요?");
-        assertThat(message.body()).isEqualTo("새벽 공시반의 멤버가 됐어요");
+        assertThat(message.ko().title()).isEqualTo("새로운 그룹에서 공부를 시작해 볼까요?");
+        assertThat(message.ko().body()).isEqualTo("새벽 공시반의 멤버가 됐어요");
+        assertThat(message.en())
+                .isEqualTo(new PushText("Start studying with your new group", "You're now a member of 새벽 공시반."));
         assertThat(message.link()).isEqualTo("/groups/10");
     }
 
@@ -79,8 +85,11 @@ class GroupNotificationsTest {
 
         PushMessage message = sentTo(List.of(9L));
         assertThat(message.type()).isEqualTo("group_application_declined");
-        assertThat(message.title()).isEqualTo("비슷한 그룹에 신청해 볼까요?");
-        assertThat(message.body()).isEqualTo("새벽 공시반 신청이 거절됐어요");
+        assertThat(message.ko().title()).isEqualTo("비슷한 그룹에 신청해 볼까요?");
+        assertThat(message.ko().body()).isEqualTo("새벽 공시반 신청이 거절됐어요");
+        assertThat(message.en())
+                .isEqualTo(
+                        new PushText("Find a similar group to join", "Your request to join 새벽 공시반 wasn't accepted."));
         assertThat(message.link()).isEqualTo("/groups?tab=public&category=CIVIL_SERVICE");
     }
 
@@ -90,8 +99,11 @@ class GroupNotificationsTest {
 
         PushMessage message = sentTo(List.of(9L));
         assertThat(message.type()).isEqualTo("group_application_expired");
-        assertThat(message.title()).isEqualTo("다른 그룹에 신청해 볼까요?");
-        assertThat(message.body()).isEqualTo("새벽 공시반 신청은 답이 없어 취소됐어요");
+        assertThat(message.ko().title()).isEqualTo("다른 그룹에 신청해 볼까요?");
+        assertThat(message.ko().body()).isEqualTo("새벽 공시반 신청은 답이 없어 취소됐어요");
+        assertThat(message.en())
+                .isEqualTo(new PushText(
+                        "Find another group to join", "Your request to join 새벽 공시반 expired with no reply."));
         assertThat(message.link()).isEqualTo("/groups?tab=public");
     }
 
@@ -101,8 +113,11 @@ class GroupNotificationsTest {
 
         PushMessage message = sentTo(List.of(9L));
         assertThat(message.type()).isEqualTo("group_application_room_closed");
-        assertThat(message.title()).isEqualTo("다른 그룹을 찾아볼까요?");
-        assertThat(message.body()).isEqualTo("새벽 공시반 그룹이 사라져 신청이 취소됐어요");
+        assertThat(message.ko().title()).isEqualTo("다른 그룹을 찾아볼까요?");
+        assertThat(message.ko().body()).isEqualTo("새벽 공시반 그룹이 사라져 신청이 취소됐어요");
+        assertThat(message.en())
+                .isEqualTo(new PushText(
+                        "Look for another group", "새벽 공시반 is no longer available, so your request was canceled."));
         assertThat(message.link()).isEqualTo("/groups?tab=public");
     }
 
@@ -112,8 +127,9 @@ class GroupNotificationsTest {
 
         PushMessage message = sentTo(List.of(1L, 2L, 3L));
         assertThat(message.type()).isEqualTo("group_member_started");
-        assertThat(message.title()).isEqualTo("포메님이 공부를 시작했어요");
-        assertThat(message.body()).isEqualTo("새벽 공시반에 같이 공부하러 가 볼까요?");
+        assertThat(message.ko().title()).isEqualTo("포메님이 공부를 시작했어요");
+        assertThat(message.ko().body()).isEqualTo("새벽 공시반에 같이 공부하러 가 볼까요?");
+        assertThat(message.en()).isEqualTo(new PushText("포메 started studying", "Study together in 새벽 공시반."));
         assertThat(message.link()).isEqualTo("/groups/10");
     }
 
@@ -130,8 +146,10 @@ class GroupNotificationsTest {
 
         PushMessage message = sentTo(List.of(9L));
         assertThat(message.type()).isEqualTo("group_member_kicked");
-        assertThat(message.title()).isEqualTo("다른 그룹과 다시 시작해 볼까요?");
-        assertThat(message.body()).isEqualTo("새벽 공시반에서 내보내졌어요");
+        assertThat(message.ko().title()).isEqualTo("다른 그룹과 다시 시작해 볼까요?");
+        assertThat(message.ko().body()).isEqualTo("새벽 공시반에서 내보내졌어요");
+        assertThat(message.en())
+                .isEqualTo(new PushText("Start fresh with another group", "You're no longer a member of 새벽 공시반."));
         assertThat(message.link()).isEqualTo("/groups?tab=public");
     }
 

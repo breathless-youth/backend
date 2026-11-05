@@ -27,7 +27,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * 비회원(DEVICE) 토큰 인증 (ADR-0019). 보호 API는 {@code Authorization: Bearer <access>}가 필수이고,
- * 없거나 무효면 401 JSON({@code code: UNAUTHORIZED})으로 답한다. 소셜 로그인은 파킹 상태다.
+ * 없거나 무효면 401 JSON({@code code: UNAUTHORIZED})으로 답한다. 소셜 로그인은 이 토큰으로 호출하는 {@code POST /api/auth/link}로 한다.
  */
 @EnableWebSecurity
 @Configuration
@@ -57,6 +57,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/users")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/refresh")
+                        .permitAll()
+                        // 안드로이드 애플 웹 로그인 콜백 — 애플이 결과를 form_post로 보내 인증 헤더가 없다.
+                        // 고정된 앱 딥링크로 넘기기만 하고 로그인 처리는 하지 않는다 (AppleCallbackController)
+                        .requestMatchers(HttpMethod.POST, "/api/auth/apple/callback")
                         .permitAll()
                         // WebSocket 핸드셰이크 — 인증은 CONNECT 프레임에서 한다 (WebSocketConfig)
                         .requestMatchers("/ws")

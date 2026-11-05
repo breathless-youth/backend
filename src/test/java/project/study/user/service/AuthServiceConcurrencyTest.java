@@ -44,12 +44,14 @@ class AuthServiceConcurrencyTest {
 
     @Test
     void 다른_트랜잭션이_유저_행을_잠근_동안_refresh는_기다렸다가_잠금이_풀리면_완료된다() throws Exception {
+        String deviceId = UUID.randomUUID().toString();
         long userId = jdbcTemplate.queryForObject(
                 "INSERT INTO users (provider, provider_user_id, nickname) VALUES ('DEVICE', ?, ?) RETURNING id",
                 Long.class,
-                UUID.randomUUID().toString(),
+                deviceId,
                 "lock-" + UUID.randomUUID());
-        AuthService.TokenPair tokens = authService.issueTokensRevokingExisting(userId);
+        AuthService.TokenPair tokens =
+                authService.issueDeviceTokens(userId, deviceId).orElseThrow();
 
         CountDownLatch locked = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);

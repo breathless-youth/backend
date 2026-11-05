@@ -68,9 +68,15 @@ class PushTokenApiTest {
                 .formatted(token, platform, notificationsEnabled);
     }
 
+    private static String body(String token, String locale) {
+        return "{\"token\": \"%s\", \"platform\": \"IOS\", \"notificationsEnabled\": true, \"locale\": \"%s\"}"
+                .formatted(token, locale);
+    }
+
     private Map<String, Object> row(String token) {
         return jdbcTemplate.queryForMap(
-                "SELECT user_id, platform, notifications_enabled, created_at, updated_at FROM push_token WHERE token = ?",
+                "SELECT user_id, platform, notifications_enabled, locale, created_at, updated_at FROM push_token"
+                        + " WHERE token = ?",
                 token);
     }
 
@@ -114,6 +120,60 @@ class PushTokenApiTest {
         assertThat(put(userId, body(token, "ANDROID", true))).hasStatus(HttpStatus.NO_CONTENT);
 
         assertThat(row(token).get("user_id")).isEqualTo(userId);
+    }
+
+    @Test
+    void 앱_언어를_받은_그대로_저장한다() {
+        assertThat(put(userId, body(token, "zh-Hant"))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row(token).get("locale")).isEqualTo("zh-Hant");
+    }
+
+    @Test
+    void 앱_언어를_안_보내는_구_앱은_한국어로_저장한다() {
+        assertThat(put(userId, body(token, "IOS", true))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row(token).get("locale")).isEqualTo("ko");
+    }
+
+    @Test
+    void 앱_언어가_비었거나_공백뿐이면_한국어로_저장한다() {
+        String blank = "fcm-" + UUID.randomUUID();
+        assertThat(put(userId, body(token, ""))).hasStatus(HttpStatus.NO_CONTENT);
+        assertThat(put(userId, body(blank, "   "))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row(token).get("locale")).isEqualTo("ko");
+        assertThat(row(blank).get("locale")).isEqualTo("ko");
+    }
+
+    @Test
+    void 앱_언어는_앞뒤_공백을_지워_저장한다() {
+        assertThat(put(userId, body(token, " en "))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row(token).get("locale")).isEqualTo("en");
+    }
+
+    @Test
+    void 앱_언어는_35자까지_받는다() {
+        String locale = "a".repeat(35);
+
+        assertThat(put(userId, body(token, locale))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row(token).get("locale")).isEqualTo(locale);
+    }
+
+    @Test
+    void 앱_언어가_35자를_넘으면_400이다() {
+        assertThat(put(userId, body(token, "a".repeat(36)))).hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void 같은_토큰을_다른_언어로_다시_등록하면_언어가_바뀐다() {
+        put(userId, body(token, "ko"));
+
+        assertThat(put(userId, body(token, "en"))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row(token).get("locale")).isEqualTo("en");
     }
 
     @Test

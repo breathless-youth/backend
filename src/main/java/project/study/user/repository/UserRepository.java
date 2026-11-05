@@ -17,15 +17,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByProviderAndProviderUserId(Provider provider, String providerUserId);
 
+    // link용 값 조회 — 엔티티를 영속성 컨텍스트에 싣지 않는다. 같은 요청에서 뒤에 잠그는 행이 옛 값으로 보이지 않게 한다(open-in-view)
+    @Query("select u.id from User u where u.provider = :provider and u.providerUserId = :providerUserId")
+    Optional<Long> findIdByProviderAndProviderUserId(
+            @Param("provider") Provider provider, @Param("providerUserId") String providerUserId);
+
+    @Query("select u.provider from User u where u.id = :id")
+    Optional<Provider> findProviderById(@Param("id") Long id);
+
     // @Modifying 쿼리의 반환 타입은 void/int/long만 허용된다 — 삽입된 행 수(0 또는 1)를 반환
     // 프로필(자동 닉네임·이니셜·색상)은 등록 시점에 함께 발급한다. 재등록(멱등)이면 기존 값 보존
-    // on conflict에 타겟이 없어 닉네임 유니크 충돌도 예외 없이 0행으로 떨어진다
+    // on conflict에 타겟이 없어 닉네임 유니크 충돌(대소문자 무시 인덱스 포함)도 예외 없이 0행으로 떨어진다. 자동 닉네임이라 nickname_auto는 true
     // (트랜잭션 안에서 제약 위반 예외가 나면 PostgreSQL이 트랜잭션을 abort하고 Hibernate도 세션을 rollback-only로
     // 마킹하므로, 예외를 catch해도 같은 트랜잭션에서 재시도가 불가능하다)
     @Modifying
     @Query(value = """
-        insert into users (provider, provider_user_id, nickname, initial, color_index, created_at, updated_at)
-        values (:provider, :providerUserId, :nickname, :initial, :colorIndex, now(), now())
+        insert into users (provider, provider_user_id, nickname, nickname_auto, initial, color_index, created_at, updated_at)
+        values (:provider, :providerUserId, :nickname, true, :initial, :colorIndex, now(), now())
         on conflict do nothing
         """, nativeQuery = true)
     int insertIfAbsent(
@@ -42,6 +50,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
+
+    // 행이 아직 그 식별자일 때만 잠근다. 식별자 비교를 WHERE에 둬서 DB가 잠근 최신 행으로 판정한다 — 같은 요청에서 먼저 읽은
+    // 엔티티가 영속성 컨텍스트에 남아 있어도(open-in-view) 옛 값으로 통과하지 않는다
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id and u.provider = :provider and u.providerUserId = :providerUserId")
+    Optional<User> findByIdAndIdentityForUpdate(
+            @Param("id") Long id, @Param("provider") Provider provider, @Param("providerUserId") String providerUserId);
 
     @Query("select u.timeZone from User u where u.id = :id")
     Optional<String> findTimeZoneById(@Param("id") Long id);

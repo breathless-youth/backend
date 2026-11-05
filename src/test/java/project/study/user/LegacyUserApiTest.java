@@ -15,6 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
+import project.study.user.nickname.AutoNicknameFixtures;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -82,7 +83,8 @@ class LegacyUserApiTest {
         assertThat(mvc.get().uri("/api/users/" + userId + "/profile"))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"));
+                .hasPathSatisfying(
+                        "$.nickname", v -> assertThat(v).asString().satisfies(AutoNicknameFixtures::assertAuto));
     }
 
     @Test

@@ -56,7 +56,7 @@
   <tr><td>엔드포인트</td><td><code>wss://&lt;API 호스트&gt;/ws</code> — 순수 WebSocket. SockJS는 쓰지 않는다 (<code>@stomp/stompjs</code>의 <code>brokerURL</code>)</td></tr>
   <tr><td>인증</td><td>CONNECT 프레임 헤더 <code>Authorization: Bearer &lt;access 토큰&gt;</code>. 핸드셰이크 URL 쿼리에는 토큰을 싣지 않는다(ALB 액세스 로그에 남는다)</td></tr>
   <tr><td>인증 실패</td><td>헤더가 없거나 토큰이 무효하면 서버가 ERROR 프레임(<code>인증이 필요합니다</code> / <code>유효하지 않은 토큰입니다</code>)을 보내고 소켓을 닫는다. 사유는 ERROR 프레임의 <code>message</code> 헤더에 담기고 본문은 없다</td></tr>
-  <tr><td>구 앱 호환 (임시)</td><td>CONNECT에 <code>Authorization</code> 헤더가 아예 없으면 핸드셰이크 URL의 <code>?userId=</code>(숫자)로 식별한다 — 스토어의 구 앱(v1.2.x)만을 위한 폴백이고 새 앱은 쓰지 않는다. 강제 업데이트 뒤 제거된다 (ADR-0020). HTTP API의 구분은 <code>API-Version</code> 헤더지만 WebSocket에는 헤더가 없다</td></tr>
+  <tr><td>구 앱 호환 (임시)</td><td>CONNECT에 <code>Authorization</code> 헤더가 아예 없으면 핸드셰이크 URL의 <code>?userId=</code>(숫자)로 식별한다 — 스토어의 구 앱(v1.2.x)만을 위한 폴백이고 새 앱은 쓰지 않는다. 실존하는 비회원의 userId만 받고, 없는 사용자나 소셜 계정의 userId면 CONNECT를 거부한다(ERROR 프레임). 강제 업데이트 뒤 제거된다 (ADR-0020, ADR-0043). HTTP API의 구분은 <code>API-Version</code> 헤더지만 WebSocket에는 헤더가 없다</td></tr>
   <tr><td>토큰 만료</td><td>검증은 CONNECT 시점 한 번. 접속 중 access가 만료돼도 세션은 유지된다. 재접속 전에 갱신해서 붙이는 것은 클라이언트 몫</td></tr>
   <tr><td>heartbeat</td><td>서버 제안 <code>10000,10000</code>(ms). 클라이언트도 <code>heartbeatIncoming: 10000, heartbeatOutgoing: 10000</code>으로 맞춘다. 0이면 비활성</td></tr>
 </table>
@@ -336,7 +336,7 @@ sequenceDiagram
   <tr><th>type</th><th>어디로</th><th>필드</th><th>언제</th></tr>
   <tr><td><code>MIC_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>, <code>micOn</code></td><td>누군가의 state 보고에 <code>micOn</code>이 있을 때(마이크를 켜고 끌 때)</td></tr>
   <tr><td><code>BREAK_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>, <code>onBreak</code></td><td>뽀모도로 휴식이 시작되거나 끝날 때</td></tr>
-  <tr><td><code>OWNER_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>(새 그룹장)</td><td>공부방이 열려 있는 동안 그룹장이 바뀔 때</td></tr>
+  <tr><td><code>OWNER_CHANGED</code></td><td>방 토픽</td><td><code>userId</code>(새 그룹장)</td><td>공부방이 열려 있는 동안 그룹장이 바뀔 때(그룹장 넘기기, 그룹장 탈퇴, 그룹장 계정이 다른 계정으로 병합될 때)</td></tr>
   <tr><td><code>KICKED</code></td><td>내보내진 당사자의 내 큐</td><td><code>groupId</code></td><td>공부방에 있던 사람이 그룹에서 내보내질 때. 이어서 방 토픽에 MEMBER_LEFT가 간다</td></tr>
   <tr><td><code>PEER_BLOCKED</code></td><td>차단 관계인 두 사람 각자의 내 큐</td><td><code>userId</code>(연결하지 말 상대)</td><td>차단 관계인 두 사람이 같은 방에 있게 될 때(입장 확정 시)와, 공부방에서 신고·차단하는 순간. <strong>SNAPSHOT을 보낼 때마다</strong> 그 세션에 해당하는 PEER_BLOCKED를 상대마다 하나씩 이어서 다시 보낸다. PEER_BLOCKED를 받으면 그 상대와의 기존 연결을 즉시 닫고 새로 맺지 않는다(§11.5). 보내는 때는 §11.5 표를 본다</td></tr>
 </table>
@@ -385,9 +385,11 @@ sequenceDiagram
   <tr><td>2026-09-18</td><td>BY-676</td><td>구 앱(v1.2.x) 병행: CONNECT에 <code>Authorization</code>이 없을 때만 핸드셰이크 <code>?userId=</code> 폴백(§1). 새 앱 계약은 변화 없음. 강제 업데이트 뒤 제거 예정</td></tr>
   <tr><td>2026-10-16</td><td>BY-925</td><td>빈 방 소멸을 600초에서 3600초로 늘림(§8·§10). 방 생성 응답 <code>emptyTtlSeconds</code>도 3600. 소멸한 코드의 ROOM_CLOSED 안내 600초는 그대로</td></tr>
   <tr><td>2026-10-28</td><td>BY-1035</td><td>멤버 객체에 <code>profileImageUrl</code>(string | null) 추가(§5). 입장 시점 값이라 방 안에서 사진을 바꿔도 다음 입장부터 반영</td></tr>
+  <tr><td>2026-11-03</td><td>BY-1126</td><td>구 앱 <code>?userId=</code> 폴백(§1)은 비회원 userId만 받는다 — 소셜 계정의 userId는 없는 사용자처럼 CONNECT 거부. 새 앱 계약은 변화 없음</td></tr>
   <tr><td>2026-11-03</td><td>BY-1124</td><td>그룹 공부방 계약(§11) 추가: 멤버 객체 <code>micOn</code>·<code>onBreak</code>·<code>owner</code>, state 보고 <code>micOn</code>·<code>onBreak</code>, 새 type 5개(<code>MIC_CHANGED</code>, <code>BREAK_CHANGED</code>, <code>OWNER_CHANGED</code>, <code>KICKED</code>, <code>PEER_BLOCKED</code>). PEER_BLOCKED를 받으면 기존 P2P 연결도 닫는다. 서버 송신은 4단계부터. 초대코드 방은 변화 없음</td></tr>
   <tr><td>2026-11-03</td><td>BY-1124</td><td>그룹 공부방 서버 구현(4단계): 자리 잡기·나가기, 멤버 객체 <code>micOn</code>·<code>onBreak</code>·<code>owner</code>, MIC_CHANGED·BREAK_CHANGED·OWNER_CHANGED·KICKED 송신. 계약은 그대로이고, 초대코드 방에서 보낸 <code>micOn</code>·<code>onBreak</code>는 저장·알림 없이 무시한다는 것과 MEMBER_LEFT의 그룹 사유를 적었다(§5·§11.3). PEER_BLOCKED·signal 차단은 신고·차단 단계에서 시작</td></tr>
   <tr><td>2026-11-03</td><td>BY-1124</td><td>신고·차단 서버 구현(6단계): 그룹 공부방에서 차단 관계(어느 쪽이든)인 두 사람 사이 signal을 버리고 PEER_BLOCKED를 보내기 시작한다(§11.5 표). 메시지 모양은 그대로다. 보내는 때·세션 범위를 표로 적고, 차단 해제는 알림 없이 다음 입장부터라는 것과 받은 PEER_BLOCKED를 방에서 나갈 때까지 기억한다는 것을 더했다. 초대코드 방은 변화 없음</td></tr>
+  <tr><td>2026-11-04</td><td>BY-1126</td><td>OWNER_CHANGED(§11.4)가 그룹장 넘기기 말고도 그룹장이 탈퇴할 때(가장 먼저 들어온 멤버가 새 그룹장)와 그룹장 계정이 소셜 로그인으로 다른 계정에 병합될 때(남는 계정이 새 그룹장)도 온다. 탈퇴 때는 이어서 방 토픽에 탈퇴한 사람의 MEMBER_LEFT가 올 수 있다. 메시지 모양은 그대로다</td></tr>
 </table>
 
 </main>

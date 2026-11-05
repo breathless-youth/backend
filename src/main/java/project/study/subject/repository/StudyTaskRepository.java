@@ -17,10 +17,12 @@ public interface StudyTaskRepository extends JpaRepository<StudyTask, Long> {
             select t
             from StudyTask t
             where t.subjectId in :subjectIds and t.deletedAt is null
-              and (t.doneAt is null or t.doneAt >= :todayStart)
+              and (t.doneAt is null or t.doneAt >= :todayStart) and t.plannedDate <= :planToday
             order by t.id asc""")
     List<StudyTask> findVisible(
-            @Param("subjectIds") Collection<Long> subjectIds, @Param("todayStart") Instant todayStart);
+            @Param("subjectIds") Collection<Long> subjectIds,
+            @Param("todayStart") Instant todayStart,
+            @Param("planToday") java.time.LocalDate planToday);
 
     Optional<StudyTask> findByIdAndSubjectIdAndDeletedAtIsNull(Long id, Long subjectId);
 

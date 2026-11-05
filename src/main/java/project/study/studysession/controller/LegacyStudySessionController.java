@@ -20,13 +20,14 @@ import project.study.studysession.dto.LegacyStudySessionCreateRequest;
 import project.study.studysession.dto.SessionRecoveryResponse;
 import project.study.studysession.dto.StudySessionResponse;
 import project.study.studysession.service.StudySessionService;
-import project.study.user.service.UserService;
+import project.study.user.service.LegacyGuestGuard;
 
 /**
  * 구 앱(v1.2.x) 전용 세션 API — API-Version 헤더가 없거나 1인 요청만 여기로 온다 (ADR-0020).
  *
  * <p>v1.2.1 계약 그대로 본문·쿼리의 userId로 식별하고, 토큰 계약 핸들러({@link StudySessionController},
- * {@link ActiveStudySessionController})에 userId만 바꿔 위임하는 어댑터라 로직이 없다(멱등 재제출·재시도 포함).
+ * {@link ActiveStudySessionController})에 userId만 바꿔 위임하는 어댑터라 로직이 없다(멱등 재제출·재시도 포함). userId는 비회원만
+ * 받는다({@link LegacyGuestGuard}) — 세션 상세는 조회 조건이 (id, userId)라 소유자도 비회원이어야 보인다.
  * 강제 업데이트(BY-531) 뒤 contract 시 이 클래스와 Legacy DTO를 삭제한다.
  */
 // Swagger에 싣지 않는다 — springdoc은 같은 경로+메서드를 하나로 합쳐 토큰 계약(v2) 문서를 덮어쓴다.
@@ -39,17 +40,19 @@ public class LegacyStudySessionController {
 
     private final StudySessionController studySessionController;
     private final ActiveStudySessionController activeStudySessionController;
-    private final UserService userService;
     private final StudySessionService studySessionService;
+    private final LegacyGuestGuard legacyGuestGuard;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public List<StudySessionResponse> create(@Valid @RequestBody LegacyStudySessionCreateRequest request) {
+        legacyGuestGuard.requireGuest(request.userId());
         return studySessionController.create(request.userId(), request.toRequest());
     }
 
     @GetMapping("/{id}")
     public StudySessionResponse detail(@PathVariable Long id, @RequestParam Long userId) {
+        legacyGuestGuard.requireGuest(userId);
         // 익명 userId 경로라 과목·할 일 이름은 싣지 않는다 (BY-734) — 구 앱은 그 필드를 읽지 않는다
         return studySessionService.findById(userId, id, false);
     }
@@ -59,17 +62,19 @@ public class LegacyStudySessionController {
     public void report(@Valid @RequestBody LegacyActiveSessionSnapshotRequest request) {
         // 토큰 계약은 유효한 토큰이 곧 실존 유저지만 여기는 아무 숫자나 올 수 있다 — 없는 유저를 버퍼에 넣으면 flush 때
         // FK 위반으로 배치가 통째로 롤백되고 정상 유저 행까지 개별 재시도로 밀린다. 404(USER_NOT_FOUND)로 먼저 끊는다
-        userService.getProfile(request.userId());
+        legacyGuestGuard.requireGuest(request.userId());
         activeStudySessionController.report(request.userId(), request.toRequest());
     }
 
     @GetMapping("/active")
     public ActiveSessionSnapshotResponse restore(@RequestParam Long userId) {
+        legacyGuestGuard.requireGuest(userId);
         return activeStudySessionController.restore(userId);
     }
 
     @PostMapping("/recovery")
     public SessionRecoveryResponse recover(@RequestParam Long userId) {
+        legacyGuestGuard.requireGuest(userId);
         return activeStudySessionController.recover(userId);
     }
 }

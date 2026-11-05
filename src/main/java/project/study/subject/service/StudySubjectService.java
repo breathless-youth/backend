@@ -25,6 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
 import project.study.common.exception.NotFoundException;
+import project.study.planner.dto.PlannerTaskRequests;
+import project.study.planner.service.PlannerCalendar;
+import project.study.planner.service.PlannerTaskService;
 import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.CompletedTaskResponse;
 import project.study.studysession.dto.DaySubjectResponse;
@@ -63,18 +66,14 @@ public class StudySubjectService implements SubjectLookupProvider {
     private final StudySessionSubjectSegmentRepository subjectSegmentRepository;
     private final Clock clock;
     private final UserTimeZones userTimeZones;
+    private final PlannerTaskService plannerTasks;
 
     @Transactional(readOnly = true)
     public List<SubjectResponse> list(Long userId) {
         return toResponses(userId, liveSubjects(userId));
     }
 
-    /**
-     * 상한·다음 순서·이름 중복은 살아있는 과목 목록(≤ 20건) 한 번으로 계산한다 — 별도 집계 쿼리를 두지 않는다.
-     * 색과 되살리기는 지운 과목 목록도 한 번 읽는다.
-     * 지운 과목과 같은 이름이면 새로 만들지 않고 그 과목을 되살린다 — id가 이어져 세션 기록이 한 과목으로 모인다.
-     * 되살린 과목의 할 일은 지운 채로 둔다.
-     */
+    /** 색·순서·이름을 사용자 락 안에서 정한다. 동명 삭제 과목은 id/시간을 유지해 복원하되 할 일은 복원하지 않는다. */
     @Transactional
     public SubjectResponse create(Long userId, String name) {
         lockRepository.lockUser(userId); // 동시 생성이 같은 색·순서·이름을 받지 않게 사용자 단위로 직렬화
@@ -118,11 +117,7 @@ public class StudySubjectService implements SubjectLookupProvider {
         return toResponses(userId, List.of(subject)).get(0);
     }
 
-    /**
-     * 순서를 통째로 저장한다 — 보낸 순서대로 0부터, 빠진 살아있는 과목은 기존 순서 그대로 뒤에 (ADR-0022).
-     * 남의·지운·없는·중복 id가 섞이면 400이고 아무것도 바뀌지 않는다. 동시 저장은 행마다 나중 쓰기가 이기지만
-     * 목록이 (sort_order, id)로 정렬되므로 어떤 조합이든 전순서다.
-     */
+    /** 순서를 저장한다. 빠진 과목은 기존 상대 순서로 뒤에 두고 잘못된 id는 전체 거절한다 (ADR-0022). */
     @Transactional
     public List<SubjectResponse> reorder(Long userId, List<Long> subjectIds) {
         Set<Long> listed = new HashSet<>(subjectIds);
@@ -147,20 +142,19 @@ public class StudySubjectService implements SubjectLookupProvider {
     /** soft delete — 하위 할 일도 함께 숨긴다. 세션에 쌓인 시간 기록은 그대로 남는다. */
     @Transactional
     public void delete(Long userId, Long subjectId) {
+        lockRepository.lockUser(userId);
         StudySubject subject = ownedSubject(userId, subjectId);
         Instant now = clock.instant();
+        plannerTasks.deleteSubjectPlan(userId, subjectId);
         subject.delete(now);
         taskRepository.softDeleteBySubjectId(subjectId, now);
     }
 
     @Transactional
     public TaskResponse addTask(Long userId, Long subjectId, String name) {
-        ownedSubject(userId, subjectId);
-        if (taskRepository.countBySubjectIdAndDeletedAtIsNull(subjectId) >= MAX_TASKS_PER_SUBJECT) {
-            throw new BadRequestException("할 일은 과목당 최대 " + MAX_TASKS_PER_SUBJECT + "개까지 만들 수 있습니다");
-        }
-        StudyTask task = taskRepository.save(new StudyTask(subjectId, name.strip()));
-        return new TaskResponse(task.getId(), task.getName(), task.getDoneAt());
+        LocalDate today = PlannerCalendar.today(clock, userTimeZones.zoneOf(userId));
+        var task = plannerTasks.create(userId, new PlannerTaskRequests.Create(subjectId, today, name, null), null);
+        return new TaskResponse(task.taskId(), task.name(), task.doneAt());
     }
 
     @Transactional
@@ -169,7 +163,17 @@ public class StudySubjectService implements SubjectLookupProvider {
             throw new BadRequestException("바꿀 값이 없습니다 — name 또는 done을 보내야 합니다");
         }
         ownedSubject(userId, subjectId);
+        lockRepository.lockUser(userId);
         StudyTask task = ownedTask(subjectId, taskId);
+        if (task.getSeriesId() != null) {
+            var changed = plannerTasks.update(
+                    userId,
+                    "t:" + taskId,
+                    new PlannerTaskRequests.Update(request.name(), request.done(), PlannerTaskRequests.Scope.THIS),
+                    null);
+            return new TaskResponse(changed.taskId(), changed.name(), changed.doneAt());
+        }
+        StudyTaskPlanRules.change(task, request, PlannerCalendar.today(clock, userTimeZones.zoneOf(userId)));
         if (request.name() != null) {
             if (request.name().isBlank()) {
                 throw new BadRequestException("name은 비어 있을 수 없습니다");
@@ -177,7 +181,7 @@ public class StudySubjectService implements SubjectLookupProvider {
             task.rename(request.name().strip());
         }
         if (Boolean.TRUE.equals(request.done())) {
-            task.markDone(clock.instant());
+            if (task.getDoneAt() == null) task.markDone(clock.instant());
         } else if (Boolean.FALSE.equals(request.done())) {
             task.clearDone();
         }
@@ -187,7 +191,14 @@ public class StudySubjectService implements SubjectLookupProvider {
     @Transactional
     public void deleteTask(Long userId, Long subjectId, Long taskId) {
         ownedSubject(userId, subjectId);
-        ownedTask(subjectId, taskId).delete(clock.instant());
+        lockRepository.lockUser(userId);
+        StudyTask task = ownedTask(subjectId, taskId);
+        if (task.getSeriesId() != null) {
+            plannerTasks.delete(userId, "t:" + taskId, PlannerTaskRequests.Scope.THIS, null);
+            return;
+        }
+        StudyTaskPlanRules.delete(task, PlannerCalendar.today(clock, userTimeZones.zoneOf(userId)));
+        task.delete(clock.instant());
     }
 
     /**
@@ -207,10 +218,7 @@ public class StudySubjectService implements SubjectLookupProvider {
         }
     }
 
-    /**
-     * 세션 제출의 완료 할 일이 토큰 유저의 것인지 확인하고, 자정 분할 귀속에 쓸 완료 시각을 붙여 돌려준다 (ADR-0022).
-     * 과목(assertOwned)과 같은 이유로 삭제 여부는 보지 않는다. 위반은 400.
-     */
+    /** 완료 할 일 소유를 검증하고 자정 귀속용 시각을 붙인다. 삭제 이력은 허용한다 (ADR-0022). */
     @Transactional(readOnly = true)
     public List<CompletedTask> assertTasksOwned(Long userId, List<Long> taskIds) {
         if (taskIds.isEmpty()) {
@@ -226,11 +234,7 @@ public class StudySubjectService implements SubjectLookupProvider {
                 .toList();
     }
 
-    /**
-     * 세션 응답에 실을 과목·할 일 이름 (BY-734). deleted_at을 무시한다 — 세션 기록은 지운 과목·할 일도 남기고,
-     * 할 일 목록 API는 "미완료 + 오늘 완료"만 주므로 어제 완료한 할 일의 이름은 이 경로가 유일한 출처다.
-     * 소유는 세션이 이미 그 유저 것이라 다시 보지 않는다.
-     */
+    /** 세션이 참조한 과목·할 일의 이름. 삭제 이력도 포함한다 (BY-734). */
     @Override
     @Transactional(readOnly = true)
     public SubjectLookup lookup(Collection<Long> subjectIds, Collection<Long> taskIds) {
@@ -361,8 +365,9 @@ public class StudySubjectService implements SubjectLookupProvider {
         ZoneId zone = userTimeZones.zoneOf(userId);
         Instant todayStart =
                 clock.instant().atZone(zone).toLocalDate().atStartOfDay(zone).toInstant();
-        Map<Long, List<StudyTask>> tasksBySubject = taskRepository.findVisible(subjectIds, todayStart).stream()
-                .collect(groupingBy(StudyTask::getSubjectId));
+        Map<Long, List<StudyTask>> tasksBySubject =
+                taskRepository.findVisible(subjectIds, todayStart, PlannerCalendar.today(clock, zone)).stream()
+                        .collect(groupingBy(StudyTask::getSubjectId));
         Map<Long, SubjectTimeSum> subjectSums = index(subjectSegmentRepository.sumBySubjectIds(subjectIds));
 
         return subjects.stream()

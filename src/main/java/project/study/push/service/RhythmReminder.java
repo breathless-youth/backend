@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import project.study.common.time.DefaultTimeZone;
 import project.study.push.dto.PushMessage;
 import project.study.push.dto.PushResult;
+import project.study.push.dto.PushText;
 import project.study.push.repository.PushExperimentQueries;
 import project.study.push.repository.RhythmReminderQueries;
 import project.study.push.repository.RhythmReminderQueries.Candidate;
@@ -62,9 +63,14 @@ public class RhythmReminder {
     private static final int DAY_START_HOUR = 5;
     private static final int PEAK_SPAN_HOURS = 2;
 
-    private static final PushContent PEAK = new PushContent("내 뇌가 가장 똑똑해지는 시간 🧠", "가장 집중 잘되는 시간이에요. 오늘도 달려볼까요?");
-    private static final PushContent USUAL =
-            new PushContent("딱 5분만 눈 딱 감고 켜봐요 ⏱️", "오늘 공부, 길게 할 필요 없어요. 평소 시작하던 시간에 5분만 가볍게 워밍업!");
+    private static final PushContent PEAK = new PushContent(
+            new PushText("내 뇌가 가장 똑똑해지는 시간 🧠", "가장 집중 잘되는 시간이에요. 오늘도 달려볼까요?"),
+            new PushText("Your brain's sharpest hour 🧠", "This is when you focus best. Let's make today count."));
+    private static final PushContent USUAL = new PushContent(
+            new PushText("딱 5분만 눈 딱 감고 켜봐요 ⏱️", "오늘 공부, 길게 할 필요 없어요. 평소 시작하던 시간에 5분만 가볍게 워밍업!"),
+            new PushText(
+                    "Just give it 5 minutes ⏱️",
+                    "No need to study long today. Warm up for 5 minutes at your usual start time."));
 
     private final RhythmReminderQueries queries;
     private final PushExperimentQueries sendLog;
@@ -217,12 +223,12 @@ public class RhythmReminder {
         }
         PushContent content = TYPE_PEAK.equals(type) ? PEAK : USUAL;
         PushResult result =
-                pushSender.send(List.of(userId), new PushMessage(content.title(), content.body(), LINK, type, pushId));
+                pushSender.send(List.of(userId), new PushMessage(content.ko(), content.en(), LINK, type, pushId));
         sendLog.recordAccepted(pushId, result.sent());
     }
 
     /** grid가 있으면 피크 알림, 없으면 usual 시각의 평균 알림이다. */
     private record Profile(long userId, ZoneId zone, int[][] grid, LocalTime usual) {}
 
-    private record PushContent(String title, String body) {}
+    private record PushContent(PushText ko, PushText en) {}
 }

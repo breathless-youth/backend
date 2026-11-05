@@ -20,8 +20,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
+import project.study.user.dto.DeleteAccountRequest;
 import project.study.user.dto.ProfileImageUpdateRequest;
 import project.study.user.dto.ProfileImageUploadUrlRequest;
 import project.study.user.dto.ProfileImageUploadUrlResponse;
@@ -29,7 +31,9 @@ import project.study.user.dto.ProfileResponse;
 import project.study.user.dto.ProfileUpdateRequest;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
+import project.study.user.service.AccountDeletionService;
 import project.study.user.service.AuthService;
+import project.study.user.service.DeviceRegistrationService;
 import project.study.user.service.ProfileImageService;
 import project.study.user.service.UserService;
 
@@ -41,8 +45,9 @@ import project.study.user.service.UserService;
 public class UserController {
 
     private final UserService userService;
-    private final AuthService authService;
+    private final DeviceRegistrationService deviceRegistrationService;
     private final ProfileImageService profileImageService;
+    private final AccountDeletionService accountDeletionService;
 
     @Operation(summary = "익명 기기 유저 등록 (토큰 발급)", description = """
                     앱은 첫 실행 때 **UUID**를 하나 생성해 기기 보안 저장소에 보관하고, \
@@ -80,9 +85,8 @@ public class UserController {
     @SecurityRequirements // 인증 없이 호출하는 유일한 등록 경로 — 여기서 토큰이 시작된다
     @PostMapping(version = "2")
     public ResponseEntity<UserRegisterResponse> register(@Valid @RequestBody UserRegisterRequest request) {
-        UserService.RegisterResult result = userService.register(request);
-        // 등록과 발급은 별도 트랜잭션이다 — 발급이 실패해도 유저는 남고, 재호출(멱등)이 토큰을 채운다
-        AuthService.TokenPair tokens = authService.issueTokensRevokingExisting(result.userId());
+        DeviceRegistrationService.Registration result = deviceRegistrationService.register(request);
+        AuthService.TokenPair tokens = result.tokens();
         UserRegisterResponse response =
                 new UserRegisterResponse(result.isNew(), tokens.accessToken(), tokens.refreshToken());
         // 신규 등록은 201, 같은 기기의 재등록(멱등)은 200
@@ -93,7 +97,8 @@ public class UserController {
     @Operation(summary = "내 프로필 조회", description = """
                     토큰의 유저 프로필(닉네임·한줄 목표·카테고리·아바타 정보)을 조회한다. \
                     최초 프로필은 유저 등록(POST /api/users) 시점에 자동 발급된다 — \
-                    닉네임 `포메{랜덤5자리}`, goal·category는 null.""")
+                    닉네임은 등록 때 보낸 휴대폰 언어(`language`) 목록의 `꾸미는 말 + 동물`(예: `벼락치기하는 수달`, `Caffeinated Capybara`, `一夜漬けするラッコ`), \
+                    이니셜은 닉네임 첫 글자, goal·category는 null.""")
     @ApiResponse(responseCode = "200", description = "조회 성공")
     @ApiResponse(
             responseCode = "404",
@@ -114,7 +119,9 @@ public class UserController {
     @ApiResponse(responseCode = "200", description = "수정 성공 — 수정된 전체 프로필 반환")
     @ApiResponse(
             responseCode = "400",
-            description = "검증 실패 — 닉네임 형식(한글·영문·숫자·이모지·띄어쓰기, 앞뒤 공백 제외 2~12자), 목표 길이(20자), 카테고리 값",
+            description = "검증 실패 — 닉네임 형식(다국어 허용 글자, 앞뒤 공백 제외 1글자 이상 40칸 이하)·목표 길이(20자)·카테고리 값은 "
+                    + "`VALIDATION_FAILED`, 닉네임에 욕설·성적 표현·혐오 표현이 있거나 운영자로 보이는 이름이면 `NICKNAME_NOT_ALLOWED`"
+                    + "(어느 단어에 걸렸는지는 알려주지 않는다. 지금 닉네임을 그대로 보내면 검사하지 않는다)",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -123,15 +130,18 @@ public class UserController {
                                 @ExampleObject(
                                         name = "닉네임 형식",
                                         value =
-                                                "{\"message\": \"nickname: 닉네임은 한글·영문·숫자·이모지·띄어쓰기만 쓸 수 있고, 앞뒤 공백을 제외하고 2~12자여야 합니다\"}"),
+                                                "{\"message\": \"nickname: 닉네임은 한글·영문·일본어·한자·숫자·이모지·띄어쓰기·_ . -만 쓸 수 있고, 1글자 이상 40칸 이하여야 합니다(한글·한자·가나·이모지는 2칸)\"}"),
                                 @ExampleObject(
                                         name = "목표 길이",
                                         value = "{\"message\": \"goal: 목표는 공백 포함 20자 이하여야 합니다\"}"),
-                                @ExampleObject(name = "카테고리", value = "{\"message\": \"category: 정의되지 않은 카테고리입니다\"}")
+                                @ExampleObject(name = "카테고리", value = "{\"message\": \"category: 정의되지 않은 카테고리입니다\"}"),
+                                @ExampleObject(
+                                        name = "쓸 수 없는 닉네임",
+                                        value = "{\"code\": \"NICKNAME_NOT_ALLOWED\", \"message\": \"쓸 수 없는 닉네임이에요\"}")
                             }))
     @ApiResponse(
             responseCode = "409",
-            description = "이미 사용 중인 닉네임",
+            description = "이미 사용 중인 닉네임 — 영문 대소문자·전각만 다른 닉네임도 같은 닉네임으로 본다",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -181,5 +191,37 @@ public class UserController {
     @DeleteMapping(value = "/me/profile-image", version = "1")
     public ProfileResponse deleteProfileImage(@AuthenticationPrincipal Long userId) {
         return profileImageService.deleteProfileImage(userId);
+    }
+
+    @Operation(summary = "계정 삭제(탈퇴)", description = """
+                    계정과 이 계정의 모든 데이터(공부 기록·과목·방 참가 이력·랭킹·프로필 사진 등)를 즉시 지운다. **되돌릴 수 없다.** \
+                    모든 기기가 로그아웃되고(refresh 전량 무효), 공부방에 있으면 먼저 나간다. 같은 소셜 계정으로 다시 로그인하면 새 가입이다.
+
+                    애플 계정은 앱이 애플 로그인을 다시 띄워 받은 `appleAuthorizationCode`와 `appleClient`를 본문에 함께 보낸다. \
+                    다른 계정과 비회원은 본문이 없어도 된다. 이미 삭제된 계정이어도 204다.""")
+    @ApiResponse(responseCode = "204", description = "삭제됨 — 본문 없음. 앱은 저장된 토큰을 지우고 `POST /api/users`로 새 비회원이 된다")
+    @ApiResponse(
+            responseCode = "400",
+            description =
+                    "`VALIDATION_FAILED`: appleAuthorizationCode가 1024자 초과이거나, appleAuthorizationCode만 있고 appleClient가 없음. "
+                            + "`BAD_REQUEST`: 본문을 읽을 수 없음 — `IOS`·`ANDROID` 밖의 appleClient 값도 여기다. 어느 쪽이든 지우지 않는다",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "우리 access 토큰이 없거나 무효 — 기존 refresh 흐름",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples =
+                                    @ExampleObject(value = "{\"code\": \"UNAUTHORIZED\", \"message\": \"인증이 필요합니다\"}")))
+    @DeleteMapping(value = "/me", version = "1")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteAccount(
+            @AuthenticationPrincipal Long userId, @RequestBody(required = false) @Valid DeleteAccountRequest request) {
+        accountDeletionService.delete(userId, request);
     }
 }

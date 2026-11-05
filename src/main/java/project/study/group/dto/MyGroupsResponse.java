@@ -12,7 +12,12 @@ public record MyGroupsResponse(
         @Schema(description = "답을 기다리는 내 신청 수 (최대 3)", example = "1")
         int pendingApplicationCount,
 
-        @Schema(description = "내가 그룹장인 그룹 수", example = "1") int ownedGroupCount,
+        // 배포된 웹이 그룹 만들기 버튼을 이 값으로 막는다. 응답에서 빼면 undefined < 2가 거짓이라 모두 막히므로 웹이 바뀐 뒤 지운다 (ADR-0040 결정 15)
+        @Schema(
+                description = "내가 그룹장인 그룹 수 — 쓰지 않는다. 그룹 만들기 가능 여부는 `groups` 수 + `pendingApplicationCount`로 본다",
+                example = "1",
+                deprecated = true)
+        int ownedGroupCount,
 
         @Schema(description = "한도 — 화면의 \"n/5\" 같은 표시와 버튼 막기에 쓴다")
         GroupLimits limits) {

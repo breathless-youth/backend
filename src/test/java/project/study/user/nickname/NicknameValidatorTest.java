@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
-/** 허용 목록(한글·영문·숫자·이모지·띄어쓰기) + 앞뒤 공백 제외 2~12자 (BY-647). */
+/** 허용 목록(한글·영문·일본어·한자·숫자·이모지·띄어쓰기·_ . -) + 앞뒤 공백 제외 1글자 이상 40칸 이하 (BY-647, BY-1135). */
 class NicknameValidatorTest {
 
     private final NicknameValidator validator = new NicknameValidator();
@@ -29,7 +29,7 @@ class NicknameValidatorTest {
     @Test
     void 앞뒤_공백은_잘라낸_뒤_길이를_잰다() {
         assertThat(valid("  홍길동  ")).isTrue();
-        assertThat(valid(" a ")).isFalse(); // 잘라내면 1자
+        assertThat(valid(" a ")).isTrue(); // 잘라내면 1자 — 하한은 1글자
     }
 
     @Test
@@ -38,18 +38,37 @@ class NicknameValidatorTest {
     }
 
     @Test
+    void 일본어_중국어_밑줄_점_하이픈_악센트_라틴을_허용한다() {
+        assertThat(valid("猫")).isTrue();
+        assertThat(valid("a")).isTrue();
+        assertThat(valid("一夜漬けするラッコ")).isTrue();
+        assertThat(valid("佐々木")).isTrue();
+        assertThat(valid("ハムスター")).isTrue();
+        assertThat(valid("熬夜复习的考拉")).isTrue();
+        assertThat(valid("捱夜溫書嘅樹熊")).isTrue();
+        assertThat(valid("study_otter")).isTrue();
+        assertThat(valid("j.kim")).isTrue();
+        assertThat(valid("Jean-Luc")).isTrue();
+        assertThat(valid("José")).isTrue();
+        assertThat(valid("벼락치기하는 하늘다람쥐")).isTrue();
+    }
+
+    @Test
     void 문장부호_다른_언어_자음모음_단독은_거부한다() {
         assertThat(valid("느낌표금지!")).isFalse();
-        assertThat(valid("日本語ニック")).isFalse();
+        assertThat(valid("中・日")).isFalse(); // 가운뎃점은 문장부호
         assertThat(valid("ㅋㅋㅋ")).isFalse();
-        assertThat(valid("under_score")).isFalse();
+        assertThat(valid("ㅅㅂ")).isFalse();
+        assertThat(valid("नमस्ते")).isFalse(); // 데바나가리
+        assertThat(valid("Привет")).isFalse(); // 키릴
+        assertThat(valid("a!b")).isFalse();
     }
 
     @Test
     void 보이지_않는_글자는_지우지_않고_거부한다() {
         assertThat(valid("홍길​동")).isFalse(); // 제로폭 공백
         assertThat(valid("홍길‍동")).isFalse(); // 단독 ZWJ
-        assertThat(valid("홍길 동")).isFalse(); // NBSP
+        assertThat(valid("홍길 동")).isTrue(); // NBSP는 NFKC가 보통 띄어쓰기로 바꾼다
         assertThat(valid("홍길\t동")).isFalse();
         assertThat(valid("😀‍a")).isFalse(); // 이모지 뒤에 남은 ZWJ
         assertThat(valid("😀‌a")).isFalse(); // ZWNJ
@@ -65,13 +84,15 @@ class NicknameValidatorTest {
     }
 
     @Test
-    void 길이_경계는_2자와_12자다() {
-        assertThat(valid("가나")).isTrue();
-        assertThat(valid("가나다라마바사아자차카타")).isTrue(); // 12자
-        assertThat(valid("가")).isFalse();
-        assertThat(valid("가나다라마바사아자차카타파")).isFalse(); // 13자
-        assertThat(valid("🇰🇷".repeat(12))).isTrue(); // 국기 12개 = 12자
-        assertThat(valid("🇰🇷".repeat(13))).isFalse();
+    void 길이_경계는_1글자와_40칸이다() {
+        assertThat(valid("가")).isTrue();
+        assertThat(valid("가".repeat(20))).isTrue(); // 40칸
+        assertThat(valid("가".repeat(20) + "a")).isFalse(); // 41칸
+        assertThat(valid("a".repeat(40))).isTrue();
+        assertThat(valid("a".repeat(41))).isFalse();
+        assertThat(valid("😀".repeat(20))).isTrue(); // 이모지 2칸 × 20
+        assertThat(valid("🇰🇷".repeat(20))).isTrue();
+        assertThat(valid("🇰🇷".repeat(21))).isFalse();
     }
 
     @Test

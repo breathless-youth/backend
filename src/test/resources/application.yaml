@@ -1,11 +1,17 @@
 # 테스트 전용 설정: @SpringBootTest 컨텍스트 기동에 필요한 최소값
 oauth:
   google:
-    client-id: test-google-client-id
+    client-ids: test-google-client-id
   kakao:
-    app-key: test-kakao-app-key
+    app-keys: test-kakao-app-key
   apple:
-    client-id: test-apple-client-id
+    bundle-ids: test-apple-bundle-id
+    services-id: ""
+    team-id: ""
+    key-id: ""
+    private-key: ""
+    web-redirect-uri: ""
+    android-callback-redirect: ""
 
 jwt:
   secret: test-secret-key-that-is-at-least-32-chars-long
