@@ -77,7 +77,7 @@ public class RankingSource {
         return studySessionService.streak(userId, null, null).streak();
     }
 
-    /** from~to 중 순공 1분 이상 측정 조각이 있는 날 수 — 누적 일수의 최근 페이스 계산용. */
+    /** from~to 중 순공 1초 이상 측정 조각이 있는 날 수 — 누적 일수의 최근 페이스 계산용. */
     @Transactional(readOnly = true)
     public int studiedDays(long userId, LocalDate from, LocalDate to) {
         return studySessionRepository

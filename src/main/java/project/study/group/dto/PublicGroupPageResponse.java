@@ -16,7 +16,7 @@ public record PublicGroupPageResponse(
     /** 이번 주 평균 순공 설명 — 공개 그룹 카드와 공개 그룹 보기가 같은 값을 쓴다. */
     static final String WEEKLY_AVERAGE_FOCUS_DESCRIPTION = "평균 순공(초) — 지금 멤버들의 이번 주(월요일 0시 KST부터) 앱 전체 순공 합 ÷ 지금 멤버 수. "
             + "주 중간에 들어온 멤버도 이번 주 순공이 모두 들어가고 나간 멤버는 빠진다. "
-            + "측정 세션만, 1분 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신";
+            + "측정 세션만, 1초 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신";
 
     public record PublicGroupCard(
             @Schema(description = "그룹 ID", example = "10") long groupId,

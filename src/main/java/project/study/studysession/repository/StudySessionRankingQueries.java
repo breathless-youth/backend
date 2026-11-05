@@ -28,7 +28,7 @@ import project.study.studysession.entity.TimeSlot;
  * userId를 주면 그 사용자 한 줄만 계산한다(내 값은 캐시와 상관없이 매번 새로 읽는다). 탈퇴(DELETE) 사용자는 뺀다.
  * 사용자 시간대가 서울인 사용자의, 서울에서 기록한 세션만 센다(ADR-0041) — 랭킹 창이 KST라 다른 시간대의 stat_date·slot_date가
  * 섞이면 하루가 어긋난다. 여행에서 돌아온 사용자의 해외 세션도 그래서 뺀다.
- * 기준은 다른 화면과 같다 — 순공 1분 미만 조각 제외(ADR-0009), 연속 일수는 세션 5분 기준.
+ * 기준은 다른 화면과 같다 — 순공 1초 미만 조각 제외(ADR-0009), 연속 일수는 세션 5분 기준.
  * 측정한 세션만 센다 — 수동 기록은 개인 기록에만 더한다(ADR-0031).
  */
 @Repository
@@ -94,7 +94,7 @@ public class StudySessionRankingQueries {
     }
 
     /**
-     * 누적 공부일 — 순공 1분 이상 조각이 있는 날 수(오늘까지). 누적 공부일 API와 같은 숫자다. 같은 조각 중 focusFrom 이후의 순공
+     * 누적 공부일 — 순공 1초 이상 조각이 있는 날 수(오늘까지). 누적 공부일 API와 같은 숫자다. 같은 조각 중 focusFrom 이후의 순공
      * 합(누적 시간 판의 값)을 함께 낸다 — 같은 일수끼리 순서를 가른다.
      */
     public List<RankingDaysRow> studyDays(LocalDate focusFrom, LocalDate today, Long userId) {

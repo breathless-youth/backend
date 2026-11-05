@@ -93,7 +93,7 @@ public class StandingsCalculator {
                 .toList();
     }
 
-    /** 집중률 판의 한 사용자 합계 — 참가 조건과 상관없이. 기간에 1분 이상 조각이 없으면 empty. */
+    /** 집중률 판의 한 사용자 합계 — 참가 조건과 상관없이. 기간에 1초 이상 조각이 없으면 empty. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Optional<RateTotals> rateTotals(
             RankingBoard board, Window window, Instant asOf, List<LivePiece> live, long userId) {

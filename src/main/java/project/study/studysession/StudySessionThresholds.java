@@ -6,8 +6,8 @@ package project.study.studysession;
  */
 public final class StudySessionThresholds {
 
-    /** 1분 — 조회에 보이는 최소 순공시간. */
-    public static final int MIN_LIST_FOCUS_SEC = 60;
+    /** 1초 — 조회에 보이는 최소 순공시간. */
+    public static final int MIN_LIST_FOCUS_SEC = 1;
 
     /** 5분 — 스트릭 인정 최소 순공시간(세션 단위). */
     public static final int MIN_STREAK_FOCUS_SEC = 300;
