@@ -74,6 +74,9 @@ app:
     # 알림을 허용한 토큰이 있는 사용자만 대상이라 토큰을 등록하지 않는 구 앱 사용자는 빠진다. d0-delay는 기본 PT2H
     first-session-experiment:
       enabled: true
+    # 정기 맞춤 알림 (ADR-0042). 실제 사용자에게 보낸다 — 끄려면 false로 되돌린다
+    rhythm-reminder:
+      enabled: true
   # 메타 설치 정보 복호화 키 (BY-1066, ADR-0036). 값이 없으면 복호화만 꺼진 채 기동한다 — 운영은 ECS가 SSM meta/install-referrer-key를 주입
   acquisition:
     meta-install-referrer-key: ${META_INSTALL_REFERRER_KEY:}
