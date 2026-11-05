@@ -1,6 +1,10 @@
 package project.study.push.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.google.api.client.http.LowLevelHttpRequest;
 import com.google.api.client.http.LowLevelHttpResponse;
@@ -31,6 +35,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import project.study.TestcontainersConfiguration;
 import project.study.push.dto.PushMessage;
 import project.study.push.dto.PushResult;
+import project.study.push.dto.PushText;
 import project.study.push.repository.PushTokenRepository;
 
 /**
@@ -41,7 +46,8 @@ import project.study.push.repository.PushTokenRepository;
 @Import(TestcontainersConfiguration.class)
 class PushSenderTest {
 
-    private static final PushMessage MESSAGE = new PushMessage("제목", "본문", "/records", "test");
+    private static final PushMessage MESSAGE =
+            new PushMessage(new PushText("제목", "본문"), new PushText("Title", "Body"), "/records", "test");
 
     @Autowired
     private PushTokenRepository pushTokenRepository;
@@ -81,13 +87,27 @@ class PushSenderTest {
     }
 
     private String insertToken(Long userId, String prefix) {
+        return insertToken(userId, prefix, "ko");
+    }
+
+    private String insertToken(Long userId, String prefix, String locale) {
         String token = prefix + "-" + UUID.randomUUID();
         jdbcTemplate.update(
-                "INSERT INTO push_token (user_id, token, platform, notifications_enabled, created_at, updated_at)"
-                        + " VALUES (?, ?, 'IOS', true, now(), now())",
+                "INSERT INTO push_token (user_id, token, platform, notifications_enabled, locale, created_at, updated_at)"
+                        + " VALUES (?, ?, 'IOS', true, ?, now(), now())",
                 userId,
-                token);
+                token,
+                locale);
         return token;
+    }
+
+    /** 이 토큰으로 나간 요청 본문. */
+    private String requestTo(String token) {
+        return requests.entrySet().stream()
+                .filter(e -> e.getValue().equals(token))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElseThrow();
     }
 
     private boolean exists(String token) {
@@ -160,6 +180,87 @@ class PushSenderTest {
                 .contains("\"type\":\"test\"")
                 .contains("\"analytics_label\":\"test\"")
                 .contains("\"sound\":\"default\"");
+    }
+
+    @Test
+    void 한국어_기기는_한국어_문구를_받고_ko_KR도_한국어로_본다() {
+        Long user = insertUser();
+        String ko = insertToken(user, "ok", "ko");
+        String koKr = insertToken(user, "ok", "ko-KR");
+
+        sender.send(List.of(user), MESSAGE);
+
+        assertThat(requestTo(ko)).contains("\"title\":\"제목\"").contains("\"body\":\"본문\"");
+        assertThat(requestTo(koKr)).contains("\"title\":\"제목\"");
+    }
+
+    @Test
+    void 한국어_판별은_대소문자를_가리지_않는다() {
+        Long user = insertUser();
+        String upper = insertToken(user, "ok", "KO");
+        String mixed = insertToken(user, "ok", "Ko-KR");
+
+        sender.send(List.of(user), MESSAGE);
+
+        assertThat(requestTo(upper)).contains("\"title\":\"제목\"");
+        assertThat(requestTo(mixed)).contains("\"title\":\"제목\"");
+    }
+
+    @Test
+    void 한국어가_아닌_기기는_모두_영어_문구를_받는다() {
+        Long user = insertUser();
+        List<String> others =
+                List.of(insertToken(user, "ok", "en"), insertToken(user, "ok", "ja"), insertToken(user, "ok", "fr"));
+
+        sender.send(List.of(user), MESSAGE);
+
+        others.forEach(token ->
+                assertThat(requestTo(token)).contains("\"title\":\"Title\"").contains("\"body\":\"Body\""));
+    }
+
+    @Test
+    void 한_사람의_기기가_두_언어면_언어마다_따로_보낸다() throws Exception {
+        Long user = insertUser();
+        insertToken(user, "ok", "ko");
+        insertToken(user, "ok", "en");
+        FirebaseMessaging messaging = spy(FirebaseMessaging.getInstance(app));
+
+        PushResult result = new PushSender(pushTokenRepository, messaging).send(List.of(user), MESSAGE);
+
+        assertThat(result).isEqualTo(new PushResult(2, 0, 0));
+        verify(messaging, times(2)).sendEachForMulticast(any());
+    }
+
+    @Test
+    void 언어마다_500개씩_나눠_보낸다() {
+        Long user = insertUser();
+        IntStream.range(0, 501).forEach(i -> insertToken(user, "ok", "en"));
+        String ko = insertToken(user, "ok", "ko");
+
+        PushResult result = sender.send(List.of(user), MESSAGE);
+
+        assertThat(result.sent()).isEqualTo(502);
+        assertThat(requestTo(ko)).contains("\"title\":\"제목\"");
+        assertThat(requests.keySet())
+                .filteredOn(body -> body.contains("\"title\":\"Title\""))
+                .hasSize(501);
+    }
+
+    @Test
+    void 언어가_달라도_UNREGISTERED만_지우고_결과를_합친다() {
+        Long user = insertUser();
+        String koDead = insertToken(user, "dead", "ko");
+        insertToken(user, "ok", "ko");
+        String enDead = insertToken(user, "dead", "en");
+        String enBad = insertToken(user, "bad", "en");
+        insertToken(user, "ok", "en");
+
+        PushResult result = sender.send(List.of(user), MESSAGE);
+
+        assertThat(result).isEqualTo(new PushResult(2, 1, 2));
+        assertThat(exists(koDead)).isFalse();
+        assertThat(exists(enDead)).isFalse();
+        assertThat(exists(enBad)).isTrue();
     }
 
     @Test

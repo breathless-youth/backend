@@ -113,8 +113,8 @@ class GroupApplyApiTest {
 
         PushMessage message = pushedOnceTo(pushSender, owner);
         assertThat(message.type()).isEqualTo("group_application_received");
-        assertThat(message.title()).isEqualTo("새 신청을 확인해 볼까요?");
-        assertThat(message.body())
+        assertThat(message.ko().title()).isEqualTo("새 신청을 확인해 볼까요?");
+        assertThat(message.ko().body())
                 .isEqualTo(GroupProbe.nickname("신청자", applicant) + "님이 "
                         + probe.group(group).orElseThrow().name() + "에 신청했어요");
         assertThat(message.link()).isEqualTo("/groups/" + group + "/applications");
@@ -127,7 +127,7 @@ class GroupApplyApiTest {
 
         assertThat(apply(nameless, group, "안녕하세요")).hasStatus(HttpStatus.CREATED);
 
-        assertThat(pushedOnceTo(pushSender, owner).body()).startsWith("새 사용자님이 ");
+        assertThat(pushedOnceTo(pushSender, owner).ko().body()).startsWith("새 사용자님이 ");
     }
 
     @Test
@@ -323,7 +323,8 @@ class GroupApplyApiTest {
 
         PushMessage expired = pushedOnceTo(pushSender, applicant);
         assertThat(expired.type()).isEqualTo("group_application_expired");
-        assertThat(expired.body()).isEqualTo(probe.group(group).orElseThrow().name() + " 신청은 답이 없어 취소됐어요");
+        assertThat(expired.ko().body())
+                .isEqualTo(probe.group(group).orElseThrow().name() + " 신청은 답이 없어 취소됐어요");
         assertThat(pushedOnceTo(pushSender, owner).type()).isEqualTo("group_application_received");
     }
 

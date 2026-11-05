@@ -85,8 +85,9 @@ class GroupApplicationExpiryTest {
         assertThat(row.answeredAt()).isEqualTo(NOW);
         PushMessage message = pushedOnceTo(pushSender, user);
         assertThat(message.type()).isEqualTo("group_application_expired");
-        assertThat(message.title()).isEqualTo("다른 그룹에 신청해 볼까요?");
-        assertThat(message.body()).isEqualTo(probe.group(group).orElseThrow().name() + " 신청은 답이 없어 취소됐어요");
+        assertThat(message.ko().title()).isEqualTo("다른 그룹에 신청해 볼까요?");
+        assertThat(message.ko().body())
+                .isEqualTo(probe.group(group).orElseThrow().name() + " 신청은 답이 없어 취소됐어요");
         assertThat(message.link()).isEqualTo("/groups?tab=public");
     }
 
@@ -137,7 +138,8 @@ class GroupApplicationExpiryTest {
 
         // user는 두 그룹에 낸 신청이 모두 만료돼 푸시 두 건을 받고, second는 한 건이다
         PushMessage forSecond = pushedOnceTo(pushSender, second);
-        assertThat(forSecond.body()).contains(probe.group(group).orElseThrow().name());
+        assertThat(forSecond.ko().body())
+                .contains(probe.group(group).orElseThrow().name());
         verify(pushSender, timeout(3000).times(2)).send(eq(List.of(user)), any());
     }
 
@@ -152,7 +154,8 @@ class GroupApplicationExpiryTest {
         assertThat(statusOf(id)).isEqualTo("EXPIRED");
         PushMessage message = pushedOnceTo(pushSender, user);
         assertThat(message.type()).isEqualTo("group_application_expired");
-        assertThat(message.body()).isEqualTo(probe.group(gone).orElseThrow().name() + " 신청은 답이 없어 취소됐어요");
+        assertThat(message.ko().body())
+                .isEqualTo(probe.group(gone).orElseThrow().name() + " 신청은 답이 없어 취소됐어요");
     }
 
     @Test

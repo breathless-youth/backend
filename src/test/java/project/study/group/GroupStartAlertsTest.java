@@ -134,8 +134,9 @@ class GroupStartAlertsTest {
 
         PushMessage message = pushedOnceTo(pushSender, receiver);
         assertThat(message.type()).isEqualTo("group_member_started");
-        assertThat(message.title()).isEqualTo(GroupProbe.nickname("공부왕", starter) + "님이 공부를 시작했어요");
-        assertThat(message.body()).isEqualTo(probe.group(group).orElseThrow().name() + "에 같이 공부하러 가 볼까요?");
+        assertThat(message.ko().title()).isEqualTo(GroupProbe.nickname("공부왕", starter) + "님이 공부를 시작했어요");
+        assertThat(message.ko().body())
+                .isEqualTo(probe.group(group).orElseThrow().name() + "에 같이 공부하러 가 볼까요?");
         assertThat(message.link()).isEqualTo("/groups/" + group);
         assertThat(fixture.lastSentAt(receiver, group)).isEqualTo(NOW);
     }
@@ -293,7 +294,7 @@ class GroupStartAlertsTest {
         assertThat(alerts.process(NOW)).isEqualTo(1);
 
         PushMessage message = pushedOnceTo(pushSender, receiver);
-        assertThat(message.title()).startsWith(GroupProbe.nickname("딱10분", exactStarter));
+        assertThat(message.ko().title()).startsWith(GroupProbe.nickname("딱10분", exactStarter));
         // 늦게 올라온 draft는 알리지 않을 뿐 꺼낸 것으로 표시돼 다음 번에 다시 보이지 않는다
         assertThat(alerts.process(NOW.plusSeconds(10))).isZero();
     }
