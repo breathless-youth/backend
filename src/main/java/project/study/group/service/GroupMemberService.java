@@ -98,8 +98,8 @@ public class GroupMemberService {
     }
 
     /**
-     * 그룹장을 넘긴다. 순서: 그룹 행 잠금(없음 404, 그룹장 아님 403) → 자기 자신 400 → 대상이 멤버가 아님 404 → 그룹장 바꾸기. 새 그룹장은
-     * "그룹장 2개" 한도를 보지 않는다(설계). 커밋 뒤 새 그룹장에게 푸시, 열린 공부방에 {@code OWNER_CHANGED}.
+     * 그룹장을 넘긴다. 순서: 그룹 행 잠금(없음 404, 그룹장 아님 403) → 자기 자신 400 → 대상이 멤버가 아님 404 → 그룹장 바꾸기.
+     * 커밋 뒤 새 그룹장에게 푸시, 열린 공부방에 {@code OWNER_CHANGED}.
      */
     @Transactional
     public void transferOwner(Long userId, long groupId, long targetUserId) {

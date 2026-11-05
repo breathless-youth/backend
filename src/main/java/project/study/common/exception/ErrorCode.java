@@ -57,9 +57,6 @@ public enum ErrorCode {
     /** 그룹 멤버가 6명이다 (409) */
     GROUP_FULL,
 
-    /** 그룹장인 그룹이 2개다 (409) */
-    OWNED_GROUP_LIMIT,
-
     /** 이름·소개·신청 소개 글에 연락처나 링크가 있다 (400) */
     CONTACT_NOT_ALLOWED,
 

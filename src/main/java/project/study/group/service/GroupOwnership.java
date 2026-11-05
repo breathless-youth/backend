@@ -23,7 +23,7 @@ public class GroupOwnership {
     private final GroupRoomService groupRooms;
     private final GroupNotifications notifications;
 
-    /** 그룹장을 바꾼다. 커밋 뒤 새 그룹장에게 푸시, 열린 공부방에 {@code OWNER_CHANGED}. 새 그룹장의 "그룹장 2개" 한도는 보지 않는다. */
+    /** 그룹장을 바꾼다. 커밋 뒤 새 그룹장에게 푸시, 열린 공부방에 {@code OWNER_CHANGED}. */
     public void handOver(GroupRow lockedGroup, long newOwnerId, Instant now) {
         requireUpdated(groups.updateOwner(lockedGroup.id(), newOwnerId, now), lockedGroup.id());
         groupRooms.ownerChanged(lockedGroup.id(), newOwnerId);
