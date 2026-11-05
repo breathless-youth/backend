@@ -2,6 +2,8 @@ package project.study.user.oauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
@@ -13,14 +15,16 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.test.web.client.RequestMatcher;
 import org.springframework.web.client.RestClient;
 import project.study.user.entity.Provider;
 
 class KakaoTokenVerifierTest {
 
-    private static final String TOKEN_INFO_URL = "https://kauth.kakao.com/oauth/tokeninfo?id_token=id-token";
+    private static final String TOKEN_INFO_URL = "https://kauth.kakao.com/oauth/tokeninfo";
 
     private final RestClient.Builder builder = RestClient.builder();
     private final MockRestServiceServer server =
@@ -30,9 +34,21 @@ class KakaoTokenVerifierTest {
             new OAuthProperties(
                     null, new OAuthProperties.Kakao(List.of("my-kakao-app-key", "second-kakao-app-key")), null));
 
+    // 카카오 tokeninfo는 POST(form)만 받고 GET은 405다 — 메서드와 본문을 모든 호출에서 고정한다
+    private static RequestMatcher tokenInfoPost() {
+        return request -> {
+            requestTo(TOKEN_INFO_URL).match(request);
+            method(HttpMethod.POST).match(request);
+            content()
+                    .contentTypeCompatibleWith(MediaType.APPLICATION_FORM_URLENCODED)
+                    .match(request);
+            content().string("id_token=id-token").match(request);
+        };
+    }
+
     @Test
     void 유효한_ID_토큰이면_유저정보를_반환한다() {
-        server.expect(requestTo(TOKEN_INFO_URL))
+        server.expect(tokenInfoPost())
                 .andRespond(withSuccess(
                         "{\"aud\":\"my-kakao-app-key\",\"sub\":\"kakao-12345\",\"email\":\"test@kakao.com\"}",
                         MediaType.APPLICATION_JSON));
@@ -45,8 +61,20 @@ class KakaoTokenVerifierTest {
     }
 
     @Test
+    void 토큰은_주소가_아니라_본문으로_보낸다() {
+        // 주소에 실리면 접근 로그에 남고, GET은 카카오가 405로 거절한다
+        server.expect(tokenInfoPost())
+                .andRespond(
+                        withSuccess("{\"aud\":\"my-kakao-app-key\",\"sub\":\"kakao-1\"}", MediaType.APPLICATION_JSON));
+
+        verifier.verify("id-token");
+
+        server.verify();
+    }
+
+    @Test
     void 숫자로_온_exp를_만료_시각으로_담는다() {
-        server.expect(requestTo(TOKEN_INFO_URL))
+        server.expect(tokenInfoPost())
                 .andRespond(withSuccess(
                         "{\"aud\":\"my-kakao-app-key\",\"sub\":\"kakao-12345\",\"exp\":1700000000}",
                         MediaType.APPLICATION_JSON));
@@ -56,7 +84,7 @@ class KakaoTokenVerifierTest {
 
     @Test
     void 목록의_두번째_aud로_발급된_토큰도_통과한다() {
-        server.expect(requestTo(TOKEN_INFO_URL))
+        server.expect(tokenInfoPost())
                 .andRespond(withSuccess(
                         "{\"aud\":\"second-kakao-app-key\",\"sub\":\"kakao-12345\"}", MediaType.APPLICATION_JSON));
 
@@ -65,7 +93,7 @@ class KakaoTokenVerifierTest {
 
     @Test
     void 토큰의_nonce를_그대로_담는다() {
-        server.expect(requestTo(TOKEN_INFO_URL))
+        server.expect(tokenInfoPost())
                 .andRespond(withSuccess(
                         "{\"aud\":\"my-kakao-app-key\",\"sub\":\"kakao-12345\",\"nonce\":\"abc-nonce\"}",
                         MediaType.APPLICATION_JSON));
@@ -75,7 +103,7 @@ class KakaoTokenVerifierTest {
 
     @Test
     void 목록에_없는_aud는_거부한다() {
-        server.expect(requestTo(TOKEN_INFO_URL))
+        server.expect(tokenInfoPost())
                 .andRespond(
                         withSuccess("{\"aud\":\"other-app-key\",\"sub\":\"kakao-12345\"}", MediaType.APPLICATION_JSON));
 
@@ -84,14 +112,14 @@ class KakaoTokenVerifierTest {
 
     @Test
     void 카카오가_거부한_토큰은_예외를_던진다() {
-        server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withBadRequest());
+        server.expect(tokenInfoPost()).andRespond(withBadRequest());
 
         assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(InvalidOAuthTokenException.class);
     }
 
     @Test
     void 네트워크_실패는_토큰_문제가_아니라_프로바이더_장애다() {
-        server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withException(new IOException("connection reset")));
+        server.expect(tokenInfoPost()).andRespond(withException(new IOException("connection reset")));
 
         assertThatThrownBy(() -> verifier.verify("id-token"))
                 .isInstanceOf(SocialProviderUnavailableException.class)
@@ -100,25 +128,24 @@ class KakaoTokenVerifierTest {
 
     @Test
     void 카카오_5xx와_429는_프로바이더_장애다() {
-        server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withServerError());
+        server.expect(tokenInfoPost()).andRespond(withServerError());
         assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(SocialProviderUnavailableException.class);
 
         server.reset();
-        server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withTooManyRequests());
+        server.expect(tokenInfoPost()).andRespond(withTooManyRequests());
         assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(SocialProviderUnavailableException.class);
     }
 
     @Test
     void 읽을_수_없는_응답은_프로바이더_장애다() {
-        server.expect(requestTo(TOKEN_INFO_URL)).andRespond(withSuccess("not-json", MediaType.APPLICATION_JSON));
+        server.expect(tokenInfoPost()).andRespond(withSuccess("not-json", MediaType.APPLICATION_JSON));
 
         assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(SocialProviderUnavailableException.class);
     }
 
     @Test
     void aud가_없는_응답은_거부한다() {
-        server.expect(requestTo(TOKEN_INFO_URL))
-                .andRespond(withSuccess("{\"sub\":\"kakao-12345\"}", MediaType.APPLICATION_JSON));
+        server.expect(tokenInfoPost()).andRespond(withSuccess("{\"sub\":\"kakao-12345\"}", MediaType.APPLICATION_JSON));
 
         assertThatThrownBy(() -> verifier.verify("id-token")).isInstanceOf(InvalidOAuthTokenException.class);
     }

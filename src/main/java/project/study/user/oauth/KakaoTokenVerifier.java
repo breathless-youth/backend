@@ -3,7 +3,10 @@ package project.study.user.oauth;
 import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -18,7 +21,8 @@ import project.study.user.entity.Provider;
 @Component
 public class KakaoTokenVerifier implements OAuthTokenVerifier {
 
-    private static final String TOKEN_INFO_URL = "https://kauth.kakao.com/oauth/tokeninfo?id_token={idToken}";
+    // 카카오는 POST(form)만 받는다 — GET은 405다. ID 토큰은 주소가 아니라 본문에 실어 접근 로그에도 남지 않는다
+    private static final String TOKEN_INFO_URL = "https://kauth.kakao.com/oauth/tokeninfo";
 
     private static final int TOO_MANY_REQUESTS = 429;
 
@@ -45,7 +49,15 @@ public class KakaoTokenVerifier implements OAuthTokenVerifier {
         }
         KakaoTokenInfo tokenInfo;
         try {
-            tokenInfo = restClient.get().uri(TOKEN_INFO_URL, idToken).retrieve().body(KakaoTokenInfo.class);
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+            form.add("id_token", idToken);
+            tokenInfo = restClient
+                    .post()
+                    .uri(TOKEN_INFO_URL)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(form)
+                    .retrieve()
+                    .body(KakaoTokenInfo.class);
         } catch (HttpClientErrorException e) {
             if (e.getStatusCode().value() != TOO_MANY_REQUESTS) {
                 throw new InvalidOAuthTokenException("카카오 ID 토큰 검증에 실패했습니다");
