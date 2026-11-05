@@ -105,6 +105,11 @@ public class GroupService {
         List<GroupRow> joined =
                 groupIds.stream().filter(live::containsKey).map(live::get).toList();
         Map<Long, List<GroupMemberDesk>> desks = deskReader.desks(joined, now);
+        List<Long> requestableGroupIds = joined.stream()
+                .filter(group -> group.ownerId() == userId && group.visibility() == GroupVisibility.PUBLIC)
+                .map(GroupRow::id)
+                .toList();
+        Map<Long, Integer> pendingCounts = applications.countPendingOfGroups(requestableGroupIds, now);
 
         List<MyGroupCard> cards = joined.stream()
                 .map(group -> {
@@ -117,6 +122,7 @@ public class GroupService {
                             groupDesks.size(),
                             GroupDeskReader.studyingCount(groupDesks),
                             group.ownerId() == userId,
+                            requestableGroupIds.contains(group.id()) ? pendingCounts.getOrDefault(group.id(), 0) : null,
                             groupDesks);
                 })
                 .toList();
