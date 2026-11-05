@@ -24,6 +24,12 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Query("delete from RefreshToken t where t.userId = :userId")
     void deleteByUserId(@Param("userId") Long userId);
 
+    // logout용 — 호출자 소유의 미사용 토큰만 한 문장으로 지운다. 0이면 없거나 남의 토큰이거나 이미 회전된 것.
+    // 호출자는 유저 행 잠금 아래에서 부른다
+    @Modifying
+    @Query("delete from RefreshToken t where t.tokenHash = :tokenHash and t.userId = :userId and t.usedAt is null")
+    int deleteByTokenHashAndUserIdIfUnused(@Param("tokenHash") String tokenHash, @Param("userId") Long userId);
+
     // 원자적 사용 처리: 같은 토큰의 동시 재발급 요청 중 정확히 한쪽만 성공하게 한다
     @Modifying
     @Query("update RefreshToken t set t.usedAt = :now where t.id = :id and t.usedAt is null")

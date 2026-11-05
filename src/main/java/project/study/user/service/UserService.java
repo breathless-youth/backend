@@ -50,11 +50,14 @@ public class UserService {
                 .findByProviderAndProviderUserId(Provider.DEVICE, deviceId)
                 .orElseThrow(() -> new IllegalStateException("등록 이후 조회 실패")));
 
-        return new RegisterResult(user.getId(), existing.isEmpty());
+        return new RegisterResult(user.getId(), existing.isEmpty(), deviceId);
     }
 
-    /** 등록 결과. 토큰은 컨트롤러가 AuthService로 덧붙인다 — 시더 같은 내부 호출은 토큰이 필요 없다. */
-    public record RegisterResult(Long userId, boolean isNew) {}
+    /**
+     * 등록 결과. deviceId는 정규화한 값이다. 토큰은 {@link DeviceRegistrationService}가 덧붙인다 — 시더 같은 내부 호출은 토큰이 필요
+     * 없다.
+     */
+    public record RegisterResult(Long userId, boolean isNew, String deviceId) {}
 
     // 자동 닉네임(포메{랜덤5자리})이 기존 닉네임과 충돌하면 재생성해서 재시도한다.
     private Optional<User> insertWithAutoNickname(String deviceId) {
@@ -71,6 +74,17 @@ public class UserService {
             }
         }
         throw new IllegalStateException("자동 닉네임 발급에 실패했습니다");
+    }
+
+    /**
+     * 사용자가 있는지 확인한다 — 없으면 404 {@code USER_NOT_FOUND}. users를 FK로 가리키지 않는 테이블에 쓰기 전에 부른다: 탈퇴 뒤 남은 옛
+     * access 토큰의 쓰기가 지워진 사람의 행을 다시 만들지 않게 한다 (ADR-0043).
+     */
+    @Transactional(readOnly = true)
+    public void requireExists(Long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new NotFoundException(ErrorCode.USER_NOT_FOUND, "존재하지 않는 사용자입니다");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -118,7 +132,10 @@ public class UserService {
                 user.getCategory(),
                 user.getInitial(),
                 user.getColorIndex(),
-                profileImageUrls.of(user.getProfileImage()));
+                profileImageUrls.of(user.getProfileImage()),
+                user.getProvider() == Provider.DEVICE
+                        ? null
+                        : user.getProvider().name());
     }
 
     /** 회원번호 중 users에 있는 것 — Amplitude에만 있는 id(타 환경·지운 행)를 리포트에서 거른다 (스펙 §7.4, BY-904). */

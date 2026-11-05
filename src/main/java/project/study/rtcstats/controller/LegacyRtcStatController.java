@@ -10,10 +10,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.rtcstats.dto.LegacyRtcStatRequest;
+import project.study.user.service.LegacyGuestGuard;
 
 /**
  * 구 앱(v1.2.x) 전용 WebRTC 통계 API — API-Version 헤더가 없거나 1인 요청만 여기로 온다 (ADR-0020).
- * 본문 userId로 식별해 {@link RtcStatController}에 위임한다. 강제 업데이트(BY-531) 뒤 contract 시 삭제한다.
+ * 본문 userId로 식별해 {@link RtcStatController}에 위임한다. userId는 비회원만 받는다({@link LegacyGuestGuard}). 강제 업데이트(BY-531)
+ * 뒤 contract 시 삭제한다.
  */
 // Swagger에 싣지 않는다 — springdoc은 같은 경로+메서드를 하나로 합쳐 토큰 계약(v2) 문서를 덮어쓴다.
 // 구 앱 계약은 v1.2.1 그대로이며 ADR-0020의 표가 명세다
@@ -24,10 +26,12 @@ import project.study.rtcstats.dto.LegacyRtcStatRequest;
 public class LegacyRtcStatController {
 
     private final RtcStatController rtcStatController;
+    private final LegacyGuestGuard legacyGuestGuard;
 
     @PostMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void report(@Valid @RequestBody LegacyRtcStatRequest request) {
+        legacyGuestGuard.requireGuest(request.userId());
         rtcStatController.report(request.userId(), request.toRequest());
     }
 }

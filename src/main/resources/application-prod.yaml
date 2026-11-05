@@ -39,14 +39,24 @@ decorator:
     enabled: false
 
 
+# 소셜 로그인 (BY-1126, ADR-0043). 로그인 앱보다 그룹 릴리즈가 먼저 나가므로 값이 없어도 기동한다 — 허용 aud 목록이 빈 프로바이더는
+# 모든 토큰을 400으로 거부하고 기동 로그에 프로바이더마다 WARN을 남긴다. 로그인 앱 출시 전에 SSM·태스크 정의에 넣는다
 oauth:
   google:
-    # 앱이 ID 토큰을 요청할 때 쓰는 웹(서버) 클라이언트 ID — aud 검증에 사용. 시크릿 아님
-    client-id: ${OAUTH_GOOGLE_CLIENT_ID}
+    # 허용하는 ID 토큰 aud 목록(쉼표 구분) — 웹(서버) 클라이언트 ID 등. 시크릿 아님
+    # 목록형 이름이 없으면 바뀌기 전 이름(OAUTH_GOOGLE_CLIENT_ID·OAUTH_KAKAO_APP_KEY·OAUTH_APPLE_CLIENT_ID)의 값을 읽는다 — 운영에 이미 들어가 있다
+    client-ids: ${OAUTH_GOOGLE_CLIENT_IDS:${OAUTH_GOOGLE_CLIENT_ID:}}
   kakao:
-    app-key: ${OAUTH_KAKAO_APP_KEY}
+    app-keys: ${OAUTH_KAKAO_APP_KEYS:${OAUTH_KAKAO_APP_KEY:}}
   apple:
-    client-id: ${OAUTH_APPLE_CLIENT_ID}
+    # iOS 앱 번들 ID 목록(쉼표 구분). 운영은 앱 하나(com.breathlessyouth.mobile)
+    bundle-ids: ${OAUTH_APPLE_BUNDLE_IDS:${OAUTH_APPLE_BUNDLE_ID:${OAUTH_APPLE_CLIENT_ID:}}}
+    services-id: ${OAUTH_APPLE_SERVICES_ID:}
+    team-id: ${OAUTH_APPLE_TEAM_ID:}
+    key-id: ${OAUTH_APPLE_KEY_ID:}
+    private-key: ${OAUTH_APPLE_PRIVATE_KEY:}
+    web-redirect-uri: ${OAUTH_APPLE_WEB_REDIRECT_URI:}
+    android-callback-redirect: ${OAUTH_APPLE_ANDROID_CALLBACK_REDIRECT:}
 
 jwt:
   secret: ${JWT_SECRET} # 32자 이상 랜덤 문자열

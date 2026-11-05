@@ -21,4 +21,11 @@ public record ProfileResponse(
         @Schema(
                 description = "프로필 사진 경로 — 없으면 null. 지금은 웹과 같은 출처의 상대 경로",
                 example = "/avatars/12/3f2a9c1e-7b4d-4e8a-9c2f-1a2b3c4d5e6f.jpg")
-        String profileImageUrl) {}
+        String profileImageUrl,
+
+        @Schema(
+                description = "로그인한 소셜 계정 — 비회원이면 null. 그룹 탭 진입(로그인 필요)과 탈퇴 방법(애플 재인증·카카오 연결 끊기)을 고르는 데 쓴다",
+                example = "KAKAO",
+                allowableValues = {"GOOGLE", "KAKAO", "APPLE"},
+                nullable = true)
+        String loginProvider) {}

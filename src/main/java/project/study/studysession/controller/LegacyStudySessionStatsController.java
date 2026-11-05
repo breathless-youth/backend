@@ -12,11 +12,13 @@ import project.study.studysession.dto.StudyPeriodStatsResponse;
 import project.study.studysession.dto.StudySessionListResponse;
 import project.study.studysession.dto.StudySessionStreakResponse;
 import project.study.studysession.service.StudySessionService;
+import project.study.user.service.LegacyGuestGuard;
 
 /**
  * 구 앱(v1.2.x) 전용 통계 API — API-Version 헤더가 없거나 1인 요청만 여기로 온다 (ADR-0020).
  *
- * <p>v1.2.1 계약 그대로 쿼리 userId로 식별하고 {@link StudySessionStatsController}에 위임하는 어댑터다.
+ * <p>v1.2.1 계약 그대로 쿼리 userId로 식별하고 {@link StudySessionStatsController}에 위임하는 어댑터다. userId는 비회원만 받는다
+ * ({@link LegacyGuestGuard}).
  * {@code /study-days}는 구 앱 대응이 없는 새 경로라 기본버전(1) 하나뿐이고 여기엔 없다 (ADR-0015 갱신).
  * 강제 업데이트(BY-531) 뒤 contract 시 삭제한다.
  */
@@ -30,10 +32,12 @@ public class LegacyStudySessionStatsController {
 
     private final StudySessionStatsController statsController;
     private final StudySessionService studySessionService;
+    private final LegacyGuestGuard legacyGuestGuard;
 
     @GetMapping
     public StudySessionListResponse list(
             @RequestParam Long userId, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        legacyGuestGuard.requireGuest(userId);
         // 익명 userId 경로라 과목·할 일 이름은 싣지 않는다 (BY-734) — 구 앱은 그 필드를 읽지 않는다
         return studySessionService.list(userId, date, false);
     }
@@ -43,6 +47,7 @@ public class LegacyStudySessionStatsController {
             @RequestParam Long userId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        legacyGuestGuard.requireGuest(userId);
         return statsController.streak(userId, from, to);
     }
 
@@ -53,6 +58,7 @@ public class LegacyStudySessionStatsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate compareFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate compareTo) {
+        legacyGuestGuard.requireGuest(userId);
         return statsController.period(userId, from, to, compareFrom, compareTo);
     }
 }

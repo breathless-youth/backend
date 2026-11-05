@@ -14,12 +14,17 @@ import project.study.rtcstats.dto.RtcStatRequest;
 import project.study.rtcstats.entity.RtcConnectionStat;
 import project.study.rtcstats.repository.RtcStatRepository;
 import project.study.rtcstats.service.RtcStatService;
+import project.study.user.service.UserService;
 
 @ExtendWith(MockitoExtension.class)
 class RtcStatServiceTest {
 
     @Mock
     private RtcStatRepository repository;
+
+    // 실존 사용자로 둔다(목은 아무것도 던지지 않는다) — 지워진 사용자는 StaleTokenWriteApiTest가 본다
+    @Mock
+    private UserService userService;
 
     @InjectMocks
     private RtcStatService service;

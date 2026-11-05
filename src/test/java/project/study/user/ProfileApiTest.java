@@ -59,7 +59,9 @@ class ProfileApiTest {
                                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.INTEGER)
                                 .isBetween(0, 7))
                 .hasPathSatisfying("$.goal", v -> assertThat(v).isNull())
-                .hasPathSatisfying("$.category", v -> assertThat(v).isNull());
+                .hasPathSatisfying("$.category", v -> assertThat(v).isNull())
+                // 비회원은 로그인한 소셜 계정이 없다 — 그룹 탭 진입 판단에 쓴다
+                .hasPathSatisfying("$.loginProvider", v -> assertThat(v).isNull());
     }
 
     @Test

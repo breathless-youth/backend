@@ -159,6 +159,23 @@ class GroupApplicationExpiryTest {
     }
 
     @Test
+    void 그룹장이_탈퇴해_그룹장이_빈_사라진_그룹의_신청도_만료_푸시를_보낸다() {
+        long gone = probe.insertGroup(probe.insertUser(), "PUBLIC");
+        long id = probe.insertApplication(gone, user, "PENDING", NOW.minusSeconds(30));
+        probe.softDeleteGroup(gone);
+        // 탈퇴가 하는 일 — 지운 그룹은 그룹장을 비운다(BY-1126, V43)
+        jdbc.sql("UPDATE study_group SET owner_id = NULL WHERE id = :id")
+                .param("id", gone)
+                .update();
+
+        assertThat(expiry.expireDue(NOW)).isEqualTo(1);
+
+        assertThat(statusOf(id)).isEqualTo("EXPIRED");
+        assertThat(pushedOnceTo(pushSender, user).ko().body())
+                .isEqualTo(probe.group(gone).orElseThrow().name() + " 신청은 답이 없어 취소됐어요");
+    }
+
+    @Test
     void 그룹이_사라질_때_닫히지_않은_기한_지난_신청은_만료_작업이_EXPIRED로_닫고_만료_푸시를_보낸다() {
         long gone = probe.insertGroup(probe.insertUser(), "PUBLIC");
         long lapsed = probe.insertApplication(gone, user, "PENDING", NOW.minusSeconds(30));

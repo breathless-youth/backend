@@ -3,7 +3,9 @@ package project.study.rtcstats;
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.support.AuthTestSupport.asUser;
 
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,6 +30,18 @@ class RtcStatApiTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    // 유효한 토큰은 실존 사용자다 — 없는 사용자의 샘플은 404로 버린다(탈퇴 뒤 옛 토큰, StaleTokenWriteApiTest)
+    private long userId;
+
+    @BeforeEach
+    void seedUser() {
+        userId = jdbcTemplate.queryForObject(
+                "INSERT INTO users (provider, provider_user_id, nickname) VALUES ('DEVICE', ?, ?) RETURNING id",
+                Long.class,
+                UUID.randomUUID().toString(),
+                "rtc-" + UUID.randomUUID().toString().substring(0, 8));
+    }
+
     @AfterEach
     void cleanUp() {
         jdbcTemplate.update("DELETE FROM rtc_connection_stat");
@@ -38,7 +52,7 @@ class RtcStatApiTest {
                 .uri("/api/rtc-stats")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
-                .with(asUser(2))
+                .with(asUser(userId))
                 .exchange();
     }
 

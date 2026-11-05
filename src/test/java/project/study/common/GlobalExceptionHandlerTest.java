@@ -2,8 +2,10 @@ package project.study.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.SQLException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -131,8 +133,66 @@ class GlobalExceptionHandlerTest {
                 .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("서버 오류가 발생했습니다"));
     }
 
+    /** 탈퇴·병합 뒤 남은 옛 access 토큰의 쓰기가 지워진 users 행을 가리키면 FK 위반이 난다 — 서버 오류가 아니라 없는 사용자다 (ADR-0043) */
+    @Test
+    void users를_가리키는_FK_위반은_404_USER_NOT_FOUND다() {
+        assertThat(mvc.get().uri("/test/fk-users").exchange())
+                .hasStatus(HttpStatus.NOT_FOUND)
+                .bodyJson()
+                .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("USER_NOT_FOUND"));
+    }
+
+    @Test
+    void 다른_무결성_위반은_지금처럼_500이다() {
+        for (String uri : List.of("/test/fk-other", "/test/unique", "/test/fk-delete-users")) {
+            assertThat(mvc.get().uri(uri).exchange())
+                    .as(uri)
+                    .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .bodyJson()
+                    .hasPathSatisfying("$.code", code -> assertThat(code).isEqualTo("INTERNAL_ERROR"))
+                    .hasPathSatisfying(
+                            "$.message", message -> assertThat(message).isEqualTo("서버 오류가 발생했습니다"));
+        }
+    }
+
     @RestController
     static class ThrowingController {
+
+        // pgjdbc가 SQLException 메시지에 붙이는 Detail까지 그대로 흉내 낸다
+        private static DataIntegrityViolationException violation(String sqlState, String message) {
+            return new DataIntegrityViolationException(
+                    "could not execute statement", new SQLException(message, sqlState));
+        }
+
+        @GetMapping("/test/fk-users")
+        void fkUsers() {
+            throw violation(
+                    "23503",
+                    "ERROR: insert or update on table \"push_token\" violates foreign key constraint \"fk\"\n"
+                            + "  Detail: Key (user_id)=(5) is not present in table \"users\".");
+        }
+
+        @GetMapping("/test/fk-other")
+        void fkOther() {
+            throw violation(
+                    "23503",
+                    "ERROR: insert or update on table \"study_task\" violates foreign key constraint \"fk\"\n"
+                            + "  Detail: Key (subject_id)=(5) is not present in table \"study_subject\".");
+        }
+
+        @GetMapping("/test/fk-delete-users")
+        void fkDeleteUsers() {
+            // users 행을 지우다 남은 참조에 걸린 것 — 병합·탈퇴 처리기의 빠뜨림이라 서버 오류로 남겨야 한다
+            throw violation(
+                    "23503",
+                    "ERROR: update or delete on table \"users\" violates foreign key constraint \"fk\" on table \"x\"\n"
+                            + "  Detail: Key (id)=(5) is still referenced from table \"x\".");
+        }
+
+        @GetMapping("/test/unique")
+        void unique() {
+            throw violation("23505", "ERROR: duplicate key value violates unique constraint \"uq\"");
+        }
 
         @GetMapping("/test/unexpected")
         void unexpected() {

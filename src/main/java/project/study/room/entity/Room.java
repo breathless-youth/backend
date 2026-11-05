@@ -37,7 +37,8 @@ public class Room {
     @Column(updatable = false)
     private Long groupId;
 
-    @Column(nullable = false, updatable = false)
+    // 만든 사람이 탈퇴하면 NULL이다 — 다른 사람 기록이 걸려 있어 방은 지우지 않는다 (V41, ADR-0043)
+    @Column(updatable = false)
     private Long createdBy;
 
     @Column(nullable = false, updatable = false)

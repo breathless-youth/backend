@@ -44,7 +44,7 @@ class GroupRoomServiceRetryTest {
         when(tx.execute(any()))
                 .thenAnswer(inv ->
                         ((TransactionCallback<?>) inv.getArgument(0)).doInTransaction(mock(TransactionStatus.class)));
-        when(users.getProfile(USER)).thenReturn(new ProfileResponse("포메", null, null, "포", 0, null));
+        when(users.getProfile(USER)).thenReturn(new ProfileResponse("포메", null, null, "포", 0, null, null));
     }
 
     @Test
