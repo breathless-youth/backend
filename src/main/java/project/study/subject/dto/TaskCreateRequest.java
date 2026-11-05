@@ -5,5 +5,5 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record TaskCreateRequest(
-        @Schema(description = "할 일 이름 — 앞뒤 공백은 잘라 저장한다", example = "3단원 문제풀기") @NotBlank @Size(max = 100)
+        @Schema(description = "할 일 이름 — 앞뒤 공백은 잘라 저장한다", example = "3단원 문제풀기") @NotBlank @Size(max = 25)
         String name) {}

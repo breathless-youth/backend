@@ -59,7 +59,7 @@ public class StudySubjectController {
             새로 만든 과목은 맨 뒤다. 응답에 순서 번호는 없다 — 배열 순서가 곧 순서다.
 
             - **색** = `colorIndex`(0..19). 만들 때 서버가 덜 쓴 색을 배정하고 이후 바뀌지 않는다 — 앱은 팔레트에 매핑만 한다.
-            - **보이는 할 일** = 미완료 전부 + 완료 시각이 오늘(사용자 시간대)인 것. 어제 완료한 할 일은 숨지만 삭제되지 않는다.
+            - **보이는 할 일** = 오늘 이전 계획의 미완료 + 완료 시각이 오늘(사용자 시간대)인 것. 미래 계획은 제외한다. 날짜별·반복 전체 조회는 /api/planner를 쓴다.
             - **누적 시간** = 저장된 모든 세션의 과목 구간(`subjectSegments`)에서 서버가 계산한 총공부·순공의 합. 과목 시간은 할 일을 골랐든 과목만 골랐든 그 과목 전부의 합이다.
             - 과목이 하나도 없으면 빈 배열 — 앱은 이때 추천 칩을 보여준다.""")
     @ApiResponse(responseCode = "200", description = "과목 배열 — 각 원소에 tasks·studySec·focusSec")
@@ -149,7 +149,7 @@ public class StudySubjectController {
     @ApiResponse(responseCode = "409", description = "살아있는 과목이 이미 쓰는 이름")
     @ApiResponse(
             responseCode = "400",
-            description = "이름 누락·공백·50자 초과, 또는 과목 상한(20) 초과",
+            description = "이름 누락·공백·12자 초과, 또는 과목 상한(20) 초과",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -213,10 +213,13 @@ public class StudySubjectController {
         return subjectService.reorder(userId, request.subjectIds());
     }
 
-    @Operation(summary = "할 일 추가", description = "과목 아래 할 일을 만든다. 마감일은 없다. 그 과목의 살아있는 할 일이 30개면 400.")
+    @Operation(
+            summary = "할 일 추가",
+            description = "기기 시간대 05시 기준 오늘의 할 일을 만든다. 미래 계획은 POST /api/planner/tasks를 쓴다. 오늘 반복 회차를 포함해 과목별 30개면 409.")
     @ApiResponse(responseCode = "201", description = "만들어진 할 일 — 미완료, 누적 0")
-    @ApiResponse(responseCode = "400", description = "이름 누락·공백·100자 초과, 또는 할 일 상한(30) 초과")
+    @ApiResponse(responseCode = "400", description = "이름 누락·공백·25자 초과")
     @ApiResponse(responseCode = "404", description = "없는 과목이거나 다른 유저의 과목")
+    @ApiResponse(responseCode = "409", description = "오늘 반복 회차를 포함한 과목별 30개 한도 초과")
     @PostMapping("/{subjectId}/tasks")
     @ResponseStatus(HttpStatus.CREATED)
     public TaskResponse addTask(
