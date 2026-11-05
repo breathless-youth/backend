@@ -46,7 +46,7 @@ public class GroupService {
     /** 동시에 답을 기다릴 수 있는 신청 수 상한 */
     static final int MAX_PENDING_APPLICATIONS = 3;
 
-    /** 한 사람이 그룹장일 수 있는 그룹 수 상한 */
+    /** 그룹장 한도를 없앴지만 이미 배포된 웹이 응답 모양을 기대해서 값만 남긴다. 웹이 안 읽게 되면 지운다. */
     static final int MAX_OWNED_GROUPS = 2;
 
     /** 그룹 멤버 수 상한 — 신청·수락·코드 참여가 본다 */
@@ -65,8 +65,7 @@ public class GroupService {
     private final Clock clock;
 
     /**
-     * 그룹을 만들고 ID를 돌려준다. 만든 사람은 멤버이자 그룹장이 되므로 "그룹+신청 5개"와 "그룹장 2개" 한도를 모두 본다 — 둘 다 걸리면
-     * {@code GROUP_SLOT_LIMIT}이 먼저다.
+     * 그룹을 만들고 ID를 돌려준다. 만든 사람은 멤버이자 그룹장이 되므로 "그룹+신청 5개" 한도를 본다.
      *
      * <p>사용자 락(락 순서 ②)을 잡은 뒤 센다. 같은 사람이 동시에 만들어도 개수 검사와 insert 사이로 끼어들 수 없다. 아직 없는 그룹이라
      * 그룹 행 락(①)은 없다.
@@ -82,9 +81,6 @@ public class GroupService {
         int slots = members.countLiveGroupsOfUser(userId) + applications.countPendingOfUser(userId, now);
         if (slots >= MAX_GROUP_SLOTS) {
             throw new ConflictException(ErrorCode.GROUP_SLOT_LIMIT, "들어간 그룹과 신청 중인 그룹이 이미 5개예요");
-        }
-        if (groups.countOwnedLive(userId) >= MAX_OWNED_GROUPS) {
-            throw new ConflictException(ErrorCode.OWNED_GROUP_LIMIT, "그룹장인 그룹이 이미 2개예요");
         }
 
         String inviteCode =

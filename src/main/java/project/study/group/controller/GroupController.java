@@ -38,7 +38,7 @@ import project.study.group.service.GroupService;
 
                 - 구 앱 대응이 없는 새 경로라 모두 `API-Version: 1`이고 인증이 필요하다
                 - 못 하는 이유는 응답 본문 `{code, message}`의 `code`로만 가른다 — message는 바뀔 수 있다
-                - 한도: 들어간 그룹과 답을 기다리는 신청을 합쳐 5개, 신청 3개, 그룹장 2개, 멤버 6명""")
+                - 한도: 들어간 그룹과 답을 기다리는 신청을 합쳐 5개, 신청 3개, 멤버 6명""")
 @RestController
 @RequestMapping("/api/groups")
 @RequiredArgsConstructor
@@ -47,7 +47,7 @@ public class GroupController {
     private final GroupService groupService;
 
     @Operation(summary = "그룹 만들기", description = """
-                    그룹을 만든다. 만든 사람은 멤버이자 그룹장이 되므로 "그룹+신청 5개"와 "그룹장 2개" 한도를 모두 보고, 둘 다 걸리면 `GROUP_SLOT_LIMIT`을 먼저 준다. \
+                    그룹을 만든다. 만든 사람은 멤버이자 그룹장이 되므로 "그룹+신청 5개" 한도를 본다. \
                     공개 여부(`visibility`)는 만든 뒤 바꿀 수 없다. 이름·소개에 연락처나 링크가 있으면 막는다.""")
     @ApiResponse(responseCode = "201", description = "만들어짐 — `{groupId}`")
     @ApiResponse(
@@ -56,9 +56,7 @@ public class GroupController {
                     + "`BAD_REQUEST` 없는 시험·목표·공개 여부 값, 읽을 수 없는 본문 / "
                     + "`CONTACT_NOT_ALLOWED` 이름이나 소개에 연락처·링크가 있음")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
-    @ApiResponse(
-            responseCode = "409",
-            description = "`GROUP_SLOT_LIMIT` 들어간 그룹과 답을 기다리는 신청이 합쳐 이미 5개 / `OWNED_GROUP_LIMIT` 그룹장인 그룹이 이미 2개")
+    @ApiResponse(responseCode = "409", description = "`GROUP_SLOT_LIMIT` 들어간 그룹과 답을 기다리는 신청이 합쳐 이미 5개")
     @PostMapping(version = "1")
     @ResponseStatus(HttpStatus.CREATED)
     public GroupCreateResponse create(
