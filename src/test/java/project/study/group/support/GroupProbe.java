@@ -272,6 +272,19 @@ public class GroupProbe {
         insertApplication(insertGroup(insertUser(), "PUBLIC"), userId, status, expiresAt);
     }
 
+    /**
+     * 살아 있는 공개 그룹을 모두 지운 것으로 표시한다. 테스트 DB는 테스트 사이에 비워지지 않는데 공개 그룹 이름은 겹칠 수 없어서(BY-1124),
+     * 이름을 고정해 쓰는 테스트가 앞선 테스트의 그룹과 부딪히지 않게 준비 단계에서 부른다.
+     */
+    public void softDeleteAllPublicGroups() {
+        jdbc.sql("update study_group_member set left_at = now(), leave_reason = 'GROUP_DELETED' "
+                        + "where left_at is null and group_id in "
+                        + "(select id from study_group where visibility = 'PUBLIC' and deleted_at is null)")
+                .update();
+        jdbc.sql("update study_group set deleted_at = now() where visibility = 'PUBLIC' and deleted_at is null")
+                .update();
+    }
+
     /** 그룹을 지운 것으로 표시하고 살아 있는 멤버를 모두 내보낸 것으로(GROUP_DELETED) 닫는다. */
     public void softDeleteGroup(long groupId) {
         jdbc.sql("update study_group set deleted_at = now(), invite_code = null where id = :id")
