@@ -335,7 +335,7 @@ git commit -m "feat: 안드로이드 애플 웹 로그인 콜백을 추가한다
 ### Task 10: ADR·정리·리뷰
 
 **Files:**
-- Create: `docs/adr/0042-social-login-link-merge-and-account-deletion.md` (기존 ADR 형식)
+- Create: `docs/adr/0043-social-login-link-merge-and-account-deletion.md` (기존 ADR 형식)
 - Modify: `src/main/java/project/study/user/service/AuthService.java` 클래스 주석의 "파킹" 문구, `// AUTH-DISABLED` 잔재가 남은 곳
 
 ADR에 적을 것: link 단일화와 전환·병합, 병합 규칙 표 요약(겹침 폐기·같은 이름 과목·푸시 토큰 이전·실험 기록 폐기·랭킹 충돌), `UserDataHandler`와 빠뜨림 방지 테스트, 탈퇴 하드 삭제와 `rooms.created_by` NULL, 애플 해지(재인증 코드, 실패해도 탈퇴), 안드로이드 애플 콜백 permitAll의 이유, 잘못된 ID 토큰 400(8월 명세 401에서 바꾼 이유), nonce, 서버에서 비회원 그룹 차단을 안 하는 이유(강제 업데이트), 옛 앱 무인증 경로의 남은 위험과 후속, 병합·탈퇴 뒤 최대 30분 남는 옛 access 토큰은 받아들인다(앱이 바로 토큰을 바꾼다)

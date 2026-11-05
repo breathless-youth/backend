@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * link에 쓴 소셜 ID 토큰의 사용 기록 (ADR-0042). 토큰 원문은 받지 않고 SHA-256 hex만 다룬다 — 원문도 해시도 로그에 남기지 않는다.
+ * link에 쓴 소셜 ID 토큰의 사용 기록 (ADR-0043). 토큰 원문은 받지 않고 SHA-256 hex만 다룬다 — 원문도 해시도 로그에 남기지 않는다.
  *
  * <p>link 트랜잭션 안에서 부른다. 그래야 전환 경쟁으로 롤백된 시도는 토큰을 쓰지 않은 것이 되어 재시도가 같은 토큰을 쓸 수 있고, 같은 토큰이
  * 동시에 두 번 오면 나중 쪽은 먼저 쪽이 끝날 때까지 기본 키에서 기다렸다가 0행을 받는다.

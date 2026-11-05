@@ -139,7 +139,7 @@ class UserIdChannelInterceptorTest {
 
     @Test
     void 핸드셰이크_userId가_소셜_계정이면_없는_유저처럼_거부된다() {
-        // 구 앱 사용자는 늘 비회원이다 — 숫자 userId만으로 소셜 계정의 방 구독을 열지 못하게 한다 (ADR-0042)
+        // 구 앱 사용자는 늘 비회원이다 — 숫자 userId만으로 소셜 계정의 방 구독을 열지 못하게 한다 (ADR-0043)
         LegacyGuestGuard realGuard = new LegacyGuestGuard(socialUserRepository(77L));
         @SuppressWarnings("unchecked")
         ObjectProvider<RoomMessenger> provider = mock(ObjectProvider.class);

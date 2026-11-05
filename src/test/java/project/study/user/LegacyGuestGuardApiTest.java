@@ -21,7 +21,7 @@ import project.study.TestcontainersConfiguration;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 구 앱 무인증 경로(ADR-0020)는 비회원(DEVICE) userId만 받는다 (ADR-0042). 구 앱 사용자는 늘 비회원이라, 숫자 userId만 알면 소셜 계정의 기록을
+ * 구 앱 무인증 경로(ADR-0020)는 비회원(DEVICE) userId만 받는다 (ADR-0043). 구 앱 사용자는 늘 비회원이라, 숫자 userId만 알면 소셜 계정의 기록을
  * 읽고 쓰던 구멍을 없는 사용자와 같은 404로 막는다. 비회원의 동작은 그대로다.
  */
 @SpringBootTest

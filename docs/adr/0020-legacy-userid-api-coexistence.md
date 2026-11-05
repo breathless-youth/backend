@@ -110,7 +110,7 @@ ADR-0019(BY-526)로 모든 보호 API가 `Authorization: Bearer` + `@Authenticat
   증폭). `LegacyStudySessionController.report`와 STOMP 폴백(`legacyPrincipal`)이 실존 유저만
   통과시킨다(`UserService.getProfile` → 404 / CONNECT 거부). 토큰 계약은 유효한 토큰이 곧 실존 유저라
   이 검사가 필요 없다. (2026-11-03 BY-1126: 소셜 계정이 생기면서 이 검사는 `LegacyGuestGuard`로 옮겨 모든 구 앱 경로에 걸고,
-  실존 **비회원(DEVICE)**만 통과시킨다 — ADR-0042 "옛 앱 무인증 경로")
+  실존 **비회원(DEVICE)**만 통과시킨다 — ADR-0043 "옛 앱 무인증 경로")
 - **후속 티켓 후보(v1.2.1 prod에도 동일하게 있던 결함이라 이 티켓과 분리)**:
   - HTTP 본문 크기 상한(스트리밍 단계)과 `events` 원소 수 상한 — 익명 경로가 열려 있는 동안 더 노출됨
   - STOMP 연결당 구독 수·인바운드 프레임 속도 상한 — `/user/queue/room` 구독은 방 소속 확인 없이 허용됨

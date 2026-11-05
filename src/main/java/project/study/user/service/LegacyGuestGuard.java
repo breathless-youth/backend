@@ -9,7 +9,7 @@ import project.study.user.entity.Provider;
 import project.study.user.repository.UserRepository;
 
 /**
- * 구 앱(v1.2.x) 무인증 경로의 userId 확인 (ADR-0020, ADR-0042). 이 경로들은 토큰 없이 숫자 userId만으로 사용자를 고른다. 구 앱 사용자는 늘
+ * 구 앱(v1.2.x) 무인증 경로의 userId 확인 (ADR-0020, ADR-0043). 이 경로들은 토큰 없이 숫자 userId만으로 사용자를 고른다. 구 앱 사용자는 늘
  * 비회원(DEVICE)이므로, 비회원이 아닌 userId는 없는 사용자와 똑같이 거부해 숫자만 알면 소셜 계정의 기록을 읽고 쓰던 길을 막는다.
  *
  * <p>모든 Legacy* 컨트롤러와 STOMP의 {@code ?userId=} 폴백이 이것만 부른다. 강제 업데이트(BY-531) 뒤 contract 때 함께 지운다.

@@ -45,7 +45,7 @@ class LegacyRtcStatApiTest {
                 .exchange();
     }
 
-    // 구 앱 경로는 실존 비회원의 userId만 받는다 (ADR-0042) — 구 앱처럼 기기 등록으로 만든다
+    // 구 앱 경로는 실존 비회원의 userId만 받는다 (ADR-0043) — 구 앱처럼 기기 등록으로 만든다
     private long registerGuest() {
         MvcTestResult result = mvc.post()
                 .uri("/api/users")

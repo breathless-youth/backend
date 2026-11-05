@@ -50,7 +50,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     // 순환 참조가 나므로 ObjectProvider로 지연 해석한다
     private final ObjectProvider<RoomMessenger> roomMessenger;
     private final JwtUtil jwtUtil;
-    // 구 앱 폴백의 비회원 확인용 — contract 시 함께 삭제한다 (ADR-0020, ADR-0042)
+    // 구 앱 폴백의 비회원 확인용 — contract 시 함께 삭제한다 (ADR-0020, ADR-0043)
     private final LegacyGuestGuard legacyGuestGuard;
 
     @Override
@@ -222,7 +222,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 try {
                     long id = Long.parseLong(s);
                     // 토큰과 달리 아무 숫자나 올 수 있다 — 계정 없는 principal이 구독을 쌓지 못하게, 또 숫자만으로 소셜 계정의
-                    // 방에 붙지 못하게 실존 비회원만 통과시킨다 (구 앱 사용자는 늘 비회원이다, ADR-0042)
+                    // 방에 붙지 못하게 실존 비회원만 통과시킨다 (구 앱 사용자는 늘 비회원이다, ADR-0043)
                     if (id > 0 && legacyGuestGuard.isGuest(id)) return new StompPrincipal(s);
                 } catch (NumberFormatException ignored) {
                     // 아래에서 거부
