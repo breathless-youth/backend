@@ -20,6 +20,7 @@ import project.study.user.dto.TokenResponse;
 import project.study.user.dto.UserRegisterResponse;
 import project.study.user.entity.Provider;
 import project.study.user.jwt.JwtUtil;
+import project.study.user.nickname.AutoNicknameFixtures;
 import project.study.user.repository.UserRepository;
 import tools.jackson.databind.ObjectMapper;
 
@@ -66,7 +67,8 @@ class AuthApiIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + device.accessToken()))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"));
+                .hasPathSatisfying(
+                        "$.nickname", v -> assertThat(v).asString().satisfies(AutoNicknameFixtures::assertAuto));
     }
 
     @Test

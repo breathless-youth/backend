@@ -15,6 +15,9 @@ public enum ErrorCode {
     /** 요청 본문 검증 실패 (@Valid) */
     VALIDATION_FAILED,
 
+    /** 닉네임에 욕설·성적 표현·혐오 표현이 있거나 운영자로 보이는 이름이다 (400) — 어느 단어에 걸렸는지는 알려주지 않는다 */
+    NICKNAME_NOT_ALLOWED,
+
     /** access 토큰 누락·위조·만료 (401) — 클라이언트는 refresh 후 1회 재시도한다 */
     UNAUTHORIZED,
 
