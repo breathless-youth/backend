@@ -13,7 +13,10 @@ public record PlannerRecordOperation(
         @Schema(description = "조회에서 받은 묶음 키. CREATE에는 생략", example = "c:2026-10-01T10:00:00Z")
         String key,
 
+        @Schema(description = "전체 시작 시각. CREATE 필수. UPDATE는 두 시각 모두 생략하면 보존, 하나만 생략하면 400. 변경 없는 경계는 초·소수초까지 보존")
         Instant startedAt,
+
+        @Schema(description = "전체 종료 시각. UPDATE 명시 시 fullStartedAt/fullEndedAt 사용. CREATE와 실제 변경한 경계만 분 단위 내림")
         Instant endedAt,
 
         @Schema(description = "수정 구간 전체에 적용할 과목. null이면 과목 없음", example = "3")

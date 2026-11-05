@@ -37,7 +37,9 @@ class GroupApplicationBlockSwaggerTest {
                         v -> assertThat(v).asList().containsExactly("1"))
                 .hasPathSatisfying(
                         "$.paths['/api/groups/{groupId}/applications'].post.description",
-                        v -> assertThat(v).asString().contains("공개 그룹만. 답이 없으면 3일 뒤 취소"))
+                        v -> assertThat(v)
+                                .asString()
+                                .contains("APPROVAL 공개 그룹만", "OPEN 그룹은 409 `GROUP_JOIN_OPEN`", "답이 없으면 3일 뒤 취소"))
                 .hasPathSatisfying(
                         "$.paths['/api/groups/{groupId}/applications'].post.description",
                         v -> assertThat(v)
@@ -51,9 +53,9 @@ class GroupApplicationBlockSwaggerTest {
                         "$.paths['/api/groups/{groupId}/members/{userId}'].delete.description",
                         v -> assertThat(v)
                                 .asString()
-                                .contains("비공개 그룹이면 같은 처리에서 초대코드가 새로 발급되고, 예전 코드·링크로 참여하면 INVITE_CODE_NOT_FOUND다. "
-                                        + "응답 형식은 그대로이고 FE는 초대코드 보기(GET /api/groups/{groupId}/invite)를 다시 받아 새 코드를 보여 준다. "
-                                        + "내보내진 사람은 새 코드를 받아도 3일 동안 RECENTLY_KICKED다"))
+                                .contains("비공개 그룹이면 같은 처리에서 초대코드가 새로 발급되고, 예전 코드·링크로 참여하면 INVITE_CODE_NOT_FOUND다. 응답"
+                                        + " 형식은 그대로이고 FE는 초대코드 보기(GET /api/groups/{groupId}/invite)를 다시 받아 새 코드를"
+                                        + " 보여 준다. 내보내진 사람은 새 코드를 받아도 3일 동안 RECENTLY_KICKED다"))
                 .hasPathSatisfying(
                         "$.paths['/api/group-applications/{applicationId}/accept'].post.description",
                         v -> assertThat(v).asString().contains("자리가 없으면 GROUP_FULL, 신청은 기한까지 남는다"))
@@ -79,10 +81,13 @@ class GroupApplicationBlockSwaggerTest {
                 // 설정 수정은 공개 여부를 받지 않는다. 만들기는 받는다
                 .hasPathSatisfying(
                         "$.paths['/api/groups/{groupId}'].patch.responses['400'].description",
-                        v -> assertThat(v).asString().contains("없는 시험·목표 값").doesNotContain("공개 여부"))
+                        v -> assertThat(v)
+                                .asString()
+                                .contains("없는 시험·목표·입장 방식 값")
+                                .doesNotContain("공개 여부"))
                 .hasPathSatisfying(
                         "$.paths['/api/groups'].post.responses['400'].description",
-                        v -> assertThat(v).asString().contains("없는 시험·목표·공개 여부 값"))
+                        v -> assertThat(v).asString().contains("없는 시험·목표·공개 여부·입장 방식 값"))
                 // 자기 자신을 대상으로 한 요청은 BAD_REQUEST다
                 .hasPathSatisfying(
                         "$.paths['/api/groups/{groupId}/owner'].put.responses['400'].description",
@@ -95,8 +100,8 @@ class GroupApplicationBlockSwaggerTest {
                         "$.paths['/api/groups/join'].post.description",
                         v -> assertThat(v)
                                 .asString()
-                                .contains(
-                                        "이미 멤버인지를 내보냄·정원·한도 검사보다 먼저 본다 — 이미 멤버면 RECENTLY_KICKED·GROUP_FULL·GROUP_SLOT_LIMIT 대신 joined=false로 200"))
+                                .contains("이미 멤버인지를 내보냄·정원·한도 검사보다 먼저 본다 — 이미 멤버면"
+                                        + " RECENTLY_KICKED·GROUP_FULL·GROUP_SLOT_LIMIT 대신 joined=false로 200"))
                 // 차단은 영상·소리만 막는다 — 멤버 목록·타일에는 그대로 나온다
                 .hasPathSatisfying(
                         "$.paths['/api/groups/{groupId}/members/{userId}/report'].post.description",

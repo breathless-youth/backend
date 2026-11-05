@@ -112,6 +112,34 @@ class GroupLocksTest {
     }
 
     @Test
+    void 같은_이름_락끼리는_서로를_기다리고_공백과_대소문자는_같은_이름이다() {
+        tx.executeWithoutResult(status -> {
+            locks.lockPublicName("Study Room");
+
+            assertThatThrownBy(() -> inOtherConnection(() -> locks.lockPublicName(" study  room ")))
+                    .hasMessageContaining("lock timeout");
+        });
+    }
+
+    @Test
+    void 다른_이름_락과_사용자_락은_기다리지_않는다() {
+        tx.executeWithoutResult(status -> {
+            locks.lockPublicName("Study Room");
+
+            assertThatCode(() -> inOtherConnection(() -> locks.lockPublicName("다른 이름")))
+                    .doesNotThrowAnyException();
+            assertThatCode(() -> inOtherConnection(() -> locks.lockUser(user))).doesNotThrowAnyException();
+            assertThatCode(() -> inOtherConnection(() -> roomRepository.lockUser(user)))
+                    .doesNotThrowAnyException();
+        });
+    }
+
+    @Test
+    void 이름_락도_트랜잭션_안에서만_잡을_수_있다() {
+        assertThatThrownBy(() -> locks.lockPublicName("Study Room")).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void 다른_도메인_락을_쥔_사용자가_그룹_락을_잡아도_기다리지_않는다() {
         tx.executeWithoutResult(status -> {
             manualLocks.lockUser(user);

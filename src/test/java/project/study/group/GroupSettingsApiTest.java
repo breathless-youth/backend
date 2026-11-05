@@ -43,6 +43,7 @@ class GroupSettingsApiTest {
     @BeforeEach
     void setUp() {
         probe = new GroupProbe(jdbc);
+        probe.softDeleteAllPublicGroups();
         owner = probe.insertUser();
         member = probe.insertUser();
         stranger = probe.insertUser();
@@ -138,6 +139,56 @@ class GroupSettingsApiTest {
     @Test
     void 이름이_비면_400_VALIDATION_FAILED다() {
         assertValidationFailed(json(v1Patch(mvc, patchUri(), owner), update("  ", "ETC", "null")));
+    }
+
+    @Test
+    void 공개_그룹을_이미_있는_공개_이름으로_바꾸면_409_GROUP_NAME_TAKEN이고_그대로다() {
+        probe.insertGroup(probe.insertUser(), "PUBLIC", "새벽 공시반", "ETC");
+        long mine = probe.insertGroup(owner, "PUBLIC", "내 그룹", "ETC");
+
+        assertErrorCode(
+                json(v1Patch(mvc, "/api/groups/" + mine, owner), update("새벽공시반", "ETC", "null")),
+                HttpStatus.CONFLICT,
+                "GROUP_NAME_TAKEN");
+
+        assertThat(probe.group(mine).orElseThrow().name()).isEqualTo("내 그룹");
+    }
+
+    @Test
+    void 비공개_그룹은_공개_그룹과_같은_이름으로_바꿀_수_있다() {
+        probe.insertGroup(probe.insertUser(), "PUBLIC", "새벽 공시반", "ETC");
+
+        assertThat(json(v1Patch(mvc, patchUri(), owner), update("새벽 공시반", "ETC", "null")))
+                .hasStatus(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void 이름을_바꾸지_않으면_이미_겹쳐_있는_공개_그룹도_소개를_고칠_수_있다() {
+        probe.insertGroup(probe.insertUser(), "PUBLIC", "겹친 이름", "ETC");
+        long mine = probe.insertGroup(owner, "PUBLIC", "겹친 이름", "ETC");
+
+        assertThat(json(v1Patch(mvc, "/api/groups/" + mine, owner), update("겹친 이름", "ETC", "\"새 소개\"")))
+                .hasStatus(HttpStatus.NO_CONTENT);
+        assertThat(json(v1Patch(mvc, "/api/groups/" + mine, owner), update("겹친  이름", "ETC", "\"또 소개\"")))
+                .hasStatus(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void 자기_이름의_대소문자와_공백만_바꾸는_것은_허용한다() {
+        long mine = probe.insertGroup(owner, "PUBLIC", "Study Room", "ETC");
+
+        assertThat(json(v1Patch(mvc, "/api/groups/" + mine, owner), update("study room", "ETC", "null")))
+                .hasStatus(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void 지워진_공개_그룹의_이름으로는_바꿀_수_있다() {
+        long gone = probe.insertGroup(probe.insertUser(), "PUBLIC", "새벽 공시반", "ETC");
+        probe.softDeleteGroup(gone);
+        long mine = probe.insertGroup(owner, "PUBLIC", "내 그룹", "ETC");
+
+        assertThat(json(v1Patch(mvc, "/api/groups/" + mine, owner), update("새벽 공시반", "ETC", "null")))
+                .hasStatus(HttpStatus.NO_CONTENT);
     }
 
     @Test

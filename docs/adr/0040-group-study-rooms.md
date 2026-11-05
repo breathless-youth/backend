@@ -112,6 +112,16 @@ FE는 Swagger가 나와야 타입을 만들 수 있어서 계약(REST·STOMP·�
     지웠다. `ownedGroupCount`와 `limits.maxOwnedGroups`는 웹이 바뀔 때까지 남긴다. 배포된 웹이 `ownedGroupCount`로 그룹 만들기 버튼을 막아서, 먼저
     빼면 `undefined < 2`가 거짓이 되어 모두의 버튼이 막힌다. 서버를 먼저 배포하고 웹을 나중에 배포한다.
 
+16. **공개 그룹의 입장 방식은 `APPROVAL`(기본값, 신청 후 입장) 또는 `OPEN`(바로 입장)이며 그룹장이 변경할 수 있다 (BY-1124).**
+    비공개 그룹은 초대코드 전용이고 항상 `APPROVAL`이며, 생성·수정에서 `OPEN`을 보내면 `400 VALIDATION_FAILED`다. 공개 여부는 바꾸지 않는다.
+    `APPROVAL → OPEN`은 같은 트랜잭션에서 기한이 지났어도 상태가 `PENDING`인 신청을 모두 `JOIN_POLICY_OPEN`과 `answered_at`으로 닫고 알리지 않는다.
+    반대 변경은 멤버와 신청을 건드리지 않는다. `POST /api/groups/{groupId}/members`(버전 1, 인증 필요, 본문 없음)는 그룹 없음·삭제 `404 GROUP_NOT_FOUND` →
+    비공개·`APPROVAL` `409 GROUP_JOIN_APPROVAL_REQUIRED` → 이미 멤버 `200 {groupId, joined:false}` → 내보낸 지 3일 → 멤버 6명 → 그룹·신청 합쳐 5개 순서로 검사한다.
+    락은 그룹 행 → 사용자 순서이며 신청 3곳 제한은 적용하지 않는다. 성공하면 `OPEN_JOIN`으로 멤버를 넣고 `200 {groupId, joined:true}`를 반환하며,
+    초대코드 참여와 같이 별도 푸시·공부방 메시지는 없다. `OPEN`에 신청하면 그룹 확인 직후 멤버 확인보다 먼저 `409 GROUP_JOIN_OPEN`이다.
+    홈·공개 목록·공개 보기·내 그룹 카드에 `joinPolicy`를 주며, `OPEN`의 새 신청 수는 그룹장에게도 null이다. 공개 보기의 기존 `CAN_APPLY`는
+    입장 방식에 따라 신청 또는 바로 입장을 뜻하고, `OPEN`의 입장 불가 사유에는 `APPLICATION_LIMIT`을 주지 않는다.
+
 ## 결과
 
 - 초대코드 방과 옛 앱의 동작은 바뀌지 않는다. 4단계 구현은 `websocket.html` §11을 따르고, 계약(type·필드·목적지·수치)을 바꾸면

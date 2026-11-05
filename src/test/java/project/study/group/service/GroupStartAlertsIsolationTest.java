@@ -16,6 +16,7 @@ import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import project.study.block.service.BlockService;
 import project.study.common.category.StudyCategory;
+import project.study.group.GroupJoinPolicy;
 import project.study.group.GroupVisibility;
 import project.study.group.push.GroupNotifications;
 import project.study.group.repository.GroupAlertRepository;
@@ -60,7 +61,17 @@ class GroupStartAlertsIsolationTest {
         when(members.findLiveGroupIdsOfUser(HEALTHY)).thenReturn(List.of(GROUP));
         when(groups.findLiveByIds(List.of(GROUP)))
                 .thenReturn(List.of(new GroupRow(
-                        GROUP, "스터디", null, GroupVisibility.PUBLIC, StudyCategory.ETC, 99, null, NOW, NOW, null)));
+                        GROUP,
+                        "스터디",
+                        null,
+                        GroupVisibility.PUBLIC,
+                        GroupJoinPolicy.APPROVAL,
+                        StudyCategory.ETC,
+                        99,
+                        null,
+                        NOW,
+                        NOW,
+                        null)));
         when(members.findLiveByGroups(List.of(GROUP)))
                 .thenReturn(List.of(new MemberRow(1, GROUP, RECEIVER, NOW, "APPLICATION", true)));
         when(alerts.findSeatHolders(List.of(GROUP))).thenReturn(Map.of());
