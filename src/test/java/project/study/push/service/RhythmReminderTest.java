@@ -32,6 +32,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.push.dto.PushMessage;
 import project.study.push.dto.PushResult;
+import project.study.push.dto.PushText;
 import project.study.push.repository.PushExperimentQueries;
 import project.study.push.repository.RhythmReminderQueries;
 import project.study.push.repository.RhythmReminderQueries.Candidate;
@@ -191,6 +192,10 @@ class RhythmReminderTest {
         assertThat(sent.getValue().link()).isEqualTo("/home");
         assertThat(sent.getValue().type()).isEqualTo(RhythmReminder.TYPE_PEAK);
         assertThat(sent.getValue().pushId()).isEqualTo(reserved.getValue());
+        assertThat(sent.getValue().ko().title()).isEqualTo("내 뇌가 가장 똑똑해지는 시간 🧠");
+        assertThat(sent.getValue().en())
+                .isEqualTo(new PushText(
+                        "Your brain's sharpest hour 🧠", "This is when you focus best. Let's make today count."));
         verify(pushSender, times(1)).send(any(), any());
         // 피크 알림은 3일 간격을 보지 않고, 미리 계산한 값은 하루 한 번만 만든다
         verify(queries, never()).lastSendDate(anyLong(), any());
@@ -217,7 +222,14 @@ class RhythmReminderTest {
         tickEvery10Minutes(laSeven.minusSeconds(1800), laSeven.plusSeconds(1800));
 
         verify(sendLog).reserveSend(any(), eq(1L), eq(RhythmReminder.TYPE_USUAL), eq(TODAY), eq(laSeven));
-        verify(pushSender, times(1)).send(any(), any());
+        ArgumentCaptor<PushMessage> sent = ArgumentCaptor.forClass(PushMessage.class);
+        verify(pushSender, times(1)).send(any(), sent.capture());
+        // 어느 언어로 보낼지는 PushSender가 토큰마다 고르니 두 언어 문구를 함께 넘긴다
+        assertThat(sent.getValue().ko().title()).isEqualTo("딱 5분만 눈 딱 감고 켜봐요 ⏱️");
+        assertThat(sent.getValue().en())
+                .isEqualTo(new PushText(
+                        "Just give it 5 minutes ⏱️",
+                        "No need to study long today. Warm up for 5 minutes at your usual start time."));
     }
 
     @Test

@@ -39,4 +39,7 @@ public class PushToken extends BaseTimeEntity {
 
     @Column(name = "notifications_enabled", nullable = false)
     private boolean notificationsEnabled;
+
+    @Column(nullable = false)
+    private String locale;
 }

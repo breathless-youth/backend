@@ -121,8 +121,9 @@ class GroupReportApiTest {
         // 거절과 똑같은 푸시다 — 신고됐다는 사실은 신청한 사람에게 드러나지 않는다
         PushMessage message = pushedOnceTo(pushSender, applicant);
         assertThat(message.type()).isEqualTo("group_application_declined");
-        assertThat(message.title()).isEqualTo("비슷한 그룹에 신청해 볼까요?");
-        assertThat(message.body()).isEqualTo(probe.group(group).orElseThrow().name() + " 신청이 거절됐어요");
+        assertThat(message.ko().title()).isEqualTo("비슷한 그룹에 신청해 볼까요?");
+        assertThat(message.ko().body())
+                .isEqualTo(probe.group(group).orElseThrow().name() + " 신청이 거절됐어요");
         assertThat(message.link()).isEqualTo("/groups?tab=public&category=ETC");
         notPushedTo(pushSender, owner);
         assertThat(blocks.blockedAt(owner, applicant)).isEmpty();

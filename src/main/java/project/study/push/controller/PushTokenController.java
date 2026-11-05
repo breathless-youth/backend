@@ -26,9 +26,13 @@ public class PushTokenController {
 
     private final PushTokenService pushTokenService;
 
-    @Operation(summary = "기기 토큰 등록", description = "같은 토큰이면 알림 권한 상태와 갱신 시각만 바뀐다(멱등). 다른 사용자에게 붙어 있던 토큰이면 지금 사용자로 옮긴다.")
+    @Operation(
+            summary = "기기 토큰 등록",
+            description = "같은 토큰이면 알림 권한 상태, 언어, 갱신 시각이 바뀐다(멱등). 다른 사용자에게 붙어 있던 토큰이면 지금 사용자로 옮긴다.")
     @ApiResponse(responseCode = "204", description = "등록됨")
-    @ApiResponse(responseCode = "400", description = "토큰 누락·4096자 초과, IOS·ANDROID 밖의 플랫폼, 알림 권한 상태 누락")
+    @ApiResponse(
+            responseCode = "400",
+            description = "토큰 누락·4096자 초과, IOS·ANDROID 밖의 플랫폼, 알림 권한 상태 누락, 언어(locale) 35자 초과")
     @PutMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void register(@AuthenticationPrincipal Long userId, @Valid @RequestBody PushTokenRequest request) {

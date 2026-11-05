@@ -164,8 +164,9 @@ class GroupLeaveApiTest {
         assertThat(statusOf(declinedId)).isEqualTo("DECLINED");
         PushMessage message = pushedOnceTo(pushSender, waiting);
         assertThat(message.type()).isEqualTo("group_application_room_closed");
-        assertThat(message.title()).isEqualTo("다른 그룹을 찾아볼까요?");
-        assertThat(message.body()).isEqualTo(probe.group(group).orElseThrow().name() + " 그룹이 사라져 신청이 취소됐어요");
+        assertThat(message.ko().title()).isEqualTo("다른 그룹을 찾아볼까요?");
+        assertThat(message.ko().body())
+                .isEqualTo(probe.group(group).orElseThrow().name() + " 그룹이 사라져 신청이 취소됐어요");
         assertThat(message.link()).isEqualTo("/groups?tab=public");
         notPushedTo(pushSender, lapsed);
         notPushedTo(pushSender, declined);

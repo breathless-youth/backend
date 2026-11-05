@@ -30,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.push.dto.FirstSessionCandidate;
 import project.study.push.dto.PushMessage;
 import project.study.push.dto.PushResult;
+import project.study.push.dto.PushText;
 import project.study.push.repository.PushExperimentQueries;
 
 @ExtendWith(MockitoExtension.class)
@@ -166,6 +167,12 @@ class FirstSessionPushExperimentTest {
         experiment(DELAY).tick(eightPm.plus(Duration.ofMinutes(10)));
 
         verify(queries).reserveSend(any(), eq(1L), eq("first_session_d1"), eq(nyToday), eq(eightPm));
+        ArgumentCaptor<PushMessage> sent = ArgumentCaptor.forClass(PushMessage.class);
+        verify(pushSender).send(eq(List.of(1L)), sent.capture());
+        assertThat(sent.getValue().en())
+                .isEqualTo(new PushText(
+                        "How about just 5 minutes? 👀",
+                        "Getting started is the hardest part. Try the timer before today ends."));
         verify(queries, never()).assign(any(), eq(2L), anyString(), any());
         verify(queries, org.mockito.Mockito.times(1)).assign(any(), eq(1L), anyString(), any());
     }
@@ -215,6 +222,9 @@ class FirstSessionPushExperimentTest {
         assertThat(sent.getValue().pushId()).isEqualTo(reserved.getValue());
         assertThat(sent.getValue().link()).isEqualTo("/");
         assertThat(sent.getValue().type()).isEqualTo("first_session_d0");
+        assertThat(sent.getValue().en())
+                .isEqualTo(new PushText(
+                        "Build a 5-minute focus habit 🔥", "Just turn on the timer for 5 minutes and start small."));
         verify(pushSender, never()).send(eq(List.of(2L)), any());
     }
 
