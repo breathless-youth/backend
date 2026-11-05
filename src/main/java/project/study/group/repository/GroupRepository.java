@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.common.category.StudyCategory;
+import project.study.group.GroupJoinPolicy;
 import project.study.group.GroupVisibility;
 import project.study.group.service.GroupNames;
 
@@ -31,6 +32,7 @@ public class GroupRepository {
             String name,
             String description,
             GroupVisibility visibility,
+            GroupJoinPolicy joinPolicy,
             StudyCategory category,
             long ownerId,
             String inviteCode,
@@ -39,16 +41,19 @@ public class GroupRepository {
             Instant deletedAt) {}
 
     /** 공개 목록 한 줄 — 이름·시험 목표와 지금 멤버 수만 읽는다. */
-    public record PublicGroupRow(long id, String name, StudyCategory category, int memberCount) {}
+    public record PublicGroupRow(
+            long id, String name, StudyCategory category, GroupJoinPolicy joinPolicy, int memberCount) {}
 
     private static final String COLUMNS =
-            "id, name, description, visibility, category, owner_id, invite_code, created_at, updated_at, deleted_at";
+            "id, name, description, visibility, join_policy, category, owner_id, invite_code, created_at, updated_at,"
+                    + " deleted_at";
 
     private static final RowMapper<GroupRow> ROW = (rs, n) -> new GroupRow(
             rs.getLong("id"),
             rs.getString("name"),
             rs.getString("description"),
             GroupVisibility.valueOf(rs.getString("visibility")),
+            GroupJoinPolicy.valueOf(rs.getString("join_policy")),
             StudyCategory.valueOf(rs.getString("category")),
             rs.getLong("owner_id"),
             rs.getString("invite_code"),
@@ -67,10 +72,10 @@ public class GroupRepository {
             String inviteCode,
             Instant now) {
         return jdbc.sql("""
-                        INSERT INTO study_group
-                            (name, description, visibility, category, owner_id, invite_code, created_at, updated_at)
-                        VALUES (:name, :description, :visibility, :category, :ownerId, :inviteCode, :now, :now)
-                        RETURNING id""")
+            INSERT INTO study_group
+                (name, description, visibility, category, owner_id, invite_code, created_at, updated_at)
+            VALUES (:name, :description, :visibility, :category, :ownerId, :inviteCode, :now, :now)
+            RETURNING id""")
                 .param("name", name)
                 .param("description", description)
                 .param("visibility", visibility.name())
@@ -111,18 +116,18 @@ public class GroupRepository {
      */
     public List<Long> lockLiveInvolving(long userId) {
         return jdbc.sql("""
-                        SELECT g.id FROM study_group g
-                         WHERE g.id IN (SELECT m.group_id FROM study_group_member m
-                                         WHERE m.user_id = :userId AND m.left_at IS NULL
-                                        UNION
-                                        SELECT a.group_id FROM study_group_application a
-                                         WHERE a.user_id = :userId AND a.status = 'PENDING'
-                                        UNION
-                                        SELECT o.id FROM study_group o
-                                         WHERE o.owner_id = :userId AND o.deleted_at IS NULL)
-                           AND g.deleted_at IS NULL
-                         ORDER BY g.id
-                           FOR NO KEY UPDATE OF g""").param("userId", userId).query(Long.class).list();
+            SELECT g.id FROM study_group g
+             WHERE g.id IN (SELECT m.group_id FROM study_group_member m
+                             WHERE m.user_id = :userId AND m.left_at IS NULL
+                            UNION
+                            SELECT a.group_id FROM study_group_application a
+                             WHERE a.user_id = :userId AND a.status = 'PENDING'
+                            UNION
+                            SELECT o.id FROM study_group o
+                             WHERE o.owner_id = :userId AND o.deleted_at IS NULL)
+               AND g.deleted_at IS NULL
+             ORDER BY g.id
+               FOR NO KEY UPDATE OF g""").param("userId", userId).query(Long.class).list();
     }
 
     /**
@@ -131,15 +136,15 @@ public class GroupRepository {
      */
     public List<GroupRow> lockLiveOfMemberOrOwner(long userId) {
         return jdbc.sql("SELECT " + COLUMNS + """
-                         FROM study_group g
-                        WHERE g.id IN (SELECT m.group_id FROM study_group_member m
-                                        WHERE m.user_id = :userId AND m.left_at IS NULL
-                                       UNION
-                                       SELECT o.id FROM study_group o
-                                        WHERE o.owner_id = :userId AND o.deleted_at IS NULL)
-                          AND g.deleted_at IS NULL
-                        ORDER BY g.id
-                          FOR NO KEY UPDATE OF g""")
+             FROM study_group g
+            WHERE g.id IN (SELECT m.group_id FROM study_group_member m
+                            WHERE m.user_id = :userId AND m.left_at IS NULL
+                           UNION
+                           SELECT o.id FROM study_group o
+                            WHERE o.owner_id = :userId AND o.deleted_at IS NULL)
+              AND g.deleted_at IS NULL
+            ORDER BY g.id
+              FOR NO KEY UPDATE OF g""")
                 .param("userId", userId)
                 .query(ROW)
                 .list();
@@ -162,15 +167,16 @@ public class GroupRepository {
      */
     public List<PublicGroupRow> findPublicLive() {
         return jdbc.sql("""
-                        SELECT g.id, g.name, g.category, count(m.id) AS member_count
-                          FROM study_group g
-                          LEFT JOIN study_group_member m ON m.group_id = g.id AND m.left_at IS NULL
-                         WHERE g.visibility = 'PUBLIC' AND g.deleted_at IS NULL
-                         GROUP BY g.id, g.name, g.category""")
+            SELECT g.id, g.name, g.category, g.join_policy, count(m.id) AS member_count
+              FROM study_group g
+              LEFT JOIN study_group_member m ON m.group_id = g.id AND m.left_at IS NULL
+             WHERE g.visibility = 'PUBLIC' AND g.deleted_at IS NULL
+             GROUP BY g.id, g.name, g.category""")
                 .query((rs, n) -> new PublicGroupRow(
                         rs.getLong("id"),
                         rs.getString("name"),
                         StudyCategory.valueOf(rs.getString("category")),
+                        GroupJoinPolicy.valueOf(rs.getString("join_policy")),
                         rs.getInt("member_count")))
                 .list();
     }
@@ -199,16 +205,27 @@ public class GroupRepository {
                 .list();
     }
 
-    /** 이름·시험·목표·소개 전체 교체. 공개 여부는 바꾸지 않는다. */
-    public int update(long id, String name, StudyCategory category, String description, Instant now) {
+    /** 이름·시험·목표·소개와 입장 방식을 바꾼다. 공개 여부는 바꾸지 않는다. */
+    public int update(
+            long id, String name, StudyCategory category, String description, GroupJoinPolicy joinPolicy, Instant now) {
         return jdbc.sql("""
-                        UPDATE study_group
-                           SET name = :name, category = :category, description = :description, updated_at = :now
-                         WHERE id = :id AND deleted_at IS NULL""")
+            UPDATE study_group
+               SET name = :name, category = :category, description = :description,
+                   join_policy = :joinPolicy, updated_at = :now
+             WHERE id = :id AND deleted_at IS NULL""")
                 .param("name", name)
                 .param("category", category.name())
                 .param("description", description)
+                .param("joinPolicy", joinPolicy.name())
                 .param("now", Rows.ts(now))
+                .param("id", id)
+                .update();
+    }
+
+    /** 생성 트랜잭션에서 기본값 APPROVAL 대신 선택한 입장 방식을 저장한다. */
+    public int updateJoinPolicy(long id, GroupJoinPolicy joinPolicy) {
+        return jdbc.sql("UPDATE study_group SET join_policy = :joinPolicy WHERE id = :id AND deleted_at IS NULL")
+                .param("joinPolicy", joinPolicy.name())
                 .param("id", id)
                 .update();
     }
@@ -219,10 +236,10 @@ public class GroupRepository {
      */
     public boolean existsLivePublicNamed(String name, long exceptGroupId) {
         return jdbc.sql("""
-                        SELECT EXISTS (
-                            SELECT 1 FROM study_group
-                             WHERE visibility = 'PUBLIC' AND deleted_at IS NULL AND id <> :exceptId
-                               AND %s = %s)""".formatted(GroupNames.keySql("name"), GroupNames.keySql(":name")))
+            SELECT EXISTS (
+                SELECT 1 FROM study_group
+                 WHERE visibility = 'PUBLIC' AND deleted_at IS NULL AND id <> :exceptId
+                   AND %s = %s)""".formatted(GroupNames.keySql("name"), GroupNames.keySql(":name")))
                 .param("name", name)
                 .param("exceptId", exceptGroupId)
                 .query(Boolean.class)
@@ -258,8 +275,8 @@ public class GroupRepository {
     /** 비공개 그룹의 코드를 바꾼다. 공개 그룹은 CHECK 제약이 코드를 막는다. */
     public int updateInviteCode(long id, String code, Instant now) {
         return jdbc.sql("""
-                        UPDATE study_group SET invite_code = :code, updated_at = :now
-                         WHERE id = :id AND deleted_at IS NULL""")
+            UPDATE study_group SET invite_code = :code, updated_at = :now
+             WHERE id = :id AND deleted_at IS NULL""")
                 .param("code", code)
                 .param("now", Rows.ts(now))
                 .param("id", id)
@@ -268,8 +285,8 @@ public class GroupRepository {
 
     public int updateOwner(long id, long ownerId, Instant now) {
         return jdbc.sql("""
-                        UPDATE study_group SET owner_id = :ownerId, updated_at = :now
-                         WHERE id = :id AND deleted_at IS NULL""")
+            UPDATE study_group SET owner_id = :ownerId, updated_at = :now
+             WHERE id = :id AND deleted_at IS NULL""")
                 .param("ownerId", ownerId)
                 .param("now", Rows.ts(now))
                 .param("id", id)
@@ -279,8 +296,8 @@ public class GroupRepository {
     /** 삭제 표시. 초대코드는 비워 다른 그룹이 다시 쓸 수 있게 한다. */
     public int softDelete(long id, Instant now) {
         return jdbc.sql("""
-                        UPDATE study_group SET deleted_at = :now, updated_at = :now, invite_code = NULL
-                         WHERE id = :id AND deleted_at IS NULL""").param("now", Rows.ts(now)).param("id", id).update();
+            UPDATE study_group SET deleted_at = :now, updated_at = :now, invite_code = NULL
+             WHERE id = :id AND deleted_at IS NULL""").param("now", Rows.ts(now)).param("id", id).update();
     }
 
     /** 이 사용자가 그룹장인 살아 있는 그룹 수. */

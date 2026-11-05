@@ -3,6 +3,7 @@ package project.study.group.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import project.study.common.category.StudyCategory;
+import project.study.group.GroupJoinPolicy;
 
 /** 공개 그룹 목록의 한 쪽 — 쪽 번호 방식이라 다음 쪽이 있는지만 준다. */
 public record PublicGroupPageResponse(
@@ -25,6 +26,9 @@ public record PublicGroupPageResponse(
 
             @Schema(description = "시험·목표", example = "CIVIL_SERVICE")
             StudyCategory category,
+
+            @Schema(description = "입장 방식 — APPROVAL 신청 후 입장, OPEN 바로 입장")
+            GroupJoinPolicy joinPolicy,
 
             @Schema(description = "멤버 수 (최대 6) — 6이면 다 찬 그룹이다", example = "4")
             int memberCount,

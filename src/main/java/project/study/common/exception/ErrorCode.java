@@ -63,6 +63,12 @@ public enum ErrorCode {
     /** 그룹 멤버가 6명이다 (409) */
     GROUP_FULL,
 
+    /** 바로 입장 그룹에는 신청할 수 없다 (409) */
+    GROUP_JOIN_OPEN,
+
+    /** 신청 후 입장 또는 비공개 그룹에는 바로 들어갈 수 없다 (409) */
+    GROUP_JOIN_APPROVAL_REQUIRED,
+
     /** 이름·소개·신청 소개 글에 연락처나 링크가 있다 (400) */
     CONTACT_NOT_ALLOWED,
 
