@@ -32,6 +32,7 @@ public class GroupApplicationRepository {
     public static final String CANCELED = "CANCELED";
     public static final String EXPIRED = "EXPIRED";
     public static final String GROUP_DELETED = "GROUP_DELETED";
+    public static final String JOIN_POLICY_OPEN = "JOIN_POLICY_OPEN";
 
     public record ApplicationRow(
             long id,
@@ -83,10 +84,10 @@ public class GroupApplicationRepository {
     /** 답을 기다리는 새 신청. 같은 쌍에 기한 안이든 지났든 {@code PENDING}이 남아 있으면 부분 unique가 막는다. */
     public long insert(long groupId, long userId, String introduction, Instant now, Instant expiresAt) {
         return jdbc.sql("""
-                        INSERT INTO study_group_application
-                            (group_id, user_id, introduction, status, created_at, expires_at)
-                        VALUES (:groupId, :userId, :introduction, 'PENDING', :now, :expiresAt)
-                        RETURNING id""")
+            INSERT INTO study_group_application
+                (group_id, user_id, introduction, status, created_at, expires_at)
+            VALUES (:groupId, :userId, :introduction, 'PENDING', :now, :expiresAt)
+            RETURNING id""")
                 .param("groupId", groupId)
                 .param("userId", userId)
                 .param("introduction", introduction)
@@ -114,8 +115,8 @@ public class GroupApplicationRepository {
     /** 이 사람이 이 그룹에 낸, 기한 안에서 답을 기다리는 신청. */
     public Optional<ApplicationRow> findPending(long groupId, long userId, Instant now) {
         return jdbc.sql("SELECT " + COLUMNS + """
-                         FROM study_group_application
-                        WHERE group_id = :groupId AND user_id = :userId AND status = 'PENDING' AND expires_at > :now""")
+             FROM study_group_application
+            WHERE group_id = :groupId AND user_id = :userId AND status = 'PENDING' AND expires_at > :now""")
                 .param("groupId", groupId)
                 .param("userId", userId)
                 .param("now", Rows.ts(now))
@@ -126,8 +127,8 @@ public class GroupApplicationRepository {
     /** 이 사용자가 답을 기다리는 신청 수 — "그룹+신청 5개"와 "신청 3개" 한도가 쓴다. */
     public int countPendingOfUser(long userId, Instant now) {
         return jdbc.sql("""
-                        SELECT count(*) FROM study_group_application
-                         WHERE user_id = :userId AND status = 'PENDING' AND expires_at > :now""")
+            SELECT count(*) FROM study_group_application
+             WHERE user_id = :userId AND status = 'PENDING' AND expires_at > :now""")
                 .param("userId", userId)
                 .param("now", Rows.ts(now))
                 .query(Integer.class)
@@ -137,8 +138,8 @@ public class GroupApplicationRepository {
     /** 이 그룹에 답을 기다리는 신청 수 — 그룹 홈의 새 신청 띠가 쓴다. */
     public int countPendingOfGroup(long groupId, Instant now) {
         return jdbc.sql("""
-                        SELECT count(*) FROM study_group_application
-                         WHERE group_id = :groupId AND status = 'PENDING' AND expires_at > :now""")
+            SELECT count(*) FROM study_group_application
+             WHERE group_id = :groupId AND status = 'PENDING' AND expires_at > :now""")
                 .param("groupId", groupId)
                 .param("now", Rows.ts(now))
                 .query(Integer.class)
@@ -152,9 +153,9 @@ public class GroupApplicationRepository {
         }
         Map<Long, Integer> counts = new HashMap<>();
         jdbc.sql("""
-                        SELECT group_id, count(*) AS pending FROM study_group_application
-                         WHERE group_id IN (:groupIds) AND status = 'PENDING' AND expires_at > :now
-                         GROUP BY group_id""").param("groupIds", groupIds).param("now", Rows.ts(now)).query(rs -> {
+            SELECT group_id, count(*) AS pending FROM study_group_application
+             WHERE group_id IN (:groupIds) AND status = 'PENDING' AND expires_at > :now
+             GROUP BY group_id""").param("groupIds", groupIds).param("now", Rows.ts(now)).query(rs -> {
             counts.put(rs.getLong("group_id"), rs.getInt("pending"));
         });
         return counts;
@@ -163,11 +164,11 @@ public class GroupApplicationRepository {
     /** 그룹장용 목록 — 이 그룹에서 기한 안에서 답을 기다리는 신청을 신청한 순서(오래된 것부터)로. */
     public List<ApplicantRow> findPendingOfGroup(long groupId, Instant now) {
         return jdbc.sql("""
-                        SELECT a.id, a.user_id, u.nickname, u.profile_image, a.introduction, a.created_at, a.expires_at
-                          FROM study_group_application a
-                          JOIN users u ON u.id = a.user_id
-                         WHERE a.group_id = :groupId AND a.status = 'PENDING' AND a.expires_at > :now
-                         ORDER BY a.created_at, a.id""")
+            SELECT a.id, a.user_id, u.nickname, u.profile_image, a.introduction, a.created_at, a.expires_at
+              FROM study_group_application a
+              JOIN users u ON u.id = a.user_id
+             WHERE a.group_id = :groupId AND a.status = 'PENDING' AND a.expires_at > :now
+             ORDER BY a.created_at, a.id""")
                 .param("groupId", groupId)
                 .param("now", Rows.ts(now))
                 .query((rs, n) -> new ApplicantRow(
@@ -184,11 +185,11 @@ public class GroupApplicationRepository {
     /** 내 신청 목록 — 기한 안에서 답을 기다리는 것을 신청한 순서(오래된 것부터)로. 사라진 그룹의 신청은 싣지 않는다. */
     public List<MyApplicationRow> findPendingOfUser(long userId, Instant now) {
         return jdbc.sql("""
-                        SELECT a.id, a.group_id, g.name, g.category, a.created_at, a.expires_at
-                          FROM study_group_application a
-                          JOIN study_group g ON g.id = a.group_id AND g.deleted_at IS NULL
-                         WHERE a.user_id = :userId AND a.status = 'PENDING' AND a.expires_at > :now
-                         ORDER BY a.created_at, a.id""")
+            SELECT a.id, a.group_id, g.name, g.category, a.created_at, a.expires_at
+              FROM study_group_application a
+              JOIN study_group g ON g.id = a.group_id AND g.deleted_at IS NULL
+             WHERE a.user_id = :userId AND a.status = 'PENDING' AND a.expires_at > :now
+             ORDER BY a.created_at, a.id""")
                 .param("userId", userId)
                 .param("now", Rows.ts(now))
                 .query((rs, n) -> new MyApplicationRow(
@@ -212,8 +213,8 @@ public class GroupApplicationRepository {
     /** 신청이 {@code fromStatus}일 때만 {@code toStatus}로 바꾼다. 이미 답한 신청이면 0건. */
     public int answer(long id, String fromStatus, String toStatus, Instant now) {
         return jdbc.sql("""
-                        UPDATE study_group_application SET status = :toStatus, answered_at = :now
-                         WHERE id = :id AND status = :fromStatus""")
+            UPDATE study_group_application SET status = :toStatus, answered_at = :now
+             WHERE id = :id AND status = :fromStatus""")
                 .param("toStatus", toStatus)
                 .param("now", Rows.ts(now))
                 .param("id", id)
@@ -227,9 +228,9 @@ public class GroupApplicationRepository {
      */
     public List<ExpiredRow> expireDue(Instant now) {
         return jdbc.sql("""
-                        UPDATE study_group_application SET status = 'EXPIRED', answered_at = :now
-                         WHERE status = 'PENDING' AND expires_at <= :now
-                         RETURNING id, group_id, user_id""")
+            UPDATE study_group_application SET status = 'EXPIRED', answered_at = :now
+             WHERE status = 'PENDING' AND expires_at <= :now
+             RETURNING id, group_id, user_id""")
                 .param("now", Rows.ts(now))
                 .query((rs, n) -> new ExpiredRow(rs.getLong("id"), rs.getLong("group_id"), rs.getLong("user_id")))
                 .list();
@@ -238,9 +239,9 @@ public class GroupApplicationRepository {
     /** 이 쌍의 기한 지난 {@code PENDING}만 EXPIRED로 바꾼다 — 새 신청이 부분 unique에 막히지 않게 한다. 바꿨으면 1건. */
     public int expireStale(long groupId, long userId, Instant now) {
         return jdbc.sql("""
-                        UPDATE study_group_application SET status = 'EXPIRED', answered_at = :now
-                         WHERE group_id = :groupId AND user_id = :userId
-                           AND status = 'PENDING' AND expires_at <= :now""")
+            UPDATE study_group_application SET status = 'EXPIRED', answered_at = :now
+             WHERE group_id = :groupId AND user_id = :userId
+               AND status = 'PENDING' AND expires_at <= :now""")
                 .param("now", Rows.ts(now))
                 .param("groupId", groupId)
                 .param("userId", userId)
@@ -254,12 +255,23 @@ public class GroupApplicationRepository {
      */
     public List<Long> closePendingOfGroup(long groupId, Instant now) {
         return jdbc.sql("""
-                        UPDATE study_group_application SET status = 'GROUP_DELETED', answered_at = :now
-                         WHERE group_id = :groupId AND status = 'PENDING' AND expires_at > :now
-                         RETURNING user_id""")
+            UPDATE study_group_application SET status = 'GROUP_DELETED', answered_at = :now
+             WHERE group_id = :groupId AND status = 'PENDING' AND expires_at > :now
+             RETURNING user_id""")
                 .param("now", Rows.ts(now))
                 .param("groupId", groupId)
                 .query(Long.class)
                 .list();
+    }
+
+    /** 바로 입장으로 바꾸면 기한이 지났어도 아직 PENDING인 신청을 모두 닫는다. 신청자에게는 알리지 않는다. */
+    public int closePendingForOpenJoin(long groupId, Instant now) {
+        return jdbc.sql("""
+            UPDATE study_group_application SET status = :status, answered_at = :now
+             WHERE group_id = :groupId AND status = 'PENDING'""")
+                .param("status", JOIN_POLICY_OPEN)
+                .param("now", Rows.ts(now))
+                .param("groupId", groupId)
+                .update();
     }
 }

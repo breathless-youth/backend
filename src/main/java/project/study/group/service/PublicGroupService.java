@@ -16,6 +16,7 @@ import project.study.common.category.StudyCategory;
 import project.study.common.exception.ErrorCode;
 import project.study.common.text.Graphemes;
 import project.study.group.ApplyState;
+import project.study.group.GroupJoinPolicy;
 import project.study.group.dto.GroupMemberDesk;
 import project.study.group.dto.PublicGroupDetailResponse;
 import project.study.group.dto.PublicGroupDetailResponse.GroupOwnerProfile;
@@ -87,6 +88,7 @@ public class PublicGroupService {
                         group.id(),
                         group.name(),
                         group.category(),
+                        group.joinPolicy(),
                         group.memberCount(),
                         averages.getOrDefault(group.id(), 0L),
                         GroupDeskReader.studyingCount(desks.getOrDefault(group.id(), List.of())),
@@ -111,11 +113,12 @@ public class PublicGroupService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("그룹장이 멤버가 아니다 groupId=" + groupId));
         boolean member = desks.stream().anyMatch(desk -> desk.userId() == userId);
-        ApplyDecision decision = applyDecision(userId, groupId, member, desks.size(), now);
+        ApplyDecision decision = applyDecision(userId, group, member, desks.size(), now);
         return new PublicGroupDetailResponse(
                 group.id(),
                 group.name(),
                 group.category(),
+                group.joinPolicy(),
                 group.description(),
                 desks.size(),
                 new GroupOwnerProfile(ownerDesk.userId(), ownerDesk.nickname(), ownerDesk.profileImageUrl()),
@@ -126,11 +129,13 @@ public class PublicGroupService {
                 decision.application());
     }
 
-    private ApplyDecision applyDecision(long userId, long groupId, boolean member, int memberCount, Instant now) {
+    private ApplyDecision applyDecision(long userId, GroupRow group, boolean member, int memberCount, Instant now) {
         if (member) {
             return ApplyDecision.of(ApplyState.MEMBER);
         }
-        Optional<ApplicationRow> pending = applications.findPending(groupId, userId, now);
+        Optional<ApplicationRow> pending = group.joinPolicy() == GroupJoinPolicy.APPROVAL
+                ? applications.findPending(group.id(), userId, now)
+                : Optional.empty();
         if (pending.isPresent()) {
             ApplicationRow application = pending.get();
             return new ApplyDecision(
@@ -139,22 +144,22 @@ public class PublicGroupService {
         if (memberCount >= GroupService.MAX_MEMBERS) {
             return ApplyDecision.of(ApplyState.FULL);
         }
-        ErrorCode reason = unavailableReason(userId, groupId, now);
+        ErrorCode reason = unavailableReason(userId, group, now);
         return reason == null
                 ? ApplyDecision.of(ApplyState.CAN_APPLY)
                 : new ApplyDecision(ApplyState.UNAVAILABLE, reason, null);
     }
 
     /** 신청할 수 없는 이유를 {@code RECENTLY_KICKED} > {@code GROUP_SLOT_LIMIT} > {@code APPLICATION_LIMIT} 순으로 하나. 없으면 null. */
-    private ErrorCode unavailableReason(long userId, long groupId, Instant now) {
-        if (members.recentlyKicked(groupId, userId, now.minus(GroupService.KICK_COOLDOWN))) {
+    private ErrorCode unavailableReason(long userId, GroupRow group, Instant now) {
+        if (members.recentlyKicked(group.id(), userId, now.minus(GroupService.KICK_COOLDOWN))) {
             return ErrorCode.RECENTLY_KICKED;
         }
         int pending = applications.countPendingOfUser(userId, now);
         if (members.countLiveGroupsOfUser(userId) + pending >= GroupService.MAX_GROUP_SLOTS) {
             return ErrorCode.GROUP_SLOT_LIMIT;
         }
-        if (pending >= GroupService.MAX_PENDING_APPLICATIONS) {
+        if (group.joinPolicy() == GroupJoinPolicy.APPROVAL && pending >= GroupService.MAX_PENDING_APPLICATIONS) {
             return ErrorCode.APPLICATION_LIMIT;
         }
         return null;

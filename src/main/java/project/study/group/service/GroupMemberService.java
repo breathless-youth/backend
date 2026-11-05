@@ -16,6 +16,7 @@ import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
 import project.study.common.exception.ErrorCode;
 import project.study.common.exception.NotFoundException;
+import project.study.group.GroupJoinPolicy;
 import project.study.group.GroupVisibility;
 import project.study.group.InviteCodes;
 import project.study.group.JoinVia;
@@ -43,7 +44,7 @@ import project.study.user.image.ProfileImageUrls;
 /**
  * 그룹 멤버·초대·공부방 자리·멤버 신고 (BY-1124). 공부방 자리 잡기·나가기와 공부방 메시지는 {@link GroupRoomService}에 맡긴다.
  *
- * <p>락 순서({@link GroupLocks}): 그룹을 바꾸는 작업은 모두 그룹 행(①)을 먼저 {@code FOR UPDATE}로 잡는다. 코드 참여만 한도를 세려고 그 뒤
+ * <p>락 순서({@link GroupLocks}): 그룹을 바꾸는 작업은 모두 그룹 행(①)을 먼저 {@code FOR UPDATE}로 잡는다. 코드 참여와 바로 입장은 한도를 세려고 그 뒤
  * 들어오는 사람의 사용자 락(②)을 잡는다. 내보내기·나가기의 공부방 자리 지우기({@link GroupRoomService#memberRemoved})는 ①을 쥔 채
  * 방·자리 행(④⑤)만 잡는다.
  *
@@ -212,6 +213,22 @@ public class GroupMemberService {
                 .filter(locked -> code.equals(locked.inviteCode()))
                 .orElseThrow(GroupMemberService::inviteCodeNotFound);
 
+        return joinMember(userId, groupId, joinedVia(request.via()));
+    }
+
+    /** 공개 바로 입장 — 그룹 행(①) → 입장 방식 → 이미 멤버 → 내보낸 지 3일 → 정원 → 사용자 락(②) → 그룹·신청 한도. */
+    @Transactional
+    public GroupJoinResponse joinOpen(Long userId, long groupId) {
+        GroupRow group = groups.lockLive(groupId)
+                .orElseThrow(() -> new NotFoundException(ErrorCode.GROUP_NOT_FOUND, "없거나 사라진 그룹이에요"));
+        if (group.visibility() != GroupVisibility.PUBLIC || group.joinPolicy() != GroupJoinPolicy.OPEN) {
+            throw new ConflictException(ErrorCode.GROUP_JOIN_APPROVAL_REQUIRED, "이 그룹에는 신청 후 수락이나 초대코드가 필요해요");
+        }
+        return joinMember(userId, groupId, GroupMemberRepository.VIA_OPEN_JOIN);
+    }
+
+    /** 그룹 행을 잠근 뒤 호출한다. 코드 참여와 바로 입장의 검사·락 순서와 멤버 추가를 같게 유지한다. */
+    private GroupJoinResponse joinMember(long userId, long groupId, String via) {
         if (members.findLive(groupId, userId).isPresent()) {
             return new GroupJoinResponse(groupId, false);
         }
@@ -227,7 +244,7 @@ public class GroupMemberService {
                 >= GroupService.MAX_GROUP_SLOTS) {
             throw new ConflictException(ErrorCode.GROUP_SLOT_LIMIT, "들어간 그룹과 신청 중인 그룹이 이미 5개예요");
         }
-        members.insert(groupId, userId, joinedVia(request.via()), now);
+        members.insert(groupId, userId, via, now);
         return new GroupJoinResponse(groupId, true);
     }
 

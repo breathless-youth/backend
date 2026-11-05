@@ -103,7 +103,7 @@ class GroupRepositoriesTest {
         assertThat(groups.findLiveByInviteCode(code)).isEmpty();
         assertThat(groups.inviteCodeTaken(code)).isFalse();
         assertThat(groups.countOwnedLive(owner)).isZero();
-        assertThat(groups.update(id, "x", StudyCategory.ETC, null, Instant.now()))
+        assertThat(groups.update(id, "x", StudyCategory.ETC, null, GroupJoinPolicy.APPROVAL, Instant.now()))
                 .isZero();
     }
 
