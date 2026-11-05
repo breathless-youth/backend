@@ -8,8 +8,9 @@ import project.study.user.nickname.ValidNickname;
 // 모든 필드는 null 허용(생략 = 미변경) — Bean Validation 제약은 null을 통과시키므로 부분 수정 의미가 유지된다
 public record ProfileUpdateRequest(
         @Schema(
-                description = "변경할 닉네임 — 한글·영문·숫자·이모지·띄어쓰기만, 앞뒤 공백을 제외하고 2~12자"
-                        + "(글자 단위, 이모지 조합은 1자, 중간 띄어쓰기 포함, 이모지 조합을 포함해 최대 100 코드포인트). 생략하면 미변경",
+                description = "변경할 닉네임 — 한글·영문(악센트 포함)·일본어·한자·숫자·이모지·띄어쓰기·_ . -만, 앞뒤 공백을 제외하고 "
+                        + "1글자 이상 40칸 이하. 한글·가나·한자·이모지(조합 포함 한 글자)는 2칸, 나머지는 1칸이다(한글 20자, 영문 40자). "
+                        + "전각 영문은 보통 글자로 바꿔 저장하고, 영문 대소문자만 다른 닉네임은 같은 닉네임으로 본다(409). 생략하면 미변경",
                 example = "숨 벅찬 청년들🔥")
         @ValidNickname
         String nickname,

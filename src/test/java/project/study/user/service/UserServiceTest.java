@@ -28,6 +28,7 @@ import project.study.user.dto.UserRegisterRequest;
 import project.study.user.entity.Provider;
 import project.study.user.entity.User;
 import project.study.user.image.ProfileImageUrls;
+import project.study.user.nickname.AutoNicknameFixtures;
 import project.study.user.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,7 +47,8 @@ class UserServiceTest {
 
     @Test
     void 새_기기_등록은_유저를_생성하고_isNew가_true다() {
-        when(userRepository.insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), eq("포"), anyInt()))
+        when(userRepository.insertIfAbsent(
+                        eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), anyString(), anyInt()))
                 .thenReturn(1);
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.of(userWithId(1L, DEVICE_ID)));
@@ -58,23 +60,60 @@ class UserServiceTest {
     }
 
     @Test
-    void 등록_시_자동_닉네임은_포메_뒤에_5자리_숫자다() {
-        when(userRepository.insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), eq("포"), anyInt()))
+    void 등록_시_자동_닉네임은_꾸미는_말과_동물이고_이니셜은_첫_글자다() {
+        when(userRepository.insertIfAbsent(
+                        eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), anyString(), anyInt()))
                 .thenReturn(1);
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.of(userWithId(1L, DEVICE_ID)));
 
         userService.register(new UserRegisterRequest(DEVICE_ID));
 
-        ArgumentCaptor<String> nicknameCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> nickname = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> initial = ArgumentCaptor.forClass(String.class);
         verify(userRepository)
-                .insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), nicknameCaptor.capture(), eq("포"), anyInt());
-        assertThat(nicknameCaptor.getValue()).matches("포메\\d{5}");
+                .insertIfAbsent(
+                        eq(Provider.DEVICE.name()), eq(DEVICE_ID), nickname.capture(), initial.capture(), anyInt());
+        AutoNicknameFixtures.assertAuto(nickname.getValue());
+        assertThat(initial.getValue()).isEqualTo(nickname.getValue().substring(0, 1));
+    }
+
+    @Test
+    void 조합이_10번_연달아_충돌하면_옛_방식_닉네임으로_넘어간다() {
+        // 0행 + 기기 없음 = 닉네임 충돌. 조합 10번이 모두 막히고 11번째(옛 방식)에 성공
+        when(userRepository.insertIfAbsent(
+                        eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), anyString(), anyInt()))
+                .thenReturn(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
+                .thenReturn(
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.of(userWithId(1L, DEVICE_ID)));
+
+        userService.register(new UserRegisterRequest(DEVICE_ID));
+
+        ArgumentCaptor<String> nickname = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> initial = ArgumentCaptor.forClass(String.class);
+        verify(userRepository, times(11))
+                .insertIfAbsent(
+                        eq(Provider.DEVICE.name()), eq(DEVICE_ID), nickname.capture(), initial.capture(), anyInt());
+        assertThat(nickname.getAllValues().subList(0, 10)).allSatisfy(AutoNicknameFixtures::assertAuto);
+        assertThat(nickname.getAllValues().getLast()).matches("포메\\d{5}");
+        assertThat(initial.getAllValues().getLast()).isEqualTo("포");
     }
 
     @Test
     void 이미_등록된_기기는_기존_유저를_반환하고_isNew가_false다() {
-        when(userRepository.insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), eq("포"), anyInt()))
+        when(userRepository.insertIfAbsent(
+                        eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), anyString(), anyInt()))
                 .thenReturn(0);
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.of(userWithId(7L, DEVICE_ID)));
@@ -88,7 +127,8 @@ class UserServiceTest {
     @Test
     void 이미_등록된_기기는_기기_조회를_한_번만_한다() {
         // 0행 판정에 쓴 조회 결과를 응답에 재사용해 같은 기기를 다시 조회하지 않는다
-        when(userRepository.insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), eq("포"), anyInt()))
+        when(userRepository.insertIfAbsent(
+                        eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), anyString(), anyInt()))
                 .thenReturn(0);
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.of(userWithId(7L, DEVICE_ID)));
@@ -101,7 +141,8 @@ class UserServiceTest {
     @Test
     void 자동_닉네임이_충돌하면_새_닉네임으로_재시도한다() {
         // 0행 + 기기 없음 = 닉네임 충돌 → 재시도, 두 번째에 성공
-        when(userRepository.insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), eq("포"), anyInt()))
+        when(userRepository.insertIfAbsent(
+                        eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), anyString(), anyInt()))
                 .thenReturn(0, 1);
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.empty())
@@ -115,7 +156,8 @@ class UserServiceTest {
     @Test
     void deviceId는_소문자로_정규화되어_저장되고_조회된다() {
         String upperCase = DEVICE_ID.toUpperCase(Locale.ROOT);
-        when(userRepository.insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), eq("포"), anyInt()))
+        when(userRepository.insertIfAbsent(
+                        eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), anyString(), anyInt()))
                 .thenReturn(1);
         when(userRepository.findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID))
                 .thenReturn(Optional.of(userWithId(1L, DEVICE_ID)));
@@ -123,7 +165,7 @@ class UserServiceTest {
         userService.register(new UserRegisterRequest(upperCase));
 
         verify(userRepository)
-                .insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), eq("포"), anyInt());
+                .insertIfAbsent(eq(Provider.DEVICE.name()), eq(DEVICE_ID), anyString(), anyString(), anyInt());
         verify(userRepository).findByProviderAndProviderUserId(Provider.DEVICE, DEVICE_ID);
     }
 

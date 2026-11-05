@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
-/** 닉네임 정규화(NFC + 앞뒤 공백 제거)와 글자 단위 길이·이니셜 (BY-647). */
+/** 닉네임 정규화(NFKC + 앞뒤 공백 제거)와 글자 단위 길이·칸·이니셜 (BY-647, BY-1135). */
 class NicknamesTest {
 
     @Test
@@ -41,6 +41,23 @@ class NicknamesTest {
         assertThat(Nicknames.length("🇰🇷1️⃣")).isEqualTo(2); // 국기, 키캡
         assertThat(Nicknames.length("홍 길  동")).isEqualTo(6);
         assertThat(Nicknames.length("")).isZero();
+    }
+
+    @Test
+    void 전각_영문과_반각_가타카나는_보통_글자로_바꾼다() {
+        assertThat(Nicknames.normalize("ＯＴＴＥＲ")).isEqualTo("OTTER");
+        assertThat(Nicknames.normalize("ﾊﾑｽﾀｰ")).isEqualTo("ハムスター");
+    }
+
+    @Test
+    void 칸은_한중일_글자와_이모지를_2칸_나머지를_1칸으로_센다() {
+        assertThat(Nicknames.width("벼락치기하는 하늘다람쥐")).isEqualTo(23);
+        assertThat(Nicknames.width("Caffeinated Capybara")).isEqualTo(20);
+        assertThat(Nicknames.width("一夜漬けするラッコ")).isEqualTo(18);
+        assertThat(Nicknames.width("ハムスター")).isEqualTo(10); // 장음 부호 ー도 2칸
+        assertThat(Nicknames.width("佐々木")).isEqualTo(6);
+        assertThat(Nicknames.width("👨‍👩‍👧")).isEqualTo(2);
+        assertThat(Nicknames.width("José_K.")).isEqualTo(7);
     }
 
     @Test

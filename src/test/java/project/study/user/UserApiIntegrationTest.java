@@ -26,6 +26,7 @@ import project.study.config.ApiVersionConfig;
 import project.study.user.dto.UserRegisterRequest;
 import project.study.user.dto.UserRegisterResponse;
 import project.study.user.jwt.JwtUtil;
+import project.study.user.nickname.AutoNicknameFixtures;
 import project.study.user.service.UserService;
 import tools.jackson.databind.ObjectMapper;
 
@@ -158,15 +159,16 @@ class UserApiIntegrationTest {
                 .hasPathSatisfying("$.goal", goal -> assertThat(goal).isEqualTo("올해 안에 이직 성공"))
                 .hasPathSatisfying(
                         "$.nickname",
-                        nickname -> assertThat(nickname).asString().matches("포메\\d{5}"));
+                        nickname -> assertThat(nickname).asString().satisfies(AutoNicknameFixtures::assertAuto));
     }
 
     @Test
     void 닉네임_형식이_틀리면_400이다() {
-        assertThat(patchProfile(1L, "{\"nickname\":\"한\"}")).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(patchProfile(1L, "{\"nickname\":\"Привет\"}")).hasStatus(HttpStatus.BAD_REQUEST); // 키릴 문자
         assertThat(patchProfile(1L, "{\"nickname\":\"특수문자!!\"}")).hasStatus(HttpStatus.BAD_REQUEST);
         assertThat(patchProfile(1L, "{\"nickname\":\"   \"}")).hasStatus(HttpStatus.BAD_REQUEST); // 공백뿐
-        assertThat(patchProfile(1L, "{\"nickname\":\"열세글자가넘는닉네임이다열세\"}")).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(patchProfile(1L, "{\"nickname\":\"스물한글자가넘는아주긴닉네임이에요정말로요\"}"))
+                .hasStatus(HttpStatus.BAD_REQUEST); // 21자 = 42칸
     }
 
     @Test

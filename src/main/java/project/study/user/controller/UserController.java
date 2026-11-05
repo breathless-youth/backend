@@ -97,7 +97,8 @@ public class UserController {
     @Operation(summary = "내 프로필 조회", description = """
                     토큰의 유저 프로필(닉네임·한줄 목표·카테고리·아바타 정보)을 조회한다. \
                     최초 프로필은 유저 등록(POST /api/users) 시점에 자동 발급된다 — \
-                    닉네임 `포메{랜덤5자리}`, goal·category는 null.""")
+                    닉네임은 등록 때 보낸 휴대폰 언어(`language`) 목록의 `꾸미는 말 + 동물`(예: `벼락치기하는 수달`, `Caffeinated Capybara`, `一夜漬けするラッコ`), \
+                    이니셜은 닉네임 첫 글자, goal·category는 null.""")
     @ApiResponse(responseCode = "200", description = "조회 성공")
     @ApiResponse(
             responseCode = "404",
@@ -118,7 +119,9 @@ public class UserController {
     @ApiResponse(responseCode = "200", description = "수정 성공 — 수정된 전체 프로필 반환")
     @ApiResponse(
             responseCode = "400",
-            description = "검증 실패 — 닉네임 형식(한글·영문·숫자·이모지·띄어쓰기, 앞뒤 공백 제외 2~12자), 목표 길이(20자), 카테고리 값",
+            description = "검증 실패 — 닉네임 형식(다국어 허용 글자, 앞뒤 공백 제외 1글자 이상 40칸 이하)·목표 길이(20자)·카테고리 값은 "
+                    + "`VALIDATION_FAILED`, 닉네임에 욕설·성적 표현·혐오 표현이 있거나 운영자로 보이는 이름이면 `NICKNAME_NOT_ALLOWED`"
+                    + "(어느 단어에 걸렸는지는 알려주지 않는다. 지금 닉네임을 그대로 보내면 검사하지 않는다)",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -127,15 +130,18 @@ public class UserController {
                                 @ExampleObject(
                                         name = "닉네임 형식",
                                         value =
-                                                "{\"message\": \"nickname: 닉네임은 한글·영문·숫자·이모지·띄어쓰기만 쓸 수 있고, 앞뒤 공백을 제외하고 2~12자여야 합니다\"}"),
+                                                "{\"message\": \"nickname: 닉네임은 한글·영문·일본어·한자·숫자·이모지·띄어쓰기·_ . -만 쓸 수 있고, 1글자 이상 40칸 이하여야 합니다(한글·한자·가나·이모지는 2칸)\"}"),
                                 @ExampleObject(
                                         name = "목표 길이",
                                         value = "{\"message\": \"goal: 목표는 공백 포함 20자 이하여야 합니다\"}"),
-                                @ExampleObject(name = "카테고리", value = "{\"message\": \"category: 정의되지 않은 카테고리입니다\"}")
+                                @ExampleObject(name = "카테고리", value = "{\"message\": \"category: 정의되지 않은 카테고리입니다\"}"),
+                                @ExampleObject(
+                                        name = "쓸 수 없는 닉네임",
+                                        value = "{\"code\": \"NICKNAME_NOT_ALLOWED\", \"message\": \"쓸 수 없는 닉네임이에요\"}")
                             }))
     @ApiResponse(
             responseCode = "409",
-            description = "이미 사용 중인 닉네임",
+            description = "이미 사용 중인 닉네임 — 영문 대소문자·전각만 다른 닉네임도 같은 닉네임으로 본다",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,

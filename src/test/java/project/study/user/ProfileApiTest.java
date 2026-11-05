@@ -3,6 +3,7 @@ package project.study.user;
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.support.AuthTestSupport.asUser;
 
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
+import project.study.user.nickname.AutoNicknameFixtures;
+import project.study.user.nickname.AutoNicknames;
+import project.study.user.nickname.NicknameLanguage;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
@@ -44,6 +48,51 @@ class ProfileApiTest {
                 .asLong();
     }
 
+    private long registerUser(String language) {
+        MvcTestResult result = mvc.post()
+                .uri("/api/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deviceId\":\"" + UUID.randomUUID() + "\", \"language\":\"" + language + "\"}")
+                .exchange();
+        assertThat(result).hasStatus(HttpStatus.CREATED);
+        return objectMapper
+                .readTree(result.getResponse().getContentAsByteArray())
+                .get("userId")
+                .asLong();
+    }
+
+    private MvcTestResult patchNickname(long userId, String nickname) {
+        return mvc.patch()
+                .uri("/api/users/me/profile")
+                .with(asUser(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nickname\": \"" + nickname + "\"}")
+                .exchange();
+    }
+
+    private String nicknameOf(long userId) {
+        return jdbc.queryForObject("select nickname from users where id = ?", String.class, userId);
+    }
+
+    private boolean nicknameAutoOf(long userId) {
+        return jdbc.queryForObject("select nickname_auto from users where id = ?", Boolean.class, userId);
+    }
+
+    // 다른 테스트와 겹치지 않는 영문 닉네임 꼬리
+    private static String uniqueLetters() {
+        return new java.util.Random()
+                .ints(6, 'a', 'z' + 1)
+                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+                .toString();
+    }
+
+    // 자동 닉네임의 이니셜은 꾸미는 말의 첫 글자다
+    private static List<String> modifierInitials() {
+        return AutoNicknames.modifiers(NicknameLanguage.KO).stream()
+                .map(m -> m.substring(0, 1))
+                .toList();
+    }
+
     @Test
     void 등록된_유저는_자동_닉네임과_프로필을_가진다() {
         long userId = registerUser();
@@ -51,8 +100,9 @@ class ProfileApiTest {
         assertThat(mvc.get().uri("/api/users/me/profile").with(asUser(userId)))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"))
-                .hasPathSatisfying("$.initial", v -> assertThat(v).isEqualTo("포"))
+                .hasPathSatisfying(
+                        "$.nickname", v -> assertThat(v).asString().satisfies(AutoNicknameFixtures::assertAuto))
+                .hasPathSatisfying("$.initial", v -> assertThat(v).asString().isIn(modifierInitials()))
                 .hasPathSatisfying(
                         "$.colorIndex",
                         v -> assertThat(v)
@@ -76,7 +126,8 @@ class ProfileApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.goal", v -> assertThat(v).isEqualTo("올해 안에 이직 성공"))
-                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"));
+                .hasPathSatisfying(
+                        "$.nickname", v -> assertThat(v).asString().satisfies(AutoNicknameFixtures::assertAuto));
     }
 
     private String timeZoneOf(long userId) {
@@ -101,7 +152,8 @@ class ProfileApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .doesNotHavePath("$.timeZone")
-                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"));
+                .hasPathSatisfying(
+                        "$.nickname", v -> assertThat(v).asString().satisfies(AutoNicknameFixtures::assertAuto));
         assertThat(timeZoneOf(userId)).isEqualTo("America/New_York");
     }
 
@@ -155,7 +207,7 @@ class ProfileApiTest {
     void 허용되지_않는_글자_공백뿐_길이_초과는_400이다() {
         long userId = registerUser();
 
-        for (String bad : new String[] {"느낌표금지!", "홍길\u200B동", "日本語", "   ", "a", "가나다라마바사아자차카타파"}) {
+        for (String bad : new String[] {"느낌표금지!", "홍길\u200B동", "Привет", "   ", "가".repeat(21), "a".repeat(41)}) {
             assertThat(mvc.patch()
                             .uri("/api/users/me/profile")
                             .with(asUser(userId))
@@ -201,7 +253,8 @@ class ProfileApiTest {
         assertThat(mvc.get().uri("/api/users/me/profile").with(asUser(second)))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.nickname", v -> assertThat(v).asString().matches("포메\\d{5}"));
+                .hasPathSatisfying(
+                        "$.nickname", v -> assertThat(v).asString().satisfies(AutoNicknameFixtures::assertAuto));
 
         assertThat(mvc.patch()
                         .uri("/api/users/me/profile")
@@ -248,5 +301,50 @@ class ProfileApiTest {
     void 존재하지_않는_유저의_프로필_조회는_404다() {
         assertThat(mvc.get().uri("/api/users/me/profile").with(asUser(999_999_999L)))
                 .hasStatus(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void 일본어_폰으로_등록하면_일본어_기본_닉네임이다() {
+        long userId = registerUser("ja-JP");
+
+        assertThat(AutoNicknameFixtures.all(NicknameLanguage.JA)).contains(nicknameOf(userId));
+        assertThat(nicknameAutoOf(userId)).isTrue();
+    }
+
+    @Test
+    void 영문_대소문자나_전각만_다른_닉네임은_409다() {
+        String name = "Otter" + uniqueLetters();
+        long first = registerUser();
+        long second = registerUser();
+
+        assertThat(patchNickname(first, name)).hasStatusOk();
+        assertThat(patchNickname(second, name.toLowerCase(java.util.Locale.ROOT)))
+                .hasStatus(HttpStatus.CONFLICT);
+        String fullWidth =
+                name.chars().mapToObj(c -> String.valueOf((char) (c + 0xFEE0))).reduce("", String::concat);
+        assertThat(patchNickname(second, fullWidth)).hasStatus(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void 지금_닉네임을_그대로_보내면_기본_닉네임_표시가_유지되고_바꾸면_꺼진다() {
+        long userId = registerUser();
+        String auto = nicknameOf(userId);
+
+        assertThat(patchNickname(userId, auto)).hasStatusOk();
+        assertThat(nicknameAutoOf(userId)).isTrue();
+
+        assertThat(patchNickname(userId, "직접 지은 " + uniqueLetters())).hasStatusOk();
+        assertThat(nicknameAutoOf(userId)).isFalse();
+    }
+
+    @Test
+    void 금칙어_닉네임은_400_NICKNAME_NOT_ALLOWED다() {
+        long userId = registerUser();
+
+        assertThat(patchNickname(userId, "fuck"))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .extractingPath("$.code")
+                .isEqualTo("NICKNAME_NOT_ALLOWED");
     }
 }
