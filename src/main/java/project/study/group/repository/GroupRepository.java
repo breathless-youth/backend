@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.common.category.StudyCategory;
 import project.study.group.GroupVisibility;
+import project.study.group.service.GroupNames;
 
 /**
  * study_group 테이블 (BY-1124). 네이티브 SQL + record — JPA 1차 캐시가 낡은 값을 돌려주지 않게 한다. 상태를 바꾸는 갱신은 바뀐 행
@@ -210,6 +211,32 @@ public class GroupRepository {
                 .param("now", Rows.ts(now))
                 .param("id", id)
                 .update();
+    }
+
+    /**
+     * 다른 살아 있는 공개 그룹이 이 이름을 쓰는지. 공백과 대소문자는 무시한다({@link GroupNames}). 이름을 바꾸는 그룹 자신은
+     * {@code exceptGroupId}로 뺀다(새로 만들 때는 0).
+     */
+    public boolean existsLivePublicNamed(String name, long exceptGroupId) {
+        return jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM study_group
+                             WHERE visibility = 'PUBLIC' AND deleted_at IS NULL AND id <> :exceptId
+                               AND %s = %s)""".formatted(GroupNames.keySql("name"), GroupNames.keySql(":name")))
+                .param("name", name)
+                .param("exceptId", exceptGroupId)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /** 이 그룹의 지금 이름과 {@code name}이 같은 이름인지(공백·대소문자 무시). 이름을 안 바꾸는 수정을 가려내는 데 쓴다. */
+    public boolean hasSameNameKey(long groupId, String name) {
+        return jdbc.sql("SELECT %s = %s FROM study_group WHERE id = :id"
+                        .formatted(GroupNames.keySql("name"), GroupNames.keySql(":name")))
+                .param("name", name)
+                .param("id", groupId)
+                .query(Boolean.class)
+                .single();
     }
 
     /** 코드는 {@link project.study.group.InviteCodes#canonical}로 맞춘 값을 준다. */

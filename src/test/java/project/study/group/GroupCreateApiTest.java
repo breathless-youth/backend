@@ -56,6 +56,7 @@ class GroupCreateApiTest {
     @BeforeEach
     void setUp() {
         probe = new GroupProbe(jdbc);
+        probe.softDeleteAllPublicGroups();
         user = probe.insertUser();
     }
 

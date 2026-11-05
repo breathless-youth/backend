@@ -54,6 +54,9 @@ public enum ErrorCode {
     /** 답을 기다리는 신청이 3곳이다 (409) */
     APPLICATION_LIMIT,
 
+    /** 같은 이름의 공개 그룹이 이미 있다 (409) */
+    GROUP_NAME_TAKEN,
+
     /** 그룹 멤버가 6명이다 (409) */
     GROUP_FULL,
 

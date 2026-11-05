@@ -65,7 +65,8 @@ public class GroupService {
     private final Clock clock;
 
     /**
-     * 그룹을 만들고 ID를 돌려준다. 만든 사람은 멤버이자 그룹장이 되므로 "그룹+신청 5개" 한도를 본다.
+     * 그룹을 만들고 ID를 돌려준다. 만든 사람은 멤버이자 그룹장이 되므로 "그룹+신청 5개" 한도를 본다. 공개 그룹이면 같은 이름의 공개 그룹이
+     * 이미 있는지도 보고, 둘 다 걸리면 {@code GROUP_SLOT_LIMIT}이 먼저다.
      *
      * <p>사용자 락(락 순서 ②)을 잡은 뒤 센다. 같은 사람이 동시에 만들어도 개수 검사와 insert 사이로 끼어들 수 없다. 아직 없는 그룹이라
      * 그룹 행 락(①)은 없다.
@@ -83,6 +84,9 @@ public class GroupService {
             throw new ConflictException(ErrorCode.GROUP_SLOT_LIMIT, "들어간 그룹과 신청 중인 그룹이 이미 5개예요");
         }
 
+        if (request.visibility() == GroupVisibility.PUBLIC) {
+            requirePublicNameFree(name, 0);
+        }
         String inviteCode =
                 request.visibility() == GroupVisibility.PRIVATE ? InviteCodes.issue(groups::inviteCodeTaken) : null;
         long groupId =
@@ -167,8 +171,23 @@ public class GroupService {
         String description = normalizeDescription(request.description());
         rejectContact(name, description);
 
-        access.requireOwner(groupId, userId, true);
+        GroupRow group = access.requireOwner(groupId, userId, true).group();
+        // 공개 그룹만 이름을 겹치지 못한다. 이름을 안 바꾸는 수정은 이미 겹쳐 있는 그룹이어도 막지 않는다.
+        if (group.visibility() == GroupVisibility.PUBLIC && !groups.hasSameNameKey(groupId, name)) {
+            requirePublicNameFree(name, groupId);
+        }
         groups.update(groupId, name, request.category(), description, clock.instant());
+    }
+
+    /**
+     * 공개 그룹 이름이 비어 있는지 본다. 이름 락을 쥔 채 세어 같은 이름을 동시에 쓰려는 요청이 사이로 끼어들 수 없다.
+     * 락 순서는 만들기 ②→이름, 이름 바꾸기 ①→이름이다({@link GroupLocks}).
+     */
+    private void requirePublicNameFree(String name, long exceptGroupId) {
+        locks.lockPublicName(name);
+        if (groups.existsLivePublicNamed(name, exceptGroupId)) {
+            throw new ConflictException(ErrorCode.GROUP_NAME_TAKEN, "이미 있는 공개 그룹 이름이에요");
+        }
     }
 
     /** 공개 그룹 목록 — {@link PublicGroupService}가 읽는다. */

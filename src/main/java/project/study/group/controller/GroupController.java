@@ -48,7 +48,8 @@ public class GroupController {
 
     @Operation(summary = "그룹 만들기", description = """
                     그룹을 만든다. 만든 사람은 멤버이자 그룹장이 되므로 "그룹+신청 5개" 한도를 본다. \
-                    공개 여부(`visibility`)는 만든 뒤 바꿀 수 없다. 이름·소개에 연락처나 링크가 있으면 막는다.""")
+                    공개 여부(`visibility`)는 만든 뒤 바꿀 수 없다. 이름·소개에 연락처나 링크가 있으면 막는다. \
+                    공개 그룹은 살아 있는 다른 공개 그룹과 이름이 같으면(공백·대소문자는 무시) 막는다. 비공개 그룹은 이름이 겹쳐도 된다.""")
     @ApiResponse(responseCode = "201", description = "만들어짐 — `{groupId}`")
     @ApiResponse(
             responseCode = "400",
@@ -56,7 +57,10 @@ public class GroupController {
                     + "`BAD_REQUEST` 없는 시험·목표·공개 여부 값, 읽을 수 없는 본문 / "
                     + "`CONTACT_NOT_ALLOWED` 이름이나 소개에 연락처·링크가 있음")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
-    @ApiResponse(responseCode = "409", description = "`GROUP_SLOT_LIMIT` 들어간 그룹과 답을 기다리는 신청이 합쳐 이미 5개")
+    @ApiResponse(
+            responseCode = "409",
+            description = "`GROUP_SLOT_LIMIT` 들어간 그룹과 답을 기다리는 신청이 합쳐 이미 5개 / "
+                    + "`GROUP_NAME_TAKEN` 같은 이름의 공개 그룹이 이미 있음. 둘 다 걸리면 `GROUP_SLOT_LIMIT`을 먼저 준다")
     @PostMapping(version = "1")
     @ResponseStatus(HttpStatus.CREATED)
     public GroupCreateResponse create(
@@ -91,7 +95,8 @@ public class GroupController {
 
     @Operation(summary = "그룹 설정 수정", description = """
                     이름·시험·목표·소개를 바꾼다 — 그룹장만 할 수 있다. 공개 여부는 바꿀 수 없어 받지 않는다. \
-                    세 필드를 모두 보내는 전체 교체다. 이름·소개에 연락처나 링크가 있으면 막는다.""")
+                    세 필드를 모두 보내는 전체 교체다. 이름·소개에 연락처나 링크가 있으면 막는다. \
+                    공개 그룹의 새 이름이 다른 공개 그룹과 같으면(공백·대소문자는 무시) 막는다. 이름을 바꾸지 않는 수정은 막지 않는다.""")
     @ApiResponse(responseCode = "204", description = "수정됨")
     @ApiResponse(
             responseCode = "400",
@@ -101,6 +106,7 @@ public class GroupController {
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "403", description = "`NOT_GROUP_OWNER` 그룹장이 아님")
     @ApiResponse(responseCode = "404", description = "`GROUP_NOT_FOUND` 없거나 사라진 그룹")
+    @ApiResponse(responseCode = "409", description = "`GROUP_NAME_TAKEN` 같은 이름의 공개 그룹이 이미 있음")
     @PatchMapping(value = "/{groupId}", version = "1")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void update(
