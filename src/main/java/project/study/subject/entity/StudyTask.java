@@ -7,14 +7,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import project.study.common.BaseTimeEntity;
 
 /**
- * 할 일 — 과목의 하위 항목. 완료 체크와 시간이 모두 붙는다. 마감일이 없어 완료 전까지 남고,
- * 완료 시각이 오늘(사용자 시간대)인 것만 목록에 보인다 (ADR-0021).
+ * 날짜별 계획의 할 일. id와 실제 완료 시각을 보존한다 (ADR-0044).
+ * plannedDate/seriesId는 플래너 저장소가 관리하고 기존 세션 API는 읽기 메타데이터로 사용한다.
  */
 @Entity
 @Table(name = "study_task")
@@ -31,6 +32,12 @@ public class StudyTask extends BaseTimeEntity {
 
     @Column(nullable = false, length = 100)
     private String name;
+
+    @Column(name = "planned_date", insertable = false, updatable = false)
+    private LocalDate plannedDate;
+
+    @Column(name = "series_id", insertable = false, updatable = false)
+    private Long seriesId;
 
     @Column(name = "done_at")
     private Instant doneAt;
