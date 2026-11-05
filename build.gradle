@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'project'
-version = 'v2.9.0'
+version = 'v2.10.0'
 
 java {
 	toolchain {
@@ -94,6 +94,8 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// 캐시된 Spring 테스트 컨텍스트(목 조합마다 하나)가 늘어 기본 512MB로는 힙이 모자란다 (BY-1126, 그룹 테스트와 합친 뒤)
+	maxHeapSize = '1g'
 	testLogging {
 		events 'passed', 'failed', 'skipped'
 	}
