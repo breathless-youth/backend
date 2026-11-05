@@ -138,8 +138,8 @@ class GroupAccountEraseTest {
         assertThat(probe.members(group)).extracting(MemberRow::userId).containsExactlyInAnyOrder(later, member);
         PushMessage message = pushedOnceTo(pushSender, member);
         assertThat(message.type()).isEqualTo("group_owner_transferred");
-        assertThat(message.title()).isEqualTo("그룹장이 됐어요");
-        assertThat(message.body()).isEqualTo(row.name() + "의 그룹장을 넘겨받았어요");
+        assertThat(message.ko().title()).isEqualTo("그룹장이 됐어요");
+        assertThat(message.ko().body()).isEqualTo(row.name() + "의 그룹장을 넘겨받았어요");
         notPushedTo(pushSender, later);
     }
 
@@ -176,7 +176,7 @@ class GroupAccountEraseTest {
         assertThat(statusOf(lapsedId)).isEqualTo("PENDING");
         PushMessage message = pushedOnceTo(pushSender, waiting);
         assertThat(message.type()).isEqualTo("group_application_room_closed");
-        assertThat(message.body()).isEqualTo(row.name() + " 그룹이 사라져 신청이 취소됐어요");
+        assertThat(message.ko().body()).isEqualTo(row.name() + " 그룹이 사라져 신청이 취소됐어요");
         notPushedTo(pushSender, lapsed);
     }
 

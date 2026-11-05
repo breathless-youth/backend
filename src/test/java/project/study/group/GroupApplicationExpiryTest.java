@@ -171,7 +171,7 @@ class GroupApplicationExpiryTest {
         assertThat(expiry.expireDue(NOW)).isEqualTo(1);
 
         assertThat(statusOf(id)).isEqualTo("EXPIRED");
-        assertThat(pushedOnceTo(pushSender, user).body())
+        assertThat(pushedOnceTo(pushSender, user).ko().body())
                 .isEqualTo(probe.group(gone).orElseThrow().name() + " 신청은 답이 없어 취소됐어요");
     }
 
