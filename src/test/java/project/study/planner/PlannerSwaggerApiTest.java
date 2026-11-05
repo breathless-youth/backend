@@ -30,6 +30,17 @@ class PlannerSwaggerApiTest extends PlannerApiSupport {
         JsonNode batch = paths.get("/api/planner/records/batch").get("post");
         assertExamples(batch.get("requestBody"));
         assertExamples(batch.get("responses").get("200"));
+        JsonNode repeat = paths.get("/api/planner/tasks/{key}/repeat").get("get");
+        assertThat(repeat).isNotNull();
+        assertExamples(repeat.get("responses").get("200"));
+        JsonNode schemas = api.at("/components/schemas");
+        assertThat(schemas.at("/PlannerRepeatResponse/properties").propertyNames())
+                .contains("seriesId", "startDate", "weekdays", "endDate");
+        for (String field : List.of("fullStartedAt", "fullEndedAt")) {
+            assertThat(schemas.at("/PlannerRecordView/properties/" + field + "/format")
+                            .asText())
+                    .isEqualTo("date-time");
+        }
         assertExamples(paths.get("/api/planner/goals/{date}")
                 .get("get")
                 .get("responses")

@@ -1,15 +1,13 @@
 package project.study.planner.record;
 
 import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
+import project.study.planner.record.PlannerRecordSpans.Span;
 import project.study.studysession.entity.StudySessionSource;
 import project.study.subject.service.StudySubjectService;
 import project.study.user.service.UserTimeZones;
@@ -40,7 +38,7 @@ class PlannerRecordMutationService {
         if (operation.key() != null) {
             throw new BadRequestException("CREATE에는 key를 지정할 수 없습니다");
         }
-        Span span = span(operation);
+        Span span = PlannerRecordSpans.create(operation, clock.instant());
         assertSubject(userId, operation.subjectId(), null);
         assertFree(userId, span, null);
         userTimeZones.resolve(userId, operation.timeZone());
@@ -54,19 +52,25 @@ class PlannerRecordMutationService {
 
     private PlannerRecordResult update(Long userId, PlannerRecordOperation operation) {
         PlannerRecordEdit current = records.current(userId, operation.key());
-        Span span = span(operation);
+        Span span = PlannerRecordSpans.update(operation, current, clock.instant());
         assertSubject(userId, operation.subjectId(), current.subjectId());
-        assertFree(userId, span, current.key());
+        boolean unchanged =
+                span.start().equals(current.startedAt()) && span.end().equals(current.endedAt());
+        // 기존 수동 묶음은 다른 기록을 피해 여러 조각일 수 있다. 과목만 바꾸면 점유 시간은 늘지 않는다.
+        if (!unchanged) {
+            assertFree(userId, span, current.key());
+        }
         if (current.source() == StudySessionSource.MANUAL) {
             userTimeZones.resolve(userId, operation.timeZone());
         }
-        String key = current.source() == StudySessionSource.MANUAL ? "m:" + span.start() : current.key();
+        String key =
+                current.source() == StudySessionSource.MANUAL && !span.start().equals(current.startedAt())
+                        ? "m:" + span.start()
+                        : current.key();
         if (!key.equals(current.key())) {
             repository.saveEdit(userId, current.tombstone());
         }
-        boolean preserve = current.preserveOriginalTotals()
-                && span.start().equals(current.startedAt())
-                && span.end().equals(current.endedAt());
+        boolean preserve = current.preserveOriginalTotals() && unchanged;
         repository.saveEdit(
                 userId,
                 new PlannerRecordEdit(
@@ -100,21 +104,4 @@ class PlannerRecordMutationService {
             throw new ConflictException("다른 개인 기록과 시간이 겹칩니다");
         }
     }
-
-    private Span span(PlannerRecordOperation operation) {
-        if (operation.startedAt() == null || operation.endedAt() == null) {
-            throw new BadRequestException("시작과 종료 시각이 필요합니다");
-        }
-        Instant start = operation.startedAt().truncatedTo(ChronoUnit.MINUTES);
-        Instant end = operation.endedAt().truncatedTo(ChronoUnit.MINUTES);
-        if (!start.isBefore(end) || Duration.between(start, end).compareTo(Duration.ofHours(24)) > 0) {
-            throw new BadRequestException("기록은 1분 이상 24시간 이하여야 합니다");
-        }
-        if (end.isAfter(clock.instant())) {
-            throw new BadRequestException("미래 기록은 입력할 수 없습니다");
-        }
-        return new Span(start, end);
-    }
-
-    private record Span(Instant start, Instant end) {}
 }

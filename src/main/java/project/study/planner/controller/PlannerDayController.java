@@ -40,15 +40,25 @@ public class PlannerDayController {
     @Operation(
             summary = "날짜별 계획과 실제 기록",
             description =
-                    "서버가 직접 선택한 과목+할 일이 있는 과목+기록에 남은 과목을 합친다. 기록만 있는 삭제 과목도 포함한다. 선택 순서 후 전체 과목 순서/id. 수정·삭제된 개인 기록을 반영하며 랭킹 원본은 유지한다.")
+                    "서버가 직접 선택한 과목+할 일이 있는 과목+기록에 남은 과목을 합친다. 기록만 있는 삭제 과목도 포함한다. 선택 순서 후 전체 과목 순서/id. 수정·삭제된 개인 기록을 반영하며 랭킹 원본은 유지한다. records의 startedAt/endedAt은 표시 구간, fullStartedAt/fullEndedAt은 편집에 사용할 현재 전체 구간이다.")
     @ApiResponse(
             responseCode = "200",
             content =
                     @Content(
-                            examples =
-                                    @ExampleObject(
-                                            value =
-                                                    "{\"date\":\"2026-11-06\",\"timeZone\":\"Asia/Seoul\",\"studySec\":0,\"focusSec\":0,\"goal\":{\"goalSec\":14400,\"individualGoalSec\":null,\"defaultGoalSec\":14400},\"subjects\":[],\"records\":[]}")))
+                            examples = {
+                                @ExampleObject(
+                                        name = "계획 없는 날",
+                                        value =
+                                                "{\"date\":\"2026-11-06\",\"timeZone\":\"Asia/Seoul\",\"studySec\":0,\"focusSec\":0,\"goal\":{\"goalSec\":14400,\"individualGoalSec\":null,\"defaultGoalSec\":14400},\"subjects\":[],\"records\":[]}"),
+                                @ExampleObject(name = "05시를 걸친 기록의 당일 부분", value = """
+                                            {"date":"2026-11-06","timeZone":"Asia/Seoul","studySec":3600,"focusSec":3600,
+                                             "goal":{"goalSec":null,"individualGoalSec":null,"defaultGoalSec":null},"subjects":[],
+                                             "records":[{"key":"c:2026-11-05T19:30:00Z","source":"MEASURED",
+                                               "startedAt":"2026-11-05T20:00:00Z","endedAt":"2026-11-05T21:00:00Z",
+                                               "fullStartedAt":"2026-11-05T19:30:00Z","fullEndedAt":"2026-11-05T21:00:00Z",
+                                               "studySec":3600,"focusSec":3600,"subjectSegments":[]}]}
+                                            """)
+                            }))
     @GetMapping("/days/{date}")
     public PlannerDayResponse day(
             @AuthenticationPrincipal Long userId,
