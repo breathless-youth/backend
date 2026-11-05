@@ -1,12 +1,15 @@
 package project.study.planner.service;
 
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
+import project.study.planner.dto.PlannerRepeatResponse;
 import project.study.planner.dto.PlannerTask;
 import project.study.planner.dto.PlannerTaskRequests.Repeat;
 import project.study.planner.repository.PlannerRule;
@@ -24,6 +27,19 @@ public class PlannerRepeatService {
     private final StudySubjectLockRepository locks;
     private final UserTimeZones timeZones;
     private final Clock clock;
+
+    @Transactional(readOnly = true)
+    public PlannerRepeatResponse get(Long userId, String key) {
+        PlannerTask task = resolver.get(userId, key);
+        PlannerRule rule = task.seriesId() == null ? null : ruleAtOrBefore(userId, task);
+        if (rule == null) {
+            return new PlannerRepeatResponse(task.seriesId(), null, List.of(), null);
+        }
+        List<DayOfWeek> weekdays = Arrays.stream(DayOfWeek.values())
+                .filter(day -> (rule.weekdays() & (1 << (day.getValue() - 1))) != 0)
+                .toList();
+        return new PlannerRepeatResponse(task.seriesId(), rule.startDate(), weekdays, rule.endDate());
+    }
 
     @Transactional
     public PlannerTask change(Long userId, String key, Repeat request, String timeZone) {

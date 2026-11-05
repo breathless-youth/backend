@@ -54,9 +54,16 @@ public class PlannerRecordService {
     private Optional<PlannerRecordView> editedView(
             Long userId, PlannerRecordEdit edit, Map<String, List<StudySession>> bundles, Instant from, Instant to) {
         try {
-            List<StudySession> bundle = edit.source() == StudySessionSource.MANUAL
+            List<StudySession> bundle = edit.source() == StudySessionSource.MANUAL && !edit.preserveOriginalTotals()
                     ? List.of()
                     : bundles.containsKey(edit.key()) ? bundles.get(edit.key()) : bundle(userId, edit.key());
+            if (edit.source() == StudySessionSource.MANUAL
+                    && edit.preserveOriginalTotals()
+                    && bundle.stream()
+                            .noneMatch(piece -> piece.getStartedAt().isBefore(to)
+                                    && PlannerRecordViews.end(piece).isAfter(from))) {
+                return Optional.empty();
+            }
             return Optional.of(PlannerRecordViews.edited(edit, bundle, from, to));
         } catch (NotFoundException orphan) {
             // 계정 병합에서 원본 충돌로 버린 측정 수정본도 함께 숨긴다.
@@ -111,12 +118,6 @@ public class PlannerRecordService {
                 .findFirst()
                 .orElse(null);
         return new PlannerRecordEdit(
-                key,
-                bundle.getFirst().getSource(),
-                bundle.getFirst().getStartedAt(),
-                end,
-                subject,
-                false,
-                bundle.getFirst().getSource() == StudySessionSource.MEASURED);
+                key, bundle.getFirst().getSource(), bundle.getFirst().getStartedAt(), end, subject, false, true);
     }
 }

@@ -3,6 +3,7 @@ package project.study.planner.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import project.study.planner.dto.PlannerRepeatResponse;
 import project.study.planner.dto.PlannerTask;
 import project.study.planner.dto.PlannerTaskRequests.Create;
 import project.study.planner.dto.PlannerTaskRequests.Move;
@@ -156,6 +158,35 @@ public class PlannerTaskController {
             @Valid @RequestBody Move request,
             @RequestParam(required = false) String timeZone) {
         return tasks.move(userId, key, request.date(), timeZone);
+    }
+
+    @Operation(
+            summary = "반복 편집 초기값 조회",
+            description =
+                    "현재 계획 날짜에 유효한 규칙 버전을 읽는다. 이동한 회차는 이동 후 날짜 기준이며 요일 밖에서도 읽을 수 있다. 일반 할 일/종료된 계열의 예외는 weekdays=[]다. 가상 회차를 저장하지 않는다.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "반복 설정",
+            content =
+                    @Content(
+                            schema = @Schema(implementation = PlannerRepeatResponse.class),
+                            examples = {
+                                @ExampleObject(
+                                        name = "월수금",
+                                        value =
+                                                "{\"seriesId\":4,\"startDate\":\"2026-11-06\",\"weekdays\":[\"MONDAY\",\"WEDNESDAY\",\"FRIDAY\"],\"endDate\":\"2026-12-31\"}"),
+                                @ExampleObject(
+                                        name = "종료일 없음",
+                                        value =
+                                                "{\"seriesId\":4,\"startDate\":\"2026-11-06\",\"weekdays\":[\"MONDAY\"],\"endDate\":null}"),
+                                @ExampleObject(
+                                        name = "안 함",
+                                        value =
+                                                "{\"seriesId\":null,\"startDate\":null,\"weekdays\":[],\"endDate\":null}")
+                            }))
+    @GetMapping("/{key}/repeat")
+    public PlannerRepeatResponse repeatSettings(@AuthenticationPrincipal Long userId, @PathVariable String key) {
+        return repeats.get(userId, key);
     }
 
     @Operation(
