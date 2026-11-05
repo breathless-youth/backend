@@ -108,6 +108,9 @@ FE는 Swagger가 나와야 타입을 만들 수 있어서 계약(REST·STOMP·�
       막히지만 그 틈에 협상을 끝낸 연결은 남을 수 있다.
 14. **공개 그룹 목록의 입력 상한을 서버가 막는다.** `query`가 100자를 넘거나 `page`가 0~10000 밖이면 `400 REQUEST_FAILED`다.
     `@RequestParam` 검증은 기존 일반 처리기를 타고 `page`·`size` 위반도 이미 그 코드라서 `VALIDATION_FAILED`로 따로 가르지 않았다.
+15. **그룹장인 그룹 수는 제한하지 않는다 (2026-11-05).** 처음의 "그룹장 2개"를 없애고 그룹 만들기도 "그룹+신청 5개"만 본다. `OWNED_GROUP_LIMIT`을
+    지웠다. `ownedGroupCount`와 `limits.maxOwnedGroups`는 웹이 바뀔 때까지 남긴다. 배포된 웹이 `ownedGroupCount`로 그룹 만들기 버튼을 막아서, 먼저
+    빼면 `undefined < 2`가 거짓이 되어 모두의 버튼이 막힌다. 서버를 먼저 배포하고 웹을 나중에 배포한다.
 
 ## 결과
 

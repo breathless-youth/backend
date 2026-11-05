@@ -83,7 +83,6 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
 | `GROUP_SLOT_LIMIT` | 409 | 들어간 그룹과 답을 기다리는 신청이 합쳐 5개다 |
 | `APPLICATION_LIMIT` | 409 | 답을 기다리는 신청이 3곳이다 |
 | `GROUP_FULL` | 409 | 멤버가 6명이다 |
-| `OWNED_GROUP_LIMIT` | 409 | 그룹장인 그룹이 2개다 |
 | `CONTACT_NOT_ALLOWED` | 400 | 이름·소개·신청 소개 글에 연락처나 링크가 있다 |
 | `OWNER_CANNOT_LEAVE` | 409 | 다른 멤버가 있는 그룹장은 나갈 수 없다 |
 | `ALREADY_APPLIED` | 409 | 이 그룹에 답을 기다리는 신청이 이미 있다 |
@@ -104,8 +103,8 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
 
 | 무엇 | 메서드·경로 | 권한 | 비고 |
 |---|---|---|---|
-| 그룹 만들기 | `POST /api/groups` | 누구나 | `{name, visibility: PUBLIC\|PRIVATE, category, description?}` → 201 `{groupId}`. 만든 사람은 멤버이자 그룹장이 되므로 5개·2개 제한을 모두 본다 |
-| 내 그룹 탭 | `GET /api/groups/me` | 누구나 | `{groups[], pendingApplicationCount, ownedGroupCount, limits{maxGroupsAndApplications:5, maxPendingApplications:3, maxOwnedGroups:2}}`. 그룹은 내가 들어간 순서 |
+| 그룹 만들기 | `POST /api/groups` | 누구나 | `{name, visibility: PUBLIC\|PRIVATE, category, description?}` → 201 `{groupId}`. 만든 사람도 멤버가 되므로 5개 제한을 본다. 그룹장인 그룹 수는 막지 않는다 |
+| 내 그룹 탭 | `GET /api/groups/me` | 누구나 | `{groups[], pendingApplicationCount, ownedGroupCount, limits{maxGroupsAndApplications:5, maxPendingApplications:3, maxOwnedGroups:2}}`. 그룹은 내가 들어간 순서. `ownedGroupCount`·`maxOwnedGroups`는 배포된 웹을 위해 남긴 값이다(ADR-0040 결정 15) |
 | 그룹 홈 | `GET /api/groups/{groupId}` | 멤버 | 아래 "그룹 홈" 참고 |
 | 그룹 설정 | `PATCH /api/groups/{groupId}` | 그룹장 | `{name, category, description}`. 공개 여부는 받지 않는다 |
 | 공개 그룹 목록 | `GET /api/groups/public?query=&category=&page=&size=` | 누구나 | 이름에 `query`가 들어간 것(대소문자 무시), `category` 하나로 거르기 |
@@ -148,7 +147,7 @@ FE는 Swagger가 나와야 타입을 만들 수 있으므로 **계약(REST·STOM
 이번 주 순위는 `members[].weekFocusSec`로 FE가 그린다.
 `newApplicationCount`는 답을 기다리는(기한 안) 신청 전부다. 그룹장이 목록을 봤는지는 따로 기록하지 않아, 답할 때까지 띠가 남는다 **[BE 판단]** — 신청한 사람이 3일 안에 답을 받게 그룹장을 미는 쪽이 위키 7절의 뜻에 맞고, "봤음" 기록과 그 처리 경로가 필요 없다.
 
-**내 그룹 카드**: `groupId, name, category, visibility, memberCount, studyingCount, owner(내가 그룹장인지), members[GroupMemberDesk]`.
+**내 그룹 카드**: `groupId, name, category, visibility, memberCount, studyingCount, owner(내가 그룹장인지), newApplicationCount(공개 그룹 그룹장만, 아니면 null), members[GroupMemberDesk]`.
 `studyingCount`는 `IN_ROOM` + `STUDYING` 수다 (파랑 + 초록, 위키 12절).
 
 **공개 그룹 카드**: `groupId, name, category, memberCount, weeklyAverageFocusSec, studyingCount, member(내가 멤버인지)`.
@@ -295,6 +294,5 @@ Swagger 설명과 `websocket.html`도 같은 내용으로 맞췄고, 구조에 �
 - 공개 그룹 목록에서 `query`가 100자를 넘거나 `page`가 0~10000 밖이면 `400 REQUEST_FAILED`다(`VALIDATION_FAILED`가 아니다).
 - 이미 차단한 사람을 다시 신고해도 `204`다.
 - 코드 참여가 `409`로 막히는 이유가 여럿이면 `RECENTLY_KICKED` → `GROUP_FULL` → `GROUP_SLOT_LIMIT` 순서로 하나만 준다.
-- 그룹 만들기에서 "그룹+신청 5개"와 "그룹장 2개" 한도가 둘 다 걸리면 `GROUP_SLOT_LIMIT`을 먼저 준다.
 - 그룹이 사라진 신청의 수락·거절·신고는 `404 NOT_FOUND`다(`GROUP_NOT_FOUND`가 아니다).
 - FE는 받은 `PEER_BLOCKED`를 그 방에서 나갈 때까지 기억한다. 차단을 풀어도 알림 없이 다음 입장부터 풀린다.
