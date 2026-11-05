@@ -5,6 +5,9 @@ import static project.study.group.support.GroupApiTestSupport.v1Get;
 import static project.study.group.support.GroupDeskTestConfig.NOW;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -154,6 +157,29 @@ class MyGroupsApiTest {
         probe.insertApplicationToNewGroup(me, "CANCELED", NOW.plusSeconds(3600));
 
         assertThat(myGroups(me).pendingApplicationCount()).isEqualTo(2);
+    }
+
+    @Test
+    void 새_신청_수는_공개_그룹_그룹장의_카드에만_기한_안_PENDING을_센다() {
+        Instant future = NOW.plusSeconds(3600);
+        Instant past = NOW.minusSeconds(3600);
+        long withRequests = probe.insertGroup(me, "PUBLIC");
+        long quiet = probe.insertGroup(me, "PUBLIC");
+        long privateGroup = probe.insertGroup(me, "PRIVATE");
+        long memberOnly = probe.joinNewGroupOf(me);
+        probe.insertApplication(withRequests, probe.insertUser(), "PENDING", future);
+        probe.insertApplication(withRequests, probe.insertUser(), "PENDING", future);
+        probe.insertApplication(withRequests, probe.insertUser(), "PENDING", past);
+        probe.insertApplication(withRequests, probe.insertUser(), "DECLINED", future);
+        probe.insertApplication(memberOnly, probe.insertUser(), "PENDING", future);
+
+        Map<Long, Integer> counts = new HashMap<>();
+        myGroups(me).groups().forEach(card -> counts.put(card.groupId(), card.newApplicationCount()));
+
+        assertThat(counts.get(withRequests)).isEqualTo(2);
+        assertThat(counts.get(quiet)).isZero();
+        assertThat(counts.get(privateGroup)).isNull();
+        assertThat(counts.get(memberOnly)).isNull();
     }
 
     @Test

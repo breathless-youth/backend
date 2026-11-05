@@ -179,25 +179,24 @@ class GroupCreateApiTest {
     }
 
     @Test
-    void 그룹장인_그룹이_둘이면_세_번째는_409_OWNED_GROUP_LIMIT이다() throws Exception {
+    void 그룹장인_그룹이_둘이어도_세_번째를_만들_수_있다() throws Exception {
         createdGroupId(create(user, body("하나", "PUBLIC", "null")));
         createdGroupId(create(user, body("둘", "PRIVATE", "null")));
 
-        assertErrorCode(
-                json(v1Post(mvc, "/api/groups", user), body("셋", "PUBLIC", "null")),
-                HttpStatus.CONFLICT,
-                "OWNED_GROUP_LIMIT");
+        createdGroupId(create(user, body("셋", "PUBLIC", "null")));
 
-        assertThat(probe.groupsOwnedBy(user)).hasSize(2);
+        assertThat(probe.groupsOwnedBy(user)).hasSize(3);
     }
 
     @Test
-    void 지워진_그룹은_그룹장_한도에_세지_않는다() throws Exception {
+    void 지워진_그룹은_다섯_개에_세지_않는다() throws Exception {
         long first = createdGroupId(create(user, body("하나", "PUBLIC", "null")));
-        createdGroupId(create(user, body("둘", "PUBLIC", "null")));
+        for (int i = 0; i < 4; i++) {
+            probe.joinNewGroupOf(user);
+        }
         probe.softDeleteGroup(first);
 
-        createdGroupId(create(user, body("셋", "PUBLIC", "null")));
+        createdGroupId(create(user, body("다섯째", "PUBLIC", "null")));
     }
 
     @Test
@@ -246,34 +245,20 @@ class GroupCreateApiTest {
     }
 
     @Test
-    void 두_한도가_함께_걸리면_GROUP_SLOT_LIMIT이_먼저다() {
-        probe.insertGroup(user, "PUBLIC");
-        probe.insertGroup(user, "PRIVATE");
-        for (int i = 0; i < 3; i++) {
-            probe.joinNewGroupOf(user);
+    void 그룹장인_그룹만으로_다섯이면_409_GROUP_SLOT_LIMIT이다() {
+        for (int i = 0; i < 5; i++) {
+            probe.insertGroup(user, "PUBLIC");
         }
 
         assertErrorCode(
-                json(v1Post(mvc, "/api/groups", user), body("셋째", "PUBLIC", "null")),
+                json(v1Post(mvc, "/api/groups", user), body("여섯째", "PUBLIC", "null")),
                 HttpStatus.CONFLICT,
                 "GROUP_SLOT_LIMIT");
     }
 
     @Test
-    void 그룹_다섯_개_안이어도_그룹장이_둘이면_OWNED_GROUP_LIMIT이다() {
-        probe.insertGroup(user, "PUBLIC");
-        probe.insertGroup(user, "PRIVATE");
-        probe.joinNewGroupOf(user);
-
-        assertErrorCode(
-                json(v1Post(mvc, "/api/groups", user), body("셋째", "PUBLIC", "null")),
-                HttpStatus.CONFLICT,
-                "OWNED_GROUP_LIMIT");
-    }
-
-    @Test
-    void 같은_사용자가_동시에_세_번_만들어도_그룹장_그룹은_둘이다() throws Exception {
-        int threads = 3;
+    void 같은_사용자가_동시에_여섯_번_만들어도_그룹은_다섯이다() throws Exception {
+        int threads = 6;
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         CountDownLatch ready = new CountDownLatch(threads);
         CountDownLatch go = new CountDownLatch(1);
@@ -300,13 +285,13 @@ class GroupCreateApiTest {
                 statuses.add(future.get());
             }
 
-            assertThat(statuses).containsExactlyInAnyOrder(201, 201, 409);
+            assertThat(statuses).containsExactlyInAnyOrder(201, 201, 201, 201, 201, 409);
         } finally {
             pool.shutdownNow();
         }
 
         List<GroupRow> owned = probe.groupsOwnedBy(user);
-        assertThat(owned).hasSize(2);
+        assertThat(owned).hasSize(5);
         for (GroupRow group : owned) {
             assertThat(probe.members(group.id())).hasSize(1);
         }

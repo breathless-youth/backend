@@ -12,8 +12,7 @@ public record MyGroupsResponse(
         @Schema(description = "답을 기다리는 내 신청 수 (최대 3)", example = "1")
         int pendingApplicationCount,
 
-        @Schema(description = "내가 그룹장인 그룹 수 (최대 2)", example = "1")
-        int ownedGroupCount,
+        @Schema(description = "내가 그룹장인 그룹 수", example = "1") int ownedGroupCount,
 
         @Schema(description = "한도 — 화면의 \"n/5\" 같은 표시와 버튼 막기에 쓴다")
         GroupLimits limits) {
@@ -41,6 +40,9 @@ public record MyGroupsResponse(
             @Schema(description = "내가 이 그룹의 그룹장이면 true", example = "true")
             boolean owner,
 
+            @Schema(description = "답을 기다리는 새 신청 수 — 공개 그룹 그룹장에게만 값이 있고 나머지는 null", example = "2", nullable = true)
+            Integer newApplicationCount,
+
             @Schema(description = "멤버 책상 — 들어간 순서. 정렬은 FE가 한다")
             List<GroupMemberDesk> members) {}
 
@@ -51,6 +53,6 @@ public record MyGroupsResponse(
             @Schema(description = "동시에 답을 기다릴 수 있는 신청 수", example = "3")
             int maxPendingApplications,
 
-            @Schema(description = "그룹장이 될 수 있는 그룹 수", example = "2")
+            @Schema(description = "쓰지 않는다 — 그룹장 한도는 없어졌고 이미 배포된 웹을 위해 남겨 두었다", example = "2", deprecated = true)
             int maxOwnedGroups) {}
 }

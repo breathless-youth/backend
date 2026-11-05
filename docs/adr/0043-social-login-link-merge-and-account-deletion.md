@@ -128,7 +128,7 @@ ADR-0013에서 정하고 ADR-0019 결정 8과 이전 주석에서 "소셜 로그
 - 이 사람이 만든 `rooms`는 다른 사람 기록이 걸려 있어 지우지 않고 `created_by`를 NULL로 둔다. V41이 NULL을 허용한다.
 - **그룹장 자동 승계**(사용자 결정): 그룹장이 탈퇴하면 그 그룹에서 가장 먼저 들어온 다른 살아 있는 멤버(들어온 시각, 같으면 멤버 행 ID 순)가
   그룹장이 되고 탈퇴한 사람은 그룹에서 빠진다. 새 그룹장에게 `group_owner_transferred` 푸시, 공부방이 열려 있으면 `OWNER_CHANGED` —
-  그룹장 넘기기 API와 같은 처리(`GroupOwnership.handOver`)다. 새 그룹장의 "그룹장 2개" 한도는 보지 않는다(넘기기와 같다). 다른 멤버가 없으면
+  그룹장 넘기기 API와 같은 처리(`GroupOwnership.handOver`)다. 다른 멤버가 없으면
   나가기의 그룹 지우기를 탄다(`GroupOwnership.closeAbandoned`: 그룹 지우기, 기한 안의 `PENDING` 신청을 `GROUP_DELETED`로 닫고
   `group_application_room_closed` 푸시). 그룹장이 아닌 그룹은 공부방 자리가 남아 있으면 지운다(`MEMBER_LEFT`, 보통은 탈퇴 전 방 나가기가
   이미 했다).

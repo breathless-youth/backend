@@ -1,7 +1,10 @@
 package project.study.group.repository;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
@@ -140,6 +143,21 @@ public class GroupApplicationRepository {
                 .param("now", Rows.ts(now))
                 .query(Integer.class)
                 .single();
+    }
+
+    /** 여러 그룹의 답을 기다리는 신청 수 — 내 그룹 카드가 쓴다. 신청이 없는 그룹은 결과에 없다. */
+    public Map<Long, Integer> countPendingOfGroups(Collection<Long> groupIds, Instant now) {
+        if (groupIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Integer> counts = new HashMap<>();
+        jdbc.sql("""
+                        SELECT group_id, count(*) AS pending FROM study_group_application
+                         WHERE group_id IN (:groupIds) AND status = 'PENDING' AND expires_at > :now
+                         GROUP BY group_id""").param("groupIds", groupIds).param("now", Rows.ts(now)).query(rs -> {
+            counts.put(rs.getLong("group_id"), rs.getInt("pending"));
+        });
+        return counts;
     }
 
     /** 그룹장용 목록 — 이 그룹에서 기한 안에서 답을 기다리는 신청을 신청한 순서(오래된 것부터)로. */

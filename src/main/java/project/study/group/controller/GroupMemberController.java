@@ -50,8 +50,7 @@ public class GroupMemberController {
 
     @Operation(summary = "그룹장 넘기기", description = """
                     그룹장을 다른 멤버에게 넘긴다 — 그룹장만 할 수 있다. 넘기면 나는 일반 멤버가 되고, 새 그룹장에게 푸시가 간다. \
-                    공부방이 열려 있으면 방 토픽에 `OWNER_CHANGED`가 나간다 (공부방 메시지는 /docs/websocket.html). \
-                    새 그룹장은 "그룹장 2개" 한도를 보지 않는다.""")
+                    공부방이 열려 있으면 방 토픽에 `OWNER_CHANGED`가 나간다 (공부방 메시지는 /docs/websocket.html).""")
     @ApiResponse(responseCode = "204", description = "넘겨짐")
     @ApiResponse(
             responseCode = "400",
