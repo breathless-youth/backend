@@ -235,7 +235,7 @@ class GroupMemberManageApiTest {
     }
 
     @Test
-    void 새_그룹장은_그룹장인_그룹이_이미_2개여도_넘겨받는다() {
+    void 새_그룹장은_그룹장인_그룹이_이미_있어도_넘겨받는다() {
         probe.insertGroup(member, "PUBLIC");
         probe.insertGroup(member, "PRIVATE");
 
