@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'project'
-version = 'v2.10.0'
+version = 'v2.10.1'
 
 java {
 	toolchain {
