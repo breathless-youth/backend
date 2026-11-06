@@ -30,7 +30,7 @@ public class OAuthConfigCheck {
         if (missing.isEmpty()) {
             return;
         }
-        String message = "소셜 로그인 설정이 비어 있어 그 로그인·해지를 모두 거부한다: " + String.join(", ", missing);
+        String message = "소셜 로그인 설정이 비어 있어 괄호 안의 기능만 꺼진다(로그인은 400, 탈퇴 때 해지·연결 끊기는 건너뜀): " + String.join(", ", missing);
         log.warn(message);
         Sentry.captureMessage(message, SentryLevel.WARNING);
     }

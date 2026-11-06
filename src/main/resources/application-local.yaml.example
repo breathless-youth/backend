@@ -73,7 +73,8 @@ oauth:
     # 네이티브 앱 키(REST API 키 아님)
     app-keys: <카카오-네이티브-앱-키>
     # 탈퇴 때 카카오 연결 끊기에 쓰는 어드민 키. 시크릿이라 실제 값은 복사한 application-local.yaml에만 넣는다 (비워 두면 연결 끊기만 꺼짐)
-    # 값은 카카오 디벨로퍼스 > 앱 > 앱 키 > 어드민 키에서 확인
+    # 값은 카카오 디벨로퍼스 > 앱 > 앱 키 > 어드민 키에서 확인. 어드민 키는 키마다 허용 API를 고르므로 Kakao Login > Unlink 권한을 켠다
+    # (없으면 연결 끊기가 실패해 Sentry에 남는다. https://developers.kakao.com/docs/en/reference/admin-key-api)
     admin-key: ""
   apple:
     # 번들 ID 목록(쉼표 구분)
