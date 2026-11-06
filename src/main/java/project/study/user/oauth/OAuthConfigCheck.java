@@ -45,6 +45,9 @@ public class OAuthConfigCheck {
         if (properties.kakao().appKeys().isEmpty()) {
             missing.add("OAUTH_KAKAO_APP_KEYS(카카오 로그인)");
         }
+        if (!properties.kakao().unlinkConfigured()) {
+            missing.add("OAUTH_KAKAO_ADMIN_KEY(탈퇴 때 카카오 연결 끊기)");
+        }
         if (apple.bundleIds().isEmpty()) {
             missing.add("OAUTH_APPLE_BUNDLE_IDS(iOS 애플 로그인)");
         }

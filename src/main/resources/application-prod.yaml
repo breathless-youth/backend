@@ -48,6 +48,8 @@ oauth:
     client-ids: ${OAUTH_GOOGLE_CLIENT_IDS:${OAUTH_GOOGLE_CLIENT_ID:}}
   kakao:
     app-keys: ${OAUTH_KAKAO_APP_KEYS:${OAUTH_KAKAO_APP_KEY:}}
+    # 어드민 키(시크릿). 탈퇴 때 카카오 연결 끊기에 쓴다. 비어 있으면 연결 끊기만 건너뛰고 기동은 된다(기동 뒤 Sentry 경고)
+    admin-key: ${OAUTH_KAKAO_ADMIN_KEY:}
   apple:
     # iOS 앱 번들 ID 목록(쉼표 구분). 운영은 앱 하나(com.breathlessyouth.mobile)
     bundle-ids: ${OAUTH_APPLE_BUNDLE_IDS:${OAUTH_APPLE_BUNDLE_ID:${OAUTH_APPLE_CLIENT_ID:}}}

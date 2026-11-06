@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static project.study.user.LinkTestClient.sha256Hex;
 
 import java.util.List;
@@ -25,6 +26,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
 import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
 import project.study.group.support.GroupProbe;
@@ -38,11 +41,13 @@ import project.study.user.entity.Provider;
 import project.study.user.image.ProfileImageStorage;
 import project.study.user.jwt.JwtUtil;
 import project.study.user.oauth.AppleTokenRevoker;
+import project.study.user.oauth.SocialProviderHttpConfig;
 import project.study.user.oauth.SocialTokenVerifiers;
 import tools.jackson.databind.ObjectMapper;
 
 /** 계정 삭제(탈퇴) — 즉시 하드 삭제. 사용자 데이터 전부와 users 행이 사라지고, 모든 기기의 refresh가 무효가 된다. */
-@SpringBootTest
+// 카카오 연결 끊기가 실제로 호출을 시도하도록 어드민 키를 넣는다. 나가는 HTTP는 아래 RestClient 목이 받는다
+@SpringBootTest(properties = "oauth.kakao.admin-key=test-admin-key")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class AccountDeletionApiTest {
@@ -73,6 +78,10 @@ class AccountDeletionApiTest {
 
     @MockitoSpyBean
     private SimpMessagingTemplate messagingTemplate;
+
+    // 검증기는 위에서 목으로 바꿨으므로 이 클라이언트를 실제로 쓰는 것은 카카오 연결 끊기뿐이다
+    @MockitoBean(name = SocialProviderHttpConfig.REST_CLIENT)
+    private RestClient socialProviderRestClient;
 
     private LinkTestClient api;
 
@@ -311,6 +320,29 @@ class AccountDeletionApiTest {
                 .hasStatus(204);
 
         verify(appleTokenRevoker, never()).revoke(anyString(), any());
+    }
+
+    @Test
+    void 카카오_연결_끊기가_실패해도_탈퇴는_된다() {
+        Social kakao = api.stubSocial(Provider.KAKAO, null);
+        LinkResponse linked = api.linkOk(api.register(), kakao);
+        long userId = api.subOf(linked.accessToken());
+        when(socialProviderRestClient.post()).thenThrow(new ResourceAccessException("timeout"));
+
+        assertThat(deleteMe(linked.accessToken())).hasStatus(204);
+
+        assertThat(countUser(userId)).isZero();
+        verify(socialProviderRestClient).post();
+    }
+
+    @Test
+    void 카카오가_아닌_계정은_카카오를_부르지_않는다() {
+        Social google = api.stubSocial(Provider.GOOGLE, null);
+        LinkResponse linked = api.linkOk(api.register(), google);
+
+        assertThat(deleteMe(linked.accessToken())).hasStatus(204);
+
+        verifyNoInteractions(socialProviderRestClient);
     }
 
     @Test
