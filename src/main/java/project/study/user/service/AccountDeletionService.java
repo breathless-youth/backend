@@ -11,6 +11,7 @@ import project.study.user.dto.DeleteAccountRequest;
 import project.study.user.entity.Provider;
 import project.study.user.image.ProfileImageStorage;
 import project.study.user.oauth.AppleTokenRevoker;
+import project.study.user.oauth.KakaoUnlinker;
 
 /**
  * 계정 삭제(탈퇴). 트랜잭션이 아니다 — 방 나가기와 사진 파일 삭제는 DB 트랜잭션 밖에서 하고, 행 삭제만 {@link AccountEraser}의 한
@@ -25,6 +26,7 @@ public class AccountDeletionService {
     private final AccountEraser accountEraser;
     private final ProfileImageStorage profileImageStorage;
     private final AppleTokenRevoker appleTokenRevoker;
+    private final KakaoUnlinker kakaoUnlinker;
 
     public void delete(Long userId, DeleteAccountRequest request) {
         currentRoomLeaver.leave(userId);
@@ -32,6 +34,10 @@ public class AccountDeletionService {
             deleteImageQuietly(erased.profileImageKey());
             if (erased.provider() == Provider.APPLE) {
                 revokeAppleQuietly(request);
+            }
+            // 행이 지워진 뒤라 실패해도 되돌릴 것이 없다. 실패는 KakaoUnlinker가 삼키고 Sentry에 남긴다
+            if (erased.provider() == Provider.KAKAO) {
+                kakaoUnlinker.unlink(erased.providerUserId());
             }
         });
     }

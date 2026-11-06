@@ -76,7 +76,7 @@ ADR-0013에서 정하고 ADR-0019 결정 8과 이전 주석에서 "소셜 로그
 | 멤버 공부 알림 기록(`group_study_alert`) | 같은 그룹 기록이 남는 쪽에 있으면 옮기는 쪽을 지우고, 나머지는 옮긴다 |
 | 그룹 신고(`user_report`) | 신고한 쪽·받은 쪽을 옮기고, 두 계정 사이의 신고(합치면 자기 자신 신고)는 지운다 |
 | 차단(`user_block`) | 건 차단·받은 차단을 모두 옮기고, 두 계정 사이의 차단(자기 자신 차단)과 남는 쪽에 이미 있는 쌍은 버린다(남는 쪽 행의 차단 시각이 남는다) |
-| `amplitude_*` | 건드리지 않는다(사용자 결정) |
+| `amplitude_*` | 옮기는 쪽 것을 지운다. 리포트·실험 집계는 users에 있는 회원만 읽어 병합 뒤에는 쓰이지 않고, 남겨 두면 나중에 탈퇴해도 지울 수 없다 |
 
 세션 겹침: 두 세션 s, t는 시작 시각이 같거나(`UNIQUE(user_id, started_at)`) `s.start < t.end AND t.start < s.end`이면 충돌이다.
 유효 종료는 `GREATEST(start, COALESCE(ended_at, start + study_sec))`라서 `ended_at`이 NULL인 옛 세션도 500 없이 처리된다. 끝과 시작이
@@ -91,7 +91,16 @@ ADR-0013에서 정하고 ADR-0019 결정 8과 이전 주석에서 "소셜 로그
   그룹이 방보다 먼저라, 탈퇴에서 그룹 공부방 자리를 정리(`MEMBER_LEFT`)한 뒤 방 처리기가 참가 행을 지운다.
 - `UserDataCoverageTest`가 DB에서 users를 참조하는 컬럼을 읽어, 처리기에 등록되지 않은 컬럼이 있으면 실패시킨다. FK 없이 `user_id`를
   가진 테이블은 처리기에 직접 적고 같은 테스트가 이름으로 확인한다. 그룹 테이블이 더해지면 이 테스트가 실패해 병합·탈퇴 규칙을 같이 넣게 한다.
-- `amplitude_*`는 의도적으로 제외 목록에 둔다.
+- `amplitude_*`(Amplitude 적재본)도 탈퇴 시 함께 삭제한다(`AmplitudeUserDataHandler`). 처음에는 일부러 제외 목록에 두었으나,
+  개인정보처리방침에 무기한 보관을 쓸 수 없어 바꿨다(2026-11-06 사용자 결정). 제외 목록(`UserDataColumns.IGNORED`)은 이제 비어 있다.
+  Amplitude 쪽에는 그 사람의 이벤트가 남아 있고 늦게 수신된 이벤트나 아직 처리하지 않은 창으로 다시 들어올 수 있어, 적재
+  (`AmplitudeWindowWriter`)는 users에 있는 회원의 행만 쓴다. 확인할 때 그 users 행을 id 순으로 `FOR SHARE`로 잡는다. 탈퇴·병합의
+  users 행 잠금(`findByIdForUpdate`)은 Hibernate가 PostgreSQL에서 `FOR NO KEY UPDATE`로 내므로, `FOR KEY SHARE`로는 부딪히지 않아
+  탈퇴가 적재본을 지운 뒤 users 행을 지우기 전에 적재가 끼어들 수 있다(고아 행이 남거나 같은 키 upsert에서 교착). `FOR SHARE`면 탈퇴의
+  잠금이 적재 커밋을 기다렸다가 새로 쓴 행까지 지우거나, 적재가 탈퇴 커밋을 기다렸다가 빈 결과를 읽는다. FK 검사(`FOR KEY SHARE`)와는
+  부딪히지 않고, 적재는 users 행을 잡기 전에 다른 사용자 데이터 행을 잡지 않으며 병합처럼 id 순으로 잡아 교착하지 않는다.
+  `AccountEraseIngestRaceTest`가 두 순서를 실제 두 트랜잭션으로 고정한다. 그래도 롤링 배포 중 필터가 없는 이전 버전 인스턴스가 쓴 행은
+  남을 수 있어, 매일 적재가 끝날 때 users에 없는 id의 두 표 행을 지운다(`AmplitudeIngestRepository.deleteOrphans`).
 
 ### 동시성
 
@@ -124,7 +133,7 @@ ADR-0013에서 정하고 ADR-0019 결정 8과 이전 주석에서 "소셜 로그
 
 - `DELETE /api/users/me`는 즉시 하드 삭제다. 모든 기기 로그아웃, 비회원도 가능, 멱등(이미 없으면 204), 같은 소셜 ID로 다시 로그인하면 새 가입.
 - 순서: 그룹 행 잠금(ID 순) → 유저 행 잠금 → 처리기 순서대로 그룹 처리·데이터 삭제 → users 행 삭제 → 커밋 → (커밋 뒤) 프로필 사진 파일
-  삭제, 애플 해지, 그룹 푸시·공부방 메시지.
+  삭제, 애플 해지, 카카오 연결 끊기, 그룹 푸시·공부방 메시지.
 - 이 사람이 만든 `rooms`는 다른 사람 기록이 걸려 있어 지우지 않고 `created_by`를 NULL로 둔다. V41이 NULL을 허용한다.
 - **그룹장 자동 승계**(사용자 결정): 그룹장이 탈퇴하면 그 그룹에서 가장 먼저 들어온 다른 살아 있는 멤버(들어온 시각, 같으면 멤버 행 ID 순)가
   그룹장이 되고 탈퇴한 사람은 그룹에서 빠진다. 새 그룹장에게 `group_owner_transferred` 푸시, 공부방이 열려 있으면 `OWNER_CHANGED` —
@@ -145,7 +154,16 @@ ADR-0013에서 정하고 ADR-0019 결정 8과 이전 주석에서 "소셜 로그
   `Sentry.captureMessage`로 직접 남긴다 — `sentry-logback`이 없어 로그만으로는 Sentry에 가지 않는다(코드베이스 관례, 예:
   `HttpAmplitudeExportSource`). 고정 문구·앱 종류·예외 클래스·HTTP 상태만 싣고 코드·client secret·애플 토큰은 싣지 않는다. 해지용
   비밀값(Team ID·Key ID·개인 키)이 없으면 기동은 되고 해지만 건너뛰며, 그것도 Sentry 경고로 남긴다.
-- **카카오**는 앱이 SDK의 연결 끊기를 먼저 부른 뒤 탈퇴 API를 부른다. 서버는 하지 않는다(어드민 키가 더 필요해진다).
+- **카카오 연결 끊기**: 카카오 로그인 정책이 서비스 탈퇴 때 연결 끊기를 요구한다. 커밋 뒤 서버가 어드민 키로
+  `POST https://kapi.kakao.com/v1/user/unlink`(`Authorization: KakaoAK {어드민 키}`, `target_id_type=user_id`,
+  `target_id`=회원번호)를 부른다. 회원번호는 ID 토큰의 sub라 `users.provider_user_id`에 이미 있고, 행을 지우기 전에 읽어 둔다. 처음에는
+  앱이 SDK로 끊기로 했으나 구현되지 않았고, 앱에 맡기면 SDK 호출이 실패하거나 빠진 탈퇴를 서버가 알 수 없다. 서버가 하면 앱 토큰 없이
+  회원번호만으로 끊을 수 있어 앱 버전과 상관없이 모든 카카오 탈퇴에 적용된다. 어드민 키는 이 앱의 모든 사용자를 끊을 수 있는 비밀값이라
+  `OAUTH_KAKAO_ADMIN_KEY`(SSM)로만 받고 로그·Sentry에 싣지 않는다. 키가 없으면 기동은 되고 연결 끊기만 건너뛰며, 기동 뒤
+  `OAuthConfigCheck`가 한 번 경고한다. 어드민 키는 키마다 허용 API 범주를 고르므로 운영·개발 키에 `Kakao Login > Unlink` 권한을 켜야 한다
+  (없으면 호출이 실패해 Sentry 오류로 남는다,
+  [어드민 키 API](https://developers.kakao.com/docs/en/reference/admin-key-api)). 호출 실패(오류 응답·연결·타임아웃)도 애플 해지와 같이 탈퇴를 막지 않고 고정 문구·예외 클래스·HTTP
+  상태만 Sentry에 남긴다. 타임아웃은 다른 소셜 호출과 같은 RestClient(연결·읽기 5초)를 쓴다.
 
 ### 안드로이드 애플 콜백
 
@@ -187,8 +205,9 @@ ADR-0013에서 정하고 ADR-0019 결정 8과 이전 주석에서 "소셜 로그
   `reporter_id`·`blocker_id`·`blocked_id`는 모두 users FK가 있어 잡힌다. FK 없이 다른 이름으로 users를 가리키는 컬럼은 여전히 놓친다.
 - 운영 전 확인: 로그인 앱 출시 전에 운영 SSM·태스크 정의에 `OAUTH_*` 환경변수(목록형 이름 `OAUTH_GOOGLE_CLIENT_IDS` 등이 없으면 바뀌기 전 이름 `OAUTH_GOOGLE_CLIENT_ID`·`OAUTH_KAKAO_APP_KEY`·`OAUTH_APPLE_CLIENT_ID`를 읽어, 이미 넣어 둔 값을 그대로 쓴다. 단 카카오 값이 REST API 키면 네이티브 앱 키로 바꾸고, 구글에는 iOS 클라이언트 ID를 더한다. 더 넣을 것은 애플 Services ID부터), 애플 해지용 비밀값, Services ID의
   반환 주소 등록, 개인정보처리방침의 소셜 로그인·이메일 수집 문구. 위키의 "계정 삭제는 이메일 요청" 문구는 인앱 탈퇴로 바꾼다. 값이 비어
-  있으면 기동은 되지만 그 프로바이더 로그인이 전부 400이라(그룹 탭이 로그인을 요구하므로 그룹 탭이 통째로 막힌다), `OAuthConfigCheck`가
-  기동이 끝난 뒤 빈 항목의 환경변수 이름을 로그와 Sentry 경고로 한 번 남긴다(값은 싣지 않는다). 그룹 릴리즈 때 아직 값을 넣지 않았으면
+  있으면 기동은 되고 빈 항목의 기능만 꺼진다. 로그인 값이 비면 그 프로바이더 로그인이 전부 400이고(그룹 탭이 로그인을 요구하므로 그룹 탭이
+  통째로 막힌다), 애플 해지 비밀값·카카오 어드민 키가 비면 탈퇴는 되고 해지·연결 끊기만 건너뛴다. `OAuthConfigCheck`가
+  기동이 끝난 뒤 빈 항목의 환경변수 이름과 꺼지는 기능을 로그와 Sentry 경고로 한 번 남긴다(값은 싣지 않는다). 그룹 릴리즈 때 아직 값을 넣지 않았으면
   배포마다 같은 경고가 하나씩 쌓인다.
 - 번호: ADR 0040·마이그레이션 V36~V39는 그룹(BY-1124), V40은 구글 광고 유입(BY-1138), ADR 0041·V50·V51은 사용자 시간대(BY-1133)가 쓰고 있어 ADR 0042, 마이그레이션 V41(`rooms.created_by` NULL 허용)·
   V42(`used_social_id_token`)·V43(`study_group.owner_id` NULL 허용)을 쓴다(2026-11-04). dev에 번호가 더 생기면 머지 직전에 다시 맞춘다.
