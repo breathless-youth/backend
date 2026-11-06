@@ -32,7 +32,7 @@ class KakaoTokenVerifierTest {
     private final KakaoTokenVerifier verifier = new KakaoTokenVerifier(
             builder.build(),
             new OAuthProperties(
-                    null, new OAuthProperties.Kakao(List.of("my-kakao-app-key", "second-kakao-app-key")), null));
+                    null, new OAuthProperties.Kakao(List.of("my-kakao-app-key", "second-kakao-app-key"), null), null));
 
     // 카카오 tokeninfo는 POST(form)만 받고 GET은 405다 — 메서드와 본문을 모든 호출에서 고정한다
     private static RequestMatcher tokenInfoPost() {
