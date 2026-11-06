@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -48,10 +49,26 @@ class AmplitudeWindowWriterIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    // users에 없는 id는 적재하지 않으므로 실제 회원으로 쓴다
+    private long user;
+
     @BeforeEach
     @AfterEach
     void clean() {
         jdbcTemplate.execute("TRUNCATE amplitude_export_window, amplitude_daily_event, amplitude_user_attribute");
+    }
+
+    @BeforeEach
+    void createUser() {
+        user = insertUser();
+    }
+
+    private long insertUser() {
+        return jdbcTemplate.queryForObject(
+                "insert into users (provider, provider_user_id, created_at, updated_at) "
+                        + "values ('DEVICE', ?, now(), now()) returning id",
+                Long.class,
+                UUID.randomUUID().toString());
     }
 
     private static WindowAggregate aggregate(long userId, LocalDate date, String key, int times, Instant seenAt) {
@@ -92,27 +109,27 @@ class AmplitudeWindowWriterIntegrationTest {
 
     @Test
     void 창을_쓰면_처리_기록과_횟수와_속성이_남는다() {
-        boolean written = writer.write(new ExportWindow(OCT_12), aggregate(7, OCT_12, "app_launched", 2, T1));
+        boolean written = writer.write(new ExportWindow(OCT_12), aggregate(user, OCT_12, "app_launched", 2, T1));
 
         assertThat(written).isTrue();
-        assertThat(count(7, OCT_12, "app_launched")).isEqualTo(2);
+        assertThat(count(user, OCT_12, "app_launched")).isEqualTo(2);
         assertThat(repository.findProcessedDates(OCT_11, OCT_12)).containsExactly(OCT_12);
         assertThat(jdbcTemplate.queryForObject(
                         "select event_count from amplitude_export_window where window_date = ?", Integer.class, OCT_12))
                 .isEqualTo(2);
         assertThat(jdbcTemplate.queryForObject(
-                        "select os_name from amplitude_user_attribute where user_id = 7", String.class))
+                        "select os_name from amplitude_user_attribute where user_id = ?", String.class, user))
                 .isEqualTo("ios");
     }
 
     @Test
     void 같은_창을_두_번_쓰면_두_번째는_아무것도_쓰지_않는다() {
-        writer.write(new ExportWindow(OCT_12), aggregate(7, OCT_12, "app_launched", 2, T1));
+        writer.write(new ExportWindow(OCT_12), aggregate(user, OCT_12, "app_launched", 2, T1));
 
-        boolean second = writer.write(new ExportWindow(OCT_12), aggregate(7, OCT_12, "app_launched", 2, T1));
+        boolean second = writer.write(new ExportWindow(OCT_12), aggregate(user, OCT_12, "app_launched", 2, T1));
 
         assertThat(second).isFalse();
-        assertThat(count(7, OCT_12, "app_launched")).isEqualTo(2);
+        assertThat(count(user, OCT_12, "app_launched")).isEqualTo(2);
     }
 
     @Test
@@ -120,7 +137,7 @@ class AmplitudeWindowWriterIntegrationTest {
         CountDownLatch start = new CountDownLatch(1);
         Callable<Boolean> write = () -> {
             start.await();
-            return writer.write(new ExportWindow(OCT_12), aggregate(7, OCT_12, "app_launched", 2, T1));
+            return writer.write(new ExportWindow(OCT_12), aggregate(user, OCT_12, "app_launched", 2, T1));
         };
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
@@ -131,7 +148,7 @@ class AmplitudeWindowWriterIntegrationTest {
             List<Boolean> results = List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
 
             assertThat(results).containsExactlyInAnyOrder(true, false);
-            assertThat(count(7, OCT_12, "app_launched")).isEqualTo(2);
+            assertThat(count(user, OCT_12, "app_launched")).isEqualTo(2);
         } finally {
             pool.shutdownNow();
         }
@@ -142,7 +159,7 @@ class AmplitudeWindowWriterIntegrationTest {
         WindowAggregate broken = WindowAggregate.empty();
         // 파서를 거치지 않은 200자 초과 UTM — 선점·횟수 가산 뒤 마지막 단계(속성 upsert)에서 DB가 거부한다
         broken.addEvent(
-                7,
+                user,
                 OCT_12,
                 List.of("app_launched"),
                 UserAttributeObservation.observed(T1, "u".repeat(250), false, null));
@@ -153,54 +170,55 @@ class AmplitudeWindowWriterIntegrationTest {
         assertThat(repository.findProcessedDates(OCT_12, OCT_12)).isEmpty();
         assertThat(jdbcTemplate.queryForObject("select count(*) from amplitude_daily_event", Integer.class))
                 .isZero();
-        assertThat(writer.write(new ExportWindow(OCT_12), aggregate(7, OCT_12, "app_launched", 1, T1)))
+        assertThat(writer.write(new ExportWindow(OCT_12), aggregate(user, OCT_12, "app_launched", 1, T1)))
                 .isTrue();
     }
 
     @Test
     void 늦게_수신된_이벤트는_다른_창에서_발생일_횟수에_더해진다() {
-        writer.write(new ExportWindow(OCT_11), aggregate(7, OCT_11, "app_launched", 1, T1));
+        writer.write(new ExportWindow(OCT_11), aggregate(user, OCT_11, "app_launched", 1, T1));
 
-        writer.write(new ExportWindow(OCT_12), aggregate(7, OCT_11, "app_launched", 1, T1));
+        writer.write(new ExportWindow(OCT_12), aggregate(user, OCT_11, "app_launched", 1, T1));
 
-        assertThat(count(7, OCT_11, "app_launched")).isEqualTo(2);
+        assertThat(count(user, OCT_11, "app_launched")).isEqualTo(2);
     }
 
     @Test
     void 창이_달라도_속성은_값마다_가장_늦게_본_non_null이_이긴다() {
         // 앞 창: 01시 A, 05시 값 없음(마지막 확인 05시) / 뒤 창: 03시 B — 값으로는 B가 A보다 늦다
-        WindowAggregate first = utm(7, "A", "2026-10-12T01:00:00Z");
-        first.addEvent(7, OCT_12, List.of("app_launched"), UserAttributeObservation.observed(T5, null, false, null));
+        WindowAggregate first = utm(user, "A", "2026-10-12T01:00:00Z");
+        first.addEvent(user, OCT_12, List.of("app_launched"), UserAttributeObservation.observed(T5, null, false, null));
         writer.write(new ExportWindow(OCT_11), first);
 
-        writer.write(new ExportWindow(OCT_12), utm(7, "B", "2026-10-12T03:00:00Z"));
+        writer.write(new ExportWindow(OCT_12), utm(user, "B", "2026-10-12T03:00:00Z"));
 
-        assertThat(utmSource(7)).isEqualTo("B");
+        assertThat(utmSource(user)).isEqualTo("B");
         Map<String, Object> row = jdbcTemplate.queryForMap(
-                "select first_seen_at, last_seen_at from amplitude_user_attribute where user_id = 7");
+                "select first_seen_at, last_seen_at from amplitude_user_attribute where user_id = ?", user);
         assertThat(((Timestamp) row.get("first_seen_at")).toInstant()).isEqualTo(T1);
         assertThat(((Timestamp) row.get("last_seen_at")).toInstant()).isEqualTo(T5);
     }
 
     @Test
     void 창이_달라도_같은_시각의_속성은_먼저_쓴_값을_둔다() {
-        writer.write(new ExportWindow(OCT_11), utm(7, "A", "2026-10-12T03:00:00Z"));
+        writer.write(new ExportWindow(OCT_11), utm(user, "A", "2026-10-12T03:00:00Z"));
 
-        writer.write(new ExportWindow(OCT_12), utm(7, "B", "2026-10-12T03:00:00Z"));
+        writer.write(new ExportWindow(OCT_12), utm(user, "B", "2026-10-12T03:00:00Z"));
 
-        assertThat(utmSource(7)).isEqualTo("A");
+        assertThat(utmSource(user)).isEqualTo("A");
     }
 
     @Test
     void 광고_클릭은_한_번이라도_있으면_남는다() {
         WindowAggregate clicked = WindowAggregate.empty();
-        clicked.addEvent(7, OCT_12, List.of("app_launched"), UserAttributeObservation.observed(T1, null, true, null));
+        clicked.addEvent(
+                user, OCT_12, List.of("app_launched"), UserAttributeObservation.observed(T1, null, true, null));
         writer.write(new ExportWindow(OCT_11), clicked);
 
-        writer.write(new ExportWindow(OCT_12), aggregate(7, OCT_12, "app_launched", 1, T3));
+        writer.write(new ExportWindow(OCT_12), aggregate(user, OCT_12, "app_launched", 1, T3));
 
         assertThat(jdbcTemplate.queryForObject(
-                        "select ad_click from amplitude_user_attribute where user_id = 7", Boolean.class))
+                        "select ad_click from amplitude_user_attribute where user_id = ?", Boolean.class, user))
                 .isTrue();
     }
 
@@ -208,6 +226,27 @@ class AmplitudeWindowWriterIntegrationTest {
     void 이벤트가_없는_창도_처리_기록은_남긴다() {
         writer.write(new ExportWindow(OCT_12), WindowAggregate.empty());
 
+        assertThat(repository.findProcessedDates(OCT_12, OCT_12)).containsExactly(OCT_12);
+    }
+
+    @Test
+    void users에_없는_id의_이벤트는_적재하지_않고_창은_처리한다() {
+        // 탈퇴한 회원의 이벤트가 늦게 들어와도 탈퇴 때 지운 행이 되살아나지 않아야 한다
+        long deleted = insertUser();
+        jdbcTemplate.update("delete from users where id = ?", deleted);
+        WindowAggregate aggregate = aggregate(user, OCT_12, "app_launched", 1, T1);
+        aggregate.addEvent(
+                deleted, OCT_12, List.of("app_launched"), UserAttributeObservation.observed(T1, "ad", true, "ios"));
+
+        assertThat(writer.write(new ExportWindow(OCT_12), aggregate)).isTrue();
+
+        assertThat(count(user, OCT_12, "app_launched")).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                        "select count(*) from amplitude_daily_event where user_id = ?", Integer.class, deleted))
+                .isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                        "select count(*) from amplitude_user_attribute where user_id = ?", Integer.class, deleted))
+                .isZero();
         assertThat(repository.findProcessedDates(OCT_12, OCT_12)).containsExactly(OCT_12);
     }
 }

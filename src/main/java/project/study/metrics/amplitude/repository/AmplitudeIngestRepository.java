@@ -88,6 +88,21 @@ public class AmplitudeIngestRepository {
         }
     }
 
+    /**
+     * 주어진 id 중 users에 있는 것만 돌려주고 그 행을 트랜잭션 끝까지 잠근다. FOR KEY SHARE는 탈퇴·병합의 FOR UPDATE만 막고 다른 쓰기는
+     * 막지 않는다. id 순으로 잡아 users 행을 id 순으로 잠그는 병합과 교착하지 않는다. 하루 회원 수가 많아도 바인드 변수 한도에 걸리지 않게
+     * 배열 하나로 넘긴다.
+     */
+    public Set<Long> lockExistingUsers(Set<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Set.of();
+        }
+        // JdbcClient의 이름 있는 파라미터는 배열을 펼칠 수 있어 펼치지 않는 JdbcTemplate에 그대로 넘긴다
+        return new HashSet<>(jdbcTemplate.queryForList(
+                "SELECT id FROM users WHERE id = ANY(?) ORDER BY id FOR KEY SHARE", Long.class, (Object)
+                        userIds.toArray(Long[]::new)));
+    }
+
     public Set<LocalDate> findProcessedDates(LocalDate from, LocalDate to) {
         return new HashSet<>(jdbc.sql("""
                         SELECT window_date FROM amplitude_export_window

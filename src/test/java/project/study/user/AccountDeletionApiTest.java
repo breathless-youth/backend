@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static project.study.user.LinkTestClient.sha256Hex;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -134,6 +135,26 @@ class AccountDeletionApiTest {
 
         assertThat(fixture.countRowsReferencing(me.userId())).isZero();
         assertThat(countUser(me.userId())).isZero();
+    }
+
+    @Test
+    void 탈퇴하면_Amplitude_적재본도_지우고_다른_사람_것은_남긴다() {
+        Device me = api.register();
+        Device other = api.register();
+        LocalDate day = LocalDate.of(2030, 3, 1);
+        fixture.seedAmplitude(me.userId(), day);
+        fixture.seedAmplitude(other.userId(), day);
+
+        assertThat(deleteMe(me.accessToken())).hasStatus(204);
+
+        assertThat(fixture.count("amplitude_daily_event", "user_id", me.userId()))
+                .isZero();
+        assertThat(fixture.count("amplitude_user_attribute", "user_id", me.userId()))
+                .isZero();
+        assertThat(fixture.count("amplitude_daily_event", "user_id", other.userId()))
+                .isEqualTo(1);
+        assertThat(fixture.count("amplitude_user_attribute", "user_id", other.userId()))
+                .isEqualTo(1);
     }
 
     @Test

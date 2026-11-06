@@ -1,5 +1,9 @@
 package project.study.metrics.amplitude;
 
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,8 +24,17 @@ public class AmplitudeWindowWriter {
         if (!repository.claimWindow(window.date(), aggregate.eventCount(), aggregate.skipped())) {
             return false;
         }
-        repository.addCounts(aggregate.counts());
-        repository.upsertAttributes(aggregate.attributes());
+        // Amplitude에는 탈퇴한 회원의 이벤트가 늦게 들어오거나 남아 있다. 적재하면 탈퇴 때 지운 행이 되살아나므로 users에 있는 회원만 쓴다.
+        // 잠가 두면 이 트랜잭션이 끝날 때까지 탈퇴가 그 users 행을 지우지 못해, 확인과 쓰기 사이에 탈퇴가 끼어들어도 남는 행이 없다
+        Set<Long> userIds = new HashSet<>(aggregate.attributes().keySet());
+        aggregate.counts().keySet().forEach(key -> userIds.add(key.userId()));
+        Set<Long> members = repository.lockExistingUsers(userIds);
+        repository.addCounts(aggregate.counts().entrySet().stream()
+                .filter(entry -> members.contains(entry.getKey().userId()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+        repository.upsertAttributes(aggregate.attributes().entrySet().stream()
+                .filter(entry -> members.contains(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
         return true;
     }
 }
