@@ -89,9 +89,10 @@ public class AmplitudeIngestRepository {
     }
 
     /**
-     * 주어진 id 중 users에 있는 것만 돌려주고 그 행을 트랜잭션 끝까지 잠근다. FOR KEY SHARE는 탈퇴·병합의 FOR UPDATE만 막고 다른 쓰기는
-     * 막지 않는다. id 순으로 잡아 users 행을 id 순으로 잠그는 병합과 교착하지 않는다. 하루 회원 수가 많아도 바인드 변수 한도에 걸리지 않게
-     * 배열 하나로 넘긴다.
+     * 주어진 id 중 users에 있는 것만 돌려주고 그 행을 트랜잭션 끝까지 잠근다. 탈퇴·병합은 users 행을 FOR NO KEY UPDATE로 잡으므로(Hibernate가
+     * PESSIMISTIC_WRITE를 그렇게 낸다) 그것과 부딪히는 FOR SHARE여야 한다. FOR KEY SHARE는 부딪히지 않아, 탈퇴가 적재본을 지운 뒤 users
+     * 행을 지우기 전에 적재가 끼어들 수 있다. FK 검사(FOR KEY SHARE)와는 부딪히지 않는다. id 순으로 잡아 users 행을 id 순으로 잠그는 병합과
+     * 교착하지 않는다. 하루 회원 수가 많아도 바인드 변수 한도에 걸리지 않게 배열 하나로 넘긴다.
      */
     public Set<Long> lockExistingUsers(Set<Long> userIds) {
         if (userIds.isEmpty()) {
@@ -99,8 +100,20 @@ public class AmplitudeIngestRepository {
         }
         // JdbcClient의 이름 있는 파라미터는 배열을 펼칠 수 있어 펼치지 않는 JdbcTemplate에 그대로 넘긴다
         return new HashSet<>(jdbcTemplate.queryForList(
-                "SELECT id FROM users WHERE id = ANY(?) ORDER BY id FOR KEY SHARE", Long.class, (Object)
+                "SELECT id FROM users WHERE id = ANY(?) ORDER BY id FOR SHARE", Long.class, (Object)
                         userIds.toArray(Long[]::new)));
+    }
+
+    /**
+     * users에 없는 id의 적재본을 지운다. 탈퇴 처리기와 적재 필터가 막지만, 롤링 배포 중 필터가 없는 이전 버전 인스턴스가 쓴 행은 남을 수 있다.
+     * 지운 행 수를 돌려준다.
+     */
+    public int deleteOrphans() {
+        return jdbc.sql("""
+                        DELETE FROM amplitude_daily_event e
+                        WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = e.user_id)""").update() + jdbc.sql("""
+                                DELETE FROM amplitude_user_attribute a
+                                WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.user_id)""").update();
     }
 
     public Set<LocalDate> findProcessedDates(LocalDate from, LocalDate to) {

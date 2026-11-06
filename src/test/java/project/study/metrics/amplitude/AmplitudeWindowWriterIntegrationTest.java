@@ -249,4 +249,26 @@ class AmplitudeWindowWriterIntegrationTest {
                 .isZero();
         assertThat(repository.findProcessedDates(OCT_12, OCT_12)).containsExactly(OCT_12);
     }
+
+    @Test
+    void deleteOrphans는_users에_없는_id의_행만_지운다() {
+        long deleted = insertUser();
+        writer.write(new ExportWindow(OCT_12), aggregate(user, OCT_12, "app_launched", 1, T1));
+        // 필터가 없는 이전 버전 인스턴스가 쓴 행처럼 직접 넣는다
+        jdbcTemplate.update(
+                "insert into amplitude_daily_event (user_id, event_date, event_key, count) values (?, ?, 'app_launched', 1)",
+                deleted,
+                OCT_12);
+        jdbcTemplate.update(
+                "insert into amplitude_user_attribute (user_id, first_seen_at, last_seen_at) values (?, now(), now())",
+                deleted);
+        jdbcTemplate.update("delete from users where id = ?", deleted);
+
+        assertThat(repository.deleteOrphans()).isEqualTo(2);
+
+        assertThat(jdbcTemplate.queryForList("select user_id from amplitude_daily_event", Long.class))
+                .containsExactly(user);
+        assertThat(jdbcTemplate.queryForList("select user_id from amplitude_user_attribute", Long.class))
+                .containsExactly(user);
+    }
 }
