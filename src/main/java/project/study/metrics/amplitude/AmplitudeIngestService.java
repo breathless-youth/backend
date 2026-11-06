@@ -63,7 +63,8 @@ public class AmplitudeIngestService {
                 consecutiveFailures++;
             }
         }
-        log.info("Amplitude 적재 완료 (적재={}, 실패={})", written, failed);
+        int orphans = repository.deleteOrphans();
+        log.info("Amplitude 적재 완료 (적재={}, 실패={}, 지운 탈퇴 회원 행={})", written, failed, orphans);
         return new IngestResult(written, failed);
     }
 

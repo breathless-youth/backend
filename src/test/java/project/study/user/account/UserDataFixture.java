@@ -77,6 +77,18 @@ public class UserDataFixture {
                 .update();
     }
 
+    /** FK가 없는 적재 테이블이라 users 행 없이도 들어간다. */
+    public void seedAmplitude(long userId, LocalDate date) {
+        jdbc.sql(
+                        "INSERT INTO amplitude_daily_event (user_id, event_date, event_key, count) VALUES (:u, :d, 'app_launched', 1)")
+                .param("u", userId)
+                .param("d", date)
+                .update();
+        jdbc.sql("""
+                        INSERT INTO amplitude_user_attribute (user_id, os_name, first_seen_at, last_seen_at)
+                        VALUES (:u, 'ios', now(), now())""").param("u", userId).update();
+    }
+
     public void seedPushAssignment(long userId, String experiment) {
         jdbc.sql("""
                         INSERT INTO push_experiment_assignment (experiment, user_id, arm, assigned_at)
@@ -358,6 +370,7 @@ public class UserDataFixture {
         seedPushToken(user, "tok-" + user);
         seedPushSend(user, day);
         seedPushAssignment(user, "exp-" + user);
+        seedAmplitude(user, day);
         seedStats("study_stats_daily", user, day, 10);
         seedStats("study_stats_weekly", user, day, 10);
         seedStats("study_stats_monthly", user, day, 10);

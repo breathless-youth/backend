@@ -33,6 +33,7 @@ class OAuthConfigCheckTest {
         sentry.verify(() -> Sentry.captureMessage(
                 argThat(message -> message.contains("OAUTH_GOOGLE_CLIENT_IDS")
                         && message.contains("OAUTH_KAKAO_APP_KEYS")
+                        && message.contains("OAUTH_KAKAO_ADMIN_KEY")
                         && message.contains("OAUTH_APPLE_BUNDLE_IDS")
                         && message.contains("OAUTH_APPLE_SERVICES_ID")
                         && message.contains("OAUTH_APPLE_ANDROID_CALLBACK_REDIRECT")
@@ -46,7 +47,7 @@ class OAuthConfigCheckTest {
     void 채워진_값은_적지_않고_값_자체도_싣지_않는다() {
         OAuthProperties properties = new OAuthProperties(
                 new OAuthProperties.Google(List.of("google-web-id")),
-                new OAuthProperties.Kakao(List.of("kakao-key")),
+                new OAuthProperties.Kakao(List.of("kakao-key"), "kakao-admin-key"),
                 new OAuthProperties.Apple(List.of("com.example.app"), null, null, null, null, null, null));
 
         new OAuthConfigCheck(properties).reportMissing();
@@ -54,6 +55,8 @@ class OAuthConfigCheckTest {
         sentry.verify(() -> Sentry.captureMessage(
                 argThat(message -> !message.contains("OAUTH_GOOGLE_CLIENT_IDS")
                         && !message.contains("OAUTH_KAKAO_APP_KEYS")
+                        && !message.contains("OAUTH_KAKAO_ADMIN_KEY")
+                        && !message.contains("kakao-admin-key")
                         && !message.contains("OAUTH_APPLE_BUNDLE_IDS")
                         && message.contains("OAUTH_APPLE_SERVICES_ID")
                         && !message.contains("google-web-id")
@@ -65,7 +68,7 @@ class OAuthConfigCheckTest {
     void 다_채워져_있으면_아무것도_남기지_않는다() {
         OAuthProperties full = new OAuthProperties(
                 new OAuthProperties.Google(List.of("google-web-id")),
-                new OAuthProperties.Kakao(List.of("kakao-key")),
+                new OAuthProperties.Kakao(List.of("kakao-key"), "kakao-admin-key"),
                 new OAuthProperties.Apple(
                         List.of("com.example.app"),
                         "com.example.web",

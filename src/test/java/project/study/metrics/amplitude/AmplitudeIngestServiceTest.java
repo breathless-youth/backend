@@ -61,6 +61,21 @@ class AmplitudeIngestServiceTest {
     }
 
     @Test
+    void 창을_다_적재한_뒤_users에_없는_id의_행을_지운다() {
+        // 롤링 배포 중 이전 버전 인스턴스가 필터 없이 쓴 행을 매일 걷어 낸다
+        when(source.isEnabled()).thenReturn(true);
+        when(repository.findProcessedDates(OCT_10, OCT_12)).thenReturn(Set.of(OCT_10, OCT_11));
+        when(source.fetch(any())).thenReturn(WindowAggregate.empty());
+        when(writer.write(any(), any())).thenReturn(true);
+
+        service(NOW, 3).ingestPending();
+
+        InOrder order = inOrder(writer, repository);
+        order.verify(writer).write(any(), any());
+        order.verify(repository).deleteOrphans();
+    }
+
+    @Test
     void 아직_준비_안_된_어제_창은_건너뛴다() {
         // 2026-10-13 02:00 KST — 어제 창은 03:00 KST부터 준비된다
         Instant beforeReady = Instant.parse("2026-10-12T17:00:00Z");
