@@ -87,6 +87,31 @@ class ActiveSessionSnapshotApiTest {
     }
 
     @Test
+    void 보고_성공_응답_직후_flush_없이_DB에서_복구할_수_있다() {
+        Instant reportedAt = startedAt.plusMillis(1);
+        Long subjectId = jdbcTemplate.queryForObject(
+                "INSERT INTO study_subject (user_id, name) VALUES (?, ?) RETURNING id", Long.class, userId, "수학");
+        String body = """
+                {"startedAt":"%s","reportedAt":"%s","studySec":0,"focusSec":0,"events":[],
+                 "subjectSegments":[{"subjectId":%d,"startedAt":"%s","endedAt":"%s"}]}
+                """.formatted(startedAt, reportedAt, subjectId, startedAt, reportedAt);
+
+        assertThat(mvc.put()
+                        .uri("/api/study-sessions/active?durable=true")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(asUser(userId))
+                        .exchange())
+                .hasStatus(HttpStatus.NO_CONTENT);
+        assertThat(draftRows(userId)).isEqualTo(1);
+        assertThat(mvc.get().uri("/api/study-sessions/active").with(asUser(userId)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.subjectSegments[0].subjectId", v -> assertThat(v).isEqualTo(subjectId.intValue()));
+    }
+
+    @Test
     void 첫_스냅샷은_draft를_만든다() {
         assertThat(report(userId, startedAt, startedAt.plusSeconds(30), 30, 30)).hasStatus(HttpStatus.NO_CONTENT);
         assertThat(draftRows(userId)).isEqualTo(1);
