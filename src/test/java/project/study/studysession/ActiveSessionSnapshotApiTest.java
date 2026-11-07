@@ -88,13 +88,15 @@ class ActiveSessionSnapshotApiTest {
 
     @Test
     void 보고_성공_응답_직후_flush_없이_DB에서_복구할_수_있다() {
-        Instant reportedAt = startedAt.plusMillis(1);
+        // 실제 웹 클라이언트의 Date.toISOString()과 같은 밀리초 정밀도를 사용한다.
+        Instant browserStartedAt = startedAt.truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        Instant reportedAt = browserStartedAt.plusMillis(1);
         Long subjectId = jdbcTemplate.queryForObject(
                 "INSERT INTO study_subject (user_id, name) VALUES (?, ?) RETURNING id", Long.class, userId, "수학");
         String body = """
                 {"startedAt":"%s","reportedAt":"%s","studySec":0,"focusSec":0,"events":[],
                  "subjectSegments":[{"subjectId":%d,"startedAt":"%s","endedAt":"%s"}]}
-                """.formatted(startedAt, reportedAt, subjectId, startedAt, reportedAt);
+                """.formatted(browserStartedAt, reportedAt, subjectId, browserStartedAt, reportedAt);
 
         assertThat(mvc.put()
                         .uri("/api/study-sessions/active?durable=true")
