@@ -46,9 +46,23 @@ public class PlannerGoalService {
 
     @Transactional
     public PlannerGoalResponse save(Long userId, LocalDate date, PlannerGoalRequest request, String timeZone) {
+        return save(userId, date, request, timeZone, false);
+    }
+
+    @Transactional
+    public PlannerGoalResponse save(
+            Long userId, LocalDate date, PlannerGoalRequest request, String timeZone, boolean home) {
         validateGoal(request.goalSec());
         locks.lockUser(userId);
-        requireFuture(date, userTimeZones.resolve(userId, timeZone));
+        ZoneId zone = userTimeZones.resolve(userId, timeZone);
+        if (home) {
+            PlannerCalendar.checkDate(date);
+            if (date.isAfter(LocalDate.now(clock.withZone(zone)))) {
+                throw new BadRequestException("홈 목표는 사용자 현지 미래 날짜를 변경할 수 없습니다");
+            }
+        } else {
+            requireFuture(date, zone);
+        }
         repository.upsertIndividual(userId, date, request.goalSec());
         Integer defaultGoal = repository.findDefault(userId).orElse(null);
         return new PlannerGoalResponse(request.goalSec(), request.goalSec(), defaultGoal);
@@ -86,8 +100,8 @@ public class PlannerGoalService {
     }
 
     private void validateGoal(Integer goalSec) {
-        if (goalSec == null || goalSec < 0 || goalSec > 86400 || goalSec % 1800 != 0) {
-            throw new BadRequestException("목표 초는 0~86400 범위의 1800초 단위여야 합니다");
+        if (goalSec == null || goalSec < 0 || goalSec > 86400) {
+            throw new BadRequestException("목표 초는 0~86400 범위여야 합니다");
         }
     }
 }

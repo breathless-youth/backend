@@ -100,7 +100,7 @@ class PlannerGoalServiceTest {
 
     @ParameterizedTest
     @NullSource
-    @ValueSource(ints = {-1800, 1, 88200})
+    @ValueSource(ints = {-1800, 88200})
     void 서비스_직접_호출도_잘못된_초를_거절한다(Integer value) {
         assertThatThrownBy(() -> service.save(1L, MARCH_SECOND, new PlannerGoalRequest(value), null))
                 .isInstanceOf(BadRequestException.class);
