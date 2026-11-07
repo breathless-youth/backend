@@ -1,4 +1,4 @@
--- 핵심 사용자의 최근 2주(오늘 포함 14일, KST) 공부 시간 — 측정 세션, 순공 1분 이상 조각만(화면과 같은 기준)
+-- 핵심 사용자의 최근 2주(오늘 포함 14일, KST) 공부 시간 — 측정 세션, 순공 1초 이상 조각만(화면과 같은 기준)
 -- 핵심 = core_users.sql과 같은 정의. 사람별 줄 아래에 핵심 평균·중앙값 줄이 붙는다
 -- 오늘은 아직 진행 중이라 "14일로 나눈 하루 순공"은 조금 낮게 나온다
 WITH params AS (
@@ -29,7 +29,7 @@ per_user AS (
     CROSS JOIN params p
     LEFT JOIN study_session s ON s.user_id = c.user_id
                              AND s.source = 'MEASURED'
-                             AND s.focus_sec >= 60
+                             AND s.focus_sec >= 1
                              AND s.stat_date BETWEEN p.today - 13 AND p.today
     GROUP BY c.user_id
 ),

@@ -1,5 +1,5 @@
 -- ⑧ 수동기록 쓴 사람 — 10/17 출시 뒤 Amplitude 수동기록 이벤트(추가·수정·삭제·겹침 막힘)를 남긴 사람 한 줄씩
---    활동일 = 앱을 연 날(Amplitude) 또는 순공 1분 이상 측정한 날. Amplitude가 어제까지라 "이후"는 어제까지만 본다
+--    활동일 = 앱을 연 날(Amplitude) 또는 순공 1초 이상 측정한 날. Amplitude가 어제까지라 "이후"는 어제까지만 본다
 WITH params AS (
     SELECT (now() AT TIME ZONE 'Asia/Seoul')::date AS today,
            DATE '2026-10-17'                       AS launch
@@ -18,10 +18,10 @@ manual_ev AS (
       AND a.event_date >= p.launch
     GROUP BY a.user_id
 ),
-study_days AS (   -- 순공 1분 이상 측정한 날
+study_days AS (   -- 순공 1초 이상 측정한 날
     SELECT DISTINCT s.user_id, s.stat_date AS day
     FROM study_session s
-    WHERE s.source = 'MEASURED' AND s.focus_sec >= 60
+    WHERE s.source = 'MEASURED' AND s.focus_sec >= 1
 ),
 active_days AS (   -- 앱을 연 날 또는 측정한 날
     SELECT a.user_id, a.event_date AS day

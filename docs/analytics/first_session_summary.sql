@@ -36,7 +36,7 @@ back AS (   -- 첫 세션 다음 날부터 7일 안에 다시 공부한 날 수
     FROM target t
     LEFT JOIN study_session s ON s.user_id = t.user_id
                              AND s.source = 'MEASURED'
-                             AND s.focus_sec >= 60
+                             AND s.focus_sec >= 1
                              AND s.stat_date BETWEEN t.stat_date + 1 AND t.stat_date + 7
     GROUP BY t.user_id
 ),

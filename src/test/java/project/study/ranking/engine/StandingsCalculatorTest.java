@@ -52,9 +52,9 @@ class StandingsCalculatorTest extends RankingIntegrationTestBase {
     }
 
     @Test
-    void 일분_미만_조각과_탈퇴자는_빠지고_진행_중만_있는_사람도_들어간다() {
+    void 순공_0초_조각과_탈퇴자는_빠지고_진행_중만_있는_사람도_들어간다() {
         long tiny = user("tiny");
-        session(tiny, kst(10, 6, 9, 0), 1, 59);
+        session(tiny, kst(10, 6, 9, 0), 1, 0);
         long gone = user("gone");
         session(gone, kst(10, 6, 9, 0), 60, 3000);
         withdraw(gone);
@@ -173,7 +173,7 @@ class StandingsCalculatorTest extends RankingIntegrationTestBase {
         long a = user("a");
         session(a, kst(10, 1, 9, 0), 30, 1000);
         session(a, kst(10, 3, 9, 0), 30, 1500);
-        session(a, kst(10, 3, 14, 0), 1, 59);
+        session(a, kst(10, 3, 14, 0), 1, 0);
 
         double totalTime =
                 compute(new RankingBoard(TOTAL_TIME, null, null), a).getFirst().value();

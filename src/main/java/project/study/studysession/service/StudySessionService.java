@@ -135,7 +135,7 @@ public class StudySessionService {
 
     /**
      * 통계 날짜(statDate) 기준 하루 조회 — 기간(from~to) 조회는 추후 별도 메서드로 분리한다.
-     * 순공시간(focusSec)이 {@value project.study.studysession.StudySessionThresholds#MIN_LIST_FOCUS_SEC}초(1분)
+     * 순공시간(focusSec)이 {@value project.study.studysession.StudySessionThresholds#MIN_LIST_FOCUS_SEC}초
      * 미만인 세션은 저장은 되어도 조회엔 보이지 않는다.
      * 캘린더 표시용으로 date가 속한 달의 공부한 날짜 목록(studiedDatesInMonth)도 함께 내려준다.
      * 상태별 이벤트 건수는 세션마다(sessions[].eventCounts) 내려주고, 그 합계도 함께(totalEventCounts) 내려준다.
@@ -325,7 +325,7 @@ public class StudySessionService {
     }
 
     /**
-     * 누적 공부일 — 가입 이후 순공시간 1분 이상 세션이 하루라도 있었던 날의 수. 목록 조회와 같은 기준(ADR-0009)이라
+     * 누적 공부일 — 가입 이후 순공시간 1초 이상 세션이 하루라도 있었던 날의 수. 목록 조회와 같은 기준(ADR-0009)이라
      * "목록에 세션이 보이는 날"과 일치한다. 스트릭과 같은 이유로 사용자 시간대의 오늘까지만 센다.
      */
     @Transactional(readOnly = true)
@@ -335,7 +335,7 @@ public class StudySessionService {
     }
 
     /**
-     * 공부 리듬 — 누적 공부일(study-days와 같은 1분 기준)과 요일 × 시각별 누적 순공. 조각마다 그 세션 시간대의 정시 경계로 잘라
+     * 공부 리듬 — 누적 공부일(study-days와 같은 1초 기준)과 요일 × 시각별 누적 순공. 조각마다 그 세션 시간대의 정시 경계로 잘라
      * 배분하므로(RhythmSplitter) 자정 분할 조각도 그대로 더하면 된다. 노출 기준(며칠부터 보여줄지)은 앱이 정한다.
      */
     @Transactional(readOnly = true)

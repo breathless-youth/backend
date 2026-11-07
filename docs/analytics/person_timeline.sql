@@ -9,8 +9,8 @@ days AS (
 ),
 study AS (
     SELECT s.stat_date                                                           AS day,
-           COUNT(*) FILTER (WHERE s.source = 'MEASURED' AND s.focus_sec >= 60)     AS pieces,
-           SUM(s.focus_sec) FILTER (WHERE s.source = 'MEASURED' AND s.focus_sec >= 60) AS focus_sec,
+           COUNT(*) FILTER (WHERE s.source = 'MEASURED' AND s.focus_sec >= 1)     AS pieces,
+           SUM(s.focus_sec) FILTER (WHERE s.source = 'MEASURED' AND s.focus_sec >= 1) AS focus_sec,
            MAX(s.focus_sec) FILTER (WHERE s.source = 'MEASURED')                   AS max_focus_sec,
            SUM(s.focus_sec) FILTER (WHERE s.source = 'MANUAL')                     AS manual_sec
     FROM study_session s
@@ -34,7 +34,7 @@ events AS (
 )
 SELECT d.day                                                        AS "날짜",
        to_char(d.day, 'Dy')                                         AS "요일",
-       COALESCE(st.pieces, 0)                                       AS "측정 조각(1분+)",
+       COALESCE(st.pieces, 0)                                       AS "측정 조각(1초+)",
        ROUND(COALESCE(st.focus_sec, 0) / 60.0)                      AS "순공(분)",
        ROUND(COALESCE(st.max_focus_sec, 0) / 60.0)                  AS "가장 긴 세션(분)",
        COALESCE(st.max_focus_sec, 0) >= 300                         AS "공부한 날",
