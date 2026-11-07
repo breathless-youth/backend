@@ -59,11 +59,13 @@ public class LegacyStudySessionController {
 
     @PutMapping("/active")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void report(@Valid @RequestBody LegacyActiveSessionSnapshotRequest request) {
+    public void report(
+            @Valid @RequestBody LegacyActiveSessionSnapshotRequest request,
+            @RequestParam(defaultValue = "false") boolean durable) {
         // 토큰 계약은 유효한 토큰이 곧 실존 유저지만 여기는 아무 숫자나 올 수 있다 — 없는 유저를 버퍼에 넣으면 flush 때
         // FK 위반으로 배치가 통째로 롤백되고 정상 유저 행까지 개별 재시도로 밀린다. 404(USER_NOT_FOUND)로 먼저 끊는다
         legacyGuestGuard.requireGuest(request.userId());
-        activeStudySessionController.report(request.userId(), request.toRequest());
+        activeStudySessionController.report(request.userId(), request.toRequest(), durable);
     }
 
     @GetMapping("/active")

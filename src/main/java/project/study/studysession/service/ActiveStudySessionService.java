@@ -27,6 +27,8 @@ import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.ActiveStudySession;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.repository.ActiveStudySessionBatchRepository;
+import project.study.studysession.repository.ActiveStudySessionBatchRepository.SnapshotRow;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.user.service.UserTimeZones;
 import tools.jackson.core.type.TypeReference;
@@ -48,6 +50,7 @@ public class ActiveStudySessionService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final ActiveSnapshotBuffer buffer;
+    private final ActiveStudySessionBatchRepository batchRepository;
     private final UserTimeZones userTimeZones;
 
     public ActiveStudySessionService(
@@ -56,12 +59,14 @@ public class ActiveStudySessionService {
             ObjectMapper objectMapper,
             Clock clock,
             ActiveSnapshotBuffer buffer,
+            ActiveStudySessionBatchRepository batchRepository,
             UserTimeZones userTimeZones) {
         this.activeStudySessionRepository = activeStudySessionRepository;
         this.studySessionService = studySessionService;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.buffer = buffer;
+        this.batchRepository = batchRepository;
         this.userTimeZones = userTimeZones;
     }
 
@@ -71,6 +76,10 @@ public class ActiveStudySessionService {
      * 동시 INSERT 레이스와 역순 도착은 네이티브 UPSERT가 원자적으로 걸러 조용히 무시된다(0행 갱신).
      */
     public void reportSnapshot(Long userId, ActiveSessionSnapshotRequest request) {
+        reportSnapshot(userId, request, false);
+    }
+
+    public void reportSnapshot(Long userId, ActiveSessionSnapshotRequest request, boolean durable) {
         List<StatusEvent> events =
                 request.events().stream().map(StatusEventRequest::toEntity).toList();
         // 요청 검증에 활용
@@ -83,10 +92,21 @@ public class ActiveStudySessionService {
                 events,
                 new SessionAttachments(request.subjectSegmentsOrEmpty(), List.of()));
 
-        // 코얼레싱 버퍼에 넣고 즉시 반환 — 주기적 벌크 flush로 DB·CPU 부하를 낮춘다 (BY-470).
-        // events JSON 직렬화·DB 쓰기는 flush 시점에 세션당 1번만 일어난다.
-        // 트레이드오프: 없는 user_id의 404가 flush(비동기)로 이동한다 — 하트비트라 실질 영향 없음.
-        buffer.offer(userId, request);
+        // durable 요청은 별도 트랜잭션의 UPSERT 커밋 후 반환한다. 기존 클라이언트는 버퍼를 유지한다.
+        if (durable) {
+            batchRepository.bulkUpsert(List.of(new SnapshotRow(
+                    userId,
+                    request.startedAt(),
+                    request.reportedAt(),
+                    clock.instant(),
+                    request.studySec(),
+                    request.focusSec(),
+                    objectMapper.writeValueAsString(request.events()),
+                    objectMapper.writeValueAsString(request.subjectSegmentsOrEmpty()))));
+        } else {
+            // 기존 버퍼 경로는 직렬화와 DB 쓰기가 flush 시점에 일어난다.
+            buffer.offer(userId, request);
+        }
     }
 
     /**

@@ -76,3 +76,7 @@ WHERE series_id IS NOT NULL GROUP BY series_id, occurrence_date HAVING count(*) 
 ```
 
 실제 V52→V55 PostgreSQL 이전과 재기동, 현지 04:59/05:00·DST, 완료/삭제 시각 및 참조 보존은 `PlannerMigrationTest`로 검증한다. FE 타입 생성은 Swagger 계약을 기준으로 하고 FE·앱 연동·전체 공개는 별도 확인 후 진행한다.
+
+## 진행 중 과목 복구 체크포인트
+
+`PUT /api/study-sessions/active?durable=true`는 검증과 DB UPSERT의 커밋이 끝난 뒤 204를 반환한다. 기본값 false는 기존 메모리 버퍼 경로를 유지한다. 인증 없는 구 앱용 동일 경로도 같은 쿼리를 지원한다. DB 쓰기 실패는 성공 응답으로 바꾸지 않는다. 역순 reportedAt은 기존 UPSERT 조건으로 무시한다. 프런트는 과목 선택 직후 0길이 구간을 피한 다음 틱에 전송하고, 진행 중 요청이 있으면 완료 직후 최신 누적본을 추가 전송한다. 네트워크가 끊기거나 요청 도착 전에 앱이 종료되면 서버 복구는 마지막 성공한 체크포인트까지만 가능하다.
