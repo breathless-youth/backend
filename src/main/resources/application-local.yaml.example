@@ -106,3 +106,25 @@ refresh-token:
 # app:
 #   report:
 #     run-once: true
+
+# BY-1191 그룹 번역 — 기본 off. 운영 문서의 무료 잔량 확인과 DB 장부 초기화 후 켠다.
+# 기존 app: 블록 아래에 병합한다 (별도 app: 키를 중복 선언하지 않는다).
+# app:
+#   group-translation:
+#     enabled: false
+#     google:
+#       enabled: false
+#       api-key: ${GOOGLE_TRANSLATION_API_KEY:}
+#       daily-limit: 13000
+#       monthly-limit: 400000
+#     azure:
+#       enabled: false
+#       api-key: ${AZURE_TRANSLATION_API_KEY:}
+#       region: ${AZURE_TRANSLATION_REGION:koreacentral}
+#       plan: F0
+#       monthly-limit: 2000000
+#     deepl:
+#       enabled: false
+#       api-key: ${DEEPL_TRANSLATION_API_KEY:}
+#       plan: DEVELOPER
+#       lifetime-limit: 1000000

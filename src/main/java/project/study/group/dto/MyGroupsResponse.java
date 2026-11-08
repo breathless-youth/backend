@@ -49,7 +49,9 @@ public record MyGroupsResponse(
             Integer newApplicationCount,
 
             @Schema(description = "멤버 책상 — 들어간 순서. 정렬은 FE가 한다")
-            List<GroupMemberDesk> members) {}
+            List<GroupMemberDesk> members,
+
+            GroupTranslation translation) {}
 
     public record GroupLimits(
             @Schema(description = "들어간 그룹과 답을 기다리는 신청을 합쳐 가질 수 있는 수", example = "5")

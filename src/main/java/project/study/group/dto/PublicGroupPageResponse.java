@@ -36,5 +36,7 @@ public record PublicGroupPageResponse(
             int studyingCount,
 
             @Schema(description = "내가 이 그룹 멤버면 true", example = "false")
-            boolean member) {}
+            boolean member,
+
+            GroupTranslation translation) {}
 }

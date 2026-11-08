@@ -33,4 +33,6 @@ public record GroupHomeResponse(
         int studyingCount,
 
         @Schema(description = "멤버 책상 — 들어간 순서. 책상 순서·순위 정렬은 FE가 한다")
-        List<GroupMemberDesk> members) {}
+        List<GroupMemberDesk> members,
+
+        GroupTranslation translation) {}

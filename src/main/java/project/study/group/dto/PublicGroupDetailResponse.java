@@ -40,7 +40,9 @@ public record PublicGroupDetailResponse(
         ErrorCode unavailableReason,
 
         @Schema(description = "내 대기 중인 신청 — applyState가 `APPLIED`일 때만, 아니면 null")
-        PendingApplicationRef application) {
+        PendingApplicationRef application,
+
+        GroupTranslation translation) {
 
     public record GroupOwnerProfile(
             @Schema(description = "그룹장 userId", example = "7")
