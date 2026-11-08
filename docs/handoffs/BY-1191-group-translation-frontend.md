@@ -1,34 +1,27 @@
-# BY-1191 프론트 전달사항: 앱 언어 설정과 그룹 자동 번역
+# BY-1191 FE 연동 계약: 기기 언어에 따른 그룹 자동 번역
 
-연관 백엔드: [BY-1191](https://breathless-youth.atlassian.net/browse/BY-1191). 프론트 구현은 이 백엔드 PR에 포함하지 않는다.
+연관 백엔드: [BY-1191](https://breathless-youth.atlassian.net/browse/BY-1191), [PR #159](https://github.com/breathless-youth/backend/pull/159).
 
-## 설정 → 앱 언어
+## 이번 FE 범위
 
-선택지는 다음과 같다. 기본값은 **기기 설정 따르기**이며, 사용자의 명시적 선택은 OS 언어와 위치/국가보다 우선한다.
+이번에는 설정 화면 언어 선택을 넣지 않는다. FE가 공유한 현재 정책대로 기기 언어에서 화면 언어를 정하고, 화면에 보이는 언어를 그룹 조회 요청에 보낸다. 모바일 탭바·다른 탭의 언어 전환과 앱 업데이트는 이번 범위 밖이다.
 
-| 선택지 | 저장 값 / API 언어 |
+| 현재 표시 언어 | Accept-Language |
 | --- | --- |
-| 기기 설정 따르기 | `system` 저장, 요청 시 OS 언어를 지원 locale로 해석 |
 | 한국어 | `ko` |
-| English | `en` |
-| 日本語 | `ja` |
-| 简体中文 | `zh-CN` |
-| 繁體中文（台灣） | `zh-TW` |
-| 繁體中文（香港） | `zh-HK` |
+| 영어 (미지원 기기 언어 포함) | `en` |
+| 일본어 | `ja` |
+| 번체 중국어 (대만·홍콩·마카오 및 번체 지정) | `zh-TW` |
 
-- 선택값은 클라이언트에 저장해 앱 재실행 후에도 유지한다. 언어 저장을 위한 새 백엔드 API는 없다.
-- `system`은 UI 설정 값이며 Accept-Language에 그대로 보내지 않는다. OS 언어를 해석한 최종 앱 locale을 보낸다. 미지원 OS 언어는 기존 프론트 국제화의 기본 언어로 처리한다.
-- OS가 영어여도 앱에서 한국어를 선택하면 한국어를 유지한다. 한국에 있어도 앱에서 영어를 선택하면 영어를 유지한다. 위치 변경으로 명시적 선택을 덮어쓰지 않는다.
-- 언어 변경 즉시 기존 i18n 고정 문구와 그룹 번역 조회에 같은 최종 언어를 적용한다.
-- `system`인 경우 앱 복귀 시 OS 언어 변경을 반영한다. 직접 선택한 경우에는 OS 변경의 영향을 받지 않는다.
+FE의 번체 리소스 코드 `zh-Hant`는 요청할 때 `zh-TW`로 매핑한다. 간체 중국어 기기는 현재 화면이 영어이므로 `en`을 보낸다. `zh-CN`, `system`은 보내지 않는다. 기존 Authorization과 API-Version 헤더는 유지한다.
 
-## 요청
+백엔드는 `zh-Hant`, `zh-HK`, `zh-MO`와 각 번체 script/region 별칭을 모두 `zh-TW`로 정규화한다. 이들은 같은 번역 캐시를 공유하며 응답 `translation.language`도 `zh-TW`다. 광둥어를 별도 제공하는 계약은 아니다.
 
-기존 인증·API-Version 헤더를 유지하고, 아래 그룹 GET에 최종 앱 언어를 추가한다.
+## 요청과 표시
 
 ```http
 API-Version: 1
-Accept-Language: en
+Accept-Language: zh-TW
 ```
 
 | API | 번역 필드 위치 | 대상 |
@@ -38,47 +31,36 @@ Accept-Language: en
 | `GET /api/groups/public/{groupId}` | `translation` | 이름·소개 |
 | `GET /api/groups/{groupId}` | `translation` | 이름·소개 |
 
-헤더 없음·미지원 언어·잘못된 언어 헤더는 원문이다. 번역 공급자 호출·키·무료량·전환은 백엔드가 관리한다. 프론트에는 공급자 키를 넣지 않는다.
-
-## 표시와 수정
-
-기존 `name`, `description`은 원문이다. 새 `translation` 전체 또는 개별 필드가 null일 수 있으므로 각 필드에서 원문으로 대체한다.
-
-```json
-{
-  "name": "새벽 공부방",
-  "description": "매일 함께 공부해요",
-  "translation": {
-    "language": "en",
-    "name": "Early Morning Study Group",
-    "description": "Let's study together every day."
-  }
-}
-```
+기존 name/description은 원문이며 그룹 수정 화면은 이 원문을 사용한다.
 
 ```javascript
 const displayName = group.translation?.name ?? group.name;
 const displayDescription = group.translation?.description ?? group.description;
 ```
 
-- 번역문은 일반 텍스트로 표시한다.
-- 그룹 수정 화면은 원문 필드를 사용한다. 번역문으로 원문을 덮어 저장하지 않는다.
-- 무료량 소진·시간 초과·공급자 장애·다른 요청의 번역 처리 중에는 원문이 정상 응답이다. 이를 무한 로딩이나 오류로 표시하지 않는다.
-- 대만·홍콩은 현재 같은 표준 번체 모델을 사용한다. 홍콩 번체를 광둥어로 표시하지 않는다.
+`translation` 객체, 그 안의 `name`, `description`은 **각각 null일 수 있다**. 객체가 있을 때 `language`는 ko/en/ja/zh-TW 중 하나다. 예를 들어 이름만 번역되거나 소개만 번역될 수 있으므로 필드별 원문 대체가 필요하다. 두 번역이 모두 없으면 객체 전체가 null이다. 목록은 소개를 번역하지 않는다.
 
-## 캐시와 언어 전환
+무료량 소진·시간 초과·공급자 장애·다른 요청의 처리 중에도 원문으로 정상 응답한다. translation이 비어 있다는 이유로 오류나 로딩을 표시하지 않는다. 번역문은 일반 텍스트로 표시한다.
 
-- 그룹 조회 캐시 키에 최종 앱 locale을 포함한다. 기존 사용자·그룹·검색/필터 구분은 유지한다.
-- 언어를 바꾸면 해당 언어로 재조회하고, 이전 언어의 늦은 응답이 현재 화면을 덮지 않게 취소 또는 무시한다.
-- 백엔드도 원문·필드·언어별 결과를 공유하므로 조회하는 사용자 수만큼 번역을 다시 호출하지 않는다. 기존 화면 폴링 주기는 유지할 수 있다.
+## 캐시
 
-## 확인 목록과 배포 상태
+- FE 조회 캐시 키에 요청 언어를 포함하고 기존 사용자·그룹·필터 구분을 유지한다. 다른 언어의 응답을 섞지 않는다.
+- 네 그룹 GET 응답은 `Vary: Accept-Language`를 포함한다. 기존 인증·캐시 제어를 유지하며, 이 헤더가 공용 HTTP 캐시 허용을 의미하지는 않는다.
+- 번체 지역 별칭은 백엔드의 같은 캐시/예약량을 재사용한다. FE에서 공급자 API를 직접 호출하거나 전 언어를 미리 조회하지 않는다.
 
-- 여섯 locale의 그룹 목록·상세·내 그룹·그룹 홈 표시.
-- OS 영어 + 앱 한국어, OS 한국어 + 앱 영어에서 명시적 선택 유지.
-- 앱 재실행 후 선택 유지, system 선택 시 OS 변경 반영.
-- 언어 전환 후 이전 언어 캐시/늦은 응답이 남지 않음.
-- translation 전체 null 및 이름/소개 중 한 필드만 null일 때 원문 대체.
-- 그룹 수정 화면에서 원문 유지.
+## Swagger와 활성화 상태
 
-백엔드 기능과 공급자는 기본 off다. 백엔드 배포·키 주입·무료 잔량 장부 초기화·기능 활성화 후 실번역을 확인할 수 있다. 배포 또는 활성화 전에도 원문 표시는 정상이어야 한다. 실번역 품질 평가는 아직 실행하지 않았다.
+Swagger의 네 응답 DTO에 nullable translation을 싣고, GroupTranslation.name/description의 null 및 language의 네 값을 명시한다. 생성된 `/v3/api-docs` 응답을 테스트해 타입 계약을 검증한다.
+
+이 문서를 작성할 때 PR #159는 dev 미머지 상태다. **PR을 dev에 머지한 뒤 자동 dev 배포가 성공해야 dev Swagger에 반영된다.** 실제 배포 확인 없이 반영되었다고 안내하지 않는다.
+
+번역 기능·공급자는 기본 off다. 키 주입·무료 잔량 확인·장부 초기화·활성화 전에는 원문이 정상 응답이다. 실계정 번역 및 사람에 의한 품질 평가는 아직 실행하지 않았다. 무료 확인 전에는 켜지 않는다.
+
+## 확인 목록
+
+- 네 표시 언어와 네 조회 경로의 번역/원문 표시.
+- translation 전체 null, name만 null, description만 null일 때 필드별 원문 대체.
+- 대만·홍콩·마카오가 같은 zh-TW 결과를 재사용.
+- 간체/미지원 기기 언어는 FE의 영어 화면에 맞춰 en 전송.
+- 언어별 FE 캐시 분리, 그룹 수정 화면의 원문 유지.
+- 생성된 Swagger의 nullable 타입과 네 GET의 Vary 헤더 확인.

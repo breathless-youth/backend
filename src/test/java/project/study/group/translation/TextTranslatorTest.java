@@ -103,7 +103,7 @@ class TextTranslatorTest {
     void azureUsesStandardTextWithRegionAndTraditionalTarget() {
         response = "[{\"translations\":[{\"text\":\"一起學習\",\"to\":\"zh-Hant\"}]}]";
         var reply = new AzureTextTranslator(base, "fake-key", "koreacentral")
-                .translate(List.of("함께 공부"), TranslationLanguage.ZH_HK, Duration.ofSeconds(1));
+                .translate(List.of("함께 공부"), TranslationLanguage.ZH_TW, Duration.ofSeconds(1));
         assertThat(reply.texts()).containsExactly("一起學習");
         assertThat(requests).singleElement().satisfies(r -> {
             assertThat(r.query()).isEqualTo("api-version=3.0&to=zh-Hant");
@@ -212,14 +212,14 @@ class TextTranslatorTest {
     }
 
     @Test
-    void sixTargetLocalesUseTheDocumentedCodesOnEveryProvider() {
+    void fourTargetLocalesUseTheDocumentedCodesOnEveryProvider() {
         targets =
                 "[{\"lang\":\"ko\",\"usable_as_target\":true},{\"lang\":\"en-US\",\"usable_as_target\":true},{\"lang\":\"ja\",\"usable_as_target\":true},{\"lang\":\"zh-Hans\",\"usable_as_target\":true},{\"lang\":\"zh-Hant\",\"usable_as_target\":true}]";
-        String[] google = {"ko", "en", "ja", "zh-CN", "zh-TW", "zh-TW"};
-        String[] azure = {"ko", "en", "ja", "zh-Hans", "zh-Hant", "zh-Hant"};
-        String[] deepl = {"KO", "EN-US", "JA", "ZH-HANS", "ZH-HANT", "ZH-HANT"};
+        String[] google = {"ko", "en", "ja", "zh-TW"};
+        String[] azure = {"ko", "en", "ja", "zh-Hant"};
+        String[] deepl = {"KO", "EN-US", "JA", "ZH-HANT"};
         var deepLAdapter = new DeepLTextTranslator(base, "fake:fx");
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 4; i++) {
             var language = TranslationLanguage.values()[i];
             requests.clear();
             response = "{\"data\":{\"translations\":[{\"translatedText\":\"translated\"}]}}";

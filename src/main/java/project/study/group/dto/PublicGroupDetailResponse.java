@@ -47,6 +47,7 @@ public record PublicGroupDetailResponse(
         @Schema(description = "내 대기 중인 신청 — applyState가 `APPLIED`일 때만, 아니면 null")
         PendingApplicationRef application,
 
+        @Schema(description = "선택 언어 번역 — 없으면 null, 각 번역 필드도 null일 수 있어 원문으로 대체한다")
         GroupTranslation translation) {
 
     public record GroupOwnerProfile(

@@ -42,5 +42,6 @@ public record PublicGroupPageResponse(
             @Schema(description = "내가 이 그룹 멤버면 true", example = "false")
             boolean member,
 
+            @Schema(description = "선택 언어 번역 — 없으면 null, 각 번역 필드도 null일 수 있어 원문으로 대체한다")
             GroupTranslation translation) {}
 }

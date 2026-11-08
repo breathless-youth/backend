@@ -108,7 +108,7 @@ class GroupTranslationApiTest {
     }
 
     @Test
-    void sixLocalesUseSeparateCacheAndMissingFieldFallsBackIndividually() {
+    void fourLocalesUseSeparateCacheAndMissingFieldFallsBackIndividually() {
         for (var language : TranslationLanguage.values()) {
             warm(language, false);
             assertThat(v1Get(mvc, "/api/groups/public/" + group, stranger).header("Accept-Language", language.locale()))
@@ -170,5 +170,38 @@ class GroupTranslationApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.groups[0].joinPolicy", v -> assertThat(v).isEqualTo("OPEN"));
+    }
+
+    @Test
+    void allTranslatedGetResponsesVaryByAcceptLanguage() {
+        var requests = List.of(
+                v1Get(mvc, "/api/groups/" + group, owner),
+                v1Get(mvc, "/api/groups/public/" + group, stranger),
+                v1Get(mvc, "/api/groups/me", owner),
+                v1Get(mvc, "/api/groups/public", stranger).param("query", name));
+        for (var request : requests) {
+            var response = request.header("Accept-Language", "en").exchange().getResponse();
+            assertThat(response.getStatus()).isEqualTo(200);
+            assertThat(response.getHeaders("Vary").stream()
+                            .flatMap(v -> java.util.Arrays.stream(v.split(",")))
+                            .map(String::trim)
+                            .toList())
+                    .contains("Accept-Language");
+        }
+    }
+
+    @Test
+    void translationNameMayBeNullWhileDescriptionIsTranslated() {
+        var description = new TranslationText(group, TranslationField.DESCRIPTION, "함께 공부");
+        var lease = cache.claim(List.of(description), TranslationLanguage.EN).getFirst();
+        assertThat(cache.complete(lease, "Study together", TranslationProvider.GOOGLE))
+                .isTrue();
+        assertThat(v1Get(mvc, "/api/groups/public/" + group, stranger).header("Accept-Language", "en"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.name", v -> assertThat(v).isEqualTo(name))
+                .hasPathSatisfying("$.translation.name", v -> assertThat(v).isNull())
+                .hasPathSatisfying(
+                        "$.translation.description", v -> assertThat(v).isEqualTo("Study together"));
     }
 }

@@ -2,7 +2,7 @@
 CREATE TABLE group_translation_cache (
     group_id BIGINT NOT NULL REFERENCES study_group(id) ON DELETE CASCADE,
     field VARCHAR(16) NOT NULL CHECK (field IN ('NAME', 'DESCRIPTION')),
-    target_locale VARCHAR(8) NOT NULL CHECK (target_locale IN ('ko','en','ja','zh-CN','zh-TW','zh-HK')),
+    target_locale VARCHAR(8) NOT NULL CHECK (target_locale IN ('ko','en','ja','zh-TW')),
     source_hash VARCHAR(64) NOT NULL,
     translated_text TEXT,
     provider VARCHAR(8) CHECK (provider IN ('GOOGLE','AZURE','DEEPL')),

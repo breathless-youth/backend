@@ -10,9 +10,7 @@ public enum TranslationLanguage {
     KO("ko", "ko", "ko", "KO"),
     EN("en", "en", "en", "EN-US"),
     JA("ja", "ja", "ja", "JA"),
-    ZH_CN("zh-CN", "zh-CN", "zh-Hans", "ZH-HANS"),
-    ZH_TW("zh-TW", "zh-TW", "zh-Hant", "ZH-HANT"),
-    ZH_HK("zh-HK", "zh-TW", "zh-Hant", "ZH-HANT");
+    ZH_TW("zh-TW", "zh-TW", "zh-Hant", "ZH-HANT");
 
     private final String locale;
     private final String google;
@@ -58,12 +56,14 @@ public enum TranslationLanguage {
     }
 
     private static Optional<TranslationLanguage> fromRange(String range) {
-        return switch (range) {
-            case "zh", "zh-cn", "zh-sg", "zh-hans", "zh-hans-cn", "zh-hans-sg" -> Optional.of(ZH_CN);
-            case "zh-tw", "zh-hant", "zh-hant-tw" -> Optional.of(ZH_TW);
-            case "zh-hk", "zh-hant-hk" -> Optional.of(ZH_HK);
-            default -> westernLanguage(range);
-        };
+        Locale locale = Locale.forLanguageTag(range);
+        if (locale.getLanguage().equals("zh")) {
+            boolean traditionalScript = locale.getScript().equals("Hant");
+            boolean traditionalRegion = locale.getScript().isEmpty()
+                    && java.util.Set.of("TW", "HK", "MO").contains(locale.getCountry());
+            return traditionalScript || traditionalRegion ? Optional.of(ZH_TW) : Optional.empty();
+        }
+        return westernLanguage(range);
     }
 
     private static Optional<TranslationLanguage> westernLanguage(String range) {

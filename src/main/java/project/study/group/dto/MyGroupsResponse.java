@@ -58,6 +58,7 @@ public record MyGroupsResponse(
             @Schema(description = "멤버 책상 — 들어간 순서. 정렬은 FE가 한다")
             List<GroupMemberDesk> members,
 
+            @Schema(description = "선택 언어 번역 — 없으면 null, 각 번역 필드도 null일 수 있어 원문으로 대체한다")
             GroupTranslation translation) {}
 
     public record GroupLimits(

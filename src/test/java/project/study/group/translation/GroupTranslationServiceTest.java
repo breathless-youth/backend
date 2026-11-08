@@ -144,7 +144,7 @@ class GroupTranslationServiceTest {
         assertThat(budget.tryReserve(GOOGLE, 12998)).isTrue();
         var service = service(List.of(
                 translator(GOOGLE, TextTranslator.Failure.NONE), translator(AZURE, TextTranslator.Failure.NONE)));
-        assertThat(service.translate(texts, TranslationLanguage.ZH_CN)).hasSize(2);
+        assertThat(service.translate(texts, TranslationLanguage.ZH_TW)).hasSize(2);
         assertThat(calls).containsExactly(GOOGLE, AZURE);
         assertThat(budget.available(GOOGLE)).isZero();
         assertThat(budget.available(AZURE)).isEqualTo(1999995);
@@ -153,8 +153,8 @@ class GroupTranslationServiceTest {
     @Test
     void allFailuresAndActiveLeaseReturnOriginalAndFeatureOffNeverCalls() {
         var service = service(List.of(translator(GOOGLE, TextTranslator.Failure.TEMPORARY)));
-        assertThat(service.translate(texts, TranslationLanguage.ZH_HK)).isEmpty();
-        assertThat(service.translate(texts, TranslationLanguage.ZH_HK)).isEmpty();
+        assertThat(service.translate(texts, TranslationLanguage.ZH_TW)).isEmpty();
+        assertThat(service.translate(texts, TranslationLanguage.ZH_TW)).isEmpty();
         assertThat(calls).containsExactly(GOOGLE);
         cache.claim(texts, TranslationLanguage.KO);
         assertThat(service.translate(texts, TranslationLanguage.KO)).isEmpty();
@@ -236,5 +236,17 @@ class GroupTranslationServiceTest {
         assertThat(service.translate(texts, TranslationLanguage.KO).values()).containsExactlyInAnyOrder("새벽", "함께 공부");
         assertThat(service.translate(texts, TranslationLanguage.KO)).hasSize(2);
         assertThat(calls).containsExactly(GOOGLE);
+    }
+
+    @Test
+    void taiwanHongKongMacauAndHantShareOneTranslationReservation() {
+        var service = service(List.of(translator(GOOGLE, TextTranslator.Failure.NONE)));
+        for (String locale : List.of("zh-TW", "zh-HK", "zh-MO", "zh-Hant")) {
+            assertThat(service.translate(
+                            texts, TranslationLanguage.resolve(locale).orElseThrow()))
+                    .hasSize(2);
+        }
+        assertThat(calls).containsExactly(GOOGLE);
+        assertThat(budget.available(GOOGLE)).isEqualTo(12993);
     }
 }

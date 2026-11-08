@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 그룹 원문을 보존하면서 무료 한도 안에서 여섯 앱 언어의 번역을 재사용하고, 실패하면 원문을 제공한다.
+**Goal:** 그룹 원문을 보존하면서 무료 한도 안에서 네 앱 언어의 번역을 재사용하고, 실패하면 원문을 제공한다.
 
 **Architecture:** 기존 그룹 읽기 서비스 밖의 파사드가 응답에 번역을 붙인다. PostgreSQL이 필드별 캐시·작업 임차권·공급자별 사용량을 공유하고, 짧은 트랜잭션으로 예약한 뒤 외부 HTTP를 실행한다. Google NMT → Azure F0 → DeepL 무료 잔량 순서를 사용한다.
 
@@ -25,7 +25,7 @@
 1. 이모지·분해 한글·공백의 코드 포인트와 대상 언어 곱셈이 장부와 일치해야 한다 → Task 1, 3.
 2. 원문 수정/삭제 중 완료된 번역이 새 캐시를 덮거나 권한 없는 요청의 외부 호출을 유발하면 안 된다 → Task 2, 5.
 3. 재시작·동시 서버·DST·월 경계에도 무료 장부가 줄거나 DeepL이 초기화되면 안 된다 → Task 3.
-4. `q=0`, 잘못된 헤더, 홍콩/대만 번체 매핑은 의도한 원문 대체/언어 선택을 해야 한다 → Task 1, 4.
+4. `q=0`, 잘못된 헤더, 홍콩/대만/마카오 번체 별칭 공유는 의도한 원문 대체/언어 선택을 해야 한다 → Task 1, 4.
 5. timeout·429·403001·456·잘못된 응답 후에도 조회가 성공하고 과금 가능 재시도가 숨어 있으면 안 된다 → Task 4, 5.
 
 ---
@@ -56,7 +56,7 @@
 - Test: `src/test/java/project/study/group/translation/TranslationTextTest.java`
 
 **Interfaces:**
-- `TranslationLanguage`: enum `KO, EN, JA, ZH_CN, ZH_TW, ZH_HK`; `static Optional<TranslationLanguage> resolve(String acceptLanguage)`; `String locale()`; `String providerCode(TranslationProvider provider)`.
+- `TranslationLanguage`: enum `KO, EN, JA, ZH_TW`; `static Optional<TranslationLanguage> resolve(String acceptLanguage)`; `String locale()`; `String providerCode(TranslationProvider provider)`.
 - `TranslationField`: enum `NAME, DESCRIPTION`; `TranslationProvider`: enum `GOOGLE, AZURE, DEEPL`.
 - `TranslationText(long groupId, TranslationField field, String source)` record; `String sourceHash()`; `long characters()`. Hash exact transmitted UTF-8 with JDK SHA-256; do not normalize again after source service normalization.
 - `GroupTranslation(String language, String name, String description)` record. This task defines the type; adding it to existing responses is Task 5.
@@ -132,7 +132,7 @@
 - `TranslationConfig` wires Task 3's `TranslationBudget.Limits` and produces validated `Settings` consumed by Task 5: all enabled flags false by default, exact maxima/timeouts from Global Constraints, keys and Azure region from server configuration. No property may raise maxima above the approved values.
 
 - [ ] Write JDK `HttpServer` tests for Google `POST /language/translate/v2` with q-array, `model=nmt`, `format=text`, automatic source detection; Azure `POST /translate?api-version=3.0&to=...` with Text-array and key+region headers; DeepL free-host `/v2/translate` with text-array, auth header and provider target code. Confirm no separate paid detection request.
-- [ ] Write stub responses for ordered success, escaped text, same-as-original result, array count mismatch, blank translations, 403001, 456, auth failure, 429 Retry-After, timeout. Assert one network request per attempt and no hidden retry. Test the six target mappings and DeepL unsupported target bypass.
+- [ ] Write stub responses for ordered success, escaped text, same-as-original result, array count mismatch, blank translations, 403001, 456, auth failure, 429 Retry-After, timeout. Assert one network request per attempt and no hidden retry. Test the four target mappings and DeepL unsupported target bypass.
 - [ ] Run `./gradlew test --tests 'project.study.group.translation.TextTranslatorTest'` and confirm expected failures.
 - [ ] Implement with existing RestClient/JDK APIs and Jackson 3. Apply each invocation's timeout without mutating a shared client concurrently. Google authorization belongs in a header, never a key-bearing logged URL. Discard malformed whole-batch responses. Production endpoints are fixed provider hosts; only test configuration can point to loopback stubs.
 - [ ] Repeat tests and confirm PASS; verify default feature-off context boots without any key. Ensure no provider exception/log output contains fake test key markers or submitted source text.
@@ -169,7 +169,7 @@
 - [ ] Implement facade after the existing service transaction returns, enrichment service, DTO additions and optional Accept-Language header. Batch/cache work once per response, fixed provider order, no pretranslation on create/update/startup. Add low-cardinality existing Micrometer counters for cache result, reservation characters, provider outcome and fallback reason.
 - [ ] Repeat targeted tests and existing group API regression tests, then run `./gradlew spotlessApply` and `./gradlew check`; fix failures without disabling/removing tests. Record actual output before claiming success.
 - [ ] Write ADR and runbook: free usage baseline, key injection, endpoint/plan/language check, rollback flag, console unchanged until guard verified, Google free credit shared across other projects, Azure provider cycle may differ, DeepL lifetime never reset, original fallback and frontend integration examples.
-- [ ] Prepare a live quality matrix for six locales: short titles, 500-character intro, emoji, numbers, mixed script and study terms. Compute/reserve sample character budget before sending anything. Run only after actual keys/free balances are configured; mark unrun pairs explicitly and obtain human language-quality assessment. Do not let the harness bypass the same budget/cache path.
+- [ ] Prepare a live quality matrix for four locales: short titles, 500-character intro, emoji, numbers, mixed script and study terms. Compute/reserve sample character budget before sending anything. Run only after actual keys/free balances are configured; mark unrun pairs explicitly and obtain human language-quality assessment. Do not let the harness bypass the same budget/cache path.
 - [ ] Self-review diff and obtain the repository-required independent cross review. Present five implementation/data-flow quiz questions and wait for the user to pass before committing. Do not claim the quiz or independent review has already happened.
 - [ ] Final commit checkpoint after all gates: `feat: BY-1191 그룹 조회에 자동 번역 제공`. Push/PR/merge only within subsequent authorization; after merge transition BY-1191 to done.
 
@@ -178,7 +178,7 @@
 - 범위와 소스 코드의 네 조회 경로를 대조했다. 필드별 캐시가 목록/상세 사이에서 이름을 재사용하고 소개만 수정되는 경우를 포함한다.
 - 공통 타입/중첩 타입/메서드는 소비 작업 전에 정의했다. 어댑터 실패와 API 원문 대체는 서로 다른 계약이다.
 - Review Focus 다섯 항목 각각 테스트 소유 작업을 지정했다. 실제 번역 품질과 모의 네트워크 테스트를 구분했다.
-- 2026-11-08 최종 검증: `./gradlew check` 통과. 전체 2,520개, 번역 46개, 실패/오류/건너뜀 0개. 독립 리뷰의 캐시 경합·잘못된 헤더 수용을 RED→GREEN으로 수정했고 최신 dev 통합 후 전체 검증을 다시 통과했다. 이번 작업은 사용자 추가 승인으로 퀴즈를 생략한다. 실제 키 주입·실번역 품질 평가·콘솔 한도 변경은 미실행이다.
+- 2026-11-08 최종 검증: `./gradlew check` 통과. 전체 2,526개, 번역 52개, 실패/오류/건너뜀 0개. 독립 리뷰의 캐시 경합·잘못된 헤더 수용을 RED→GREEN으로 수정했고 최신 dev 통합 후 전체 검증을 다시 통과했다. 이번 작업은 사용자 추가 승인으로 퀴즈를 생략한다. 실제 키 주입·실번역 품질 평가·콘솔 한도 변경은 미실행이다.
 
 ## 실행 중 결정과 한계
 
@@ -188,7 +188,11 @@
 - 사용량 장부의 마지막 날짜/월 키를 저장한다. 현재/직전 장부가 사라지면 새 무료량을 만들지 않고 호출을 차단한다. 장부 유실 시 수동 복구가 필요하다.
 - HTTP 공통부는 기존 JDK 클라이언트로 구현했다. 새 SDK 없이 호출별 남은 제한 시간을 적용하며, 외부 요청이 처리됐는지 모르는 경우에도 예약량을 환급하지 않는다.
 - 처음에는 V55를 사용했으나 최신 dev의 V55 플래너와 충돌하여 V64로 재배정했다. ADR 번호도 최신 dev 뒤인 0046으로 옮겼다.
-- DeepL 현재 capability API에 맞춰 영어 대상은 EN-US를 쓴다. 마지막 공급자에서 미국식 영어가 기본이 된다. 홍콩/대만은 표준 번체를 사용한다.
+- DeepL 현재 capability API에 맞춰 영어 대상은 EN-US를 쓴다. 마지막 공급자에서 미국식 영어가 기본이 된다. 홍콩/대만/마카오는 같은 zh-TW 캐시를 사용한다.
 - 비정상 언어 헤더도 외부 호출을 유발할 수 있어 리뷰의 해당 경미 지적을 수정 대상으로 올렸다. HTTP 문법을 따르지 않는 클라이언트는 번역 대신 원문을 받는다.
 - 실계정 잔량과 사람에 의한 번역 품질 평가는 별도 활성화 단계다. 검증 전 기능은 기본 off이며, 모의 HTTP 성공을 실제 번역 품질 보장으로 설명하지 않는다.
 - 보류한 리뷰 경미 항목은 없다. 초기 검증 두 개를 겹쳐 실행한 결과 파일 충돌은 순차 검증으로 바로잡았고, 최종 수치는 순차 실행 결과다.
+
+## FE 확정 범위 반영 (2026-11-08)
+
+API 표준 언어는 ko/en/ja/zh-TW 네 개이며, zh-Hant·홍콩·마카오 별칭은 zh-TW 캐시를 공유한다. 언어 선택 UI는 이번 범위 밖이다. 생성 OpenAPI 3.1의 ref|null 및 string|null과 네 GET의 Vary: Accept-Language를 검증했다. 전체 check 재검증 2,526개(번역 52개) 통과. 초기 전체 실행의 기존 GroupApplyApiTest 비동기 푸시 mock 단언 한 건은 단독·전체 재검증에서 통과했으며 해당 신청 로직/테스트는 수정하지 않았다.
