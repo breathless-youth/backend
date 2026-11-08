@@ -24,7 +24,7 @@
 | `POST /api/planner/carryover` | `{ "offeredKeys":["t:12"], "selectedKeys":[] }` |
 | `GET/PUT/DELETE /api/planner/goals/default` | 기본 목표, PUT `{ "goalSec":14400 }` |
 | `GET/PUT/DELETE /api/planner/goals/{date}` | 개별 목표, GET은 적용/개별/기본 값 구분 |
-| `POST /api/planner/records/batch` | 작업별 CREATE/UPDATE/DELETE와 부분 성공 결과 |
+| `POST /api/planner/records/batch` | 작업별 CREATE/UPDATE/DELETE/EDIT_RANGES와 부분 성공 결과 |
 | `GET /api/planner/records/stats?date=&timeZone=` | 자정 기준 개인 기록 목록·일간 합계 |
 | `GET /api/planner/records/stats/period?from=&to=&compareFrom=&compareTo=&timeZone=` | 개인 수정본의 주·월·비교 기간 일별 합계 |
 | `GET /api/planner/records/stats/rhythm?timeZone=` | 개인 수정본 중 측정 기록의 누적 공부일과 7×24 리듬 |
@@ -66,6 +66,36 @@
 위 요청을 재시도할 때는 operationId와 본문을 그대로 보낸다. 저장 후 날짜별 상세·기간 요약을 다시 읽어 반영된 과목과 순공을 확인한다.
 
 기존 수동 기록은 다른 기록을 피한 여러 조각이 한 묶음일 수 있다. 시각이 그대로인 과목 변경은 새 점유 시간을 만들지 않으므로 묶음 사이의 다른 기록 때문에 거절하지 않는다. 과목 구간도 원래 조각의 경계를 유지해 빈 구간을 칠하지 않는다. 실제 시각 변경에는 기존 겹침 검증을 적용한다.
+
+## 분 범위 과목 변경·삭제 (BY-1204)
+
+날짜 응답의 각 기록은 `revision`과 `pieces`를 함께 준다.
+
+- `pieces`: 조회 창으로 자른 **실제로 남은 조각** `[{startedAt, endedAt, subjectId}]`. 시작 순이며 겹치지 않고 초·소수초를 보존한다. `subjectId=null`은 과목 없이 공부한 시간이고, 조각 사이 빈칸은 삭제했거나 기록이 없는 시간이다. 원본 세션 중 과목 구간이 없는 시간도 과목 없음 조각이다. 길이는 벽시계 기준이라 PAUSE가 포함된다. 분 대표 과목은 FE가 이 조각과 분의 교차 길이로 계산한다. 공부·순공 합계는 기록의 `studySec/focusSec`를 쓴다. `subjectSegments`는 호환용으로 유지한다.
+- `revision`: 기록별 버전. 수정본이 없으면 0이고 저장할 때마다 오른다. 삭제 후 같은 수동 키를 다시 만들어도 이전 값으로 돌아가지 않는다.
+
+`EDIT_RANGES`는 한 기록의 여러 분 범위를 **한 작업**으로 받는다. 작업 하나가 한 트랜잭션이므로 전부 적용하거나 전부 실패한다.
+
+```json
+{"operations":[{"operationId":"range-001","action":"EDIT_RANGES","key":"c:2026-11-09T03:00:00Z","revision":2,
+  "ranges":[{"startedAt":"2026-11-09T03:00:00Z","endedAt":"2026-11-09T03:01:00Z","change":"SUBJECT","subjectId":7},
+            {"startedAt":"2026-11-09T03:05:00Z","endedAt":"2026-11-09T03:07:00Z","change":"DELETE"}]}]}
+```
+
+- 범위는 UTC 분 경계(초·소수초 0)의 `[startedAt, endedAt)`이며 1~100개, 서로 겹치지 않는다. `startedAt/endedAt/subjectId`를 작업 최상위에 함께 보내면 400이다.
+- 범위는 현재 조각과의 교집합에만 적용한다. 37초 기록을 늘리거나 빈칸에 시간을 만들지 않는다. `SUBJECT`는 교집합 안의 모든 과목을 `subjectId`로 바꾸고(null=과목 없음), `DELETE`는 교집합을 개인 기록에서 뺀다. `DELETE`에 subjectId를 보내면 400이다.
+- `revision`은 필수다. 현재 값과 다르거나 어떤 범위가 남은 조각과 전혀 겹치지 않으면 항목 409 `STALE_RECORD`다. 다시 조회한 뒤 새 operationId로 저장한다.
+- 키는 바뀌지 않는다. 조각이 모두 지워지면 DELETE와 같은 삭제 표식이 된다. 성공 결과의 `revision`이 새 버전이다(모든 action 공통, 실패·이전 저장 결과는 null).
+- 시각을 옮기지 않으므로 겹침 검사를 하지 않는다. 과목 변경은 총공부·순공을 바꾸지 않는다. 삭제는 원래 제출값 중 지운 조각의 몫만 뺀다(이벤트 위치 기준 배분). 시각을 옮긴 적 있는 기록은 기존처럼 이벤트로 다시 센다.
+- 개인 기록 통계는 남은 조각만 센다. 지운 시간의 이벤트는 횟수에서 빠지고, 최장 집중은 지운 빈칸에서 끊긴다. 원본 세션·이벤트·랭킹·`/api/stats`는 바뀌지 않는다.
+
+기존 UPDATE/DELETE는 `revision`을 선택으로 받아 보내면 검사한다. 분 범위로 수정한 기록에 UPDATE를 하면 지운 빈칸은 그대로 비어 있다. 과목만 바꾸면 남은 모든 조각을 칠하고, 시각을 바꾸면 새 구간 안의 남은 조각과 새로 늘린 시간을 요청 과목으로 칠한다. 분 범위로 수정한 적 없는 기록의 UPDATE 규칙은 이전과 같다.
+
+- `ranges`는 EDIT_RANGES에만 보낸다. CREATE·UPDATE·DELETE에 보내면 범위를 무시하지 않고 항목 400이다 (BY-1211).
+- UPDATE 결과 남은 조각이 없으면(지운 빈칸 안으로만 옮기면) 항목 400이다. 기록을 지우려면 DELETE를 쓴다.
+- 앞부분을 지운 수동 기록은 키(`m:원래 시작`)를 유지한다. 같은 시작 시각으로 CREATE하거나 UPDATE로 옮기면 그 키를 덮어쓰지 않고 항목 409다.
+- `SUBJECT` 범위는 지운 과목을 받지 않지만, 그 범위의 남은 조각에 이미 지정된 과목이면 다시 보낼 수 있다.
+- 계정 병합: 세션 병합이 원본 세션을 버리는 기록은 남은 조각이 겹치지 않아도 함께 버린다. 같은 이름 과목 병합으로 조각 과목이 바뀐 수정본은 `revision`이 오른다.
 
 ## 이전과 출시 확인
 

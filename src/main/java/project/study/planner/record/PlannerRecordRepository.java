@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.common.exception.ConflictException;
 import project.study.studysession.entity.StudySessionSource;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @Repository
@@ -28,17 +29,26 @@ class PlannerRecordRepository {
                         rs.getTimestamp("ended_at").toInstant(),
                         rs.getObject("subject_id", Long.class),
                         rs.getBoolean("deleted"),
-                        rs.getBoolean("preserve_original_totals")))
+                        rs.getBoolean("preserve_original_totals"),
+                        pieces(rs.getString("pieces")),
+                        rs.getLong("revision")))
                 .list();
     }
 
-    void saveEdit(Long userId, PlannerRecordEdit edit) {
-        jdbc.sql("""
-                        INSERT INTO planner_record_edit(user_id,record_key,source,started_at,ended_at,subject_id,deleted,preserve_original_totals)
-                        VALUES (:u,:k,:source,:s,:e,:subject,:deleted,:preserve)
+    /**
+     * 저장 후 기록 버전을 반환한다. 기존 행은 1씩 오른다(삭제 후 같은 키를 다시 만들어도 이전 버전과 겹치지 않음).
+     * 새 행은 1이고, 계정 병합으로 옮기는 행은 전달한 버전을 유지한다.
+     */
+    long saveEdit(Long userId, PlannerRecordEdit edit) {
+        return jdbc.sql("""
+                        INSERT INTO planner_record_edit(user_id,record_key,source,started_at,ended_at,subject_id,deleted,
+                            preserve_original_totals,pieces,revision)
+                        VALUES (:u,:k,:source,:s,:e,:subject,:deleted,:preserve,CAST(:pieces AS jsonb),GREATEST(:revision,1))
                         ON CONFLICT (user_id,record_key) DO UPDATE SET started_at=EXCLUDED.started_at,
                         ended_at=EXCLUDED.ended_at,subject_id=EXCLUDED.subject_id,deleted=EXCLUDED.deleted,
-                        preserve_original_totals=EXCLUDED.preserve_original_totals
+                        preserve_original_totals=EXCLUDED.preserve_original_totals,pieces=EXCLUDED.pieces,
+                        revision=planner_record_edit.revision+1
+                        RETURNING revision
                         """)
                 .param("u", userId)
                 .param("k", edit.key())
@@ -48,7 +58,16 @@ class PlannerRecordRepository {
                 .param("subject", edit.subjectId(), Types.BIGINT)
                 .param("deleted", edit.deleted())
                 .param("preserve", edit.preserveOriginalTotals())
-                .update();
+                .param("revision", edit.revision())
+                .param("pieces", edit.pieces() == null ? null : mapper.writeValueAsString(edit.pieces()), Types.VARCHAR)
+                .query(Long.class)
+                .single();
+    }
+
+    private List<PlannerRecordPiece> pieces(String json) {
+        return json == null
+                ? null
+                : List.copyOf(mapper.readValue(json, new TypeReference<List<PlannerRecordPiece>>() {}));
     }
 
     Optional<PlannerRecordResult> replay(Long userId, PlannerRecordOperation operation, String hash) {

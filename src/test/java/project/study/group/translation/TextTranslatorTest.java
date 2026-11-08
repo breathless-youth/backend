@@ -13,6 +13,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -31,6 +32,7 @@ class TextTranslatorTest {
             "[{\"lang\":\"en-US\",\"usable_as_target\":true},{\"lang\":\"zh-Hant\",\"usable_as_target\":true}]";
     String usage = "{\"character_count\":0,\"character_limit\":1000000}";
     long delay;
+    long languagesDelay;
 
     @BeforeEach
     void setup() throws Exception {
@@ -45,9 +47,10 @@ class TextTranslatorTest {
             String path = exchange.getRequestURI().getPath();
             capture(exchange);
             String body = path.endsWith("/usage") ? usage : path.endsWith("/languages") ? targets : response;
-            if (delay > 0)
+            long waitMillis = path.endsWith("/languages") ? languagesDelay : delay;
+            if (waitMillis > 0)
                 try {
-                    Thread.sleep(delay);
+                    Thread.sleep(waitMillis);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -124,6 +127,39 @@ class TextTranslatorTest {
             assertThat(r.auth()).isEqualTo("DeepL-Auth-Key fake-key:fx");
             assertThat(r.body().path("target_lang").asString()).isEqualTo("ZH-HANT");
         });
+    }
+
+    @Test
+    void deepLWarmsOnlyCapabilitiesAtStartupBeforeTheFirstTranslationDeadline() {
+        languagesDelay = 650;
+        response = "{\"translations\":[{\"text\":\"一起學習\"}]}";
+        new ApplicationContextRunner()
+                .withBean(DeepLTextTranslator.class, () -> new DeepLTextTranslator(base, "fake-key:fx"))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(requests).extracting(Request::path).containsExactly("/v3/languages");
+                    var reply = context.getBean(DeepLTextTranslator.class)
+                            .translate(List.of("함께 공부"), TranslationLanguage.ZH_TW, Duration.ofMillis(400));
+                    assertThat(reply.failure()).isEqualTo(NONE);
+                    assertThat(reply.texts()).containsExactly("一起學習");
+                    assertThat(requests)
+                            .extracting(Request::path)
+                            .containsExactly("/v3/languages", "/v2/usage", "/v2/translate");
+                });
+    }
+
+    @Test
+    void failedCapabilityWarmupDoesNotFailStartupOrStartTranslation() {
+        targets = "not-json";
+        new ApplicationContextRunner()
+                .withBean(DeepLTextTranslator.class, () -> new DeepLTextTranslator(base, "fake-key:fx"))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    var reply = context.getBean(DeepLTextTranslator.class)
+                            .translate(List.of("함께 공부"), TranslationLanguage.ZH_TW, Duration.ofSeconds(1));
+                    assertThat(reply.failure()).isEqualTo(UNSUPPORTED);
+                    assertThat(requests).noneMatch(request -> request.path().equals("/v2/translate"));
+                });
     }
 
     @Test

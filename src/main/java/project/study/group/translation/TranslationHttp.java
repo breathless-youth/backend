@@ -22,7 +22,7 @@ final class TranslationHttp {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final HttpClient CLIENT = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofMillis(300))
+            .connectTimeout(Duration.ofMillis(1500))
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
     private final URI base;
