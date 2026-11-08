@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
@@ -49,15 +50,20 @@ public class ActiveStudySessionController {
 				**검증은 최종 제출과 같은 규칙이다** — endedAt 자리에 reportedAt을 두고 시각 순서·24시간 한도·\
 				미래 금지(5분 허용)·studySec/focusSec 범위·이벤트 겹침/구간 검증을 모두 적용한다.
 
+				`durable=true`이면 DB 커밋 후 성공을 반환한다. 생략하면 기존 메모리 버퍼 경로다.
+
 				**자동 확정** — 마지막 보고가 서버 기준 5분 넘게 끊기면 스케줄러가 reportedAt을 종료 시각으로 \
 				세션을 확정한다(자정 분할 포함, 길이 무관). 자동 확정본은 잠정 기록이라, 이후 같은 startedAt으로 \
 				최종 제출이 도착하면 그것으로 대체된다. 정상 최종 제출 시 draft는 함께 삭제되므로 \
 				앱은 확정 여부를 신경 쓸 필요 없이 늘 하던 대로 제출하면 된다.""")
     @PutMapping("/active")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void report(@AuthenticationPrincipal Long userId, @Valid @RequestBody ActiveSessionSnapshotRequest request) {
+    public void report(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody ActiveSessionSnapshotRequest request,
+            @RequestParam(defaultValue = "false") boolean durable) {
         subjectService.assertOwned(userId, request.subjectIds());
-        activeStudySessionService.reportSnapshot(userId, request);
+        activeStudySessionService.reportSnapshot(userId, request, durable);
     }
 
     @Operation(summary = "진행중 세션 복구 조회", description = """
