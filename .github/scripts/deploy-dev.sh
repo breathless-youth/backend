@@ -76,7 +76,9 @@ while [ "$i" -lt 30 ]; do
     docker image prune -f >>"$LOG" 2>&1 || true
     # 빌드 캐시는 image prune으로 지워지지 않아 배포마다 쌓인다 — 디스크가 차면 다음 빌드·SSM이 죽는다(BY-1208).
     # 최근 3일 치는 다음 빌드 속도를 위해 남긴다
-    docker builder prune -af --filter until=72h >>"$LOG" 2>&1 || true
+    # SSM 실행 시간을 넘기지 않게 2분으로 제한하고, 실패는 경고로만 남긴다
+    timeout 120 docker builder prune -af --filter until=72h >>"$LOG" 2>&1 \
+      || echo "warning: docker builder prune failed or timed out — check disk usage ($LOG)"
     exit 0
   fi
   i=$((i + 1))
