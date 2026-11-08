@@ -12,6 +12,8 @@
 - Google daily-limit=13000, monthly-limit=400000, Azure monthly-limit=2000000, DeepL lifetime-limit=1000000. 더 작게 설정할 수 있으며 승인된 최대값보다 높이면 기동을 거부한다.
 - Azure plan=F0, DeepL plan=DEVELOPER만 허용한다. 실제 콘솔 요금제도 반드시 확인한다. 이 문자열 자체가 외부 계정 상태의 증거는 아니다.
 - Google은 고정 NMT plain-text 경로, Azure는 고정 표준 텍스트 경로, DeepL은 api-free.deepl.com만 사용한다. 프론트가 endpoint/model/키를 지정할 수 없다.
+- 환경변수 스위치는 `APP_GROUPTRANSLATION_ENABLED`, `APP_GROUPTRANSLATION_DEEPL_ENABLED`처럼 쓴다. 제한 값은 `APP_GROUPTRANSLATION_GOOGLE_DAILYLIMIT`, `APP_GROUPTRANSLATION_GOOGLE_MONTHLYLIMIT`, `APP_GROUPTRANSLATION_DEEPL_LIFETIMELIMIT`다. API 키 변수와 구분하며 실제 배포 바인딩도 테스트로 검증한다.
+- DeepL을 켜면 기동 중 지원 언어만 최대 5초간 미리 조회한다. 이 준비 단계는 번역 요청을 보내지 않으며 실패해도 서버 기동을 막지 않는다. 실제 그룹 조회에서는 잔량 검증·선예약과 기존 공급자 2초·전체 3초 제한을 유지한다.
 
 ## 첫 활성화
 
@@ -84,6 +86,7 @@ Swagger는 translation 객체와 name/description 각각의 null을 명시한다
 - 별도 로컬 DB에서 DeepL 사용량 API의 `0 / 1,000,000`을 확인하고 소량 그룹 GET을 실행했다. 기존 300ms 연결 제한의 TLS 시간 초과를 재현해 1.5초로 보정했다. 조회 전체 3초·공급자 시도 2초는 유지한다.
 - 보정 뒤에도 실제 DeepL 응답은 2초 제한에 걸려 HTTP 200 원문으로 복귀했다. 01:20 KST 사용량 조회는 실제 소비 59자, 로컬 장부는 예약 269자다. 시간 초과로 예약한 문자를 환불하지 않았다. 성공 번역·성공 캐시·언어별 품질 검증은 미완료다.
 - 점검 뒤 로컬·운영 번역은 off다. 무료 소진 시 원문 복귀 자동 테스트와 실제 연결 실패의 원문 복귀를 확인했으며, 이 결과만으로 운영 활성화 완료나 Google 청구 0원을 단정하지 않는다.
+- 후속 진단에서 첫 잔량 조회 약 1.1초와 지원 언어 조회 약 0.7초가 같은 2초 예산을 소모함을 확인했다. 준비 조회를 먼저 마친 같은 어댑터로 실제 그룹 GET을 실행하자 ko/en/ja/zh-TW의 제목·소개가 모두 0.9~1.5초에 번역됐다. 숫자 6·50과 이모지, Python·시험 문맥 및 원문 보존을 확인했다. 이 결과는 백엔드 응답 확인이며 프론트 화면 확인과 별개다.
 
 | 입력 종류 | 예시/기대 | ko | en | ja | zh-TW |
 | --- | --- | --- | --- | --- | --- |

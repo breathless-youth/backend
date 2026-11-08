@@ -7,8 +7,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.beans.factory.InitializingBean;
 
-public class DeepLTextTranslator implements TextTranslator {
+public class DeepLTextTranslator implements TextTranslator, InitializingBean {
     public record FreeUsage(long usedCharacters, long limitCharacters) {}
 
     private final TranslationHttp http;
@@ -22,6 +23,11 @@ public class DeepLTextTranslator implements TextTranslator {
     DeepLTextTranslator(URI base, String key) {
         this.http = new TranslationHttp(base);
         this.auth = Map.of("Authorization", "DeepL-Auth-Key " + key);
+    }
+
+    @Override
+    public void afterPropertiesSet() {
+        supportedTargets(Duration.ofSeconds(5));
     }
 
     public TranslationProvider provider() {
