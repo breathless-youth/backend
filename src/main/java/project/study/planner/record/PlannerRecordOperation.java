@@ -2,12 +2,13 @@ package project.study.planner.record;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 
 public record PlannerRecordOperation(
         @Schema(description = "사용자별 재시도 키. 같은 ID에는 같은 본문만 허용 (최대 100자)", example = "record-edit-001")
         String operationId,
 
-        @Schema(description = "CREATE(수동 추가), UPDATE, DELETE", example = "UPDATE")
+        @Schema(description = "CREATE(수동 추가), UPDATE, DELETE, EDIT_RANGES(분 범위 과목 변경·삭제)", example = "UPDATE")
         String action,
 
         @Schema(description = "조회에서 받은 묶음 키. CREATE에는 생략", example = "c:2026-10-01T10:00:00Z")
@@ -23,4 +24,29 @@ public record PlannerRecordOperation(
         Long subjectId,
 
         @Schema(description = "수동 입력 시 저장할 사용자 IANA 시간대. 조회 창에서 날짜별 절삭", example = "Asia/Seoul")
-        String timeZone) {}
+        String timeZone,
+
+        @Schema(
+                description = "조회에서 받은 기록 버전. EDIT_RANGES는 필수, UPDATE/DELETE는 보내면 검사. 다르면 항목 409 STALE_RECORD",
+                example = "2")
+        Long revision,
+
+        @Schema(description = "EDIT_RANGES 전용. 한 기록에 적용할 분 범위(최대 100개, 서로 겹치지 않음). 전부 적용하거나 전부 실패한다")
+        List<PlannerRecordRange> ranges) {
+
+    /** 범위 수정 이전 작업과 같은 재시도 해시를 만들기 위한 이전 본문 모양. 필드 이름·순서를 바꾸지 않는다. */
+    record Legacy(
+            String operationId,
+            String action,
+            String key,
+            Instant startedAt,
+            Instant endedAt,
+            Long subjectId,
+            String timeZone) {}
+
+    Object hashBody() {
+        return revision == null && ranges == null
+                ? new Legacy(operationId, action, key, startedAt, endedAt, subjectId, timeZone)
+                : this;
+    }
+}

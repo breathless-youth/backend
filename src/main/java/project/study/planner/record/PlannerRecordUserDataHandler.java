@@ -60,8 +60,7 @@ public class PlannerRecordUserDataHandler implements UserDataHandler {
         for (PlannerRecordView view : sourceViews(sourceUserId, sourceOriginals, sourceEdits)) {
             if (targetKeys.contains(view.key())) {
                 moves.remove(view.key());
-            } else if (!records.records(targetUserId, view.startedAt(), view.endedAt())
-                    .isEmpty()) {
+            } else if (conflicts(targetUserId, view)) {
                 moves.remove(view.key());
                 if (originalKeys.contains(view.key())) {
                     moves.put(
@@ -76,6 +75,17 @@ public class PlannerRecordUserDataHandler implements UserDataHandler {
                 .param("source", sourceUserId)
                 .update();
         mergeOperations(sourceUserId, targetUserId);
+    }
+
+    /** 분 범위로 지운 빈칸은 기록이 아니므로 실제 남은 조각끼리만 충돌을 본다. */
+    private boolean conflicts(long targetUserId, PlannerRecordView view) {
+        if (view.pieces().isEmpty()) {
+            return !records.records(targetUserId, view.startedAt(), view.endedAt())
+                    .isEmpty();
+        }
+        return view.pieces().stream()
+                .anyMatch(piece -> !records.records(targetUserId, piece.startedAt(), piece.endedAt())
+                        .isEmpty());
     }
 
     private List<PlannerRecordView> sourceViews(

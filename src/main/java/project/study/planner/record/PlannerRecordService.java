@@ -64,11 +64,16 @@ public class PlannerRecordService {
                                     && PlannerRecordViews.end(piece).isAfter(from))) {
                 return Optional.empty();
             }
-            return Optional.of(PlannerRecordViews.edited(edit, bundle, from, to));
+            return visible(edit, PlannerRecordViews.edited(edit, bundle, from, to));
         } catch (NotFoundException orphan) {
             // 계정 병합에서 원본 충돌로 버린 측정 수정본도 함께 숨긴다.
             return Optional.empty();
         }
+    }
+
+    /** 분 범위 삭제로 이 조회 창에 남은 조각이 없으면 기록을 보여 주지 않는다. */
+    private static Optional<PlannerRecordView> visible(PlannerRecordEdit edit, PlannerRecordView view) {
+        return edit.pieces() != null && view.pieces().isEmpty() ? Optional.empty() : Optional.of(view);
     }
 
     List<StudySession> bundle(Long userId, String key) {
@@ -96,7 +101,8 @@ public class PlannerRecordService {
         return found;
     }
 
-    PlannerRecordEdit current(Long userId, String key) {
+    /** 수정 대상의 현재 개인 기록. 삭제했거나 없는 키는 404다. 수정본이 없는 원본은 revision 0이다. */
+    PlannerRecordTarget target(Long userId, String key) {
         PlannerRecordEdit edit = repository.edits(userId).stream()
                 .filter(e -> e.key().equals(key))
                 .findFirst()
@@ -105,7 +111,13 @@ public class PlannerRecordService {
             if (edit.deleted()) {
                 throw new NotFoundException("기록을 찾을 수 없습니다");
             }
-            return edit;
+            if (edit.pieces() != null) {
+                return new PlannerRecordTarget(edit, edit.pieces());
+            }
+            List<StudySession> bundle = edit.source() == StudySessionSource.MANUAL && edit.preserveOriginalTotals()
+                    ? bundle(userId, key)
+                    : List.of();
+            return new PlannerRecordTarget(edit, PlannerRecordPieces.legacy(edit, bundle));
         }
         List<StudySession> bundle = bundle(userId, key);
         Instant end = bundle.stream()
@@ -117,7 +129,22 @@ public class PlannerRecordService {
                 .map(s -> s.getSubjectId())
                 .findFirst()
                 .orElse(null);
-        return new PlannerRecordEdit(
-                key, bundle.getFirst().getSource(), bundle.getFirst().getStartedAt(), end, subject, false, true);
+        return new PlannerRecordTarget(
+                new PlannerRecordEdit(
+                        key,
+                        bundle.getFirst().getSource(),
+                        bundle.getFirst().getStartedAt(),
+                        end,
+                        subject,
+                        false,
+                        true),
+                PlannerRecordPieces.original(bundle));
+    }
+
+    /** {@code pieces}는 수정본이 조각 목록이 없어도 조회와 같은 규칙으로 만든 현재 조각이다. */
+    record PlannerRecordTarget(PlannerRecordEdit current, List<PlannerRecordPiece> pieces) {
+        long revision() {
+            return current.revision();
+        }
     }
 }

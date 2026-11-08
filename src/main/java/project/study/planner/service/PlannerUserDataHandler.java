@@ -49,6 +49,19 @@ public class PlannerUserDataHandler implements UserDataHandler {
                         .param("u", targetUserId)
                         .param("s", source.id())
                         .update();
+                // 분 범위 수정본의 조각 과목도 같은 기준으로 합친다(BY-1204).
+                jdbc.sql("""
+                                UPDATE planner_record_edit SET pieces = (
+                                    SELECT jsonb_agg(CASE WHEN p->'subjectId' = to_jsonb(CAST(:s AS bigint))
+                                        THEN jsonb_set(p, '{subjectId}', to_jsonb(CAST(:keep AS bigint))) ELSE p END
+                                        ORDER BY ord)
+                                    FROM jsonb_array_elements(pieces) WITH ORDINALITY AS t(p, ord))
+                                WHERE user_id=:u AND pieces @> jsonb_build_array(jsonb_build_object('subjectId', CAST(:s AS bigint)))
+                                """)
+                        .param("keep", keep)
+                        .param("u", targetUserId)
+                        .param("s", source.id())
+                        .update();
                 moveSelections(sourceUserId, targetUserId, source.id(), keep);
             } else {
                 target.put(normalize(source.name()), source.id());
