@@ -96,7 +96,8 @@ public class PlannerRecordBatchService {
         try {
             return HexFormat.of()
                     .formatHex(MessageDigest.getInstance("SHA-256")
-                            .digest(mapper.writeValueAsString(operation).getBytes(StandardCharsets.UTF_8)));
+                            .digest(mapper.writeValueAsString(operation.hashBody())
+                                    .getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException(impossible);
         }

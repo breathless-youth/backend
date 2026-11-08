@@ -67,7 +67,7 @@ class PlannerRecordSpansTest {
     }
 
     private static PlannerRecordOperation operation(Instant start, Instant end) {
-        return new PlannerRecordOperation("test", "UPDATE", "c:" + START, start, end, null, null);
+        return new PlannerRecordOperation("test", "UPDATE", "c:" + START, start, end, null, null, null, null);
     }
 
     private static PlannerRecordEdit current(Instant start, Instant end) {

@@ -1,12 +1,17 @@
 package project.study.planner.record;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
+import project.study.common.exception.ErrorCode;
+import project.study.planner.record.PlannerRecordService.PlannerRecordTarget;
 import project.study.planner.record.PlannerRecordSpans.Span;
 import project.study.studysession.entity.StudySessionSource;
 import project.study.subject.service.StudySubjectService;
@@ -16,6 +21,8 @@ import project.study.user.service.UserTimeZones;
 @Service
 @RequiredArgsConstructor
 class PlannerRecordMutationService {
+    static final int MAX_RANGES = 100;
+
     private final PlannerRecordService records;
     private final PlannerRecordRepository repository;
     private final StudySubjectService subjects;
@@ -30,7 +37,8 @@ class PlannerRecordMutationService {
             case "CREATE" -> create(userId, operation);
             case "UPDATE" -> update(userId, operation);
             case "DELETE" -> delete(userId, operation);
-            default -> throw new BadRequestException("action은 CREATE, UPDATE, DELETE 중 하나여야 합니다");
+            case "EDIT_RANGES" -> editRanges(userId, operation);
+            default -> throw new BadRequestException("action은 CREATE, UPDATE, DELETE, EDIT_RANGES 중 하나여야 합니다");
         };
     }
 
@@ -43,15 +51,17 @@ class PlannerRecordMutationService {
         assertFree(userId, span, null);
         userTimeZones.resolve(userId, operation.timeZone());
         String key = "m:" + span.start();
-        repository.saveEdit(
+        long revision = repository.saveEdit(
                 userId,
                 new PlannerRecordEdit(
                         key, StudySessionSource.MANUAL, span.start(), span.end(), operation.subjectId(), false, false));
-        return PlannerRecordResult.success(operation, key);
+        return PlannerRecordResult.success(operation, key, revision);
     }
 
     private PlannerRecordResult update(Long userId, PlannerRecordOperation operation) {
-        PlannerRecordEdit current = records.current(userId, operation.key());
+        PlannerRecordTarget target = records.target(userId, operation.key());
+        assertRevision(target, operation.revision(), false);
+        PlannerRecordEdit current = target.current();
         Span span = PlannerRecordSpans.update(operation, current, clock.instant());
         assertSubject(userId, operation.subjectId(), current.subjectId());
         boolean unchanged =
@@ -71,17 +81,159 @@ class PlannerRecordMutationService {
             repository.saveEdit(userId, current.tombstone());
         }
         boolean preserve = current.preserveOriginalTotals() && unchanged;
-        repository.saveEdit(
+        List<PlannerRecordPiece> pieces =
+                current.pieces() == null ? null : resized(current, span, unchanged, operation.subjectId());
+        long revision = repository.saveEdit(
                 userId,
                 new PlannerRecordEdit(
-                        key, current.source(), span.start(), span.end(), operation.subjectId(), false, preserve));
-        return PlannerRecordResult.success(operation, key);
+                        key,
+                        current.source(),
+                        span.start(),
+                        span.end(),
+                        operation.subjectId(),
+                        false,
+                        preserve,
+                        pieces,
+                        0));
+        return PlannerRecordResult.success(operation, key, revision);
+    }
+
+    /** 분 범위로 지운 빈칸은 전체 수정 뒤에도 되살리지 않는다. 새로 늘린 시간만 기록으로 더한다. */
+    private static List<PlannerRecordPiece> resized(
+            PlannerRecordEdit current, Span span, boolean unchanged, Long subjectId) {
+        if (unchanged) {
+            return PlannerRecordPieces.paintAll(current.pieces(), subjectId);
+        }
+        List<PlannerRecordPiece> pieces =
+                new ArrayList<>(PlannerRecordPieces.clip(current.pieces(), span.start(), span.end()));
+        if (span.start().isBefore(current.startedAt())) {
+            pieces.add(new PlannerRecordPiece(
+                    span.start(), PlannerRecordMetrics.earlier(span.end(), current.startedAt()), subjectId));
+        }
+        if (span.end().isAfter(current.endedAt())) {
+            pieces.add(new PlannerRecordPiece(
+                    PlannerRecordMetrics.later(span.start(), current.endedAt()), span.end(), subjectId));
+        }
+        return PlannerRecordPieces.paintAll(pieces, subjectId);
     }
 
     private PlannerRecordResult delete(Long userId, PlannerRecordOperation operation) {
-        PlannerRecordEdit current = records.current(userId, operation.key());
-        repository.saveEdit(userId, current.tombstone());
-        return PlannerRecordResult.success(operation, current.key());
+        PlannerRecordTarget target = records.target(userId, operation.key());
+        assertRevision(target, operation.revision(), false);
+        long revision = repository.saveEdit(userId, target.current().tombstone());
+        return PlannerRecordResult.success(operation, target.current().key(), revision);
+    }
+
+    /**
+     * 한 기록의 여러 분 범위를 한 번에 적용한다. 범위는 현재 조각과의 교집합에만 적용해 시간을 늘리지 않는다.
+     * 원본 세션·이벤트·랭킹은 바꾸지 않고, 시각을 옮기지 않으므로 겹침 검사도 하지 않는다.
+     */
+    private PlannerRecordResult editRanges(Long userId, PlannerRecordOperation operation) {
+        if (operation.key() == null) {
+            throw new BadRequestException("EDIT_RANGES에는 key가 필요합니다");
+        }
+        if (operation.startedAt() != null || operation.endedAt() != null || operation.subjectId() != null) {
+            throw new BadRequestException("EDIT_RANGES에는 startedAt, endedAt, subjectId 대신 ranges를 보내야 합니다");
+        }
+        List<PlannerRecordRange> ranges = validRanges(operation.ranges());
+        PlannerRecordTarget target = records.target(userId, operation.key());
+        assertRevision(target, operation.revision(), true);
+        PlannerRecordEdit current = target.current();
+        List<PlannerRecordPiece> pieces = applied(userId, target.pieces(), ranges);
+        if (pieces.isEmpty()) {
+            long revision = repository.saveEdit(userId, current.tombstone());
+            return PlannerRecordResult.success(operation, current.key(), revision);
+        }
+        long revision = repository.saveEdit(
+                userId,
+                new PlannerRecordEdit(
+                        current.key(),
+                        current.source(),
+                        pieces.getFirst().startedAt(),
+                        pieces.getLast().endedAt(),
+                        PlannerRecordPieces.common(pieces),
+                        false,
+                        current.preserveOriginalTotals(),
+                        pieces,
+                        0));
+        return PlannerRecordResult.success(operation, current.key(), revision);
+    }
+
+    /** 모든 범위를 먼저 검사한 뒤 적용해 일부 범위만 반영되는 일이 없게 한다. */
+    private List<PlannerRecordPiece> applied(
+            Long userId, List<PlannerRecordPiece> pieces, List<PlannerRecordRange> ranges) {
+        Long currentSubject = PlannerRecordPieces.common(pieces);
+        for (PlannerRecordRange range : ranges) {
+            if (!PlannerRecordPieces.intersects(pieces, range.startedAt(), range.endedAt())) {
+                throw new ConflictException(ErrorCode.STALE_RECORD, "고칠 범위에 남은 기록이 없습니다. 다시 조회해 주세요");
+            }
+            if (range.change().equals("SUBJECT")) {
+                assertSubject(userId, range.subjectId(), currentSubject);
+            }
+        }
+        List<PlannerRecordPiece> result = pieces;
+        for (PlannerRecordRange range : ranges) {
+            result = range.change().equals("SUBJECT")
+                    ? PlannerRecordPieces.paint(result, range.startedAt(), range.endedAt(), range.subjectId())
+                    : PlannerRecordPieces.remove(result, range.startedAt(), range.endedAt());
+        }
+        return result;
+    }
+
+    private static List<PlannerRecordRange> validRanges(List<PlannerRecordRange> ranges) {
+        if (ranges == null || ranges.isEmpty() || ranges.size() > MAX_RANGES) {
+            throw new BadRequestException("ranges는 1~" + MAX_RANGES + "개여야 합니다");
+        }
+        List<PlannerRecordRange> sorted = new ArrayList<>();
+        for (PlannerRecordRange range : ranges) {
+            assertRange(range);
+            sorted.add(range);
+        }
+        sorted.sort(Comparator.comparing(PlannerRecordRange::startedAt));
+        for (int i = 1; i < sorted.size(); i++) {
+            if (sorted.get(i).startedAt().isBefore(sorted.get(i - 1).endedAt())) {
+                throw new BadRequestException("한 작업의 범위끼리 겹칠 수 없습니다");
+            }
+        }
+        return sorted;
+    }
+
+    private static void assertRange(PlannerRecordRange range) {
+        if (range == null || range.startedAt() == null || range.endedAt() == null) {
+            throw new BadRequestException("범위에는 시작과 종료 시각이 필요합니다");
+        }
+        if (!minute(range.startedAt()) || !minute(range.endedAt())) {
+            throw new BadRequestException("범위 시각은 UTC 분 단위(초·소수초 0)여야 합니다");
+        }
+        if (!range.startedAt().isBefore(range.endedAt())) {
+            throw new BadRequestException("범위 종료는 시작 이후여야 합니다");
+        }
+        assertChange(range);
+    }
+
+    private static void assertChange(PlannerRecordRange range) {
+        if (!"SUBJECT".equals(range.change()) && !"DELETE".equals(range.change())) {
+            throw new BadRequestException("change는 SUBJECT, DELETE 중 하나여야 합니다");
+        }
+        if (range.change().equals("DELETE") && range.subjectId() != null) {
+            throw new BadRequestException("DELETE 범위에는 subjectId를 보낼 수 없습니다");
+        }
+    }
+
+    private static boolean minute(Instant time) {
+        return time.getNano() == 0 && Math.floorMod(time.getEpochSecond(), 60) == 0;
+    }
+
+    private static void assertRevision(PlannerRecordTarget target, Long expected, boolean required) {
+        if (expected == null) {
+            if (required) {
+                throw new BadRequestException("EDIT_RANGES에는 revision이 필요합니다");
+            }
+            return;
+        }
+        if (expected != target.revision()) {
+            throw new ConflictException(ErrorCode.STALE_RECORD, "기록이 조회 뒤에 바뀌었습니다. 다시 조회해 주세요");
+        }
     }
 
     private void assertSubject(Long userId, Long subjectId, Long currentSubjectId) {

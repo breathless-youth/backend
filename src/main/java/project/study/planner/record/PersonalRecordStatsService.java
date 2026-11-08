@@ -122,6 +122,15 @@ public class PersonalRecordStatsService {
         int[][] grid = RhythmSplitter.emptyGrid();
         for (PersonalRecordPiece piece : measured) {
             if (!piece.rhythmEligible()) continue;
+            accumulate(grid, piece);
+        }
+        return new StudyRhythmResponse(days, grid);
+    }
+
+    /** 분 범위로 지운 빈칸에는 리듬을 배분하지 않는다. 순공은 남은 구간의 이벤트 제외 길이 비율로 나눠 합계를 유지한다. */
+    private static void accumulate(int[][] grid, PersonalRecordPiece piece) {
+        List<PlannerRecordPiece> spans = PlannerRecordPieces.spans(piece.view().pieces());
+        if (spans.size() <= 1) {
             RhythmSplitter.accumulate(
                     grid,
                     piece.view().startedAt(),
@@ -129,7 +138,28 @@ public class PersonalRecordStatsService {
                     Math.toIntExact(piece.view().focusSec()),
                     piece.events(),
                     piece.zone());
+            return;
         }
-        return new StudyRhythmResponse(days, grid);
+        long[] weights = spans.stream()
+                .mapToLong(span -> PlannerRecordMetrics.recompute(span.startedAt(), span.endedAt(), piece.events())
+                        .focus())
+                .toArray();
+        long total = java.util.Arrays.stream(weights).sum();
+        long focus = piece.view().focusSec();
+        long cumulative = 0;
+        long given = 0;
+        for (int i = 0; i < spans.size(); i++) {
+            cumulative += weights[i];
+            long upTo = total == 0 ? focus * (i + 1) / spans.size() : focus * cumulative / total;
+            PlannerRecordPiece span = spans.get(i);
+            RhythmSplitter.accumulate(
+                    grid,
+                    span.startedAt(),
+                    span.endedAt(),
+                    Math.toIntExact(upTo - given),
+                    PersonalRecordPieces.clip(piece.events(), span.startedAt(), span.endedAt()),
+                    piece.zone());
+            given = upTo;
+        }
     }
 }

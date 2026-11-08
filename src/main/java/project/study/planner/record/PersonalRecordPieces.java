@@ -25,13 +25,16 @@ final class PersonalRecordPieces {
             PlannerRecordView view = edit == null
                     ? PlannerRecordViews.original(bundle, start, end)
                     : PlannerRecordViews.edited(edit, bundle, start, end);
+            if (edit != null && edit.pieces() != null && view.pieces().isEmpty()) {
+                continue;
+            }
             pieces.add(new PersonalRecordPiece(
                     "s:" + session.getId(),
                     session.getId(),
                     session.getStatDate(),
                     ZoneId.of(session.getTimeZone()),
                     view,
-                    clip(session.getEvents(), start, end),
+                    events(edit, view, session.getEvents(), start, end),
                     Set.copyOf(session.getCompletedTaskIds()),
                     session.getEndedAt() != null,
                     submission(bundle, start)));
@@ -55,6 +58,10 @@ final class PersonalRecordPieces {
             Instant end = PlannerRecordMetrics.earlier(
                     edit.endedAt(), date.plusDays(1).atStartOfDay(zone).toInstant());
             PlannerRecordView view = PlannerRecordViews.edited(edit, bundle, start, end);
+            if (edit.pieces() != null && view.pieces().isEmpty()) {
+                start = end;
+                continue;
+            }
             Long originalId = bundle.isEmpty() ? null : bundle.getFirst().getId();
             pieces.add(new PersonalRecordPiece(
                     edit.key() + "@" + date,
@@ -62,7 +69,7 @@ final class PersonalRecordPieces {
                     date,
                     zone,
                     view,
-                    clip(events, start, end),
+                    events(edit, view, events, start, end),
                     !tasksAttached && view.focusSec() >= MIN_LIST_FOCUS_SEC ? tasks : Set.of(),
                     true,
                     submission(bundle, edit.startedAt())));
@@ -76,6 +83,19 @@ final class PersonalRecordPieces {
         if (bundle.isEmpty()) return fallback;
         StudySession first = bundle.getFirst();
         return first.getSubmissionStartedAt() == null ? first.getStartedAt() : first.getSubmissionStartedAt();
+    }
+
+    /** 분 범위로 지운 시간의 이벤트는 개인 기록 통계에서 뺀다. */
+    private static List<StatusEvent> events(
+            PlannerRecordEdit edit, PlannerRecordView view, List<StatusEvent> events, Instant start, Instant end) {
+        if (edit == null || edit.pieces() == null) {
+            return clip(events, start, end);
+        }
+        List<StatusEvent> kept = new ArrayList<>();
+        for (PlannerRecordPiece span : PlannerRecordPieces.spans(view.pieces())) {
+            kept.addAll(clip(events, span.startedAt(), span.endedAt()));
+        }
+        return List.copyOf(kept);
     }
 
     static List<StatusEvent> clip(List<StatusEvent> events, Instant start, Instant end) {

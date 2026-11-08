@@ -96,6 +96,9 @@ public enum ErrorCode {
     /** 그룹장만 할 수 있다 (403) */
     NOT_GROUP_OWNER,
 
+    /** 개인 플래너 기록이 조회한 뒤 바뀌었거나 고칠 범위에 남은 기록이 없다 (409) — 클라이언트는 다시 조회한 뒤 고친다 */
+    STALE_RECORD,
+
     /** Spring MVC 표준 4xx (405·415 등) */
     REQUEST_FAILED,
 

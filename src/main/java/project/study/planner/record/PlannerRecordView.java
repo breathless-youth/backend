@@ -23,4 +23,11 @@ public record PlannerRecordView(
 
         long studySec,
         long focusSec,
-        List<PlannerRecordSegment> subjectSegments) {}
+
+        @Schema(description = "호환용 과목 구간. 새 화면은 pieces를 쓴다") List<PlannerRecordSegment> subjectSegments,
+
+        @Schema(description = "수정 충돌 확인용 기록 버전. 수정본이 없는 기록은 0. EDIT_RANGES에 그대로 보낸다", example = "0")
+        long revision,
+
+        @Schema(description = "조회 창으로 자른 실제 존재 조각. 시작 순·겹침 없음. 조각 사이 빈칸은 삭제했거나 기록이 없는 시간")
+        List<PlannerRecordPiece> pieces) {}

@@ -35,13 +35,20 @@ public class PlannerRecordController {
             과목만 바꾸면 현재 개인 기록의 총공부·순공을 유지한다. 시각을 바꾸면 이동 전 원본 이벤트와 새 구간의 겹침을 제외한다. PAUSE는 총공부·순공 모두에서, 그 외 이벤트는 순공에서 뺀다.
             원본 구간 밖으로 추가한 시간은 개인 플래너에서 집중으로 센다. 수동은 전부 집중이다.
             기존 /api/study-sessions와 자정 통계는 원본을 계속 보여주므로 새 플래너 화면의 집계와 다를 수 있다.
+            EDIT_RANGES는 한 기록(key)의 UTC 분 범위 1~100개를 한 작업으로 원자 적용한다. 범위는 [startedAt,endedAt)이며 초·소수초가 0이고 서로 겹치지 않는다.
+            범위는 조회 pieces와의 교집합에만 적용해 시간을 늘리지 않는다. SUBJECT는 그 안의 모든 과목을 subjectId(null=과목 없음)로, DELETE는 개인 기록에서 뺀다.
+            revision은 EDIT_RANGES에 필수, UPDATE/DELETE는 선택이다. 현재 값과 다르거나 범위가 남은 조각과 전혀 겹치지 않으면 항목 409 STALE_RECORD다. 키는 바뀌지 않고 성공 결과에 새 revision을 준다.
+            분 범위로 지운 빈칸은 이후 UPDATE에서도 되살아나지 않는다.
             """)
     @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(examples = @ExampleObject(value = """
             {"operations":[
               {"operationId":"manual-001","action":"CREATE","startedAt":"2026-10-01T10:00:00Z","endedAt":"2026-10-01T11:00:00Z","subjectId":3,"timeZone":"Asia/Seoul"},
               {"operationId":"camera-002","action":"UPDATE","key":"c:2026-10-01T12:00:00Z","startedAt":"2026-10-01T12:15:00Z","endedAt":"2026-10-01T13:00:00Z","subjectId":3},
               {"operationId":"subject-only-004","action":"UPDATE","key":"c:2026-10-01T14:00:12.123456Z","subjectId":8},
-              {"operationId":"delete-003","action":"DELETE","key":"m:2026-09-30T10:00:00Z"}
+              {"operationId":"delete-003","action":"DELETE","key":"m:2026-09-30T10:00:00Z"},
+              {"operationId":"range-005","action":"EDIT_RANGES","key":"c:2026-10-01T15:00:00Z","revision":2,"ranges":[
+                {"startedAt":"2026-10-01T15:00:00Z","endedAt":"2026-10-01T15:01:00Z","change":"SUBJECT","subjectId":7},
+                {"startedAt":"2026-10-01T15:05:00Z","endedAt":"2026-10-01T15:07:00Z","change":"DELETE"}]}
             ]}
             """)))
     @ApiResponse(
@@ -53,17 +60,18 @@ public class PlannerRecordController {
                             examples = {
                                 @ExampleObject(name = "부분 성공", value = """
                         {"results":[
-                          {"operationId":"manual-001","success":true,"key":"m:2026-10-01T10:00:00Z","status":200,"code":null,"message":null},
-                          {"operationId":"camera-002","success":false,"key":null,"status":409,"code":"CONFLICT","message":"다른 개인 기록과 시간이 겹칩니다"},
-                          {"operationId":"subject-only-004","success":true,"key":"c:2026-10-01T14:00:12.123456Z","status":200,"code":null,"message":null},
-                          {"operationId":"delete-003","success":false,"key":null,"status":404,"code":"NOT_FOUND","message":"기록을 찾을 수 없습니다"}
+                          {"operationId":"manual-001","success":true,"key":"m:2026-10-01T10:00:00Z","revision":1,"status":200,"code":null,"message":null},
+                          {"operationId":"camera-002","success":false,"key":null,"revision":null,"status":409,"code":"CONFLICT","message":"다른 개인 기록과 시간이 겹칩니다"},
+                          {"operationId":"subject-only-004","success":true,"key":"c:2026-10-01T14:00:12.123456Z","revision":1,"status":200,"code":null,"message":null},
+                          {"operationId":"delete-003","success":false,"key":null,"revision":null,"status":404,"code":"NOT_FOUND","message":"기록을 찾을 수 없습니다"},
+                          {"operationId":"range-005","success":false,"key":null,"revision":null,"status":409,"code":"STALE_RECORD","message":"기록이 조회 뒤에 바뀌었습니다. 다시 조회해 주세요"}
                         ]}
                         """),
                                 @ExampleObject(name = "입력 검증", value = """
-                        {"results":[{"operationId":"invalid-001","success":false,"key":null,"status":400,"code":"BAD_REQUEST","message":"기록은 1분 이상 24시간 이하여야 합니다"}]}
+                        {"results":[{"operationId":"invalid-001","success":false,"key":null,"revision":null,"status":400,"code":"BAD_REQUEST","message":"기록은 1분 이상 24시간 이하여야 합니다"}]}
                         """),
                                 @ExampleObject(name = "다른 본문 재시도", value = """
-                        {"results":[{"operationId":"manual-001","success":false,"key":null,"status":409,"code":"CONFLICT","message":"operationId에 다른 요청을 사용할 수 없습니다"}]}
+                        {"results":[{"operationId":"manual-001","success":false,"key":null,"revision":null,"status":409,"code":"CONFLICT","message":"operationId에 다른 요청을 사용할 수 없습니다"}]}
                         """)
                             }))
     @ApiResponse(

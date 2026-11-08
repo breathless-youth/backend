@@ -58,6 +58,8 @@ class PlannerRecordPartialFailureTest {
                 Instant.parse("2026-10-01T" + start + ":00Z"),
                 Instant.parse("2026-10-01T" + end + ":00Z"),
                 null,
+                null,
+                null,
                 null);
     }
 }

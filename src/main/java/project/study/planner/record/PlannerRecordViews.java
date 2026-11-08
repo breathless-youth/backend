@@ -74,7 +74,9 @@ final class PlannerRecordViews {
                 fullEnd,
                 study,
                 focus,
-                List.copyOf(segments));
+                List.copyOf(segments),
+                0,
+                PlannerRecordPieces.clip(PlannerRecordPieces.original(bundle), from, to));
     }
 
     private static void addSegment(
@@ -115,6 +117,9 @@ final class PlannerRecordViews {
         List<StatusEvent> events = edit.source() == StudySessionSource.MANUAL
                 ? List.of()
                 : originals.stream().flatMap(s -> s.getEvents().stream()).toList();
+        if (edit.pieces() != null) {
+            return byPieces(edit, originals, left, right, events);
+        }
         PlannerRecordMetrics.Times times = editedTimes(edit, originals, left, right, events);
         List<PlannerRecordSegment> segments = editedSegments(edit, originals, left, right, times);
         return new PlannerRecordView(
@@ -127,7 +132,101 @@ final class PlannerRecordViews {
                 edit.endedAt(),
                 times.study(),
                 times.focus(),
-                segments);
+                segments,
+                edit.revision(),
+                PlannerRecordPieces.clip(PlannerRecordPieces.legacy(edit, originals), left, right));
+    }
+
+    /**
+     * 분 범위 수정본. 맞닿은 조각은 이어진 구간 시작부터의 누적값 차이로 나눈다. 조각마다 초를 따로 버리면
+     * 과목만 칠해도 합계가 달라지기 때문이다. 시각을 옮기지 않은 기록은 원래 제출값을 이벤트 위치로 배분하므로
+     * 과목 변경은 합계를 바꾸지 않고 지운 조각의 몫만 빠진다. 시각을 옮긴 기록은 기존처럼 이벤트로 다시 센다.
+     */
+    private static PlannerRecordView byPieces(
+            PlannerRecordEdit edit,
+            List<StudySession> originals,
+            Instant left,
+            Instant right,
+            List<StatusEvent> events) {
+        List<PlannerRecordPiece> pieces = PlannerRecordPieces.clip(edit.pieces(), left, right);
+        long study = 0;
+        long focus = 0;
+        List<PlannerRecordSegment> segments = new ArrayList<>();
+        int i = 0;
+        while (i < pieces.size()) {
+            int end = i + 1;
+            while (end < pieces.size()
+                    && pieces.get(end).startedAt().equals(pieces.get(end - 1).endedAt())) {
+                end++;
+            }
+            List<PlannerRecordPiece> run = pieces.subList(i, end);
+            List<PlannerRecordMetrics.Times> shares = runShares(edit, originals, run, events);
+            for (int k = 0; k < run.size(); k++) {
+                PlannerRecordPiece piece = run.get(k);
+                PlannerRecordMetrics.Times times = shares.get(k);
+                study += times.study();
+                focus += times.focus();
+                if (piece.subjectId() != null) {
+                    segments.add(new PlannerRecordSegment(
+                            piece.subjectId(), piece.startedAt(), piece.endedAt(), times.study(), times.focus()));
+                }
+            }
+            i = end;
+        }
+        return new PlannerRecordView(
+                edit.key(),
+                edit.source(),
+                true,
+                pieces.isEmpty() ? left : pieces.getFirst().startedAt(),
+                pieces.isEmpty() ? right : pieces.getLast().endedAt(),
+                edit.startedAt(),
+                edit.endedAt(),
+                study,
+                focus,
+                List.copyOf(segments),
+                edit.revision(),
+                pieces);
+    }
+
+    /**
+     * 이어진 조각들의 몫. 초 절삭 때문에 누적값이 잠깐 줄어들 수 있어 누적값을 단조 증가하게 맞춘 뒤 차이를 낸다.
+     * 마지막 누적값은 구간 전체 값과 같아 합계는 그대로이고 어떤 조각도 음수가 되지 않는다.
+     */
+    private static List<PlannerRecordMetrics.Times> runShares(
+            PlannerRecordEdit edit,
+            List<StudySession> originals,
+            List<PlannerRecordPiece> run,
+            List<StatusEvent> events) {
+        Instant start = run.getFirst().startedAt();
+        PlannerRecordMetrics.Times total =
+                cumulative(edit, originals, start, run.getLast().endedAt(), events);
+        List<PlannerRecordMetrics.Times> shares = new ArrayList<>();
+        long study = 0;
+        long focus = 0;
+        for (PlannerRecordPiece piece : run) {
+            PlannerRecordMetrics.Times upTo = cumulative(edit, originals, start, piece.endedAt(), events);
+            long nextStudy = Math.min(Math.max(study, upTo.study()), total.study());
+            long nextFocus = Math.min(Math.max(focus, upTo.focus()), total.focus());
+            shares.add(new PlannerRecordMetrics.Times(nextStudy - study, nextFocus - focus));
+            study = nextStudy;
+            focus = nextFocus;
+        }
+        return shares;
+    }
+
+    private static PlannerRecordMetrics.Times cumulative(
+            PlannerRecordEdit edit, List<StudySession> originals, Instant from, Instant to, List<StatusEvent> events) {
+        return edit.preserveOriginalTotals()
+                ? originalTimes(originals, from, to)
+                : PlannerRecordMetrics.recompute(from, to, events);
+    }
+
+    private static PlannerRecordMetrics.Times originalTimes(List<StudySession> originals, Instant from, Instant to) {
+        if (originals.isEmpty()) {
+            return new PlannerRecordMetrics.Times(0, 0);
+        }
+        PlannerRecordView view = original(originals, from, to);
+        return new PlannerRecordMetrics.Times(view.studySec(), view.focusSec());
     }
 
     private static List<PlannerRecordSegment> editedSegments(

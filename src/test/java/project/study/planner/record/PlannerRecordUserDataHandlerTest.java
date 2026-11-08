@@ -85,6 +85,64 @@ class PlannerRecordUserDataHandlerTest {
     }
 
     @Test
+    void mergeJudgesCollisionByRemainingPiecesAndKeepsRevision() {
+        long source = user();
+        long target = user();
+        jdbc.update(
+                """
+                INSERT INTO planner_record_edit(user_id,record_key,source,started_at,ended_at,pieces,revision)
+                VALUES(?,'m:2026-10-01T10:00:00Z','MANUAL',?,?,CAST(? AS jsonb),3)
+                """,
+                source,
+                Timestamp.from(at("10:00")),
+                Timestamp.from(at("13:00")),
+                "[{\"startedAt\":\"2026-10-01T10:00:00Z\",\"endedAt\":\"2026-10-01T11:00:00Z\",\"subjectId\":null},"
+                        + "{\"startedAt\":\"2026-10-01T12:00:00Z\",\"endedAt\":\"2026-10-01T13:00:00Z\",\"subjectId\":null}]");
+        edit(target, "m:2026-10-01T11:00:00Z", "MANUAL", "11:00", "12:00", false);
+
+        handler().merge(source, target);
+
+        assertThat(records.records(target, at("00:00"), at("23:00")))
+                .extracting(PlannerRecordView::key, PlannerRecordView::revision)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("m:2026-10-01T10:00:00Z", 3L),
+                        org.assertj.core.groups.Tuple.tuple("m:2026-10-01T11:00:00Z", 1L));
+    }
+
+    @Test
+    void subjectMergeRewritesSubjectInsidePieces() {
+        long source = user();
+        long target = user();
+        long gone = jdbc.queryForObject(
+                "INSERT INTO study_subject(user_id,name) VALUES(?,'수학') RETURNING id", Long.class, source);
+        long keep = jdbc.queryForObject(
+                "INSERT INTO study_subject(user_id,name) VALUES(?,'수학') RETURNING id", Long.class, target);
+        long other = jdbc.queryForObject(
+                "INSERT INTO study_subject(user_id,name) VALUES(?,'영어') RETURNING id", Long.class, target);
+        jdbc.update(
+                """
+                INSERT INTO planner_record_edit(user_id,record_key,source,started_at,ended_at,pieces)
+                VALUES(?,'m:2026-10-01T10:00:00Z','MANUAL',?,?,CAST(? AS jsonb))
+                """,
+                target,
+                Timestamp.from(at("10:00")),
+                Timestamp.from(at("12:00")),
+                "[{\"startedAt\":\"2026-10-01T10:00:00Z\",\"endedAt\":\"2026-10-01T11:00:00Z\",\"subjectId\":" + gone
+                        + "},{\"startedAt\":\"2026-10-01T11:00:00Z\",\"endedAt\":\"2026-10-01T12:00:00Z\",\"subjectId\":"
+                        + other + "}]");
+
+        handlers.stream()
+                .filter(h -> h.columns().contains("planner_series.user_id"))
+                .findFirst()
+                .orElseThrow()
+                .merge(source, target);
+
+        assertThat(records.records(target, at("00:00"), at("23:00")).getFirst().pieces())
+                .extracting(PlannerRecordPiece::subjectId)
+                .containsExactly(keep, other);
+    }
+
+    @Test
     void eraseRemovesEveryNewUserColumn() {
         long source = user();
         edit(source, "m:2026-10-01T10:00:00Z", "MANUAL", "10:00", "11:00", false);
