@@ -50,7 +50,7 @@ class StudySessionPeriodServiceTest {
     void 기록없는_날을_0으로_채운_일별배열을_준다() {
         LocalDate from = LocalDate.of(2026, 8, 24);
         LocalDate to = LocalDate.of(2026, 8, 26);
-        when(studySessionRepository.findDailyStudyStats(1L, from, to, 60))
+        when(studySessionRepository.findDailyStudyStats(1L, from, to, 1))
                 .thenReturn(List.of(new DailyStudyStat(LocalDate.of(2026, 8, 25), 1800L, 1500L)));
 
         StudyPeriodStatsResponse response = service.periodStats(1L, from, to, null, null);
@@ -73,8 +73,8 @@ class StudySessionPeriodServiceTest {
         LocalDate to = LocalDate.of(2026, 8, 30);
         LocalDate cFrom = LocalDate.of(2026, 8, 17);
         LocalDate cTo = LocalDate.of(2026, 8, 23);
-        when(studySessionRepository.findDailyStudyStats(1L, from, to, 60)).thenReturn(List.of());
-        when(studySessionRepository.findDailyStudyStats(1L, cFrom, cTo, 60))
+        when(studySessionRepository.findDailyStudyStats(1L, from, to, 1)).thenReturn(List.of());
+        when(studySessionRepository.findDailyStudyStats(1L, cFrom, cTo, 1))
                 .thenReturn(List.of(new DailyStudyStat(cFrom, 5000L, 4000L), new DailyStudyStat(cTo, 3000L, 2000L)));
 
         StudyPeriodStatsResponse response = service.periodStats(1L, from, to, cFrom, cTo);

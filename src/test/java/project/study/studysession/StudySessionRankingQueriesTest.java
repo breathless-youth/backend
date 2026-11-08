@@ -83,12 +83,12 @@ class StudySessionRankingQueriesTest {
     }
 
     @Test
-    void 기간_합계는_일분_미만_조각과_기간_밖과_탈퇴자를_빼고_사용자별로_낸다() {
+    void 기간_합계는_순공_0초_조각과_기간_밖과_탈퇴자를_빼고_사용자별로_낸다() {
         long a = user();
         long b = user();
         long gone = user();
         session(a, FROM.plusDays(1), 9, 60, 3000);
-        session(a, FROM.plusDays(2), 9, 1, 59);
+        session(a, FROM.plusDays(2), 9, 1, 0);
         session(a, LocalDate.of(2031, 3, 20), 9, 30, 1000);
         session(b, FROM.plusDays(2), 10, 30, 1800);
         session(gone, FROM.plusDays(1), 9, 60, 3000);
@@ -127,7 +127,7 @@ class StudySessionRankingQueriesTest {
     void 누적_일수는_오늘까지_일분_이상인_날을_세고_마지막_날에_처음_넘긴_시각이_도달_시각이다() {
         long a = user();
         session(a, LocalDate.of(2031, 3, 3), 9, 30, 1000);
-        session(a, LocalDate.of(2031, 3, 4), 9, 1, 59);
+        session(a, LocalDate.of(2031, 3, 4), 9, 1, 0);
         session(a, LocalDate.of(2031, 3, 20), 9, 30, 1000);
         session(a, LocalDate.of(2031, 3, 20), 14, 30, 1000);
         session(a, LocalDate.of(2031, 4, 2), 9, 30, 1000);
@@ -138,10 +138,10 @@ class StudySessionRankingQueriesTest {
     }
 
     @Test
-    void 누적_일수의_누적_순공은_오늘까지_일분_이상_측정_조각의_합이고_제출을_빼면_함께_빠진다() {
+    void 누적_일수의_누적_순공은_오늘까지_순공_1초_이상_측정_조각의_합이다() {
         long a = user();
         session(a, LocalDate.of(2031, 3, 3), 9, 30, 1000);
-        session(a, LocalDate.of(2031, 3, 4), 9, 1, 59);
+        session(a, LocalDate.of(2031, 3, 4), 9, 1, 0);
         session(a, LocalDate.of(2031, 3, 20), 9, 30, 1200);
         session(a, LocalDate.of(2031, 3, 20), 14, 30, 1300);
         session(a, LocalDate.of(2031, 4, 2), 9, 30, 1000);
@@ -157,9 +157,6 @@ class StudySessionRankingQueriesTest {
         assertThat(source.studyDays(ALL_TIME_START, TODAY, a))
                 .extracting(RankingDaysRow::days, RankingDaysRow::focusSec)
                 .containsExactly(tuple(2, 3500L));
-        assertThat(source.studyDays(ALL_TIME_START, TODAY, a, at(LocalDate.of(2031, 3, 20), 14)))
-                .extracting(RankingDaysRow::days, RankingDaysRow::focusSec)
-                .containsExactly(tuple(2, 2200L));
         assertThat(source.periodTotals(ALL_TIME_START, TODAY, a))
                 .extracting(RankingTotalRow::focusSec)
                 .containsExactly(3500L);

@@ -10,7 +10,7 @@ import project.study.studysession.StudySessionThresholds;
 /**
  * 첫 주(D0~D6) 공부 습관 값 — 규칙 묶음 F와 명단 카드의 "습관" 줄이 같은 계산을 쓴다.
  *
- * <p>세션 단위 값은 앱 기록 목록과 같은 잣대로 순공 1분 이상 세션만 센다(잘못 눌렀다 끈 세션이 평균을 깎지 않게).
+ * <p>세션 단위 값은 앱 기록 목록과 같은 잣대로 순공 1초 이상 세션만 센다(잘못 눌렀다 끈 세션이 평균을 깎지 않게).
  */
 public final class FirstWeekHabits {
 

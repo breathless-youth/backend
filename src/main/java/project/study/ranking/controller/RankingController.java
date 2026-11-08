@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,9 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import project.study.ranking.RankingBoardType;
 import project.study.ranking.RankingPeriod;
 import project.study.ranking.dto.RankingBoardResponse;
-import project.study.ranking.dto.RankingSessionGainsResponse;
 import project.study.ranking.service.RankingBoardService;
-import project.study.ranking.service.RankingSessionGainsService;
 import project.study.studysession.entity.TimeSlot;
 
 @Tag(name = "Ranking", description = "랭킹 API — 랭킹판(순공·집중률·시간대)과 명예의 전당을 조회한다 (BY-828)")
@@ -27,7 +24,6 @@ import project.study.studysession.entity.TimeSlot;
 public class RankingController {
 
     private final RankingBoardService rankingBoardService;
-    private final RankingSessionGainsService rankingSessionGainsService;
 
     @Operation(summary = "랭킹판 조회", description = """
                     랭킹판 하나의 시상대(1~3위), 내 순위, 내 주변(앞 2 · 나 · 뒤 2), 바로 위·아래와의 차이를 준다. \
@@ -76,23 +72,5 @@ public class RankingController {
             @RequestParam(required = false) TimeSlot slot,
             @RequestParam(defaultValue = "0") int offset) {
         return rankingBoardService.board(userId, type, period, slot, offset, true);
-    }
-
-    @Operation(summary = "세션 뒤 오른 랭킹", description = """
-                    방금 제출한 세션으로 순위가 오른 판을 준다(공부 결과 화면 "랭킹이 올랐어요").
-
-                    - before: 이번 제출의 조각을 뺀 내 값, after: 지금 내 값 — 둘 다 지금의 같은 다른 사람들 사이에서 매긴 순위. \
-                    일수 판도 자리대로 매긴 순위다(같은 일수 안에서 앞선 것도 오른 것으로 본다)
-                    - 대상: 지금 기간의 순공 일·주·월, 집중률 주·월, 이 세션이 지난 시간대 일·주, 누적 시간·누적 일수·연속 일수
-                    - 이번 세션 전에 순위가 없던 판(처음 순위가 생긴 판)과 오르지 않은 판은 빠진다
-                    - startedAt은 제출한 세션의 시작 시각(자정 분할 조각 전부를 묶는 제출 시작). 없거나 내 세션이 아니면 404""")
-    @ApiResponse(responseCode = "200", description = "조회 성공")
-    @ApiResponse(responseCode = "404", description = "그 시각에 시작한 내 세션이 없음")
-    @GetMapping(value = "/session-gains", version = "1")
-    public RankingSessionGainsResponse sessionGains(
-            @AuthenticationPrincipal Long userId,
-            @Parameter(description = "제출한 세션의 시작 시각(UTC ISO-8601)", example = "2026-10-10T00:00:00Z") @RequestParam
-                    Instant startedAt) {
-        return rankingSessionGainsService.gains(userId, startedAt);
     }
 }

@@ -132,7 +132,7 @@ public class GroupController {
         - `query`는 앞뒤 공백을 떼고, 비면 검색어가 없는 것으로 본다. `%`·`_`도 그냥 글자다. 100자까지(UTF-16 기준이라 이모지 등은 2자로 센다)
         - 카드의 `weeklyAverageFocusSec`: 지금 멤버들의 이번 주(월요일 0시 KST부터) 앱 전체 순공 합 ÷ 지금 멤버 수. \
         주 중간에 들어온 멤버도 이번 주 순공이 모두 들어가고 나간 멤버는 빠진다. \
-        측정 세션만, 1분 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신
+        측정 세션만, 1초 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신
         - 내가 멤버인 그룹도 나오며 `member`가 true다""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 결과가 없으면 `groups`가 빈 배열")
     @ApiResponse(
@@ -173,7 +173,7 @@ public class GroupController {
         - `APPLIED`이면 `application`에 내 신청 ID와 만료 시각이 있다
         - `weeklyAverageFocusSec`: 지금 멤버들의 이번 주(월요일 0시 KST부터) 앱 전체 순공 합 ÷ 지금 멤버 수. \
         주 중간에 들어온 멤버도 이번 주 순공이 모두 들어가고 나간 멤버는 빠진다. \
-        측정 세션만, 1분 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신""")
+        측정 세션만, 1초 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신""")
     @ApiResponse(responseCode = "200", description = "조회 성공")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "404", description = "`GROUP_NOT_FOUND` 없거나 사라진 그룹, 또는 비공개 그룹")

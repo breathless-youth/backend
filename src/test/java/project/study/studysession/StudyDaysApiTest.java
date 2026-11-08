@@ -21,8 +21,8 @@ import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
 
 /**
- * 누적 공부일(GET /api/stats/study-days) — 가입 이후 순공시간 1분 이상 세션이 하루라도 있었던 날의 수 (BY-645).
- * 목록 조회와 같은 1분 기준(ADR-0009)이라 "목록에 세션이 보이는 날"과 정확히 일치해야 한다.
+ * 누적 공부일(GET /api/stats/study-days) — 가입 이후 순공시간 1초 이상 세션이 하루라도 있었던 날의 수 (BY-645).
+ * 목록 조회와 같은 1초 기준(ADR-0009)이라 "목록에 세션이 보이는 날"과 정확히 일치해야 한다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -77,6 +77,11 @@ class StudyDaysApiTest {
         assertThat(submitRequest(user, startedAt, durationSec)).hasStatus(HttpStatus.CREATED);
     }
 
+    /** 총공부 60초에 순공 0초인 세션 */
+    private void submitZeroFocus(Long user, Instant startedAt) {
+        assertThat(submitRequest(user, startedAt, 60, 0)).hasStatus(HttpStatus.CREATED);
+    }
+
     // 구 앱 대응이 없는 새 경로라 기본버전 1이다 — asUser의 기본 헤더(2)를 덮는다 (ADR-0015 갱신)
     private MockMvcTester.MockMvcRequestBuilder studyDays(Long user) {
         return mvc.get()
@@ -114,9 +119,19 @@ class StudyDaysApiTest {
     }
 
     @Test
-    void 순공시간_1분_미만_세션만_있는_날은_세지_않는다() {
-        submit(userId, noonOf(yesterday.minusDays(1)), 59);
-        submit(userId, noonOf(yesterday), 60);
+    void 순공시간_0초_세션만_있는_날은_세지_않고_1초부터_센다() {
+        submitZeroFocus(userId, noonOf(yesterday.minusDays(1)));
+        submit(userId, noonOf(yesterday), 1);
+
+        assertThat(studyDays(userId))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.totalDays", v -> assertThat(v).isEqualTo(1));
+    }
+
+    @Test
+    void 순공시간_59초_세션도_센다() {
+        submit(userId, noonOf(yesterday), 59);
 
         assertThat(studyDays(userId))
                 .hasStatusOk()
@@ -126,8 +141,8 @@ class StudyDaysApiTest {
 
     @Test
     void 총_공부시간이_아니라_순공시간으로_판정한다() {
-        // 총 10분 공부했지만 순공 59초 — 목록과 같은 focusSec 기준이라 세지 않는다
-        assertThat(submitRequest(userId, noonOf(yesterday), 600, 59)).hasStatus(HttpStatus.CREATED);
+        // 총 10분 공부했지만 순공 0초 — 목록과 같은 focusSec 기준이라 세지 않는다
+        assertThat(submitRequest(userId, noonOf(yesterday), 600, 0)).hasStatus(HttpStatus.CREATED);
 
         assertThat(studyDays(userId))
                 .hasStatusOk()
@@ -136,10 +151,10 @@ class StudyDaysApiTest {
     }
 
     @Test
-    void 같은_날_짧은_세션을_합쳐_1분을_넘겨도_세지_않는다() {
+    void 순공_0초_세션은_몇_개가_있어도_세지_않는다() {
         // 세션 단위 기준이지 하루 합산이 아니다 (ADR-0009)
-        submit(userId, noonOf(yesterday), 30);
-        submit(userId, noonOf(yesterday).plusSeconds(600), 30);
+        submitZeroFocus(userId, noonOf(yesterday));
+        submitZeroFocus(userId, noonOf(yesterday).plusSeconds(600));
 
         assertThat(studyDays(userId))
                 .hasStatusOk()

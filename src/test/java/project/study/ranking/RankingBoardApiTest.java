@@ -113,6 +113,22 @@ class RankingBoardApiTest extends RankingIntegrationTestBase {
     }
 
     @Test
+    void 순공_1초만_있어도_주간_순공_판에_오르고_0초는_오르지_않는다() {
+        long me = user("me");
+        long oneSec = user("one");
+        long zeroSec = user("zero");
+        session(me, kst(10, 6, 9, 0), 60, 3000);
+        session(oneSec, kst(10, 7, 9, 0), 60, 1);
+        session(zeroSec, kst(10, 7, 9, 0), 60, 0);
+
+        assertThat(request("type=FOCUS_TIME&period=WEEKLY", me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.podium[*].nickname", v -> assertThat(v).asArray().containsExactly("me", "one"));
+    }
+
+    @Test
     void 참가자가_없으면_시상대가_비고_지금_시작하면_1위다() {
         long me = user("me");
 

@@ -34,7 +34,7 @@ public class StudySessionStatsController {
                     한 유저의 세션 을 통계 날짜(`statDate`) 기준으로 하루 단위로 조회한다 (일별 기록 화면). \
                     기간(from~to) 조회는 추후 별도 API로 제공한다.
 
-                    세션은 길이와 무관하게 저장되지만, 순공시간(`focusSec`)이 1분 미만인 세션은 이 조회에는 \
+                    세션은 길이와 무관하게 저장되지만, 순공시간(`focusSec`)이 1초 미만인 세션은 이 조회에는 \
                     보이지 않는다 (`studiedDatesInMonth`도 동일 기준 적용).
 
                     응답은 세션 목록과 그날 전체 통계를 함께 담은 객체다.
@@ -108,10 +108,10 @@ public class StudySessionStatsController {
     }
 
     @Operation(summary = "누적 공부일 조회", description = """
-                    가입 이후 공부한 날이 총 며칠인지 반환한다. 그날(통계 날짜) 순공시간(focusSec)이 1분 이상인 세션이 \
+                    가입 이후 공부한 날이 총 며칠인지 반환한다. 그날(통계 날짜) 순공시간(focusSec)이 1초 이상인 세션이 \
                     하나라도 있으면 공부한 날로 센다 — 일별 목록 조회에 세션이 보이는 날과 같은 기준이며, \
                     스트릭 기준(5분)과는 다르다. 자정을 걸친 세션은 날짜별 조각으로 나뉘어 저장되며 각 조각의 순공시간이 \
-                    1분 이상일 때 그 날짜가 각각 인정된다. 사용자 시간대의 오늘까지만 센다.
+                    1초 이상일 때 그 날짜가 각각 인정된다. 사용자 시간대의 오늘까지만 센다.
 
                     기록이 없거나 존재하지 않는 userId면 totalDays는 0이다 (다른 통계 조회와 같은 계약).""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 누적 공부일 수")
@@ -121,11 +121,11 @@ public class StudySessionStatsController {
     }
 
     @Operation(summary = "공부 리듬 조회", description = """
-                    기록 탭 '나의 공부 리듬' 히트맵용. 가입 이후 전체 측정 세션(순공시간 1분 이상)의 순공을 \
+                    기록 탭 '나의 공부 리듬' 히트맵용. 가입 이후 전체 측정 세션(순공시간 1초 이상)의 순공을 \
                     요일(월=0 … 일=6) × 시각(KST 0~23시) 격자에 누적해 반환한다. 세션 하나의 순공은 시작~종료 사이의 \
                     정시 경계로 잘라 이벤트(PHONE/DEVICE/AWAY/SLEEP/PAUSE)를 뺀 길이 비율로 배분하므로 격자 합은 순공 합과 같다.
 
-                    - `studyDays` — 누적 공부일. `GET /api/stats/study-days`의 totalDays와 같은 값(1분 기준, 오늘까지)
+                    - `studyDays` — 누적 공부일. `GET /api/stats/study-days`의 totalDays와 같은 값(1초 기준, 오늘까지)
                     - `focusSecByWeekdayHour` — 7 × 24 정수(초). 앱이 며칠부터 보여줄지(노출 기준)와 농도·문구를 정한다
 
                     기록이 없거나 존재하지 않는 userId면 studyDays는 0, 격자는 모두 0이다.""")
@@ -137,7 +137,7 @@ public class StudySessionStatsController {
 
     @Operation(summary = "기간 집계 조회", description = """
                     from~to 구간의 일별 순공/총공부 집계를 dailyList로 반환한다. \
-                    dailyList는 from~to 모든 날짜를 담으며 공부 없는 날은 0이다 (순공 1분 미만 세션은 집계 제외). \
+                    dailyList는 from~to 모든 날짜를 담으며 공부 없는 날은 0이다 (순공 1초 미만 세션은 집계 제외). \
                     compareFrom/compareTo를 함께 주면 그 구간도 같은 방식의 일별 배열 compareDailyList로 함께 준다(증감 비교용) — \
                     미지정 시 compareFrom/compareTo는 null, compareDailyList는 빈 배열. 총합·비교는 응답의 배열을 합산해 계산한다. \
                     from>to, compare 한쪽만 지정, 366일 초과 범위(메인·비교 공통)는 400.""")

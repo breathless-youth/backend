@@ -31,7 +31,7 @@
 
 개인 일간 통계는 `PersonalRecordListResponse`이며 `sessions`, `sessionCount`, `totalStudySec`, `totalFocusSec`, `longestFocusSec`, `focusRate`, `totalEventCounts`, `studiedDatesInMonth`, `subjects`를 제공한다. `sessions`는 `PersonalRecordSummaryResponse` 배열이다. 항목은 `displayKey:string`, `recordKey:string`, `originalSessionId:number|null`, `edited:boolean`, `statDate`, `startedAt/endedAt`, `fullStartedAt/fullEndedAt`, `studySec/focusSec/focusRate`, `eventCounts`, `events`, `subjectSegments`, `completedTasks`, `source`, `submissionStartedAt`을 제공한다. 숫자 `id`는 없으며 원본 없는 개인 직접 입력의 `originalSessionId`는 null이다. 표시 항목은 `displayKey`, 배치 편집은 `recordKey`를 사용한다. `subjectSegments`는 기존 `PlannerRecordSegment` 구조다.
 
-개인 기간과 리듬은 각각 기존 `StudyPeriodStatsResponse`, `StudyRhythmResponse`와 같은 구조를 사용한다. 통계는 실제 초와 기존 60초 제외 기준을 유지하고, 집중률·최장 집중·리듬은 측정 개인 기록만 대상으로 한다. 수정하지 않았거나 과목만 바꾼 원본은 기존 statDate와 초를 유지한다. 시간을 바꾼 원본은 저장된 원본 시간대의 자정으로 나누고, 원본 없는 개인 직접 입력은 요청 timeZone을 사용한다. 기존 개인 수정 행에는 입력 당시 시간대가 없으므로 이를 복원하지 않는다. 원본 stats·홈·랭킹·스트릭의 의미는 바꾸지 않는다.
+개인 기간과 리듬은 각각 기존 `StudyPeriodStatsResponse`, `StudyRhythmResponse`와 같은 구조를 사용한다. 통계는 실제 초를 사용하고 순공 1초 미만 기록만 제외하며, 집중률·최장 집중·리듬은 측정 개인 기록만 대상으로 한다. 수정하지 않았거나 과목만 바꾼 원본은 기존 statDate와 초를 유지한다. 시간을 바꾼 원본은 저장된 원본 시간대의 자정으로 나누고, 원본 없는 개인 직접 입력은 요청 timeZone을 사용한다. 기존 개인 수정 행에는 입력 당시 시간대가 없으므로 이를 복원하지 않는다. 원본 stats·홈·랭킹·스트릭의 의미는 바꾸지 않는다.
 
 개인 기록의 `edited`는 과목 유무와 무관하다. 원본은 false, 기존 수정 행을 적용한 기록과 새 개인 직접 입력은 true다. 원본의 `source`는 유지한다. 시간 변경으로 여러 자정 조각이 생기면 완료한 할 일 참조는 첫 표시 조각에 한 번만 싣는다. 이 참조 표시가 원본 할 일의 실제 완료 시각·계획일·완료 개수 또는 세션 연결을 바꾸지는 않는다. 원본 날짜 조각을 유지하는 과목 변경은 원래 조각의 참조를 유지한다.
 
