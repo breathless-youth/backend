@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import tools.jackson.databind.JsonNode;
 
 class PersonalRecordBoundaryStatsApiTest extends PlannerApiSupport {
@@ -112,16 +114,16 @@ class PersonalRecordBoundaryStatsApiTest extends PlannerApiSupport {
     void fourSecondVisualCellDoesNotCreateSixtySecondsInStatsOrRhythm() {
         session("2026-10-01T09:29:49Z", "2026-10-01T09:29:53Z", 4, 4, "Asia/Seoul");
         JsonNode day = personal("2026-10-01", "Asia/Seoul");
-        assertThat(day.get("sessionCount").asInt()).isZero();
-        assertThat(day.get("totalFocusSec").asLong()).isZero();
+        assertThat(day.get("sessionCount").asInt()).isEqualTo(1);
+        assertThat(day.get("totalStudySec").asLong()).isEqualTo(4);
+        assertThat(day.get("totalFocusSec").asLong()).isEqualTo(4);
         assertThat(call("GET", "/api/planner/days/2026-10-01", null, 200)
                         .get("records")
                         .size())
                 .isEqualTo(1);
-        assertThat(call("GET", "/api/planner/records/stats/rhythm", null, 200)
-                        .get("studyDays")
-                        .asLong())
-                .isZero();
+        JsonNode rhythm = call("GET", "/api/planner/records/stats/rhythm", null, 200);
+        assertThat(rhythm.get("studyDays").asLong()).isEqualTo(1);
+        assertThat(rhythm.get("focusSecByWeekdayHour").get(3).get(18).asLong()).isEqualTo(4);
     }
 
     @Test
@@ -261,21 +263,31 @@ class PersonalRecordBoundaryStatsApiTest extends PlannerApiSupport {
         return call("GET", "/api/planner/records/stats?date=" + date + "&timeZone=" + zone, null, 200);
     }
 
-    @Test
-    void completedTaskReferenceUsesFirstVisiblePieceWhenMidnightPrefixIsUnderOneMinute() {
-        String start = "2026-10-01T14:59:44.190Z";
-        long id = session(start, "2026-10-01T14:59:49.190Z", 5, 5, "Asia/Seoul");
-        long task = jdbc.queryForObject("""
+    @ParameterizedTest
+    @CsvSource({"14:59:44.190,15", "14:59:59,1", "14:59:59.500,0"})
+    void completedTaskReferenceUsesFirstVisiblePieceAtOneSecondMidnightBoundary(String time, int prefixFocusSec) {
+        String start = "2026-10-01T" + time + "Z";
+        long id = session(start, Instant.parse(start).plusSeconds(5).toString(), 5, 5, "Asia/Seoul");
+        long task = jdbc.queryForObject(
+                """
                 INSERT INTO study_task(subject_id,name,planned_date,done_at)
-                VALUES (?,'짧은 원본 완료','2026-10-01',TIMESTAMPTZ '2026-10-01 14:59:45Z') RETURNING id
-                """, Long.class, subject);
+                VALUES (?,'짧은 원본 완료','2026-10-01',?) RETURNING id
+                """, Long.class, subject, Timestamp.from(Instant.parse(start).plusSeconds(1)));
         jdbc.update("INSERT INTO study_session_task_done(session_id,task_id) VALUES (?,?)", id, task);
         update("c:" + start, start, "2026-10-01T15:30:00Z", null);
-        assertThat(personal("2026-10-01", "Asia/Seoul").get("sessionCount").asInt())
-                .isZero();
+        JsonNode firstDay = personal("2026-10-01", "Asia/Seoul");
+        assertThat(firstDay.get("sessionCount").asInt()).isEqualTo(prefixFocusSec > 0 ? 1 : 0);
+        assertThat(firstDay.get("totalFocusSec").asLong()).isEqualTo(prefixFocusSec);
+        if (prefixFocusSec > 0) {
+            JsonNode tasks = firstDay.get("sessions").get(0).get("completedTasks");
+            assertThat(tasks.size()).isEqualTo(1);
+            assertThat(tasks.get(0).get("id").asLong()).isEqualTo(task);
+        }
         JsonNode row = personal("2026-10-02", "Asia/Seoul").get("sessions").get(0);
-        assertThat(row.get("completedTasks").size()).isEqualTo(1);
-        assertThat(row.get("completedTasks").get(0).get("id").asLong()).isEqualTo(task);
+        assertThat(row.get("completedTasks").size()).isEqualTo(prefixFocusSec > 0 ? 0 : 1);
+        if (prefixFocusSec == 0) {
+            assertThat(row.get("completedTasks").get(0).get("id").asLong()).isEqualTo(task);
+        }
     }
 
     private long session(String start, String end, int study, int focus, String zone) {

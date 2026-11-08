@@ -115,7 +115,7 @@ public class MemberStudySource {
                 .collect(Collectors.groupingBy(LiveDraft::userId));
     }
 
-    /** 진행 중 조각 중 날짜가 from~to이고 순공 1분 이상인 것의 합 — 랭킹이 진행 중 조각을 더하는 기준과 같다. */
+    /** 진행 중 조각 중 날짜가 from~to이고 순공 1초 이상인 것의 합 — 랭킹이 진행 중 조각을 더하는 기준과 같다. */
     private static long liveFocus(List<LiveDraft> drafts, LocalDate from, LocalDate to) {
         long sum = 0;
         for (LiveDraft draft : drafts) {

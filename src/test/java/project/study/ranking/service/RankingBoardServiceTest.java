@@ -135,7 +135,7 @@ class RankingBoardServiceTest extends RankingIntegrationTestBase {
         draft(me, NOW.minusSeconds(300), NOW.minusSeconds(10), 70, "[]");
         assertThat(weeklyBoard(me).me()).isNotNull(); // 진행 중 70초로 캐시에 내 줄이 올라간다
 
-        session(me, NOW.minusSeconds(300), 5, 50); // 제출이 60초 미만으로 확정 — 캐시(10초) 안에서 내 줄이 사라진다
+        session(me, NOW.minusSeconds(300), 5, 0); // 제출이 순공 0초로 확정 — 캐시(10초) 안에서 내 줄이 사라진다
         RankingBoardResponse r = weeklyBoard(me);
 
         assertThat(r.me()).isNull();

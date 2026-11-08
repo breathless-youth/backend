@@ -36,7 +36,7 @@ import project.study.studysession.service.ActiveStudySessionService;
 import project.study.studysession.service.MemberStudySource;
 
 /**
- * 그룹 멤버 책상이 읽는 앱 전체 공부 상태·순공 (BY-1124). 기준은 랭킹과 같다 — 측정 세션만, 1분 미만 조각 제외, 진행 중 draft 포함. 상태는 마지막
+ * 그룹 멤버 책상이 읽는 앱 전체 공부 상태·순공 (BY-1124). 기준은 랭킹과 같다 — 측정 세션만, 1초 미만 조각 제외, 진행 중 draft 포함. 상태는 마지막
  * 수신이 가장 최근인 draft 하나로 60초 창 안에서 판단한다.
  */
 @SpringBootTest
@@ -118,21 +118,22 @@ class MemberStudySourceTest {
     }
 
     @Test
-    void 확정_측정_세션은_오늘과_이번_주에_더하고_1분_미만과_수동_기록은_뺀다() {
+    void 확정_측정_세션은_오늘과_이번_주에_더하고_0초와_수동_기록은_빼고_1초는_더한다() {
         long me = user();
         session(me, kst(14, 10, 0, 0), 1800, "MEASURED"); // 오늘 30분, 10:30에 끝남
         session(me, kst(12, 0, 30, 0), 1200, "MEASURED"); // 이번 주 월요일
         session(me, kst(11, 20, 0, 0), 3600, "MEASURED"); // 지난주 일요일 — 이번 주가 아니다
-        session(me, kst(14, 11, 0, 0), 59, "MEASURED"); // 1분 미만 — 기록 탭에 안 보인다
+        session(me, kst(14, 11, 0, 0), 0, "MEASURED"); // 순공 0초 — 기록 탭에 안 보인다
+        session(me, kst(14, 9, 0, 0), 1, "MEASURED"); // 순공 1초 — 보인다
         session(me, kst(14, 12, 0, 0), 3600, "MANUAL"); // 수동 기록 — 랭킹처럼 뺀다
 
         MemberStudy study = of(me);
 
-        assertThat(study.todayFocusSec()).isEqualTo(1800);
-        assertThat(study.weekFocusSec()).isEqualTo(3000);
+        assertThat(study.todayFocusSec()).isEqualTo(1801);
+        assertThat(study.weekFocusSec()).isEqualTo(3001);
         assertThat(study.presence()).isEqualTo(Presence.IDLE);
         assertThat(study.accumulating()).isFalse();
-        // 59초 세션·수동 기록이 더 늦게 끝났어도 마지막 공부는 1분 이상 측정 세션의 끝이다
+        // 0초 세션·수동 기록이 더 늦게 끝났어도 마지막 공부는 1초 이상 측정 세션의 끝이다
         assertThat(study.lastStudiedAt()).isEqualTo(kst(14, 10, 30, 0));
     }
 
@@ -236,9 +237,9 @@ class MemberStudySourceTest {
     }
 
     @Test
-    void draft_조각이_1분_미만이면_순공에_안_더하지만_상태는_STUDYING이다() {
+    void draft_조각의_순공이_0초면_순공에_안_더하지만_상태는_STUDYING이다() {
         long me = user();
-        draft(me, AS_OF.minusSeconds(40), AS_OF.minusSeconds(10), 30, "[]"); // 늘려도 40초
+        draft(me, AS_OF, AS_OF, 0, "[]"); // asOf까지 늘려도 0초
 
         MemberStudy study = of(me);
 
@@ -246,7 +247,7 @@ class MemberStudySourceTest {
         assertThat(study.weekFocusSec()).isZero();
         assertThat(study.presence()).isEqualTo(Presence.STUDYING);
         assertThat(study.accumulating()).isTrue();
-        assertThat(study.lastStudiedAt()).isEqualTo(AS_OF.minusSeconds(10));
+        assertThat(study.lastStudiedAt()).isEqualTo(AS_OF);
     }
 
     @Test
@@ -322,8 +323,8 @@ class MemberStudySourceTest {
         // 같은 날 두 세션 — 먼저 넣은 쪽이 더 늦게 끝나도 늦은 끝 시각을 고른다
         session(older, kst(9, 20, 0, 0), 1200, "MEASURED");
         session(older, kst(9, 8, 0, 0), 600, "MEASURED");
-        // 1분 미만 측정과 수동 기록뿐이면 없다
-        session(onlyShort, kst(14, 8, 0, 0), 59, "MEASURED");
+        // 순공 0초 측정과 수동 기록뿐이면 없다
+        session(onlyShort, kst(14, 8, 0, 0), 0, "MEASURED");
         session(onlyShort, kst(14, 9, 0, 0), 3600, "MANUAL");
 
         Map<Long, MemberStudy> studies = source.of(List.of(split, legacy, older, onlyShort, nothing), AS_OF);

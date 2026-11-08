@@ -5,7 +5,7 @@ import java.time.Instant;
 import project.study.group.DeskStatus;
 
 /**
- * 멤버 책상 — 내 그룹 카드, 그룹 홈, 공개 그룹 보기가 함께 쓴다. 순공은 앱 전체 기준이다: 측정 세션만, 1분 미만 조각 제외, 진행 중인 세션 포함
+ * 멤버 책상 — 내 그룹 카드, 그룹 홈, 공개 그룹 보기가 함께 쓴다. 순공은 앱 전체 기준이다: 측정 세션만, 1초 미만 조각 제외, 진행 중인 세션 포함
  * (랭킹과 같다).
  */
 public record GroupMemberDesk(
