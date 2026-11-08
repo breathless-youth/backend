@@ -145,4 +145,30 @@ class GroupTranslationApiTest {
                 HttpStatus.NOT_FOUND,
                 "GROUP_NOT_FOUND");
     }
+
+    @Test
+    void translatedReadsPreserveOpenJoinPolicyAcrossFourEndpoints() {
+        jdbc.sql("update study_group set join_policy='OPEN' where id=:id")
+                .param("id", group)
+                .update();
+        warm(TranslationLanguage.EN, true);
+        assertThat(v1Get(mvc, "/api/groups/" + group, owner).header("Accept-Language", "en"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.joinPolicy", v -> assertThat(v).isEqualTo("OPEN"));
+        assertThat(v1Get(mvc, "/api/groups/public/" + group, stranger).header("Accept-Language", "en"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.joinPolicy", v -> assertThat(v).isEqualTo("OPEN"));
+        assertThat(v1Get(mvc, "/api/groups/me", owner).header("Accept-Language", "en"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.groups[0].joinPolicy", v -> assertThat(v).isEqualTo("OPEN"));
+        assertThat(v1Get(mvc, "/api/groups/public", stranger)
+                        .param("query", name)
+                        .header("Accept-Language", "en"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.groups[0].joinPolicy", v -> assertThat(v).isEqualTo("OPEN"));
+    }
 }

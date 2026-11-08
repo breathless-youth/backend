@@ -107,7 +107,7 @@ DeepL API Developer는 계정 전체에 총 1,000,000자가 추가되는 예비�
 
 ## PostgreSQL 캐시와 사용량 예약
 
-새 Flyway 마이그레이션 번호는 ADR-0041의 기존 V50~54 예약 구간 뒤인 V55를 사용한다. Redis·새 SDK 없이 기존 `JdbcClient`, `RestClient`, JDK HTTP 클라이언트를 쓴다.
+새 Flyway 마이그레이션 번호는 최신 dev의 최대 V63 다음인 V64를 사용한다. Redis·새 SDK 없이 기존 `JdbcClient`, `RestClient`, JDK HTTP 클라이언트를 쓴다.
 
 - `group_translation_cache`: 기본키 `(group_id, field, target_locale)`. `field`는 `NAME` 또는 `DESCRIPTION`. SHA-256 원문 해시, 번역문, 공급자, 임차권 UUID·만료 시각, 다음 시도 가능 시각, 갱신 시각을 저장한다. 원문은 기존 그룹 테이블에만 둔다. 그룹 물리 삭제는 FK cascade로 정리한다.
 - `group_translation_provider_state`: 공급자별 잠금 행 3개와 다음 호출 가능 시각. 사용량 예약 시 이 행을 잠가 여러 서버 인스턴스의 동시 호출을 직렬화한다. HTTP 중에는 잠금을 유지하지 않는다.

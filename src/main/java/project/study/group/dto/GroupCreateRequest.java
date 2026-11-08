@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import project.study.common.category.StudyCategory;
 import project.study.common.text.TextLength;
+import project.study.group.GroupJoinPolicy;
 import project.study.group.GroupVisibility;
 
 public record GroupCreateRequest(
@@ -16,8 +17,8 @@ public record GroupCreateRequest(
         String name,
 
         @Schema(
-                description = "공개 여부 — 만든 뒤에는 바꿀 수 없다. `PUBLIC`은 공개 그룹 목록에 나오고 신청을 받아 들어온다. "
-                        + "`PRIVATE`은 목록에 나오지 않고 초대코드·링크로만 들어온다",
+                description = "공개 여부 — 만든 뒤에는 바꿀 수 없다. `PUBLIC`은 공개 그룹 목록에 나온다. "
+                        + "입장 방식은 joinPolicy로 정한다. `PRIVATE`은 목록에 나오지 않고 초대코드·링크로만 들어온다",
                 example = "PUBLIC")
         @NotNull
         GroupVisibility visibility,
@@ -34,4 +35,16 @@ public record GroupCreateRequest(
                 description = "그룹 소개 — 0~500자 (이름과 같은 글자 수 기준). 생략하거나 비워도 된다. 연락처나 링크가 있으면 400 `CONTACT_NOT_ALLOWED`",
                 example = "평일 새벽 5시부터 같이 공부해요")
         @TextLength(max = 500)
-        String description) {}
+        String description,
+
+        @Schema(
+                description = "입장 방식 — APPROVAL 신청 후 입장, OPEN 바로 입장. 생략하거나 null이면 APPROVAL. 비공개 그룹의 OPEN은 400"
+                        + " VALIDATION_FAILED")
+        GroupJoinPolicy joinPolicy) {
+
+    public GroupCreateRequest {
+        if (joinPolicy == null) {
+            joinPolicy = GroupJoinPolicy.APPROVAL;
+        }
+    }
+}

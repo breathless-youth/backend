@@ -14,11 +14,11 @@ import project.study.studysession.entity.StudySession;
  * 세션 조각 하나의 순공을 그 세션 시간대의 정시 경계로 잘라 요일(월=0) × 시각(0~23) 격자에 누적하는 순수 로직 — 공부 리듬 히트맵.
  * 배분은 SlotSplitter와 같은 규칙이다(이벤트를 뺀 길이 비율, 마지막 구간이 나머지를 가져가 합이 조각 순공과 같다).
  */
-final class RhythmSplitter {
+public final class RhythmSplitter {
 
     private RhythmSplitter() {}
 
-    static int[][] emptyGrid() {
+    public static int[][] emptyGrid() {
         return new int[7][24];
     }
 
@@ -33,7 +33,7 @@ final class RhythmSplitter {
                 ZoneId.of(session.getTimeZone()));
     }
 
-    static void accumulate(
+    public static void accumulate(
             int[][] grid, Instant start, Instant end, int focusSec, List<StatusEvent> events, ZoneId zone) {
         if (focusSec <= 0 || !start.isBefore(end)) {
             return;

@@ -3,6 +3,7 @@ package project.study.group.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import project.study.common.category.StudyCategory;
+import project.study.group.GroupJoinPolicy;
 import project.study.group.GroupRole;
 import project.study.group.GroupVisibility;
 
@@ -11,6 +12,9 @@ public record GroupHomeResponse(
         @Schema(description = "그룹 ID", example = "10") long groupId,
         @Schema(description = "그룹 이름", example = "새벽 공시반") String name,
         @Schema(description = "공개 여부", example = "PUBLIC") GroupVisibility visibility,
+
+        @Schema(description = "입장 방식 — APPROVAL 신청 후 입장, OPEN 바로 입장")
+        GroupJoinPolicy joinPolicy,
 
         @Schema(description = "시험·목표", example = "CIVIL_SERVICE")
         StudyCategory category,
@@ -23,7 +27,8 @@ public record GroupHomeResponse(
         boolean notifyEnabled,
 
         @Schema(
-                description = "새 신청 수 — 답을 기다리는 신청 전부. 그룹장이 목록을 봤는지는 따로 기록하지 않아 답할 때까지 남는다. 공개 그룹 그룹장이 아니면 null",
+                description =
+                        "새 신청 수 — 답을 기다리는 신청 전부. 그룹장이 목록을 봤는지는 따로 기록하지 않아 답할 때까지 남는다. APPROVAL 공개 그룹 그룹장이 아니면 null",
                 example = "2")
         Integer newApplicationCount,
 

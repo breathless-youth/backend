@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 
 /** 이름 변경과 완료 토글을 한 엔드포인트로 받는다 — 둘 중 보낸 것만 바뀌고, 둘 다 없으면 400. */
 public record TaskUpdateRequest(
-        @Schema(description = "바꿀 할 일 이름 — 생략하면 그대로", example = "3단원 문제풀기") @Size(max = 100)
+        @Schema(description = "바꿀 할 일 이름 — 생략하면 그대로", example = "3단원 문제풀기") @Size(max = 25)
         String name,
 
         @Schema(

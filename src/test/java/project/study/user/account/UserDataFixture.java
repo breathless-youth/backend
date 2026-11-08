@@ -24,6 +24,7 @@ public class UserDataFixture {
     private static final AtomicLong SEQ = new AtomicLong(System.nanoTime());
 
     private final JdbcClient jdbc;
+    private final project.study.planner.record.PlannerRecordFixture plannerRecordFixture;
     private final List<UserDataHandler> handlers;
 
     public long seedUser() {
@@ -41,6 +42,16 @@ public class UserDataFixture {
         jdbc.sql("INSERT INTO user_dday (user_id, title, target_date) VALUES (:u, :t, DATE '2030-01-01')")
                 .param("u", userId)
                 .param("t", title)
+                .update();
+    }
+
+    public void seedPlannerGoals(long userId, LocalDate date) {
+        jdbc.sql("INSERT INTO planner_default_goal (user_id, goal_sec) VALUES (:u, 3600)")
+                .param("u", userId)
+                .update();
+        jdbc.sql("INSERT INTO planner_daily_goal (user_id, goal_date, goal_sec) VALUES (:u, :d, 0)")
+                .param("u", userId)
+                .param("d", date)
                 .update();
     }
 
@@ -64,6 +75,18 @@ public class UserDataFixture {
                 .param("u", userId)
                 .param("d", date)
                 .update();
+    }
+
+    /** FK가 없는 적재 테이블이라 users 행 없이도 들어간다. */
+    public void seedAmplitude(long userId, LocalDate date) {
+        jdbc.sql(
+                        "INSERT INTO amplitude_daily_event (user_id, event_date, event_key, count) VALUES (:u, :d, 'app_launched', 1)")
+                .param("u", userId)
+                .param("d", date)
+                .update();
+        jdbc.sql("""
+                        INSERT INTO amplitude_user_attribute (user_id, os_name, first_seen_at, last_seen_at)
+                        VALUES (:u, 'ios', now(), now())""").param("u", userId).update();
     }
 
     public void seedPushAssignment(long userId, String experiment) {
@@ -177,6 +200,23 @@ public class UserDataFixture {
                 .param("d", deleted)
                 .query(Long.class)
                 .single();
+    }
+
+    private void seedPlannerPlan(long user, long subject, LocalDate date) {
+        long series = jdbc.sql("INSERT INTO planner_series(user_id,subject_id) VALUES (:u,:s) RETURNING id")
+                .param("u", user)
+                .param("s", subject)
+                .query(Long.class)
+                .single();
+        jdbc.sql("INSERT INTO planner_repeat_rule(series_id,name,start_date,weekdays) VALUES (:s,'반복',:d,127)")
+                .param("s", series)
+                .param("d", date)
+                .update();
+        jdbc.sql("INSERT INTO planner_day_subject(user_id,plan_date,subject_id) VALUES (:u,:d,:s)")
+                .param("u", user)
+                .param("d", date)
+                .param("s", subject)
+                .update();
     }
 
     public long seedTask(long subjectId, String name) {
@@ -324,10 +364,13 @@ public class UserDataFixture {
         Instant t1 = Instant.parse("2030-03-01T11:00:00Z");
         LocalDate day = LocalDate.of(2030, 3, 1);
         seedDday(user, "d");
+        seedPlannerGoals(user, day);
+        plannerRecordFixture.seed(user);
         seedAcquisition(user, "s");
         seedPushToken(user, "tok-" + user);
         seedPushSend(user, day);
         seedPushAssignment(user, "exp-" + user);
+        seedAmplitude(user, day);
         seedStats("study_stats_daily", user, day, 10);
         seedStats("study_stats_weekly", user, day, 10);
         seedStats("study_stats_monthly", user, day, 10);
@@ -341,6 +384,7 @@ public class UserDataFixture {
         seedActiveSession(user, t1.plusSeconds(3600));
         long subject = seedSubject(user, "과목" + user, 0, false);
         seedTask(subject, "할일");
+        seedPlannerPlan(user, subject, day);
         seedSegment(session, subject, t0, t1);
         seedDailyCompletion(user, subject, day);
         long room = seedRoom(user);

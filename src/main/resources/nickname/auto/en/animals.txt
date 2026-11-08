@@ -1,0 +1,100 @@
+Cat
+Kitten
+Tabby Cat
+Lion
+Lion Cub
+Tiger
+Tiger Cub
+White Tiger
+Leopard
+Snow Leopard
+Cheetah
+Bear
+Polar Bear
+Brown Bear
+Panda
+Panda Cub
+Red Panda
+Koala
+Kangaroo
+Wallaby
+Platypus
+Squirrel
+Chipmunk
+Hamster
+Rabbit
+Hedgehog
+Raccoon
+Meerkat
+Chinchilla
+Capybara
+Porcupine
+Mongoose
+Fox
+Arctic Fox
+Fennec Fox
+Wolf
+Arctic Wolf
+Elephant
+Giraffe
+Zebra
+Horse
+Deer
+Reindeer
+Gazelle
+Antelope
+Llama
+Alpaca
+Lamb
+Dinosaur
+Otter
+Sea Otter
+Seal
+Seal Pup
+Dolphin
+Orca
+Beluga
+Narwhal
+Penguin
+Seahorse
+Octopus
+Pufferfish
+Turtle
+Sea Turtle
+Goldfish
+Koi
+Angelfish
+Shark
+Tiger Shark
+Swordfish
+Manta Ray
+Whale Shark
+Eagle
+Golden Eagle
+Hawk
+Falcon
+Sparrow
+Robin
+Bluebird
+Blue Jay
+Finch
+Hummingbird
+Swan
+Flamingo
+Stork
+Pelican
+Puffin
+Toucan
+Duckling
+Dove
+Lovebird
+Parakeet
+Nightingale
+Songbird
+Butterfly
+Honeybee
+Bumblebee
+Ladybug
+Firefly
+Dragonfly
+Ant

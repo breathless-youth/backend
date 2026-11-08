@@ -84,7 +84,7 @@ detail AS (
            ROUND(h.pauses_per_session, 1)                AS pauses_per_session,
            ROUND(h.distractions / (h.focus_sec / 3600.0), 1) AS distractions_per_hour,
            COALESCE(am.simple_mode_on, 0)                AS simple_mode_on,
-           u.nickname !~ '^포메[0-9]+$'                    AS nickname_changed,   -- 기본값은 '포메'+숫자
+           NOT u.nickname_auto                           AS nickname_changed,   -- 기본 닉네임을 그대로 쓰면 false (BY-1135)
            CASE u.category
                WHEN 'CSAT' THEN '수능'
                WHEN 'CIVIL_SERVICE' THEN '공무원'

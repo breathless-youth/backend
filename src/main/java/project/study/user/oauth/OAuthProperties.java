@@ -16,7 +16,7 @@ public record OAuthProperties(Google google, Kakao kakao, Apple apple) {
 
     public OAuthProperties {
         google = google == null ? new Google(null) : google;
-        kakao = kakao == null ? new Kakao(null) : kakao;
+        kakao = kakao == null ? new Kakao(null, null) : kakao;
         apple = apple == null ? new Apple(null, null, null, null, null, null, null) : apple;
     }
 
@@ -26,9 +26,15 @@ public record OAuthProperties(Google google, Kakao kakao, Apple apple) {
         }
     }
 
-    public record Kakao(List<String> appKeys) {
+    /** adminKey는 탈퇴 때 연결 끊기에만 쓴다. 비어 있으면 연결 끊기만 건너뛰고 로그인은 그대로 된다. */
+    public record Kakao(List<String> appKeys, String adminKey) {
         public Kakao {
             appKeys = audienceList(appKeys);
+        }
+
+        /** 어드민 키로 연결 끊기를 부를 수 있는지. */
+        public boolean unlinkConfigured() {
+            return StringUtils.hasText(adminKey);
         }
     }
 

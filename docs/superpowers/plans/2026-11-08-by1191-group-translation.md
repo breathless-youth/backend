@@ -71,7 +71,7 @@
 ### Task 2: 영속 캐시와 수정·동시 요청 처리
 
 **Files:**
-- Create: `src/main/resources/db/migration/V55__group_translation.sql` (recheck maximum migration number first)
+- Create: `src/main/resources/db/migration/V64__group_translation.sql` (recheck maximum migration number first)
 - Create: `src/main/java/project/study/group/translation/TranslationCacheRepository.java`
 - Test: `src/test/java/project/study/group/translation/TranslationCacheRepositoryTest.java`
 
@@ -149,7 +149,7 @@
 - Modify: `src/main/java/project/study/group/dto/PublicGroupPageResponse.java`
 - Modify: `src/main/java/project/study/group/dto/PublicGroupDetailResponse.java`
 - Update constructor sites in the existing `GroupService`, `PublicGroupService` and tests only as required for the appended nullable field; keep their transaction/access behavior.
-- Create: `docs/adr/0044-group-content-translation.md` (recheck next ADR number)
+- Create: `docs/adr/0046-group-content-translation.md` (recheck next ADR number)
 - Create: `docs/runbooks/group-translation.md`
 - Test: `src/test/java/project/study/group/translation/GroupTranslationServiceTest.java`
 - Test: `src/test/java/project/study/group/translation/GroupTranslationApiTest.java`
@@ -178,7 +178,7 @@
 - 범위와 소스 코드의 네 조회 경로를 대조했다. 필드별 캐시가 목록/상세 사이에서 이름을 재사용하고 소개만 수정되는 경우를 포함한다.
 - 공통 타입/중첩 타입/메서드는 소비 작업 전에 정의했다. 어댑터 실패와 API 원문 대체는 서로 다른 계약이다.
 - Review Focus 다섯 항목 각각 테스트 소유 작업을 지정했다. 실제 번역 품질과 모의 네트워크 테스트를 구분했다.
-- 2026-11-08 최종 검증: `./gradlew check` 통과. 전체 2,139개, 번역 45개, 실패/오류/건너뜀 0개. 독립 리뷰의 캐시 경합·잘못된 헤더 수용을 RED→GREEN으로 수정했고 전체 검증을 다시 통과했다. 사용자 퀴즈 통과 뒤에만 커밋한다. 실제 키 주입·실번역 품질 평가·콘솔 한도 변경은 미실행이다.
+- 2026-11-08 최종 검증: `./gradlew check` 통과. 전체 2,520개, 번역 46개, 실패/오류/건너뜀 0개. 독립 리뷰의 캐시 경합·잘못된 헤더 수용을 RED→GREEN으로 수정했고 최신 dev 통합 후 전체 검증을 다시 통과했다. 이번 작업은 사용자 추가 승인으로 퀴즈를 생략한다. 실제 키 주입·실번역 품질 평가·콘솔 한도 변경은 미실행이다.
 
 ## 실행 중 결정과 한계
 
@@ -187,7 +187,7 @@
 - 프로젝트 퀴즈 규칙이 계획의 개별 커밋 단계보다 우선한다. 모든 변경은 퀴즈 통과 전까지 미커밋 상태로 유지한다.
 - 사용량 장부의 마지막 날짜/월 키를 저장한다. 현재/직전 장부가 사라지면 새 무료량을 만들지 않고 호출을 차단한다. 장부 유실 시 수동 복구가 필요하다.
 - HTTP 공통부는 기존 JDK 클라이언트로 구현했다. 새 SDK 없이 호출별 남은 제한 시간을 적용하며, 외부 요청이 처리됐는지 모르는 경우에도 예약량을 환급하지 않는다.
-- 기존 V50~54 예약 구간을 피해 V55를 사용했다. 번호 사이에 빈 구간이 생길 수 있다.
+- 처음에는 V55를 사용했으나 최신 dev의 V55 플래너와 충돌하여 V64로 재배정했다. ADR 번호도 최신 dev 뒤인 0046으로 옮겼다.
 - DeepL 현재 capability API에 맞춰 영어 대상은 EN-US를 쓴다. 마지막 공급자에서 미국식 영어가 기본이 된다. 홍콩/대만은 표준 번체를 사용한다.
 - 비정상 언어 헤더도 외부 호출을 유발할 수 있어 리뷰의 해당 경미 지적을 수정 대상으로 올렸다. HTTP 문법을 따르지 않는 클라이언트는 번역 대신 원문을 받는다.
 - 실계정 잔량과 사람에 의한 번역 품질 평가는 별도 활성화 단계다. 검증 전 기능은 기본 off이며, 모의 HTTP 성공을 실제 번역 품질 보장으로 설명하지 않는다.

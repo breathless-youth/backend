@@ -20,6 +20,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * {@code FOR UPDATE}가 아니라 {@code FOR NO KEY UPDATE}로 잡는다 — ①을 잡지 않고 users 행 다음에 그룹 행을 FK로 확인하는 신고·알림 기록
  * 넣기({@code FOR KEY SHARE})를 막으면 그쪽과 교착한다.
  *
+ * <p>공개 그룹 이름 락(BY-1124)은 ① 다음, ② 사용자 락과 같은 자리에서 잡는다. 그룹 만들기는 ②를 잡은 뒤, 이름 바꾸기는 ①을 잡은 뒤 이 락을
+ * 잡는다. 어느 쪽도 이 락을 쥔 채 ① 또는 ②를 기다리지 않는다.
+ *
  * <p>advisory lock 키 공간은 모든 도메인이 DB 하나에서 나눠 쓴다. 지금 쓰는 키(코드에서 {@code pg_advisory}를 찾아 확인):
  *
  * <ul>
@@ -29,6 +32,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *   <li>수동 기록 락({@code ManualStudySessionLockRepository}): {@code 2^41 + userId}
  *   <li>과목 락({@code StudySubjectLockRepository}): {@code 9,724,000,000 + userId}
  *   <li>이 락: {@code 2^42 + userId}
+ *   <li>공개 그룹 이름 락({@link #lockPublicName}): {@code 2^43 + hashtext(이름 키)} — {@code hashtext}가 32비트라 {@code 2^43 ± 2^31}
  * </ul>
  *
  * <p>2^41은 수동 기록 락이 이미 쓰고 있어 같은 사용자의 수동 기록 저장과 그룹 만들기가 서로를 기다리게 되므로 2^42를 쓴다. 사용자 ID는
@@ -40,6 +44,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class GroupLocks {
 
     private static final long USER_LOCK_OFFSET = 1L << 42;
+    private static final long PUBLIC_NAME_LOCK_OFFSET = 1L << 43;
 
     private final JdbcClient jdbc;
 
@@ -50,6 +55,23 @@ public class GroupLocks {
         }
         jdbc.sql("SELECT pg_advisory_xact_lock(:key)")
                 .param("key", USER_LOCK_OFFSET + userId)
+                .query()
+                .listOfRows();
+    }
+
+    /**
+     * 공개 그룹 이름 락. 같은 이름을 동시에 쓰려는 두 요청이 검사와 저장 사이로 끼어들지 못하게 직렬화한다. 트랜잭션이 끝날 때까지 쥔다.
+     *
+     * <p>이름은 {@link GroupNames#KEY_SQL}과 같은 식으로 공백을 지우고 소문자로 맞춘 값이라, 공백과 대소문자만 다른 이름은 같은 락을 쓴다. 서로
+     * 다른 이름이 우연히 같은 해시를 받으면 잠깐 기다릴 뿐 틀리지 않는다.
+     */
+    public void lockPublicName(String name) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("공개 그룹 이름 락은 트랜잭션 안에서만 잡을 수 있다");
+        }
+        jdbc.sql("SELECT pg_advisory_xact_lock(:offset + hashtext(" + GroupNames.keySql(":name") + "))")
+                .param("offset", PUBLIC_NAME_LOCK_OFFSET)
+                .param("name", name)
                 .query()
                 .listOfRows();
     }

@@ -15,6 +15,7 @@ import project.study.common.exception.ForbiddenException;
 import project.study.common.exception.NotFoundException;
 import project.study.common.text.Graphemes;
 import project.study.group.ContactDetector;
+import project.study.group.GroupJoinPolicy;
 import project.study.group.GroupVisibility;
 import project.study.group.dto.GroupApplicationCreateRequest;
 import project.study.group.dto.GroupApplicationCreateResponse;
@@ -63,7 +64,7 @@ public class GroupApplicationService {
     private final Clock clock;
 
     /**
-     * 신청한다. 검사 순서(Swagger 설명을 따르고, 설명이 정하지 않은 부분은 아래 순서다): 연락처 400 → 그룹 행 잠금(없음·삭제·비공개는 404) → 이미 멤버 → 기한 안 신청 있음 → 내보낸 지
+     * 신청한다. 검사 순서(Swagger 설명을 따르고, 설명이 정하지 않은 부분은 아래 순서다): 연락처 400 → 그룹 행 잠금(없음·삭제·비공개는 404) → 바로 입장 방식 → 이미 멤버 → 기한 안 신청 있음 → 내보낸 지
      * 3일 → 멤버 6명 → 사용자 락 → "그룹+신청 5개" → "신청 3개". 같은 쌍에 기한만 지난 {@code PENDING}이 남아 있으면 넣기 전에
      * EXPIRED로 닫고 그 신청의 만료 푸시를 보낸다 — 조건부 UPDATE가 바꾼 경우에만이라 만료 작업과 겹쳐도 한 번만 나간다.
      */
@@ -80,6 +81,9 @@ public class GroupApplicationService {
                 .filter(found -> found.visibility() == GroupVisibility.PUBLIC)
                 .orElseThrow(() -> new NotFoundException(ErrorCode.GROUP_NOT_FOUND, "없거나 사라진 그룹이에요"));
 
+        if (group.joinPolicy() == GroupJoinPolicy.OPEN) {
+            throw new ConflictException(ErrorCode.GROUP_JOIN_OPEN, "바로 입장 그룹에는 신청 없이 들어갈 수 있어요");
+        }
         if (members.findLive(groupId, userId).isPresent()) {
             throw new ConflictException(ErrorCode.ALREADY_MEMBER, "이미 이 그룹의 멤버예요");
         }

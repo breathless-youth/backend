@@ -67,7 +67,8 @@ class StudySubjectServiceTest {
                 taskRepository,
                 subjectSegmentRepository,
                 CLOCK,
-                new UserTimeZones(userRepository));
+                new UserTimeZones(userRepository),
+                org.mockito.Mockito.mock(project.study.planner.service.PlannerTaskService.class));
     }
 
     /** 엔티티에 id setter를 두지 않으므로 테스트에서만 리플렉션으로 채운다. */
@@ -254,7 +255,8 @@ class StudySubjectServiceTest {
         service.list(2L);
         service.daySubjects(2L, java.time.LocalDate.of(2026, 9, 19), List.of());
 
-        verify(taskRepository).findVisible(List.of(1L), Instant.parse("2026-09-19T04:00:00Z"));
+        verify(taskRepository)
+                .findVisible(List.of(1L), Instant.parse("2026-09-19T04:00:00Z"), java.time.LocalDate.of(2026, 9, 19));
         verify(taskRepository)
                 .findOfDay(2L, Instant.parse("2026-09-19T04:00:00Z"), Instant.parse("2026-09-20T04:00:00Z"));
     }
