@@ -140,6 +140,50 @@ class PlannerRecordUserDataHandlerTest {
         assertThat(records.records(target, at("00:00"), at("23:00")).getFirst().pieces())
                 .extracting(PlannerRecordPiece::subjectId)
                 .containsExactly(keep, other);
+        // 병합 전 조회로 보낸 범위 수정이 바뀐 과목 위에 적용되지 않도록 revision을 올린다.
+        assertThat(records.records(target, at("00:00"), at("23:00")).getFirst().revision())
+                .isEqualTo(2);
+    }
+
+    @Test
+    void measuredRecordWhoseOriginalIsDroppedBySessionMergeIsNotKeptAsOrphan() {
+        long source = user();
+        long target = user();
+        jdbc.update("""
+                INSERT INTO study_session(user_id,stat_date,started_at,submission_started_at,ended_at,study_sec,focus_sec)
+                VALUES(?,DATE '2026-10-01',?,?,?,10800,10800)
+                """, source, Timestamp.from(at("10:00")), Timestamp.from(at("10:00")), Timestamp.from(at("13:00")));
+        jdbc.update(
+                """
+                INSERT INTO planner_record_edit(user_id,record_key,source,started_at,ended_at,pieces,revision)
+                VALUES(?,'c:2026-10-01T10:00:00Z','MEASURED',?,?,CAST(? AS jsonb),2)
+                """,
+                source,
+                Timestamp.from(at("10:00")),
+                Timestamp.from(at("13:00")),
+                "[{\"startedAt\":\"2026-10-01T10:00:00Z\",\"endedAt\":\"2026-10-01T11:00:00Z\",\"subjectId\":null},"
+                        + "{\"startedAt\":\"2026-10-01T12:00:00Z\",\"endedAt\":\"2026-10-01T13:00:00Z\",\"subjectId\":null}]");
+        // 남는 계정의 측정 기록은 지운 빈칸 안에만 있어 남은 조각과는 겹치지 않지만, 원본 세션과는 겹친다.
+        jdbc.update("""
+                INSERT INTO study_session(user_id,stat_date,started_at,submission_started_at,ended_at,study_sec,focus_sec)
+                VALUES(?,DATE '2026-10-01',?,?,?,3600,3600)
+                """, target, Timestamp.from(at("11:00")), Timestamp.from(at("11:00")), Timestamp.from(at("12:00")));
+
+        handler().merge(source, target);
+        handlers.stream()
+                .filter(h -> h.columns().contains("study_session.user_id"))
+                .findFirst()
+                .orElseThrow()
+                .merge(source, target);
+
+        assertThat(records.records(target, at("00:00"), at("23:00")))
+                .singleElement()
+                .satisfies(record -> assertThat(record.key()).isEqualTo("c:2026-10-01T11:00:00Z"));
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM planner_record_edit WHERE user_id=? AND NOT deleted",
+                        Integer.class,
+                        target))
+                .isZero();
     }
 
     @Test

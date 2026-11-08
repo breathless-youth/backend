@@ -33,6 +33,10 @@ class PlannerRecordMutationService {
         if (operation.action() == null) {
             throw new BadRequestException("action이 필요합니다");
         }
+        // 범위를 무시하고 기록 전체를 지우거나 바꾸지 않도록 다른 action의 ranges는 받지 않는다.
+        if (operation.ranges() != null && !"EDIT_RANGES".equals(operation.action())) {
+            throw new BadRequestException("ranges는 EDIT_RANGES에만 보낼 수 있습니다");
+        }
         return switch (operation.action()) {
             case "CREATE" -> create(userId, operation);
             case "UPDATE" -> update(userId, operation);
@@ -51,6 +55,7 @@ class PlannerRecordMutationService {
         assertFree(userId, span, null);
         userTimeZones.resolve(userId, operation.timeZone());
         String key = "m:" + span.start();
+        assertKeyFree(userId, key);
         long revision = repository.saveEdit(
                 userId,
                 new PlannerRecordEdit(
@@ -77,12 +82,13 @@ class PlannerRecordMutationService {
                 current.source() == StudySessionSource.MANUAL && !span.start().equals(current.startedAt())
                         ? "m:" + span.start()
                         : current.key();
-        if (!key.equals(current.key())) {
-            repository.saveEdit(userId, current.tombstone());
-        }
         boolean preserve = current.preserveOriginalTotals() && unchanged;
         List<PlannerRecordPiece> pieces =
                 current.pieces() == null ? null : resized(current, span, unchanged, operation.subjectId());
+        if (!key.equals(current.key())) {
+            assertKeyFree(userId, key);
+            repository.saveEdit(userId, current.tombstone());
+        }
         long revision = repository.saveEdit(
                 userId,
                 new PlannerRecordEdit(
@@ -101,9 +107,17 @@ class PlannerRecordMutationService {
     /** 분 범위로 지운 빈칸은 전체 수정 뒤에도 되살리지 않는다. 새로 늘린 시간만 기록으로 더한다. */
     private static List<PlannerRecordPiece> resized(
             PlannerRecordEdit current, Span span, boolean unchanged, Long subjectId) {
-        if (unchanged) {
-            return PlannerRecordPieces.paintAll(current.pieces(), subjectId);
+        List<PlannerRecordPiece> pieces = unchanged
+                ? PlannerRecordPieces.paintAll(current.pieces(), subjectId)
+                : extended(current, span, subjectId);
+        // 지운 빈칸만 남기면 보이지 않는데 삭제되지도 않은 기록이 된다.
+        if (pieces.isEmpty()) {
+            throw new BadRequestException("남은 기록이 없는 시간으로만 고칠 수 없습니다");
         }
+        return pieces;
+    }
+
+    private static List<PlannerRecordPiece> extended(PlannerRecordEdit current, Span span, Long subjectId) {
         List<PlannerRecordPiece> pieces =
                 new ArrayList<>(PlannerRecordPieces.clip(current.pieces(), span.start(), span.end()));
         if (span.start().isBefore(current.startedAt())) {
@@ -162,13 +176,15 @@ class PlannerRecordMutationService {
     /** 모든 범위를 먼저 검사한 뒤 적용해 일부 범위만 반영되는 일이 없게 한다. */
     private List<PlannerRecordPiece> applied(
             Long userId, List<PlannerRecordPiece> pieces, List<PlannerRecordRange> ranges) {
-        Long currentSubject = PlannerRecordPieces.common(pieces);
         for (PlannerRecordRange range : ranges) {
             if (!PlannerRecordPieces.intersects(pieces, range.startedAt(), range.endedAt())) {
                 throw new ConflictException(ErrorCode.STALE_RECORD, "고칠 범위에 남은 기록이 없습니다. 다시 조회해 주세요");
             }
             if (range.change().equals("SUBJECT")) {
-                assertSubject(userId, range.subjectId(), currentSubject);
+                // 범위 안에 이미 지정된 과목은 지운 과목이어도 다시 보낼 수 있다.
+                boolean kept = PlannerRecordPieces.clip(pieces, range.startedAt(), range.endedAt()).stream()
+                        .anyMatch(p -> Objects.equals(p.subjectId(), range.subjectId()));
+                assertSubject(userId, range.subjectId(), kept ? range.subjectId() : null);
             }
         }
         List<PlannerRecordPiece> result = pieces;
@@ -247,6 +263,13 @@ class PlannerRecordMutationService {
                         .get(subjectId)
                         .deleted()) {
             throw new BadRequestException("지운 과목은 고를 수 없습니다");
+        }
+    }
+
+    /** 앞부분을 지운 수동 기록은 시작 시각이 키와 달라 겹침 검사를 통과하므로 키로 한 번 더 막는다. */
+    private void assertKeyFree(Long userId, String key) {
+        if (repository.edits(userId).stream().anyMatch(e -> e.key().equals(key) && !e.deleted())) {
+            throw new ConflictException("같은 시작 시각의 개인 기록이 이미 있습니다");
         }
     }
 
