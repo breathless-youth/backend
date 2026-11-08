@@ -268,4 +268,66 @@ class PlannerRecordRangeApiTest extends PlannerRecordRangeSupport {
         assertThat(replay.get("revision").isNull()).isTrue();
         assertThat(day(DAY).get("records")).hasSize(1);
     }
+
+    @Test
+    void rangesOnOtherActionsAreRejectedInsteadOfIgnored() {
+        session("2026-10-01T03:00:00Z", "2026-10-01T03:03:00Z", 180, 180);
+
+        JsonNode result = batch("{\"operationId\":\"delete-with-ranges\",\"action\":\"DELETE\",\"key\":\"" + KEY
+                        + "\",\"ranges\":[" + range("2026-10-01T03:00:00Z", "2026-10-01T03:01:00Z", "DELETE", null)
+                        + "]}")
+                .get(0);
+
+        assertThat(result.get("status").asInt()).isEqualTo(400);
+        assertThat(record().get("revision").asLong()).isZero();
+    }
+
+    @Test
+    void updateIntoDeletedGapOnlyIsRejectedInsteadOfHidingRecord() {
+        session("2026-10-01T03:00:00Z", "2026-10-01T03:03:00Z", 180, 180);
+        batch(editRanges("gap", 0, range("2026-10-01T03:01:00Z", "2026-10-01T03:02:00Z", "DELETE", null)));
+
+        JsonNode result = batch(
+                        "{\"operationId\":\"into-gap\",\"action\":\"UPDATE\",\"key\":\"" + KEY
+                                + "\",\"startedAt\":\"2026-10-01T03:01:00Z\",\"endedAt\":\"2026-10-01T03:02:00Z\",\"subjectId\":null}")
+                .get(0);
+
+        assertThat(result.get("status").asInt()).isEqualTo(400);
+        assertThat(record().get("revision").asLong()).isEqualTo(1);
+    }
+
+    @Test
+    void createAtStartOfTrimmedManualRecordDoesNotOverwriteIt() {
+        batch("{\"operationId\":\"manual\",\"action\":\"CREATE\",\"startedAt\":\"2026-10-01T03:00:00Z\","
+                + "\"endedAt\":\"2026-10-01T03:05:00Z\",\"subjectId\":null}");
+        String key = "m:2026-10-01T03:00:00Z";
+        batch("{\"operationId\":\"trim\",\"action\":\"EDIT_RANGES\",\"key\":\"" + key + "\",\"revision\":1,"
+                + "\"ranges\":[" + range("2026-10-01T03:00:00Z", "2026-10-01T03:01:00Z", "DELETE", null) + "]}");
+
+        JsonNode result = batch(
+                        "{\"operationId\":\"again\",\"action\":\"CREATE\",\"startedAt\":\"2026-10-01T03:00:00Z\","
+                                + "\"endedAt\":\"2026-10-01T03:01:00Z\",\"subjectId\":null}")
+                .get(0);
+
+        assertThat(result.get("status").asInt()).isEqualTo(409);
+        JsonNode kept = record();
+        assertThat(kept.get("key").asText()).isEqualTo(key);
+        assertThat(pieces(kept)).isEqualTo("2026-10-01T03:01:00Z~2026-10-01T03:05:00Z=none");
+    }
+
+    @Test
+    void deletedSubjectAlreadyInRangeCanBeSentAgain() {
+        long a = newSubject("국어");
+        long b = newSubject("과학");
+        long id = session("2026-10-01T03:00:00Z", "2026-10-01T03:02:00Z", 120, 120);
+        segment(id, a, "2026-10-01T03:00:00Z", "2026-10-01T03:01:00Z");
+        segment(id, b, "2026-10-01T03:01:00Z", "2026-10-01T03:02:00Z");
+        jdbc.update("UPDATE study_subject SET deleted_at=now() WHERE id=?", a);
+
+        JsonNode result = batch(
+                        editRanges("same", 0, range("2026-10-01T03:00:00Z", "2026-10-01T03:01:00Z", "SUBJECT", a)))
+                .get(0);
+
+        assertThat(result.get("status").asInt()).isEqualTo(200);
+    }
 }

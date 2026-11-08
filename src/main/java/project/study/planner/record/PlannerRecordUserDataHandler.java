@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import project.study.studysession.entity.StudySession;
 import project.study.studysession.entity.StudySessionSource;
 import project.study.studysession.repository.ManualStudySessionLockRepository;
+import project.study.studysession.service.StudySessionUserDataHandler;
 import project.study.user.account.UserDataHandler;
 
 /** 원본 세션 병합(order 100) 전에 출처를 판별한다. 남는 계정의 개인 기록이 충돌에서 우선한다. */
@@ -25,6 +26,7 @@ public class PlannerRecordUserDataHandler implements UserDataHandler {
     private final PlannerRecordOriginalRepository originals;
     private final PlannerRecordService records;
     private final ManualStudySessionLockRepository locks;
+    private final StudySessionUserDataHandler sessionMerge;
 
     @Override
     public Set<String> columns() {
@@ -51,6 +53,12 @@ public class PlannerRecordUserDataHandler implements UserDataHandler {
         repository.edits(targetUserId).forEach(edit -> targetKeys.add(edit.key()));
         Set<String> originalKeys =
                 sourceOriginals.stream().map(PlannerRecordViews::key).collect(Collectors.toSet());
+        // 세션 병합은 원래 시각으로 충돌을 본다. 수정본이 그 시간을 지웠어도 원본이 버려지면 남은 조각도 근거를 잃는다.
+        Set<Long> droppedSessions = sessionMerge.conflictingSessionIds(sourceUserId, targetUserId);
+        Set<String> droppedKeys = sourceOriginals.stream()
+                .filter(session -> droppedSessions.contains(session.getId()))
+                .map(PlannerRecordViews::key)
+                .collect(Collectors.toSet());
         Map<String, PlannerRecordEdit> moves = new HashMap<>();
         sourceEdits.stream()
                 .filter(edit -> !targetKeys.contains(edit.key()))
@@ -60,7 +68,7 @@ public class PlannerRecordUserDataHandler implements UserDataHandler {
         for (PlannerRecordView view : sourceViews(sourceUserId, sourceOriginals, sourceEdits)) {
             if (targetKeys.contains(view.key())) {
                 moves.remove(view.key());
-            } else if (conflicts(targetUserId, view)) {
+            } else if (droppedKeys.contains(view.key()) || conflicts(targetUserId, view)) {
                 moves.remove(view.key());
                 if (originalKeys.contains(view.key())) {
                     moves.put(

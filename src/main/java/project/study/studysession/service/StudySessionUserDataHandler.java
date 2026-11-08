@@ -66,6 +66,15 @@ public class StudySessionUserDataHandler implements UserDataHandler {
         return 100;
     }
 
+    /** 병합에서 버릴 옮기는 쪽 완료 세션. 먼저 실행되는 개인 기록 병합이 원본을 잃을 기록을 판별할 때 쓴다. */
+    public Set<Long> conflictingSessionIds(long sourceUserId, long targetUserId) {
+        return Set.copyOf(jdbc.sql("SELECT s.id FROM study_session s WHERE s.user_id = :source AND " + CONFLICT)
+                .param("source", sourceUserId)
+                .param("target", targetUserId)
+                .query(Long.class)
+                .list());
+    }
+
     @Override
     public void merge(long sourceUserId, long targetUserId) {
         // 완료 세션을 옮기기 전에 판단해야 옮긴 세션 때문에 자기 진행 중 기록이 지워지지 않는다
