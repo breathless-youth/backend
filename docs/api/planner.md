@@ -1,6 +1,6 @@
 # 날짜별 플래너 API (BY-1162)
 
-모든 경로는 토큰 인증과 `API-Version: 1`을 사용한다. 실제 요청·응답·오류 예시는 Swagger `/v3/api-docs`의 `Planner`, `PlannerTask`, `PlannerCarry`, `PlannerGoal`, `PlannerRecord` 태그에 있다.
+모든 경로는 토큰 인증과 `API-Version: 1`을 사용한다. 실제 요청·응답·오류 예시는 Swagger `/v3/api-docs`의 `Planner`, `PlannerTask`, `PlannerCarry`, `PlannerGoal`, `PlannerRecord`, `PersonalRecordStats` 태그에 있다.
 
 하루는 기기 IANA `timeZone`(생략/잘못된 값이면 저장된 시간대)의 현지 05:00부터 다음 날짜 05:00이다. 조회는 시간대 설정을 바꾸지 않는다. 과거/오늘/미래도 05시로 구분한다. 날짜 조회와 기간의 양 끝 날짜는 포함하며 최대 366일이다. 지원 날짜는 0001-01-01~9999-12-31이며 그 밖은 400이다.
 
@@ -25,6 +25,17 @@
 | `GET/PUT/DELETE /api/planner/goals/default` | 기본 목표, PUT `{ "goalSec":14400 }` |
 | `GET/PUT/DELETE /api/planner/goals/{date}` | 개별 목표, GET은 적용/개별/기본 값 구분 |
 | `POST /api/planner/records/batch` | 작업별 CREATE/UPDATE/DELETE와 부분 성공 결과 |
+| `GET /api/planner/records/stats?date=&timeZone=` | 자정 기준 개인 기록 목록·일간 합계 |
+| `GET /api/planner/records/stats/period?from=&to=&compareFrom=&compareTo=&timeZone=` | 개인 수정본의 주·월·비교 기간 일별 합계 |
+| `GET /api/planner/records/stats/rhythm?timeZone=` | 개인 수정본 중 측정 기록의 누적 공부일과 7×24 리듬 |
+
+개인 일간 통계는 `PersonalRecordListResponse`이며 `sessions`, `sessionCount`, `totalStudySec`, `totalFocusSec`, `longestFocusSec`, `focusRate`, `totalEventCounts`, `studiedDatesInMonth`, `subjects`를 제공한다. `sessions`는 `PersonalRecordSummaryResponse` 배열이다. 항목은 `displayKey:string`, `recordKey:string`, `originalSessionId:number|null`, `edited:boolean`, `statDate`, `startedAt/endedAt`, `fullStartedAt/fullEndedAt`, `studySec/focusSec/focusRate`, `eventCounts`, `events`, `subjectSegments`, `completedTasks`, `source`, `submissionStartedAt`을 제공한다. 숫자 `id`는 없으며 원본 없는 개인 직접 입력의 `originalSessionId`는 null이다. 표시 항목은 `displayKey`, 배치 편집은 `recordKey`를 사용한다. `subjectSegments`는 기존 `PlannerRecordSegment` 구조다.
+
+개인 기간과 리듬은 각각 기존 `StudyPeriodStatsResponse`, `StudyRhythmResponse`와 같은 구조를 사용한다. 통계는 실제 초와 기존 60초 제외 기준을 유지하고, 집중률·최장 집중·리듬은 측정 개인 기록만 대상으로 한다. 수정하지 않았거나 과목만 바꾼 원본은 기존 statDate와 초를 유지한다. 시간을 바꾼 원본은 저장된 원본 시간대의 자정으로 나누고, 원본 없는 개인 직접 입력은 요청 timeZone을 사용한다. 기존 개인 수정 행에는 입력 당시 시간대가 없으므로 이를 복원하지 않는다. 원본 stats·홈·랭킹·스트릭의 의미는 바꾸지 않는다.
+
+개인 기록의 `edited`는 과목 유무와 무관하다. 원본은 false, 기존 수정 행을 적용한 기록과 새 개인 직접 입력은 true다. 원본의 `source`는 유지한다. 시간 변경으로 여러 자정 조각이 생기면 완료한 할 일 참조는 첫 표시 조각에 한 번만 싣는다. 이 참조 표시가 원본 할 일의 실제 완료 시각·계획일·완료 개수 또는 세션 연결을 바꾸지는 않는다. 원본 날짜 조각을 유지하는 과목 변경은 원래 조각의 참조를 유지한다.
+
+이전 수동 기록은 시작 변경 시 기존 키의 삭제 표식과 새 `m:<시작>` 키를 저장한다. 기존 수정 행에는 이전 키와의 연결이 없으므로 이미 연결을 잃은 수동 수정본의 원본 ID·원본 시간대·완료 참조를 확실하게 복원할 수 없다. 이 경우 `originalSessionId`는 null, 완료 참조는 빈 배열이며 요청 timeZone으로 자정 분할한다. `edited=true`, 실제 개인 시간과 이전 날짜의 삭제 표식은 그대로 반영한다. `originalSessionId`는 연결을 확인한 실제 원본만 제공하며 추측하거나 가짜 값을 만들지 않는다. 기존 키 변경 규칙과 원본 stats·세션·할 일은 바꾸지 않는다.
 
 과목 생성·이름 변경·전역 삭제는 기존 `/api/subjects`를 쓴다. 전체 과목은 20개, 새 이름은 12자, 새 할 일 이름은 25자다. 날짜·과목별 30개 한도에는 반복 회차가 포함된다. 기존 긴 이름·완료 이력은 자르거나 초기화하지 않는다.
 

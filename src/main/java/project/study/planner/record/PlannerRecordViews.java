@@ -67,6 +67,7 @@ final class PlannerRecordViews {
         return new PlannerRecordView(
                 key(bundle.getFirst()),
                 bundle.getFirst().getSource(),
+                false,
                 later(from, fullStart),
                 earlier(to, fullEnd),
                 fullStart,
@@ -119,6 +120,7 @@ final class PlannerRecordViews {
         return new PlannerRecordView(
                 edit.key(),
                 edit.source(),
+                true,
                 left,
                 right,
                 edit.startedAt(),
