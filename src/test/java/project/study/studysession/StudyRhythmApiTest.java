@@ -24,7 +24,7 @@ import project.study.config.ApiVersionConfig;
 
 /**
  * 공부 리듬(GET /api/stats/rhythm) — 전체 측정 세션의 순공을 요일 × 시각 격자에 누적한다.
- * 누적 공부일은 study-days와 같은 1분 기준이고, 격자 합은 1분 이상 세션의 순공 합과 같아야 한다.
+ * 누적 공부일은 study-days와 같은 1초 기준이고, 격자 합은 1초 이상 세션의 순공 합과 같아야 한다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -199,8 +199,8 @@ class StudyRhythmApiTest {
     }
 
     @Test
-    void 순공_1분_미만_세션은_공부일에도_격자에도_넣지_않는다() {
-        submit(at(yesterday, 9, 0), 600, 59, "[]");
+    void 순공_0초_세션은_공부일에도_격자에도_넣지_않는다() {
+        submit(at(yesterday, 9, 0), 600, 0, "[]");
 
         assertThat(rhythm(userId))
                 .hasStatusOk()

@@ -6,13 +6,13 @@ WITH params AS (
            DATE '2026-10-16' AS timelapse_from,   -- 타임랩스 출시
            DATE '2026-10-17' AS manual_from       -- 수동기록 출시 (기록·배경음은 10/7이라 기간 전체)
 ),
-sess AS (   -- 최근 2주 측정 세션, 화면과 같은 기준(순공 1분 이상 조각)
+sess AS (   -- 최근 2주 측정 세션, 화면과 같은 기준(순공 1초 이상 조각)
     SELECT s.id, s.user_id, s.stat_date, s.focus_sec
     FROM study_session s
     CROSS JOIN params p
     WHERE s.stat_date BETWEEN p.today - 13 AND p.today
       AND s.source = 'MEASURED'
-      AND s.focus_sec >= 60
+      AND s.focus_sec >= 1
 ),
 days AS (
     SELECT user_id, stat_date, MAX(focus_sec) >= 300 AS has_5min   -- 스트릭 기준

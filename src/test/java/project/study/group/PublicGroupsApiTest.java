@@ -78,7 +78,7 @@ class PublicGroupsApiTest {
     }
 
     @Test
-    void 들어오기_전_순공도_들어가고_나간_멤버와_지난_주_1분_미만_수동_기록은_들어가지_않는다() {
+    void 들어오기_전_순공도_들어가고_나간_멤버와_지난_주_기록과_순공_0초_조각은_들어가지_않는다() {
         long group = kit.group("-범위");
         long owner = probe.group(group).orElseThrow().ownerId();
         long joinedLate = kit.user();
@@ -89,9 +89,9 @@ class PublicGroupsApiTest {
         long left = kit.user();
         probe.insertLeftMember(group, left, "LEFT", NOW.minusSeconds(60));
         study.session(left, MONDAY_NOON, 9000);
-        // 지난 주 기록과 1분 미만 조각은 이번 주 순공이 아니다
+        // 지난 주 기록과 순공 0초 조각은 이번 주 순공이 아니다
         study.session(owner, LAST_SUNDAY, 5000);
-        study.session(owner, MONDAY_NOON, 30);
+        study.session(owner, MONDAY_NOON, 0);
 
         PublicGroupCard card = kit.mine().getFirst();
 

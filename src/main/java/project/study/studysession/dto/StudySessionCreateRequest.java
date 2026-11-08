@@ -21,7 +21,7 @@ public record StudySessionCreateRequest(
         @Schema(
                 description = "세션 종료 시각 — 방 퇴장 시각 (UTC, ISO-8601). 시작보다 뒤이고 24시간 이내여야 하며 "
                         + "미래일 수 없다(기기 시계 오차 5분까지 허용). 길이 하한은 없다 — 짧은 세션도 저장되고, "
-                        + "순공 1분 미만 조각은 기록 조회·랭킹에서만 빠진다",
+                        + "순공 1초 미만 조각은 기록 조회·랭킹에서만 빠진다",
                 example = "2026-07-24T03:00:00Z")
         @NotNull
         Instant endedAt,

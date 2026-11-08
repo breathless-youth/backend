@@ -21,7 +21,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import project.study.TestcontainersConfiguration;
 
 /**
- * 세션은 길이와 무관하게 저장되지만, 조회(순공시간 1분 미만 제외)와 스트릭(순공시간 5분 이상인 세션이
+ * 세션은 길이와 무관하게 저장되지만, 조회(순공시간 1초 미만, 즉 0초 제외)와 스트릭(순공시간 5분 이상인 세션이
  * 그 날 하나라도 있어야 인정 — 세션 단위 기준, 하루 합계가 아니다)은 서로 다른 기준으로 걸러낸다.
  */
 @SpringBootTest
@@ -53,8 +53,12 @@ class StudySessionMinDurationApiTest {
     }
 
     private MockMvcTester.MockMvcRequestBuilder submitRequest(Instant startedAt, int durationSec) {
+        return submitRequest(startedAt, durationSec, durationSec);
+    }
+
+    private MockMvcTester.MockMvcRequestBuilder submitRequest(Instant startedAt, int durationSec, int focusSec) {
         String body = """
-                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(startedAt, startedAt.plusSeconds(durationSec), durationSec, durationSec);
+                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": []}""".formatted(startedAt, startedAt.plusSeconds(durationSec), durationSec, focusSec);
         return mvc.post()
                 .uri("/api/study-sessions")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -75,18 +79,30 @@ class StudySessionMinDurationApiTest {
     }
 
     @Test
-    void 순공시간_1분_미만_세션은_저장되지만_목록조회에는_안_잡힌다() {
-        assertThat(submitRequest(sessionStart, 59)).hasStatus(HttpStatus.CREATED);
+    void 순공시간_0초_세션은_저장되지만_목록조회에는_안_잡힌다() {
+        assertThat(submitRequest(sessionStart, 60, 0)).hasStatus(HttpStatus.CREATED);
         assertThat(sessionRowCount()).isEqualTo(1);
 
         assertThat(mvc.get().uri("/api/stats").with(asUser(userId)).param("date", yesterday.toString()))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(0));
+                .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(0));
     }
 
     @Test
-    void 순공시간_1분_이상_5분_미만_세션은_목록엔_잡히지만_스트릭엔_반영되지_않는다() {
+    void 순공시간_1초_세션은_목록과_합계에_잡힌다() {
+        assertThat(submitRequest(sessionStart, 1)).hasStatus(HttpStatus.CREATED);
+
+        assertThat(mvc.get().uri("/api/stats").with(asUser(userId)).param("date", yesterday.toString()))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.sessionCount", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(1));
+    }
+
+    @Test
+    void 순공시간_1초_이상_5분_미만_세션은_목록엔_잡히지만_스트릭엔_반영되지_않는다() {
         assertThat(submitRequest(sessionStart, 299)).hasStatus(HttpStatus.CREATED);
 
         assertThat(mvc.get().uri("/api/stats").with(asUser(userId)).param("date", yesterday.toString()))
