@@ -135,7 +135,8 @@ public class GroupService {
                             GroupDeskReader.studyingCount(groupDesks),
                             group.ownerId() == userId,
                             requestableGroupIds.contains(group.id()) ? pendingCounts.getOrDefault(group.id(), 0) : null,
-                            groupDesks);
+                            groupDesks,
+                            null);
                 })
                 .toList();
         return new MyGroupsResponse(
@@ -171,7 +172,8 @@ public class GroupService {
                 membership.member().notifyEnabled(),
                 newApplicationCount,
                 GroupDeskReader.studyingCount(desks),
-                desks);
+                desks,
+                null);
     }
 
     /** 이름·시험·목표·소개를 통째로 바꾸고 입장 방식은 보냈을 때만 바꾼다(소개를 빼면 지워진다). 그룹장만 할 수 있고, 그룹 행을 잠가 그룹장 넘기기·삭제와 직렬화한다. */

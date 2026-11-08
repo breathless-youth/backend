@@ -9,7 +9,9 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -31,6 +34,7 @@ import project.study.group.dto.MyGroupsResponse;
 import project.study.group.dto.PublicGroupDetailResponse;
 import project.study.group.dto.PublicGroupPageResponse;
 import project.study.group.service.GroupService;
+import project.study.group.translation.LocalizedGroupReader;
 
 @Tag(name = "그룹", description = """
     그룹 스터디 API — 그룹 만들기·내 그룹·그룹 홈·설정, 공개 그룹 찾기, 멤버 공부 알림 (BY-1124). \
@@ -45,6 +49,7 @@ import project.study.group.service.GroupService;
 public class GroupController {
 
     private final GroupService groupService;
+    private final LocalizedGroupReader localizedGroups;
 
     @Operation(summary = "그룹 만들기", description = """
         그룹을 만든다. 만든 사람은 멤버이자 그룹장이 되므로 "그룹+신청 5개" 한도를 본다. \
@@ -74,8 +79,10 @@ public class GroupController {
     @ApiResponse(responseCode = "200", description = "조회 성공")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @GetMapping(value = "/me", version = "1")
-    public MyGroupsResponse myGroups(@AuthenticationPrincipal Long userId) {
-        return groupService.myGroups(userId);
+    public ResponseEntity<MyGroupsResponse> myGroups(
+            @AuthenticationPrincipal Long userId,
+            @RequestHeader(name = "Accept-Language", required = false) String language) {
+        return localized(localizedGroups.myGroups(userId, language));
     }
 
     @Operation(summary = "그룹 홈", description = """
@@ -87,10 +94,11 @@ public class GroupController {
     @ApiResponse(responseCode = "403", description = "`NOT_GROUP_MEMBER` 이 그룹 멤버가 아님")
     @ApiResponse(responseCode = "404", description = "`GROUP_NOT_FOUND` 없거나 사라진 그룹")
     @GetMapping(value = "/{groupId}", version = "1")
-    public GroupHomeResponse home(
+    public ResponseEntity<GroupHomeResponse> home(
             @AuthenticationPrincipal Long userId,
-            @Parameter(description = "그룹 ID", example = "10") @PathVariable long groupId) {
-        return groupService.home(userId, groupId);
+            @Parameter(description = "그룹 ID", example = "10") @PathVariable long groupId,
+            @RequestHeader(name = "Accept-Language", required = false) String language) {
+        return localized(localizedGroups.home(userId, groupId, language));
     }
 
     @Operation(summary = "그룹 설정 수정", description = """
@@ -133,7 +141,7 @@ public class GroupController {
                     + " `BAD_REQUEST` 없는 category 값")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @GetMapping(value = "/public", version = "1")
-    public PublicGroupPageResponse publicGroups(
+    public ResponseEntity<PublicGroupPageResponse> publicGroups(
             @AuthenticationPrincipal Long userId,
             @Parameter(
                             description =
@@ -151,8 +159,9 @@ public class GroupController {
                     @Max(10000)
                     int page,
             @Parameter(description = "쪽 크기 — 1~50", example = "20") @RequestParam(defaultValue = "20") @Min(1) @Max(50)
-                    int size) {
-        return groupService.publicGroups(userId, query, category, page, size);
+                    int size,
+            @RequestHeader(name = "Accept-Language", required = false) String language) {
+        return localized(localizedGroups.publicGroups(userId, query, category, page, size, language));
     }
 
     @Operation(summary = "공개 그룹 보기", description = """
@@ -169,10 +178,11 @@ public class GroupController {
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "404", description = "`GROUP_NOT_FOUND` 없거나 사라진 그룹, 또는 비공개 그룹")
     @GetMapping(value = "/public/{groupId}", version = "1")
-    public PublicGroupDetailResponse publicGroup(
+    public ResponseEntity<PublicGroupDetailResponse> publicGroup(
             @AuthenticationPrincipal Long userId,
-            @Parameter(description = "그룹 ID", example = "10") @PathVariable long groupId) {
-        return groupService.publicGroup(userId, groupId);
+            @Parameter(description = "그룹 ID", example = "10") @PathVariable long groupId,
+            @RequestHeader(name = "Accept-Language", required = false) String language) {
+        return localized(localizedGroups.publicGroup(userId, groupId, language));
     }
 
     @Operation(summary = "멤버 공부 알림 켜기·끄기", description = """
@@ -190,5 +200,9 @@ public class GroupController {
             @Parameter(description = "그룹 ID", example = "10") @PathVariable long groupId,
             @Valid @RequestBody GroupNotificationRequest request) {
         groupService.setNotification(userId, groupId, request.enabled());
+    }
+
+    private static <T> ResponseEntity<T> localized(T body) {
+        return ResponseEntity.ok().varyBy(HttpHeaders.ACCEPT_LANGUAGE).body(body);
     }
 }
