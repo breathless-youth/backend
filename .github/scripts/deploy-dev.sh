@@ -74,6 +74,9 @@ while [ "$i" -lt 30 ]; do
     # 서버 빌드로 쌓이는 dangling 이미지 정리 — 기동 확인 뒤에 해야 실패 시 직전 이미지로 되돌릴 수 있다.
     # 정리 실패로 배포를 실패 처리하지 않는다
     docker image prune -f >>"$LOG" 2>&1 || true
+    # 빌드 캐시는 image prune으로 지워지지 않아 배포마다 쌓인다 — 디스크가 차면 다음 빌드·SSM이 죽는다(BY-1208).
+    # 최근 3일 치는 다음 빌드 속도를 위해 남긴다
+    docker builder prune -af --filter until=72h >>"$LOG" 2>&1 || true
     exit 0
   fi
   i=$((i + 1))
