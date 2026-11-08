@@ -92,7 +92,8 @@ public class PublicGroupService {
                         group.memberCount(),
                         averages.getOrDefault(group.id(), 0L),
                         GroupDeskReader.studyingCount(desks.getOrDefault(group.id(), List.of())),
-                        joined.contains(group.id())))
+                        joined.contains(group.id()),
+                        null))
                 .toList();
         return new PublicGroupPageResponse(cards, hasNext);
     }
@@ -126,7 +127,8 @@ public class PublicGroupService {
                 desks,
                 decision.state(),
                 decision.reason(),
-                decision.application());
+                decision.application(),
+                null);
     }
 
     private ApplyDecision applyDecision(long userId, GroupRow group, boolean member, int memberCount, Instant now) {

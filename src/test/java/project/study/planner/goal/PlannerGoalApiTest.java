@@ -53,6 +53,33 @@ class PlannerGoalApiTest {
 
     private Long userId;
 
+    @Test
+    void 홈은_새벽에도_달력상_오늘의_목표를_저장하고_공유한다() {
+        assertGoal(put(userId, "/2030-03-02?calendar=HOME", "{\"goalSec\":1}"), 1, 1, null);
+        assertGoal(get(userId, "/2030-03-02"), 1, 1, null);
+    }
+
+    @Test
+    void 현지_05시_이후_홈만_오늘_목표를_쓸_수_있다() {
+        String date = "/2030-03-02";
+        assertThat(put(userId, date + "?timeZone=Australia/Sydney", "{\"goalSec\":1800}"))
+                .hasStatus(HttpStatus.BAD_REQUEST);
+        assertGoal(
+                put(userId, date + "?calendar=HOME&timeZone=Australia/Sydney", "{\"goalSec\":1800}"), 1800, 1800, null);
+        assertGoal(get(userId, date), 1800, 1800, null);
+    }
+
+    @Test
+    void 홈은_자정_이후에도_전날_목표_저장을_재시도한다() {
+        String date = "/2030-03-01";
+        assertGoal(
+                put(userId, date + "?calendar=HOME&timeZone=Australia/Sydney", "{\"goalSec\":3600}"), 3600, 3600, null);
+        assertGoal(
+                put(userId, date + "?calendar=HOME&timeZone=Australia/Sydney", "{\"goalSec\":3600}"), 3600, 3600, null);
+        assertThat(put(userId, "/2030-03-03?calendar=HOME&timeZone=Australia/Sydney", "{\"goalSec\":3600}"))
+                .hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
     @BeforeEach
     void createUser() {
         userId = insertUser();
@@ -113,8 +140,7 @@ class PlannerGoalApiTest {
     }
 
     @ParameterizedTest
-    @ValueSource(
-            strings = {"{\"goalSec\":-1800}", "{\"goalSec\":88200}", "{\"goalSec\":1}", "{\"goalSec\":null}", "{}"})
+    @ValueSource(strings = {"{\"goalSec\":-1800}", "{\"goalSec\":88200}", "{\"goalSec\":null}", "{}"})
     void 범위_단위_필수값을_검증하고_기존값을_보존한다(String body) {
         put(userId, "/default", "{\"goalSec\":3600}");
         put(userId, FUTURE, "{\"goalSec\":1800}");
