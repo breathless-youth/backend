@@ -22,7 +22,7 @@ git tag -a v1.3.0 origin/main -m "v1.3.0: 비회원 토큰 인증 도입, 누적
 git push origin v1.3.0
 ```
 
-3. 이후 자동으로 진행된다.
+3. 이후 자동으로 진행된다. (v2.14.0까지는 요약에 머지 커밋 메시지가 들어가 `gh release edit`로 고쳤다. BY-1217부터 워크플로가 annotated 태그를 다시 받아 바로 맞게 들어간다)
    - Actions의 **Release** 워크플로가 태그 커밋이 `main`에 있는지 확인한다.
    - GitHub Releases에 릴리스가 생기고, 본문은 태그 메시지 + 자동 PR 목록("새 기능 / 버그 수정 / 설정·문서·기타")으로 채워진다.
    - 분류는 PR 라벨 기준이고, 라벨은 `pr-label.yml`이 PR 제목 접두어(`[feat]` 등)에서 자동으로 붙인다.
@@ -46,6 +46,27 @@ git push origin v1.3.0
 - 태그 커밋이 `main`에 없으면 워크플로가 실패한다. `dev`나 기능 브랜치에서 태그하지 않는다.
 - 핫픽스도 같은 절차다: `origin/main`에서 분기 → `main` 대상 PR 머지 → 그 머지 커밋에 patch 태그 →
   `dev`에 `git merge --no-ff origin/main`으로 역머지.
+
+## 배포 중 Gradle 다운로드 실패 (BY-1217)
+
+증상: `Deploy to ECS`(또는 dev 배포)의 `Build and push image` 단계가 아래처럼 실패한다.
+
+```
+Downloading https://services.gradle.org/distributions/gradle-9.5.1-bin.zip
+Attempt 1/1 failed. Reason: Server returned HTTP response code: 504
+ERROR: process "/bin/sh -c ./gradlew --no-daemon bootJar -x test" did not complete successfully
+```
+
+원인: 이미지 빌드는 캐시 없는 새 러너에서 매번 Gradle 배포판을 받는다. services.gradle.org가 간헐적으로
+504를 내는데 래퍼 재시도가 꺼져 있어(`retries=0`) 한 번에 실패했다. v2.14.0 배포가 이 때문에 두 번 실패했다.
+
+해결: `gradle/wrapper/gradle-wrapper.properties`에 `retries=5`, `retryBackOffMs=5000`을 둔다. 대기는 시도마다
+2배라 5·10·20·40·80초, 최대 6번 시도한다(재시도 사이 대기만 합쳐 약 2분 35초, 각 다운로드 시간은 별도). `GradleWrapperRetryTest`가 이 값을 지킨다.
+
+- 래퍼를 올릴 때(`./gradlew wrapper --gradle-version …`) 이 두 줄이 기본값으로 돌아가면 테스트가 실패한다. 다시 넣는다.
+- 그래도 실패하면 Gradle 서버 장애가 길어진 것이다. [status.gradle.com](https://status.gradle.com)을 확인하고 복구 뒤
+  Actions에서 **Re-run failed jobs**로 다시 돌린다. 머지는 이미 끝났으므로 코드를 다시 올릴 필요는 없다.
+- 반복되면 후속으로 이미지 빌드에 buildx GitHub Actions 캐시를 붙여 배포판 다운로드 자체를 줄인다.
 
 ## 잘못 만든 릴리스 되돌리기
 
