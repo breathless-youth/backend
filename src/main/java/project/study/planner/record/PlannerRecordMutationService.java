@@ -212,7 +212,8 @@ class PlannerRecordMutationService {
                 case "SUBJECT" ->
                     PlannerRecordPieces.paint(result, range.startedAt(), range.endedAt(), range.subjectId());
                 case "DELETE" -> PlannerRecordPieces.remove(result, range.startedAt(), range.endedAt());
-                default -> result;
+                // 저장 전에 지운 다른 과목 자리로 늘리면 그 조각이 서버에는 남아 있다. 범위 전체를 이 과목으로 맞춘다.
+                default -> PlannerRecordPieces.paint(result, range.startedAt(), range.endedAt(), range.subjectId());
             };
         }
         return filled.isEmpty() ? result : grown(result, filled);
