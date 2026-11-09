@@ -47,7 +47,7 @@ class GroupTranslationApiTest {
         GroupProbe probe = new GroupProbe(jdbc);
         owner = probe.insertUser();
         stranger = probe.insertUser();
-        name = "번역-" + UUID.randomUUID().toString().substring(0, 8);
+        name = "번역 공부방-" + UUID.randomUUID().toString().substring(0, 4);
         group = probe.insertGroup(owner, "PUBLIC", name, "ETC");
         probe.setDescription(group, "함께 공부");
         cache = new TranslationCacheRepository(jdbc, manager, clock);
@@ -108,8 +108,19 @@ class GroupTranslationApiTest {
     }
 
     @Test
+    void sameLanguageReaderGetsNoTranslationEvenWhenOldCacheExists() {
+        warm(TranslationLanguage.KO, true);
+        assertThat(v1Get(mvc, "/api/groups/public/" + group, stranger).header("Accept-Language", "ko"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.name", v -> assertThat(v).isEqualTo(name))
+                .hasPathSatisfying("$.translation", v -> assertThat(v).isNull());
+    }
+
+    @Test
     void fourLocalesUseSeparateCacheAndMissingFieldFallsBackIndividually() {
-        for (var language : TranslationLanguage.values()) {
+        // 한국어 원문이라 ko는 번역 대상이 아니다 — 아래 별도 테스트에서 확인한다.
+        for (var language : List.of(TranslationLanguage.EN, TranslationLanguage.JA, TranslationLanguage.ZH_TW)) {
             warm(language, false);
             assertThat(v1Get(mvc, "/api/groups/public/" + group, stranger).header("Accept-Language", language.locale()))
                     .hasStatusOk()

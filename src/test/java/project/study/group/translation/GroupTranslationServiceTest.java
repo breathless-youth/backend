@@ -233,9 +233,49 @@ class GroupTranslationServiceTest {
             }
         };
         var service = service(List.of(same));
-        assertThat(service.translate(texts, TranslationLanguage.KO).values()).containsExactlyInAnyOrder("새벽", "함께 공부");
-        assertThat(service.translate(texts, TranslationLanguage.KO)).hasSize(2);
+        assertThat(service.translate(texts, TranslationLanguage.EN).values()).containsExactlyInAnyOrder("새벽", "함께 공부");
+        assertThat(service.translate(texts, TranslationLanguage.EN)).hasSize(2);
         assertThat(calls).containsExactly(GOOGLE);
+    }
+
+    @Test
+    void sourceAlreadyInTargetLanguageIsNotReservedCalledOrServedFromOldCache() {
+        for (var lease : cache.claim(texts, TranslationLanguage.KO)) {
+            assertThat(cache.complete(lease, "old:" + lease.source().source(), DEEPL))
+                    .isTrue();
+        }
+        var metrics = new SimpleMeterRegistry();
+        var service = new GroupTranslationService(
+                cache,
+                budget,
+                List.of(translator(GOOGLE, TextTranslator.Failure.NONE)),
+                new TranslationConfig.Settings(true, Map.of(GOOGLE, true)),
+                clock,
+                metrics);
+        long before = budget.available(GOOGLE);
+
+        assertThat(service.translate(texts, TranslationLanguage.KO)).isEmpty();
+
+        assertThat(calls).isEmpty();
+        assertThat(budget.available(GOOGLE)).isEqualTo(before);
+        assertThat(metrics.counter("group.translation.skipped", "language", "ko")
+                        .count())
+                .isEqualTo(2);
+        assertThat(metrics.counter("group.translation.fallback", "language", "ko")
+                        .count())
+                .isZero();
+    }
+
+    @Test
+    void mixedBatchSendsOnlyTextsNotYetInTargetLanguage() {
+        long englishGroup = new GroupProbe(jdbc).insertGroup(user, "PUBLIC", "Night Owls", "ETC");
+        var english = new TranslationText(englishGroup, TranslationField.NAME, "Night Owls");
+        var service = service(List.of(translator(GOOGLE, TextTranslator.Failure.NONE)));
+
+        var results = service.translate(List.of(texts.getFirst(), english), TranslationLanguage.EN);
+
+        assertThat(results.values()).containsExactly("translated:새벽");
+        assertThat(budget.available(GOOGLE)).isEqualTo(12998);
     }
 
     @Test
