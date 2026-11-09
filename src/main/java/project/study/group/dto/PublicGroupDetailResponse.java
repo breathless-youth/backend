@@ -1,6 +1,7 @@
 package project.study.group.dto;
 
 import static project.study.group.dto.PublicGroupPageResponse.WEEKLY_AVERAGE_FOCUS_DESCRIPTION;
+import static project.study.group.dto.PublicGroupPageResponse.WEEKLY_TOTAL_FOCUS_DESCRIPTION;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -27,6 +28,9 @@ public record PublicGroupDetailResponse(
 
         @Schema(description = WEEKLY_AVERAGE_FOCUS_DESCRIPTION, example = "18000")
         long weeklyAverageFocusSec,
+
+        @Schema(description = WEEKLY_TOTAL_FOCUS_DESCRIPTION, example = "72000")
+        long weeklyTotalFocusSec,
 
         @Schema(description = "멤버 책상 — 들어간 순서. 정렬은 FE가 한다") List<GroupMemberDesk> members,
 

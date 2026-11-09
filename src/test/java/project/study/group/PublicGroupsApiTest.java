@@ -25,7 +25,7 @@ import project.study.group.support.StudyFixture;
 import project.study.ranking.engine.StandingsCache;
 
 /**
- * 공개 그룹 목록 (BY-1124) — 이번 주 평균, 정렬, 카드의 멤버 여부·공부 중 수. 시계는 고정이다. 평균 캐시는 시계가 고정이라 저절로 만료되지 않아 매
+ * 공개 그룹 목록 (BY-1124, 합계 BY-1221) — 이번 주 합계·평균, 정렬, 카드의 멤버 여부·공부 중 수. 시계는 고정이다. 평균 캐시는 시계가 고정이라 저절로 만료되지 않아 매
  * 테스트 전에 비운다. 같은 컨텍스트의 다른 테스트가 만든 공개 그룹이 목록에 섞이므로 그룹 이름의 표지({@link PublicGroupKit#token})로 자기 그룹만 고른다.
  */
 @SpringBootTest
@@ -60,10 +60,10 @@ class PublicGroupsApiTest {
         standingsCache.clear();
     }
 
-    // --- 이번 주 평균 ---
+    // --- 이번 주 합계·평균 ---
 
     @Test
-    void 평균은_지금_멤버들의_이번_주_순공_합을_지금_멤버_수로_나눈_값이고_소수는_버린다() {
+    void 합계는_지금_멤버들의_이번_주_순공_합이고_평균은_그_합을_지금_멤버_수로_나눈_값이며_소수는_버린다() {
         long group = kit.group("-평균");
         long a = kit.member(group);
         long b = kit.member(group);
@@ -74,6 +74,7 @@ class PublicGroupsApiTest {
         PublicGroupCard card = kit.mine().getFirst();
 
         assertThat(card.memberCount()).isEqualTo(3);
+        assertThat(card.weeklyTotalFocusSec()).isEqualTo(1000);
         assertThat(card.weeklyAverageFocusSec()).isEqualTo(333);
     }
 
@@ -97,24 +98,29 @@ class PublicGroupsApiTest {
 
         // 멤버는 그룹장과 joinedLate 둘이고 합은 600이다
         assertThat(card.memberCount()).isEqualTo(2);
+        assertThat(card.weeklyTotalFocusSec()).isEqualTo(600);
         assertThat(card.weeklyAverageFocusSec()).isEqualTo(300);
     }
 
     @Test
-    void 진행_중인_draft의_순공도_평균에_들어간다() {
+    void 진행_중인_draft의_순공도_합계와_평균에_들어간다() {
         long group = kit.group("-진행중");
         long member = kit.member(group);
         // 마지막 수신 10초 전, 보고된 순공 590초 + 지금까지 늘린 10초
         study.studying(member, 590);
 
-        assertThat(kit.mine().getFirst().weeklyAverageFocusSec()).isEqualTo(300);
+        PublicGroupCard card = kit.mine().getFirst();
+        assertThat(card.weeklyTotalFocusSec()).isEqualTo(600);
+        assertThat(card.weeklyAverageFocusSec()).isEqualTo(300);
     }
 
     @Test
-    void 기록이_없는_그룹의_평균은_0이다() {
+    void 기록이_없는_그룹의_합계와_평균은_0이다() {
         kit.group("-빈");
 
-        assertThat(kit.mine().getFirst().weeklyAverageFocusSec()).isZero();
+        PublicGroupCard card = kit.mine().getFirst();
+        assertThat(card.weeklyTotalFocusSec()).isZero();
+        assertThat(card.weeklyAverageFocusSec()).isZero();
     }
 
     @Test
@@ -133,8 +139,8 @@ class PublicGroupsApiTest {
     // --- 정렬 ---
 
     @Test
-    void 정렬은_다_차지_않은_그룹이_먼저이고_평균_큰_순_그다음_그룹_ID_순이다() {
-        // 만든 순서와 기대 순서가 다르도록 섞어 만든다. 다 찬 그룹은 ID가 가장 작고 평균이 가장 크다
+    void 정렬은_다_차지_않은_그룹이_먼저이고_합계_큰_순_그다음_그룹_ID_순이다() {
+        // 만든 순서와 기대 순서가 다르도록 섞어 만든다. 다 찬 그룹은 ID가 가장 작고 합계가 가장 크다
         long full = kit.group("-full");
         List<Long> fullMembers = kit.join(full, 5);
         study.session(fullMembers.getFirst(), MONDAY_NOON, 6000);
@@ -150,8 +156,25 @@ class PublicGroupsApiTest {
 
         assertThat(PublicGroupKit.ids(cards)).containsExactly(high, tieFirst, tieSecond, low, full);
         assertThat(cards.getLast().memberCount()).isEqualTo(6);
-        // 다 찬 그룹의 평균 6000/6 = 1000은 high와 같지만 뒤로 간다
-        assertThat(cards.getLast().weeklyAverageFocusSec()).isEqualTo(1000);
+        // 다 찬 그룹의 합계 6000은 가장 크지만 뒤로 간다
+        assertThat(cards.getLast().weeklyTotalFocusSec()).isEqualTo(6000);
+    }
+
+    @Test
+    void 평균이_작아도_합계가_크면_앞에_온다() {
+        // crowd는 3명이 합 1200(평균 400), solo는 1명이 600(평균 600) — 평균 순이면 solo가 먼저지만 합계 순이라 crowd가 먼저다
+        long solo = kit.group("-solo");
+        study.session(probe.group(solo).orElseThrow().ownerId(), MONDAY_NOON, 600);
+        long crowd = kit.group("-crowd");
+        for (long member : kit.join(crowd, 2)) {
+            study.session(member, MONDAY_NOON, 600);
+        }
+
+        List<PublicGroupCard> cards = kit.mine();
+
+        assertThat(PublicGroupKit.ids(cards)).containsExactly(crowd, solo);
+        assertThat(PublicGroupKit.card(cards, crowd).weeklyAverageFocusSec()).isEqualTo(400);
+        assertThat(PublicGroupKit.card(cards, solo).weeklyAverageFocusSec()).isEqualTo(600);
     }
 
     // --- 카드 ---

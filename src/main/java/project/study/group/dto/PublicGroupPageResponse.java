@@ -7,7 +7,9 @@ import project.study.group.GroupJoinPolicy;
 
 /** 공개 그룹 목록의 한 쪽 — 쪽 번호 방식이라 다음 쪽이 있는지만 준다. */
 public record PublicGroupPageResponse(
-        @Schema(description = "이 쪽의 공개 그룹 — 다 차지 않은 그룹 → 평균 많은 순 → 그룹 ID 작은 순, 쪽마다 순서가 바뀔 수 있어 FE가 groupId로 중복을 거른다")
+        @Schema(
+                description =
+                        "이 쪽의 공개 그룹 — 다 차지 않은 그룹 → 합계(weeklyTotalFocusSec) 많은 순 → 그룹 ID 작은 순, 쪽마다 순서가 바뀔 수 있어 FE가 groupId로 중복을 거른다")
         List<PublicGroupCard> groups,
 
         @Schema(description = "다음 쪽이 있으면 true — 없으면 목록의 끝이다", example = "true")
@@ -16,7 +18,12 @@ public record PublicGroupPageResponse(
     /** 이번 주 평균 순공 설명 — 공개 그룹 카드와 공개 그룹 보기가 같은 값을 쓴다. */
     static final String WEEKLY_AVERAGE_FOCUS_DESCRIPTION = "평균 순공(초) — 지금 멤버들의 이번 주(월요일 0시 KST부터) 앱 전체 순공 합 ÷ 지금 멤버 수. "
             + "주 중간에 들어온 멤버도 이번 주 순공이 모두 들어가고 나간 멤버는 빠진다. "
-            + "측정 세션만, 1초 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신";
+            + "측정 세션만, 1초 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신. "
+            + "예전 앱용으로 당분간 함께 주고, 앱이 weeklyTotalFocusSec로 바꾼 뒤 뺀다";
+
+    /** 이번 주 합계 순공 설명 — 공개 그룹 카드와 공개 그룹 보기가 같은 값을 쓴다. */
+    static final String WEEKLY_TOTAL_FOCUS_DESCRIPTION = "합계 순공(초) — 지금 멤버들의 이번 주(월요일 0시 KST부터) 앱 전체 순공 합, "
+            + "weeklyAverageFocusSec가 나누기 전의 값이다. 목록은 이 값으로 정렬한다. 포함 범위·갱신 주기는 weeklyAverageFocusSec와 같다";
 
     public record PublicGroupCard(
             @Schema(description = "그룹 ID", example = "10") long groupId,
@@ -35,6 +42,9 @@ public record PublicGroupPageResponse(
 
             @Schema(description = WEEKLY_AVERAGE_FOCUS_DESCRIPTION, example = "18000")
             long weeklyAverageFocusSec,
+
+            @Schema(description = WEEKLY_TOTAL_FOCUS_DESCRIPTION, example = "72000")
+            long weeklyTotalFocusSec,
 
             @Schema(description = "지금 공부 중인 멤버 수 — 이 그룹 공부방에 있거나(`IN_ROOM`) 다른 곳에서 측정 중(`STUDYING`)인 멤버", example = "2")
             int studyingCount,

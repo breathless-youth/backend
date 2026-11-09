@@ -82,6 +82,7 @@ public class LocalizedGroupReader {
                         g.joinPolicy(),
                         g.memberCount(),
                         g.weeklyAverageFocusSec(),
+                        g.weeklyTotalFocusSec(),
                         g.studyingCount(),
                         g.member(),
                         value(g.groupId(), language.get(), results)))
@@ -103,6 +104,7 @@ public class LocalizedGroupReader {
                 response.memberCount(),
                 response.owner(),
                 response.weeklyAverageFocusSec(),
+                response.weeklyTotalFocusSec(),
                 response.members(),
                 response.applyState(),
                 response.unavailableReason(),

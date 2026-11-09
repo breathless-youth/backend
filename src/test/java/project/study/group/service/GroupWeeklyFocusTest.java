@@ -24,12 +24,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import project.study.group.repository.GroupMemberRepository;
 import project.study.group.repository.GroupMemberRepository.PublicMemberRef;
+import project.study.group.service.GroupWeeklyFocus.WeekFocus;
 import project.study.ranking.engine.StandingsCache;
 import project.study.room.support.MutableClock;
 import project.study.studysession.service.MemberStudySource;
 
-/** 공개 그룹 이번 주 평균 (BY-1124) — 합 ÷ 멤버 수(버림), 60초 캐시, 주가 바뀌면 버림, 많은 사람은 쪼개 읽기. DB 없이 본다. */
-class GroupWeeklyAveragesTest {
+/** 공개 그룹 이번 주 순공 (BY-1124, 합계 BY-1221) — 합계와 합 ÷ 멤버 수(버림), 60초 캐시, 주가 바뀌면 버림, 많은 사람은 쪼개 읽기. DB 없이 본다. */
+class GroupWeeklyFocusTest {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -40,13 +41,13 @@ class GroupWeeklyAveragesTest {
     private final MutableClock clock = MutableClock.at(WEDNESDAY);
     private GroupMemberRepository members;
     private MemberStudySource studySource;
-    private GroupWeeklyAverages averages;
+    private GroupWeeklyFocus focus;
 
     @BeforeEach
     void setUp() {
         members = mock(GroupMemberRepository.class);
         studySource = mock(MemberStudySource.class);
-        averages = new GroupWeeklyAverages(members, studySource, new StandingsCache(clock));
+        focus = new GroupWeeklyFocus(members, studySource, new StandingsCache(clock));
     }
 
     private void membership(PublicMemberRef... refs) {
@@ -58,7 +59,7 @@ class GroupWeeklyAveragesTest {
     }
 
     @Test
-    void 평균은_멤버들의_이번_주_순공_합을_멤버_수로_나눈_값이고_소수는_버린다() {
+    void 합계는_멤버들의_이번_주_순공_합이고_평균은_그_합을_멤버_수로_나눈_값이며_소수는_버린다() {
         membership(
                 new PublicMemberRef(1, 10),
                 new PublicMemberRef(1, 11),
@@ -66,9 +67,12 @@ class GroupWeeklyAveragesTest {
                 new PublicMemberRef(2, 20));
         weekFocus(Map.of(10L, 700L, 11L, 300L, 12L, 0L, 20L, 59L));
 
-        Map<Long, Long> result = averages.averages(WEDNESDAY);
+        Map<Long, WeekFocus> result = focus.byGroup(WEDNESDAY);
 
-        assertThat(result).containsEntry(1L, 333L).containsEntry(2L, 59L).hasSize(2);
+        assertThat(result)
+                .containsEntry(1L, new WeekFocus(1000, 333))
+                .containsEntry(2L, new WeekFocus(59, 59))
+                .hasSize(2);
     }
 
     @Test
@@ -76,9 +80,9 @@ class GroupWeeklyAveragesTest {
         membership(new PublicMemberRef(1, 10), new PublicMemberRef(2, 10), new PublicMemberRef(2, 11));
         weekFocus(Map.of(10L, 600L, 11L, 0L));
 
-        Map<Long, Long> result = averages.averages(WEDNESDAY);
+        Map<Long, WeekFocus> result = focus.byGroup(WEDNESDAY);
 
-        assertThat(result).containsEntry(1L, 600L).containsEntry(2L, 300L);
+        assertThat(result).containsEntry(1L, new WeekFocus(600, 600)).containsEntry(2L, new WeekFocus(600, 300));
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<Long>> ids = ArgumentCaptor.forClass(Collection.class);
         verify(studySource).weekFocus(ids.capture(), any());
@@ -89,7 +93,7 @@ class GroupWeeklyAveragesTest {
     void 공개_그룹이_없으면_빈_맵이고_순공을_읽지_않는다() {
         membership();
 
-        assertThat(averages.averages(WEDNESDAY)).isEmpty();
+        assertThat(focus.byGroup(WEDNESDAY)).isEmpty();
         verify(studySource, never()).weekFocus(anyCollection(), any());
     }
 
@@ -98,7 +102,7 @@ class GroupWeeklyAveragesTest {
         membership(new PublicMemberRef(1, 10));
         weekFocus(Map.of(10L, 100L));
 
-        averages.averages(WEDNESDAY);
+        focus.byGroup(WEDNESDAY);
 
         verify(studySource).weekFocus(anyCollection(), eq(WEDNESDAY));
     }
@@ -108,13 +112,13 @@ class GroupWeeklyAveragesTest {
         membership(new PublicMemberRef(1, 10));
         weekFocus(Map.of(10L, 100L));
 
-        averages.averages(WEDNESDAY);
+        focus.byGroup(WEDNESDAY);
         clock.advance(Duration.ofSeconds(59));
-        averages.averages(WEDNESDAY.plusSeconds(59));
+        focus.byGroup(WEDNESDAY.plusSeconds(59));
         verify(members, times(1)).findLiveOfPublicGroups();
 
         clock.advance(Duration.ofSeconds(1));
-        averages.averages(WEDNESDAY.plusSeconds(60));
+        focus.byGroup(WEDNESDAY.plusSeconds(60));
         verify(members, times(2)).findLiveOfPublicGroups();
     }
 
@@ -126,9 +130,9 @@ class GroupWeeklyAveragesTest {
         membership(new PublicMemberRef(1, 10));
         weekFocus(Map.of(10L, 100L));
 
-        averages.averages(sunday);
+        focus.byGroup(sunday);
         clock.advance(Duration.ofSeconds(30));
-        averages.averages(sunday.plusSeconds(30));
+        focus.byGroup(sunday.plusSeconds(30));
 
         verify(members, times(2)).findLiveOfPublicGroups();
         verify(studySource).weekFocus(anyCollection(), eq(sunday));
@@ -146,12 +150,12 @@ class GroupWeeklyAveragesTest {
         when(members.findLiveOfPublicGroups()).thenReturn(refs);
         when(studySource.weekFocus(anyCollection(), any())).thenReturn(weekFocus);
 
-        Map<Long, Long> result = averages.averages(WEDNESDAY);
+        Map<Long, WeekFocus> result = focus.byGroup(WEDNESDAY);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<Long>> ids = ArgumentCaptor.forClass(Collection.class);
         verify(studySource, times(3)).weekFocus(ids.capture(), any());
         assertThat(ids.getAllValues()).extracting(Collection::size).containsExactly(10_000, 10_000, 5_000);
-        assertThat(result).hasSize(25_000).containsEntry(25_000L, 60L);
+        assertThat(result).hasSize(25_000).containsEntry(25_000L, new WeekFocus(60, 60));
     }
 }

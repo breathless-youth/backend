@@ -20,10 +20,10 @@ import project.study.ranking.engine.StandingsCache;
 import project.study.studysession.service.MemberStudySource;
 
 /**
- * 공개 그룹의 이번 주 평균 순공 (BY-1124) — 지금 멤버들의 이번 주 순공 합 ÷ 지금 멤버 수(정수 나눗셈, 소수는 버린다). 주 중간에 들어온 멤버도
- * 들어오기 전을 포함한 이번 주 앱 전체 순공이 모두 들어가고, 나간 멤버는 빠진다.
+ * 공개 그룹의 이번 주 순공 합계·평균 (BY-1124, 합계 BY-1221) — 합계는 지금 멤버들의 이번 주 순공 합, 평균은 그 합 ÷ 지금 멤버 수(정수 나눗셈,
+ * 소수는 버린다). 주 중간에 들어온 멤버도 들어오기 전을 포함한 이번 주 앱 전체 순공이 모두 들어가고, 나간 멤버는 빠진다.
  *
- * <p>목록이 모든 그룹의 평균으로 정렬하므로 공개 그룹 전체를 한 번에 계산해 60초 캐시한다(랭킹의 조회 시 집계와 같은 방식, ADR-0028). 캐시는
+ * <p>목록이 모든 그룹의 합계로 정렬하므로 공개 그룹 전체를 한 번에 계산해 60초 캐시한다(랭킹의 조회 시 집계와 같은 방식, ADR-0028). 캐시는
  * 태스크 메모리라 태스크가 여럿이면 각자 계산한다. 캐시 키가 이번 주 시작 날짜라, 주가 바뀌면 옛 주의 값은 쓰지 않는다. 같은 키 동시 요청은
  * {@link StandingsCache}가 먼저 온 계산을 기다리게 한다.
  *
@@ -33,9 +33,9 @@ import project.study.studysession.service.MemberStudySource;
  */
 @Component
 @RequiredArgsConstructor
-public class GroupWeeklyAverages {
+public class GroupWeeklyFocus {
 
-    /** 평균이 갱신되는 주기 — 목록·보기 Swagger 설명의 "약 1분마다 갱신". */
+    /** 합계·평균이 갱신되는 주기 — 목록·보기 Swagger 설명의 "약 1분마다 갱신". */
     static final Duration TTL = Duration.ofSeconds(60);
 
     /** 한 번에 읽는 사람 수 — 공개 그룹이 늘어 IN 목록이 드라이버의 바인드 변수 상한(32767)에 닿지 않게 쪼갠다. */
@@ -47,12 +47,19 @@ public class GroupWeeklyAverages {
     private final MemberStudySource studySource;
     private final StandingsCache cache;
 
-    /** 그룹 ID → 평균 순공(초). 공개·살아 있는 그룹 전부이고, 멤버가 하나도 없는 그룹은 없다(값이 없으면 0으로 본다). */
-    public Map<Long, Long> averages(Instant now) {
+    /** 한 그룹의 이번 주 순공 — 합계와 평균(초). */
+    public record WeekFocus(long totalSec, long averageSec) {
+
+        /** 맵에 없는 그룹의 값 — 둘 다 0이다. */
+        public static final WeekFocus NONE = new WeekFocus(0, 0);
+    }
+
+    /** 그룹 ID → 이번 주 순공. 공개·살아 있는 그룹 전부이고, 멤버가 하나도 없는 그룹은 없다(값이 없으면 {@link WeekFocus#NONE}으로 본다). */
+    public Map<Long, WeekFocus> byGroup(Instant now) {
         return cache.get(new WeekKey(weekStart(now)), TTL, () -> compute(now));
     }
 
-    private Map<Long, Long> compute(Instant now) {
+    private Map<Long, WeekFocus> compute(Instant now) {
         List<PublicMemberRef> refs = members.findLiveOfPublicGroups();
         Set<Long> userIds = new LinkedHashSet<>();
         refs.forEach(ref -> userIds.add(ref.userId()));
@@ -75,9 +82,9 @@ public class GroupWeeklyAverages {
             acc[0] += weekFocus.getOrDefault(ref.userId(), 0L);
             acc[1]++;
         }
-        Map<Long, Long> averages = new HashMap<>();
-        sumAndCount.forEach((groupId, acc) -> averages.put(groupId, acc[0] / acc[1]));
-        return Map.copyOf(averages);
+        Map<Long, WeekFocus> byGroup = new HashMap<>();
+        sumAndCount.forEach((groupId, acc) -> byGroup.put(groupId, new WeekFocus(acc[0], acc[0] / acc[1])));
+        return Map.copyOf(byGroup);
     }
 
     /** 이번 주 월요일(KST) — 순공 집계의 주 경계({@code MemberStudySource})와 같다. */
