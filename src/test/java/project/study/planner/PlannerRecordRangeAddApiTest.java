@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 
-/** 분 범위 빈 시간 채우기(BY-1215). 범위 안 빈 부분만 채우고 다른 과목 조각은 그대로 둔다. */
+/** 분 범위 빈 시간 채우기(BY-1215). 범위 전체를 그 과목으로 맞추고 범위 밖 다른 과목 조각은 그대로 둔다. */
 class PlannerRecordRangeAddApiTest extends PlannerRecordRangeSupport {
     private long korean;
     private long math;
@@ -57,19 +57,33 @@ class PlannerRecordRangeAddApiTest extends PlannerRecordRangeSupport {
     }
 
     @Test
-    void addOverExistingPiecesFillsOnlyEmptyPart() {
+    void addOverExistingPiecesPaintsThemAndFillsEmptyPart() {
         koreanThenMath();
 
         batch(editRanges("add-cover", 0, range("2026-10-01T03:35:00Z", "2026-10-01T03:45:00Z", "ADD", korean)));
 
         assertThat(pieces(record()))
                 .isEqualTo("2026-10-01T03:00:00Z~2026-10-01T03:20:00Z=" + korean
-                        + " 2026-10-01T03:20:00Z~2026-10-01T03:40:00Z=" + math
-                        + " 2026-10-01T03:40:00Z~2026-10-01T03:45:00Z=" + korean);
+                        + " 2026-10-01T03:20:00Z~2026-10-01T03:35:00Z=" + math
+                        + " 2026-10-01T03:35:00Z~2026-10-01T03:45:00Z=" + korean);
+    }
+
+    /** 저장 전에 수학을 지우고 그 자리로 국어를 늘리면 한 작업에 ADD와 DELETE가 함께 온다. */
+    @Test
+    void addOverSiblingDeletedInSameOperationKeepsAddedSubject() {
+        koreanThenMath();
+
+        batch(editRanges(
+                "delete-then-add",
+                0,
+                range("2026-10-01T03:20:00Z", "2026-10-01T03:30:00Z", "ADD", korean),
+                range("2026-10-01T03:30:00Z", "2026-10-01T03:40:00Z", "DELETE", null)));
+
+        assertThat(pieces(record())).isEqualTo("2026-10-01T03:00:00Z~2026-10-01T03:30:00Z=" + korean);
     }
 
     @Test
-    void addFullyCoveredRangeChangesNothingButSucceeds() {
+    void addFullyCoveredRangeOnlyChangesSubjectAndKeepsTotals() {
         koreanThenMath();
 
         JsonNode result = batch(
@@ -79,8 +93,9 @@ class PlannerRecordRangeAddApiTest extends PlannerRecordRangeSupport {
         assertThat(result.get("success").asBoolean()).isTrue();
         JsonNode record = record();
         assertThat(pieces(record))
-                .isEqualTo("2026-10-01T03:00:00Z~2026-10-01T03:20:00Z=" + korean
-                        + " 2026-10-01T03:20:00Z~2026-10-01T03:40:00Z=" + math);
+                .isEqualTo("2026-10-01T03:00:00Z~2026-10-01T03:10:00Z=" + korean
+                        + " 2026-10-01T03:10:00Z~2026-10-01T03:30:00Z=none"
+                        + " 2026-10-01T03:30:00Z~2026-10-01T03:40:00Z=" + math);
         assertThat(record.get("studySec").asLong()).isEqualTo(2400);
     }
 

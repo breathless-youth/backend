@@ -37,7 +37,7 @@ public class PlannerRecordController {
             기존 /api/study-sessions와 자정 통계는 원본을 계속 보여주므로 새 플래너 화면의 집계와 다를 수 있다.
             EDIT_RANGES는 한 기록(key)의 UTC 분 범위 1~100개를 한 작업으로 원자 적용한다. 범위는 [startedAt,endedAt)이며 초·소수초가 0이고 서로 겹치지 않는다.
             SUBJECT·DELETE는 조회 pieces와의 교집합에만 적용해 시간을 늘리지 않는다. SUBJECT는 그 안의 모든 과목을 subjectId(null=과목 없음)로, DELETE는 개인 기록에서 뺀다.
-            ADD는 범위 안에서 조각이 없는 부분만 subjectId(null=과목 없음) 조각으로 채우고 이미 있는 조각은 바꾸지 않는다. 채운 만큼 기록 전체 시각이 늘어난다.
+            ADD는 범위 전체를 subjectId(null=과목 없음) 과목으로 맞춘다. 이미 있는 조각은 그 과목으로 바꾸고 빈 부분은 채운다. 채운 만큼 기록 전체 시각이 늘어난다.
             채운 부분은 서버 현재 이전이며 다른 개인 기록과 겹치면 안 되고(409), 늘어난 기록 전체는 24시간 이하다. 늘린 기록은 UPDATE로 늘릴 때처럼 이벤트로 다시 센다.
             revision은 EDIT_RANGES에 필수, UPDATE/DELETE는 선택이다. 현재 값과 다르거나 SUBJECT·DELETE 범위가 남은 조각과 전혀 겹치지 않으면 항목 409 STALE_RECORD다. 키는 바뀌지 않고 성공 결과에 새 revision을 준다.
             분 범위로 지운 빈칸은 이후 UPDATE에서도 되살아나지 않는다.

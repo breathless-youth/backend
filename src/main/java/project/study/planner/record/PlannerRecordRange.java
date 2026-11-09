@@ -12,7 +12,7 @@ public record PlannerRecordRange(
 
         @Schema(
                 description =
-                        "SUBJECT(겹친 부분의 모든 과목을 subjectId로), DELETE(겹친 부분을 개인 기록에서 제외), ADD(범위 안 빈 부분만 subjectId 조각으로 채워 기록을 늘림)",
+                        "SUBJECT(겹친 부분의 모든 과목을 subjectId로), DELETE(겹친 부분을 개인 기록에서 제외), ADD(범위 전체를 subjectId 과목으로 맞춤. 있는 조각은 과목을 바꾸고 빈 부분은 채워 기록을 늘림)",
                 example = "SUBJECT")
         String change,
 
