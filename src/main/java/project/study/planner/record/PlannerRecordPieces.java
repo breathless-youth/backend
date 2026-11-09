@@ -109,6 +109,28 @@ final class PlannerRecordPieces {
         return normalize(result);
     }
 
+    /** [from,to) 안에서 어떤 조각도 없는 부분을 subjectId 조각으로 돌려준다. 이미 있는 조각은 건드리지 않는다. */
+    static List<PlannerRecordPiece> gaps(List<PlannerRecordPiece> pieces, Instant from, Instant to, Long subjectId) {
+        List<PlannerRecordPiece> gaps = new ArrayList<>();
+        Instant cursor = from;
+        for (PlannerRecordPiece piece : normalize(pieces)) {
+            if (!piece.endedAt().isAfter(cursor)) {
+                continue;
+            }
+            if (!piece.startedAt().isBefore(to)) {
+                break;
+            }
+            if (piece.startedAt().isAfter(cursor)) {
+                gaps.add(new PlannerRecordPiece(cursor, piece.startedAt(), subjectId));
+            }
+            cursor = piece.endedAt();
+        }
+        if (cursor.isBefore(to)) {
+            gaps.add(new PlannerRecordPiece(cursor, to, subjectId));
+        }
+        return List.copyOf(gaps);
+    }
+
     static List<PlannerRecordPiece> paintAll(List<PlannerRecordPiece> pieces, Long subjectId) {
         return normalize(pieces.stream()
                 .map(p -> new PlannerRecordPiece(p.startedAt(), p.endedAt(), subjectId))
