@@ -22,7 +22,7 @@ git tag -a v1.3.0 origin/main -m "v1.3.0: 비회원 토큰 인증 도입, 누적
 git push origin v1.3.0
 ```
 
-3. 이후 자동으로 진행된다.
+3. 이후 자동으로 진행된다. (v2.14.0까지는 요약에 머지 커밋 메시지가 들어가 `gh release edit`로 고쳤다. BY-1217부터 워크플로가 annotated 태그를 다시 받아 바로 맞게 들어간다)
    - Actions의 **Release** 워크플로가 태그 커밋이 `main`에 있는지 확인한다.
    - GitHub Releases에 릴리스가 생기고, 본문은 태그 메시지 + 자동 PR 목록("새 기능 / 버그 수정 / 설정·문서·기타")으로 채워진다.
    - 분류는 PR 라벨 기준이고, 라벨은 `pr-label.yml`이 PR 제목 접두어(`[feat]` 등)에서 자동으로 붙인다.
