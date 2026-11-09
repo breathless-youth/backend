@@ -67,4 +67,19 @@ class PlannerRecordPiecesTest {
                         List.of(piece("03:00:00", "03:01:00", 1L), piece("03:01:00", "03:02:00", null))))
                 .isNull();
     }
+
+    @Test
+    void gapsReturnOnlyUncoveredPartsOfRange() {
+        List<PlannerRecordPiece> pieces = List.of(piece("03:00:00", "03:00:04", 1L), piece("03:02:00", "03:03:00", 2L));
+
+        assertThat(PlannerRecordPieces.gaps(pieces, at("02:59:00"), at("03:04:00"), 3L))
+                .containsExactly(
+                        piece("02:59:00", "03:00:00", 3L),
+                        piece("03:00:04", "03:02:00", 3L),
+                        piece("03:03:00", "03:04:00", 3L));
+        assertThat(PlannerRecordPieces.gaps(pieces, at("03:02:00"), at("03:03:00"), 3L))
+                .isEmpty();
+        assertThat(PlannerRecordPieces.gaps(List.of(), at("03:00:00"), at("03:01:00"), null))
+                .containsExactly(piece("03:00:00", "03:01:00", null));
+    }
 }

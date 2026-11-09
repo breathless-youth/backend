@@ -8,7 +8,7 @@ public record PlannerRecordOperation(
         @Schema(description = "사용자별 재시도 키. 같은 ID에는 같은 본문만 허용 (최대 100자)", example = "record-edit-001")
         String operationId,
 
-        @Schema(description = "CREATE(수동 추가), UPDATE, DELETE, EDIT_RANGES(분 범위 과목 변경·삭제)", example = "UPDATE")
+        @Schema(description = "CREATE(수동 추가), UPDATE, DELETE, EDIT_RANGES(분 범위 과목 변경·삭제·빈 시간 채우기)", example = "UPDATE")
         String action,
 
         @Schema(description = "조회에서 받은 묶음 키. CREATE에는 생략", example = "c:2026-10-01T10:00:00Z")
