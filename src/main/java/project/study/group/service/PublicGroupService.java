@@ -29,12 +29,13 @@ import project.study.group.repository.GroupMemberRepository;
 import project.study.group.repository.GroupRepository;
 import project.study.group.repository.GroupRepository.GroupRow;
 import project.study.group.repository.GroupRepository.PublicGroupRow;
+import project.study.group.service.GroupWeeklyFocus.WeekFocus;
 
 /**
- * 공개 그룹 찾기 — 목록과 보기 (BY-1124). 둘 다 읽기뿐이라 REPEATABLE READ 읽기 트랜잭션 하나에서 읽는다 — 멤버 공부 상태와 이번 주 평균이
- * 확정 합계와 draft를 한 스냅샷에서 읽어야 하고({@code MemberStudySource}), 평균 캐시를 채우는 쪽이 이 트랜잭션에 합류한다.
+ * 공개 그룹 찾기 — 목록과 보기 (BY-1124). 둘 다 읽기뿐이라 REPEATABLE READ 읽기 트랜잭션 하나에서 읽는다 — 멤버 공부 상태와 이번 주 순공이
+ * 확정 합계와 draft를 한 스냅샷에서 읽어야 하고({@code MemberStudySource}), 순공 캐시를 채우는 쪽이 이 트랜잭션에 합류한다.
  *
- * <p>평균·정렬은 {@link GroupWeeklyAverages}가 공개 그룹 전체를 한 번에 계산해 60초 캐시한 값을 쓴다. 책상은 다른 곳(싱글룸·다른 그룹 공부방)이
+ * <p>합계·평균·정렬은 {@link GroupWeeklyFocus}가 공개 그룹 전체를 한 번에 계산해 60초 캐시한 값을 쓴다. 책상은 다른 곳(싱글룸·다른 그룹 공부방)이
  * 어디인지 드러내지 않는다 — 이 그룹 공부방에 있을 때만 {@code IN_ROOM}이고 나머지는 앱 전체 상태({@code STUDYING}/{@code PAUSED}/{@code
  * IDLE}) 그대로다({@link GroupDeskReader}).
  */
@@ -47,7 +48,7 @@ public class PublicGroupService {
     private final GroupApplicationRepository applications;
     private final GroupAccess access;
     private final GroupDeskReader deskReader;
-    private final GroupWeeklyAverages weeklyAverages;
+    private final GroupWeeklyFocus weeklyFocus;
     private final Clock clock;
 
     /** {@link #applyDecision}의 결과 — 상태와 (UNAVAILABLE이면) 이유, (APPLIED이면) 내 신청. */
@@ -59,19 +60,19 @@ public class PublicGroupService {
     }
 
     /**
-     * 공개 그룹 목록의 한 쪽. 이름 검색·시험 목표 거르기·정렬을 메모리에서 하고(공개 그룹 전체를 읽는다), 정렬은 다 차지 않은 그룹 → 평균 큰 순 →
+     * 공개 그룹 목록의 한 쪽. 이름 검색·시험 목표 거르기·정렬을 메모리에서 하고(공개 그룹 전체를 읽는다), 정렬은 다 차지 않은 그룹 → 합계 큰 순 →
      * 그룹 ID 작은 순이다. 카드의 공부 중 수는 그 쪽 그룹들의 책상만 읽어 센다.
      */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PublicGroupPageResponse publicGroups(Long userId, String query, StudyCategory category, int page, int size) {
         Instant now = clock.instant();
         String needle = searchKey(Graphemes.normalize(query));
-        Map<Long, Long> averages = weeklyAverages.averages(now);
+        Map<Long, WeekFocus> focus = weeklyFocus.byGroup(now);
 
         List<PublicGroupRow> matched = groups.findPublicLive().stream()
                 .filter(group -> category == null || group.category() == category)
                 .filter(group -> needle == null || searchKey(group.name()).contains(needle))
-                .sorted(listOrder(averages))
+                .sorted(listOrder(focus))
                 .toList();
         // page는 컨트롤러가 10000까지, size는 50까지로 막지만 곱이 int를 넘지 않게 long으로 센다
         long from = (long) page * size;
@@ -90,7 +91,8 @@ public class PublicGroupService {
                         group.category(),
                         group.joinPolicy(),
                         group.memberCount(),
-                        averages.getOrDefault(group.id(), 0L),
+                        focus.getOrDefault(group.id(), WeekFocus.NONE).averageSec(),
+                        focus.getOrDefault(group.id(), WeekFocus.NONE).totalSec(),
                         GroupDeskReader.studyingCount(desks.getOrDefault(group.id(), List.of())),
                         joined.contains(group.id()),
                         null))
@@ -115,6 +117,7 @@ public class PublicGroupService {
                 .orElseThrow(() -> new IllegalStateException("그룹장이 멤버가 아니다 groupId=" + groupId));
         boolean member = desks.stream().anyMatch(desk -> desk.userId() == userId);
         ApplyDecision decision = applyDecision(userId, group, member, desks.size(), now);
+        WeekFocus focus = weeklyFocus.byGroup(now).getOrDefault(groupId, WeekFocus.NONE);
         return new PublicGroupDetailResponse(
                 group.id(),
                 group.name(),
@@ -123,7 +126,8 @@ public class PublicGroupService {
                 group.description(),
                 desks.size(),
                 new GroupOwnerProfile(ownerDesk.userId(), ownerDesk.nickname(), ownerDesk.profileImageUrl()),
-                weeklyAverages.averages(now).getOrDefault(groupId, 0L),
+                focus.averageSec(),
+                focus.totalSec(),
                 desks,
                 decision.state(),
                 decision.reason(),
@@ -167,11 +171,13 @@ public class PublicGroupService {
         return null;
     }
 
-    /** 다 찬 그룹은 평균이 커도 뒤로 간다(신청할 수 없는 그룹이 위에 오지 않게). 그 안에서 평균 큰 순, 같으면 ID 작은 순. */
-    private static Comparator<PublicGroupRow> listOrder(Map<Long, Long> averages) {
+    /** 다 찬 그룹은 합계가 커도 뒤로 간다(신청할 수 없는 그룹이 위에 오지 않게). 그 안에서 합계 큰 순, 같으면 ID 작은 순. */
+    private static Comparator<PublicGroupRow> listOrder(Map<Long, WeekFocus> focus) {
         return Comparator.comparing((PublicGroupRow group) -> group.memberCount() >= GroupService.MAX_MEMBERS)
                 .thenComparing(
-                        (PublicGroupRow group) -> averages.getOrDefault(group.id(), 0L), Comparator.reverseOrder())
+                        (PublicGroupRow group) ->
+                                focus.getOrDefault(group.id(), WeekFocus.NONE).totalSec(),
+                        Comparator.reverseOrder())
                 .thenComparingLong(PublicGroupRow::id);
     }
 
