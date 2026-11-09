@@ -127,12 +127,13 @@ public class GroupController {
     @Operation(summary = "공개 그룹 목록", description = """
         공개 그룹을 찾는다. `query`는 이름에 들어간 글자(대소문자 무시), `category`는 시험·목표 하나로 거른다. 둘 다 생략하면 전체다.
 
-        - 정렬: 다 차지 않은 그룹 → 평균 많은 순 → 그룹 ID 작은 순, 쪽마다 순서가 바뀔 수 있어 FE가 groupId로 중복을 거른다
+        - 정렬: 다 차지 않은 그룹 → 합계(`weeklyTotalFocusSec`) 많은 순 → 그룹 ID 작은 순, 쪽마다 순서가 바뀔 수 있어 FE가 groupId로 중복을 거른다
         - 쪽 번호 방식 — `page`는 0부터 10000까지, `size`는 기본 20·최대 50. 응답은 다음 쪽이 있는지(`hasNext`)만 준다
         - `query`는 앞뒤 공백을 떼고, 비면 검색어가 없는 것으로 본다. `%`·`_`도 그냥 글자다. 100자까지(UTF-16 기준이라 이모지 등은 2자로 센다)
-        - 카드의 `weeklyAverageFocusSec`: 지금 멤버들의 이번 주(월요일 0시 KST부터) 앱 전체 순공 합 ÷ 지금 멤버 수. \
+        - 카드의 `weeklyTotalFocusSec`: 지금 멤버들의 이번 주(월요일 0시 KST부터) 앱 전체 순공 합. \
         주 중간에 들어온 멤버도 이번 주 순공이 모두 들어가고 나간 멤버는 빠진다. \
         측정 세션만, 1초 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신
+        - 카드의 `weeklyAverageFocusSec`: 위 합 ÷ 지금 멤버 수(소수 버림). 예전 앱용으로 당분간 함께 준다
         - 내가 멤버인 그룹도 나오며 `member`가 true다""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 결과가 없으면 `groups`가 빈 배열")
     @ApiResponse(
@@ -171,9 +172,10 @@ public class GroupController {
         - `applyState`는 `MEMBER` > `APPLIED` > `FULL` > `UNAVAILABLE` > `CAN_APPLY` 순으로 먼저 맞는 것 하나다
         - `UNAVAILABLE`이면 `unavailableReason`이 `RECENTLY_KICKED` > `GROUP_SLOT_LIMIT` > `APPLICATION_LIMIT` 순으로 먼저 맞는 것 하나다
         - `APPLIED`이면 `application`에 내 신청 ID와 만료 시각이 있다
-        - `weeklyAverageFocusSec`: 지금 멤버들의 이번 주(월요일 0시 KST부터) 앱 전체 순공 합 ÷ 지금 멤버 수. \
+        - `weeklyTotalFocusSec`: 지금 멤버들의 이번 주(월요일 0시 KST부터) 앱 전체 순공 합. \
         주 중간에 들어온 멤버도 이번 주 순공이 모두 들어가고 나간 멤버는 빠진다. \
-        측정 세션만, 1초 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신""")
+        측정 세션만, 1초 미만 조각 제외, 진행 중 포함, 약 1분마다 갱신
+        - `weeklyAverageFocusSec`: 위 합 ÷ 지금 멤버 수(소수 버림). 예전 앱용으로 당분간 함께 준다""")
     @ApiResponse(responseCode = "200", description = "조회 성공")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "404", description = "`GROUP_NOT_FOUND` 없거나 사라진 그룹, 또는 비공개 그룹")

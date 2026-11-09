@@ -119,7 +119,7 @@ class PublicGroupDetailApiTest {
     }
 
     @Test
-    void 평균은_공개_그룹_목록_카드와_같은_값이다() {
+    void 합계와_평균은_공개_그룹_목록_카드와_같은_값이다() {
         long member = kit.member(group);
         study.session(member, MONDAY_NOON, 700);
         study.session(owner, MONDAY_NOON, 300);
@@ -133,8 +133,10 @@ class PublicGroupDetailApiTest {
                 .convertTo(PublicGroupPageResponse.class)
                 .actual();
 
+        assertThat(response.weeklyTotalFocusSec()).isEqualTo(1000);
         assertThat(response.weeklyAverageFocusSec()).isEqualTo(500);
         assertThat(page.groups()).hasSize(1);
+        assertThat(page.groups().getFirst().weeklyTotalFocusSec()).isEqualTo(1000);
         assertThat(page.groups().getFirst().weeklyAverageFocusSec()).isEqualTo(500);
     }
 
