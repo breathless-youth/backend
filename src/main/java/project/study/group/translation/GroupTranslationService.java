@@ -40,11 +40,15 @@ public class GroupTranslationService {
 
     public Map<CacheKey, String> translate(List<TranslationText> input, TranslationLanguage language) {
         if (!settings.enabled()) return Map.of();
-        var texts = input.stream()
-                .filter(t -> !t.source().isBlank())
-                .distinct()
+        var candidates =
+                input.stream().filter(t -> !t.source().isBlank()).distinct().toList();
+        // 이미 요청 언어인 원문은 예약·호출·캐시 조회 없이 원문을 쓴다. 예전에 저장된 같은 언어 결과도 쓰지 않는다.
+        var texts = candidates.stream()
+                .filter(t -> !SourceLanguage.needsNoTranslation(t.source(), language))
                 .sorted(Comparator.comparingLong(TranslationText::groupId).thenComparing(TranslationText::field))
                 .toList();
+        metrics.counter("group.translation.skipped", "language", language.locale())
+                .increment(candidates.size() - texts.size());
         if (texts.isEmpty()) return Map.of();
         Map<CacheKey, String> results = new HashMap<>();
         List<Lease> leases = List.of();
