@@ -24,7 +24,10 @@ class PlannerLegacyApiTest extends PlannerApiSupport {
                             + "\",\"repeat\":{\"weekdays\":[\"MONDAY\",\"TUESDAY\",\"WEDNESDAY\",\"THURSDAY\",\"FRIDAY\",\"SATURDAY\",\"SUNDAY\"]}}",
                     201);
         }
-        call("POST", "/api/subjects/" + subject + "/tasks", "{\"name\":\"넘침\"}", 409);
+        assertThat(call("POST", "/api/subjects/" + subject + "/tasks", "{\"name\":\"넘침\"}", 409)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_TASK_LIMIT");
     }
 
     @Test
@@ -33,7 +36,10 @@ class PlannerLegacyApiTest extends PlannerApiSupport {
         String id = key.substring(2);
         call("PATCH", "/api/subjects/" + subject + "/tasks/" + id, "{\"done\":true}", 400);
         jdbc.update("UPDATE study_task SET planned_date=? WHERE id=?", today.minusDays(1), Long.valueOf(id));
-        call("PATCH", "/api/subjects/" + subject + "/tasks/" + id, "{\"name\":\"지난 계획 수정\"}", 400);
+        assertThat(call("PATCH", "/api/subjects/" + subject + "/tasks/" + id, "{\"name\":\"지난 계획 수정\"}", 400)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_PAST_DAY");
         call("PATCH", "/api/subjects/" + subject + "/tasks/" + id, "{\"done\":true}", 200);
     }
 }

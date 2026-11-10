@@ -91,7 +91,7 @@ public class ManualStudySessionController {
     @ApiResponse(responseCode = "200", description = "다시 만든 조각 배열")
     @ApiResponse(responseCode = "400", description = "검증 실패 — 추가와 같다")
     @ApiResponse(responseCode = "404", description = "없거나 남의 세션")
-    @ApiResponse(responseCode = "409", description = "측정 세션 id이거나, 전부 겹침")
+    @ApiResponse(responseCode = "409", description = "측정 세션 id=MEASURED_RECORD_LOCKED, 전부 겹침=CONFLICT")
     @PatchMapping("/{id}")
     public List<StudySessionResponse> update(
             @AuthenticationPrincipal Long userId,
@@ -104,7 +104,7 @@ public class ManualStudySessionController {
     @Operation(summary = "수동 기록 삭제", description = "id가 속한 묶음 전체(자정·겹침으로 나뉜 조각 모두)를 지운다.")
     @ApiResponse(responseCode = "204", description = "삭제함")
     @ApiResponse(responseCode = "404", description = "없거나 남의 세션")
-    @ApiResponse(responseCode = "409", description = "측정 세션 id — 측정한 기록은 지울 수 없다")
+    @ApiResponse(responseCode = "409", description = "측정 세션 id — 측정한 기록은 지울 수 없다 (MEASURED_RECORD_LOCKED)")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(

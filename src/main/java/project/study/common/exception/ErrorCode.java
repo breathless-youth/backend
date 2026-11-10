@@ -99,6 +99,21 @@ public enum ErrorCode {
     /** 개인 플래너 기록이 조회한 뒤 바뀌었거나 고칠 범위에 남은 기록이 없다 (409) — 클라이언트는 다시 조회한 뒤 고친다 */
     STALE_RECORD,
 
+    /** 할 일을 옮기거나 가져올 날짜에 같은 반복 할 일이 이미 있다 (409) */
+    PLANNER_DUPLICATE_OCCURRENCE,
+
+    /** 과목 하나에 한 날짜의 할 일이 30개를 넘는다 — 추가·이동·반복 변경·가져오기 (409) */
+    PLANNER_TASK_LIMIT,
+
+    /** 가져오기 후보가 조회한 뒤 바뀌었거나 이미 완료한 할 일이다 (409) — 클라이언트는 후보를 다시 불러온다 */
+    PLANNER_CARRYOVER_CHANGED,
+
+    /** 지난 날의 계획은 완료와 이동만 할 수 있다 (400) */
+    PLANNER_PAST_DAY,
+
+    /** 측정한 기록은 수동 기록에서 고치거나 지울 수 없다 (409) */
+    MEASURED_RECORD_LOCKED,
+
     /** Spring MVC 표준 4xx (405·415 등) */
     REQUEST_FAILED,
 
