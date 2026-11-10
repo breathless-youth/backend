@@ -293,11 +293,15 @@ class ManualStudySessionApiTest {
         measured(at(10, 0), at(11, 0), 3600);
         long measuredId = jdbc.queryForObject("SELECT id FROM study_session WHERE user_id = ?", Long.class, userId);
 
-        assertThat(patch(userId, measuredId, at(14, 0), at(15, 0), null)).hasStatus(HttpStatus.CONFLICT);
-        assertThat(delete(userId, measuredId)).hasStatus(HttpStatus.CONFLICT);
-        Integer rows =
-                jdbc.queryForObject("SELECT count(*) FROM study_session WHERE user_id = ?", Integer.class, userId);
-        assertThat(rows).isEqualTo(1);
+        for (MockMvcRequestBuilder request :
+                List.of(patch(userId, measuredId, at(14, 0), at(15, 0), null), delete(userId, measuredId))) {
+            assertThat(request)
+                    .hasStatus(HttpStatus.CONFLICT)
+                    .bodyJson()
+                    .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("MEASURED_RECORD_LOCKED"));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM study_session WHERE user_id = ?", Integer.class, userId))
+                .isEqualTo(1);
     }
 
     @Test

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
+import project.study.common.exception.ErrorCode;
 import project.study.common.exception.NotFoundException;
 import project.study.planner.dto.PlannerTask;
 import project.study.planner.dto.PlannerTaskRequests.Create;
@@ -135,7 +136,7 @@ public class PlannerTaskService {
                 && resolver.tasks(userId, date, date).stream()
                         .anyMatch(t ->
                                 task.seriesId().equals(t.seriesId()) && !t.key().equals(task.key()))) {
-            throw new ConflictException("같은 반복 할 일이 이미 있는 날짜입니다");
+            throw new ConflictException(ErrorCode.PLANNER_DUPLICATE_OCCURRENCE, "같은 반복 할 일이 이미 있는 날짜입니다");
         }
     }
 

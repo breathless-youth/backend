@@ -7,6 +7,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import project.study.common.exception.ConflictException;
+import project.study.common.exception.ErrorCode;
 import project.study.planner.repository.PlannerRule;
 import project.study.planner.repository.PlannerStore;
 import project.study.planner.repository.PlannerTaskRow;
@@ -37,7 +38,8 @@ public class PlannerCapacity {
         }
         for (LocalDate date : dates) {
             if (PlannerTaskResolver.on(rows, rules, date).size() > 30) {
-                throw new ConflictException("과목 하나에 할 일은 날짜마다 30개까지 넣을 수 있습니다 (" + date + ")");
+                throw new ConflictException(
+                        ErrorCode.PLANNER_TASK_LIMIT, "과목 하나에 할 일은 날짜마다 30개까지 넣을 수 있습니다 (" + date + ")");
             }
         }
     }

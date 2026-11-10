@@ -12,6 +12,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.ConflictException;
+import project.study.common.exception.ErrorCode;
 import project.study.common.exception.NotFoundException;
 import project.study.studysession.dto.ManualStudySessionRequest;
 import project.study.studysession.dto.StudySessionResponse;
@@ -81,7 +82,7 @@ public class ManualStudySessionService {
                 .findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new NotFoundException("세션을 찾을 수 없습니다"));
         if (!piece.isManual()) {
-            throw new ConflictException("측정한 기록은 고치거나 지울 수 없어요");
+            throw new ConflictException(ErrorCode.MEASURED_RECORD_LOCKED, "측정한 기록은 고치거나 지울 수 없어요");
         }
         return studySessionRepository.findByUserIdAndSubmissionStartedAtAndSourceOrderByStartedAtAsc(
                 userId, piece.getSubmissionStartedAt(), StudySessionSource.MANUAL);
