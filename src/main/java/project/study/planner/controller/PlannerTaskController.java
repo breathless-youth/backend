@@ -44,7 +44,7 @@ import project.study.planner.service.PlannerTaskService;
 @ApiResponses({
     @ApiResponse(
             responseCode = "400",
-            description = "과거 변경=PLANNER_PAST_DAY, 미래 완료·이름/날짜 오류=BAD_REQUEST",
+            description = "과거 변경=PLANNER_PAST_DAY, 요청 본문 검증(이름 길이·날짜 누락)=VALIDATION_FAILED, 미래 완료 등 그 밖=BAD_REQUEST",
             content =
                     @Content(
                             examples =
