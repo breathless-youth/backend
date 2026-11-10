@@ -73,7 +73,14 @@ class PlannerRepeatApiTest extends PlannerApiSupport {
         String renamed = keyOn(today.plusDays(4));
         call("PATCH", "/api/planner/tasks/" + renamed, "{\"name\":\"특별\",\"scope\":\"THIS\"}", 200);
         String moved = keyOn(today.plusDays(5));
-        call("PUT", "/api/planner/tasks/" + moved + "/date", "{\"date\":\"" + today.plusDays(20) + "\"}", 409);
+        assertThat(call(
+                                "PUT",
+                                "/api/planner/tasks/" + moved + "/date",
+                                "{\"date\":\"" + today.plusDays(20) + "\"}",
+                                409)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_DUPLICATE_OCCURRENCE");
         call("DELETE", "/api/planner/tasks/" + keyOn(today.plusDays(20)), null, 204);
         call("PUT", "/api/planner/tasks/" + moved + "/date", "{\"date\":\"" + today.plusDays(20) + "\"}", 200);
         String from = keyOn(today.plusDays(2));
@@ -111,12 +118,15 @@ class PlannerRepeatApiTest extends PlannerApiSupport {
                 "INSERT INTO study_subject(user_id,name) VALUES (?, '영어') RETURNING id", Long.class, user);
         subject = other;
         for (int i = 0; i < 30; i++) add(today.plusDays(1000), "미래" + i);
-        call(
-                "POST",
-                "/api/planner/tasks",
-                "{\"subjectId\":" + subject + ",\"date\":\"" + today
-                        + "\",\"name\":\"반복 충돌\",\"repeat\":{\"weekdays\":[\"MONDAY\",\"TUESDAY\",\"WEDNESDAY\",\"THURSDAY\",\"FRIDAY\",\"SATURDAY\",\"SUNDAY\"]}}",
-                409);
+        assertThat(call(
+                                "POST",
+                                "/api/planner/tasks",
+                                "{\"subjectId\":" + subject + ",\"date\":\"" + today
+                                        + "\",\"name\":\"반복 충돌\",\"repeat\":{\"weekdays\":[\"MONDAY\",\"TUESDAY\",\"WEDNESDAY\",\"THURSDAY\",\"FRIDAY\",\"SATURDAY\",\"SUNDAY\"]}}",
+                                409)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_TASK_LIMIT");
         assertThat(tasks(today)).hasSize(1);
         assertThat(tasks(today.plusDays(1000)).size()).isGreaterThanOrEqualTo(30);
     }

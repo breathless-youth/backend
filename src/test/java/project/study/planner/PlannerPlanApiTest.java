@@ -29,13 +29,20 @@ class PlannerPlanApiTest extends PlannerApiSupport {
     void failedMovePreservesOriginalAndCapacityIsPerDate() {
         String key = add(today, "옮길 일");
         for (int i = 0; i < 30; i++) add(today.plusDays(1), "할 일" + i);
-        call("PUT", "/api/planner/tasks/" + key + "/date", "{\"date\":\"" + today.plusDays(1) + "\"}", 409);
+        assertThat(call("PUT", "/api/planner/tasks/" + key + "/date", "{\"date\":\"" + today.plusDays(1) + "\"}", 409)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_TASK_LIMIT");
         assertThat(day(today).at("/subjects/0/tasks/0/key").asText()).isEqualTo(key);
-        call(
-                "POST",
-                "/api/planner/tasks",
-                "{\"subjectId\":" + subject + ",\"date\":\"" + today.plusDays(1) + "\",\"name\":\"넘침\"}",
-                409);
+        assertThat(call(
+                                "POST",
+                                "/api/planner/tasks",
+                                "{\"subjectId\":" + subject + ",\"date\":\"" + today.plusDays(1)
+                                        + "\",\"name\":\"넘침\"}",
+                                409)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_TASK_LIMIT");
     }
 
     @Test
@@ -63,17 +70,24 @@ class PlannerPlanApiTest extends PlannerApiSupport {
         user = newUser();
         call("PATCH", "/api/planner/tasks/" + key, "{\"name\":\"남의 일\"}", 404);
         user = owner;
-        call(
-                "POST",
-                "/api/planner/tasks",
-                "{\"subjectId\":" + subject + ",\"date\":\"" + today.minusDays(1) + "\",\"name\":\"과거\"}",
-                400);
+        assertThat(call(
+                                "POST",
+                                "/api/planner/tasks",
+                                "{\"subjectId\":" + subject + ",\"date\":\"" + today.minusDays(1)
+                                        + "\",\"name\":\"과거\"}",
+                                400)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_PAST_DAY");
         call(
                 "POST",
                 "/api/planner/tasks",
                 "{\"subjectId\":" + subject + ",\"date\":\"" + today + "\",\"name\":\"" + "가".repeat(26) + "\"}",
                 400);
         call("POST", "/api/subjects", "{\"name\":\"" + "가".repeat(13) + "\"}", 400);
-        call("PUT", "/api/planner/tasks/" + key + "/date", "{\"date\":\"" + today.minusDays(1) + "\"}", 400);
+        assertThat(call("PUT", "/api/planner/tasks/" + key + "/date", "{\"date\":\"" + today.minusDays(1) + "\"}", 400)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_PAST_DAY");
     }
 }

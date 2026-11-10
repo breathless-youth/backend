@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ConflictException;
+import project.study.common.exception.ErrorCode;
 import project.study.planner.dto.PlannerTask;
 import project.study.planner.dto.PlannerTaskRequests.Carry;
 import project.study.planner.repository.PlannerStore;
@@ -49,13 +50,15 @@ public class PlannerCarryService {
         for (String key : request.offeredKeys()) {
             PlannerTask task = resolver.get(userId, key);
             boolean selected = request.selectedKeys().contains(key);
-            if (task.done()) throw new ConflictException("이미 완료한 할 일입니다. 후보를 다시 불러오세요");
+            if (task.done())
+                throw new ConflictException(ErrorCode.PLANNER_CARRYOVER_CHANGED, "이미 완료한 할 일입니다. 후보를 다시 불러오세요");
             if (selected && task.date().equals(today)) {
                 moved.add(task);
                 continue;
             }
             if (!selected && task.dismissed()) continue;
-            if (!eligible.contains(task.key())) throw new ConflictException("후보가 바뀌었습니다. 다시 불러오세요");
+            if (!eligible.contains(task.key()))
+                throw new ConflictException(ErrorCode.PLANNER_CARRYOVER_CHANGED, "후보가 바뀌었습니다. 다시 불러오세요");
             long id = tasks.materialize(task);
             if (selected) {
                 tasks.assertNoDuplicate(userId, task, today);

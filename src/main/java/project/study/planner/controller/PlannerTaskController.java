@@ -44,7 +44,7 @@ import project.study.planner.service.PlannerTaskService;
 @ApiResponses({
     @ApiResponse(
             responseCode = "400",
-            description = "과거 변경·미래 완료·이름/날짜 오류",
+            description = "과거 변경=PLANNER_PAST_DAY, 미래 완료·이름/날짜 오류=BAD_REQUEST",
             content =
                     @Content(
                             examples =
@@ -59,12 +59,13 @@ import project.study.planner.service.PlannerTaskService;
                                     @ExampleObject(value = "{\"code\":\"NOT_FOUND\",\"message\":\"할 일을 찾을 수 없습니다\"}"))),
     @ApiResponse(
             responseCode = "409",
-            description = "날짜별 30개 초과·반복 회차 중복. 변경 전체 원복",
+            description = "변경 전체 원복. 과목별 날짜당 30개 초과=PLANNER_TASK_LIMIT, 옮길 날짜에 같은 반복 회차=PLANNER_DUPLICATE_OCCURRENCE",
             content =
                     @Content(
                             examples =
                                     @ExampleObject(
-                                            value = "{\"code\":\"CONFLICT\",\"message\":\"같은 반복 할 일이 이미 있는 날짜입니다\"}")))
+                                            value =
+                                                    "{\"code\":\"PLANNER_DUPLICATE_OCCURRENCE\",\"message\":\"같은 반복 할 일이 이미 있는 날짜입니다\"}")))
 })
 public class PlannerTaskController {
     private final PlannerTaskService tasks;

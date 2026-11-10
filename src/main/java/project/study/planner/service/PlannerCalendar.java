@@ -7,6 +7,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import project.study.common.exception.BadRequestException;
+import project.study.common.exception.ErrorCode;
 
 /** 날짜는 현지 달력 날짜다. DST 날에도 다음 날짜 05시를 별도로 구한다. */
 public final class PlannerCalendar {
@@ -40,7 +41,7 @@ public final class PlannerCalendar {
     public static void editable(LocalDate date, LocalDate today) {
         checkDate(date);
         if (date.isBefore(today)) {
-            throw new BadRequestException("지난 날의 계획은 완료와 이동만 할 수 있습니다");
+            throw new BadRequestException(ErrorCode.PLANNER_PAST_DAY, "지난 날의 계획은 완료와 이동만 할 수 있습니다");
         }
     }
 }

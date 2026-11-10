@@ -65,11 +65,14 @@ class PlannerCarryApiTest extends PlannerApiSupport {
         String take = past("가져오기", 2);
         String leave = past("그대로", 1);
         for (int i = 0; i < 30; i++) add(today, "오늘" + i);
-        call(
-                "POST",
-                "/api/planner/carryover",
-                decision("[\"" + take + "\",\"" + leave + "\"]", "[\"" + take + "\"]"),
-                409);
+        assertThat(call(
+                                "POST",
+                                "/api/planner/carryover",
+                                decision("[\"" + take + "\",\"" + leave + "\"]", "[\"" + take + "\"]"),
+                                409)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_TASK_LIMIT");
         assertThat(candidates()).hasSize(2);
         assertThat(day(today.minusDays(2)).at("/subjects/0/tasks/0/key").asText())
                 .isEqualTo(take);
@@ -106,9 +109,23 @@ class PlannerCarryApiTest extends PlannerApiSupport {
         call("POST", "/api/planner/carryover", decision("[\"" + key + "\"]", "[]"), 404);
         user = me;
         call("PATCH", "/api/planner/tasks/" + key, "{\"done\":true}", 200);
-        call("POST", "/api/planner/carryover", decision("[\"" + key + "\"]", "[\"" + key + "\"]"), 409);
+        assertThat(call("POST", "/api/planner/carryover", decision("[\"" + key + "\"]", "[\"" + key + "\"]"), 409)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_CARRYOVER_CHANGED");
         assertThat(day(today.minusDays(1)).at("/subjects/0/tasks/0/done").asBoolean())
                 .isTrue();
+    }
+
+    @Test
+    void rejectsCandidateMovedAwayAfterItWasOffered() {
+        String key = past("옮겨질 후보", 1);
+        assertThat(candidates()).hasSize(1);
+        call("PUT", "/api/planner/tasks/" + key + "/date", "{\"date\":\"" + today.plusDays(1) + "\"}", 200);
+        assertThat(call("POST", "/api/planner/carryover", decision("[\"" + key + "\"]", "[]"), 409)
+                        .get("code")
+                        .asText())
+                .isEqualTo("PLANNER_CARRYOVER_CHANGED");
     }
 
     @Test

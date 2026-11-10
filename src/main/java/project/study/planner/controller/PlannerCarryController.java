@@ -60,12 +60,14 @@ public class PlannerCarryController {
     @ApiResponse(responseCode = "200", description = "오늘로 가져온 항목 배열(그냥 둘게요면 [])")
     @ApiResponse(
             responseCode = "409",
-            description = "한도·중복·완료·오래된 후보. 전부 원복",
+            description =
+                    "전부 원복. 후보가 바뀌었거나 이미 완료=PLANNER_CARRYOVER_CHANGED(후보를 다시 불러온다), " + "과목별 30개 초과=PLANNER_TASK_LIMIT",
             content =
                     @Content(
                             examples =
                                     @ExampleObject(
-                                            value = "{\"code\":\"CONFLICT\",\"message\":\"후보가 바뀌었습니다. 다시 불러오세요\"}")))
+                                            value =
+                                                    "{\"code\":\"PLANNER_CARRYOVER_CHANGED\",\"message\":\"후보가 바뀌었습니다. 다시 불러오세요\"}")))
     @PostMapping
     public List<PlannerTask> decide(
             @AuthenticationPrincipal Long userId,
