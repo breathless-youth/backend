@@ -62,6 +62,10 @@ public class SecurityConfig {
                         // 고정된 앱 딥링크로 넘기기만 하고 로그인 처리는 하지 않는다 (AppleCallbackController)
                         .requestMatchers(HttpMethod.POST, "/api/auth/apple/callback")
                         .permitAll()
+                        // AdMob 광고 보상 콜백 — 구글 서버가 인증 헤더 없이 부른다. 구글 서명과 우리 광고 단위가 맞는
+                        // 요청만 지급한다 (AdRewardService)
+                        .requestMatchers(HttpMethod.GET, "/api/points/ads/admob/callback")
+                        .permitAll()
                         // WebSocket 핸드셰이크 — 인증은 CONNECT 프레임에서 한다 (WebSocketConfig)
                         .requestMatchers("/ws")
                         .permitAll()

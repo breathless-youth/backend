@@ -1,6 +1,6 @@
 package project.study.point.dto;
 
-/** 포인트가 오간 사유. 3단계에서 광고·충전이 더해진다. */
+/** 포인트가 오간 사유. 3단계에서 충전이 더해진다. */
 public enum PointReason {
     /** 측정한 공부 */
     STUDY,
@@ -13,5 +13,7 @@ public enum PointReason {
     /** 하루 목표 달성 */
     DAILY_GOAL,
     /** 랭킹 메달. label은 "판 키/순위"다 (예: FOCUS_TIME:DAILY/1) */
-    MEDAL
+    MEDAL,
+    /** 광고 시청 보상 */
+    AD
 }
