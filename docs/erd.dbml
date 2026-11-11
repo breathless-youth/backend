@@ -352,3 +352,89 @@ Table live_task {
   heartbeat_at timestamptz [not null]
   reclaimed_at timestamptz [note: 'NOT NULL = 다른 태스크가 죽었다고 보고 참가자를 회수함(펜싱 신호)']
 }
+
+// 포인트·꾸미기 상점 (ADR-0047, BY-1241)
+Table point_account {
+  user_id bigint [primary key, ref: > users.id]
+  balance integer [not null, default: 0, note: 'CHECK >= 0']
+}
+
+Table point_ledger {
+  id bigserial [primary key]
+  user_id bigint [not null, ref: > users.id]
+  amount integer [not null, note: '받은 것 양수, 쓴 것 음수']
+  fund varchar(8) [not null, default: 'FREE', note: 'FREE | PAID']
+  reason varchar(32) [not null, note: 'STUDY | STUDY_ADJUST | PURCHASE | ATTENDANCE | DAILY_GOAL | MEDAL']
+  ref_key varchar(128) [not null, note: '같은 지급·차감을 한 번만 넣는 키']
+  label varchar(100)
+  stat_date date [note: 'STUDY일 때 공부한 날짜']
+  created_at timestamptz [not null]
+
+  indexes {
+    (user_id, reason, ref_key) [unique, name: 'uq_point_ledger_ref']
+    (user_id, id) [name: 'idx_point_ledger_user_id']
+    (user_id, stat_date) [name: 'idx_point_ledger_day', note: 'WHERE stat_date IS NOT NULL']
+  }
+}
+
+Table mascot {
+  code varchar(32) [primary key, note: '이름과 그림은 앱이 갖는다']
+  unlock_focus_sec integer [not null, note: '해금 기준 누적 순공(초)']
+  sort_order integer [not null]
+}
+
+Table user_mascot {
+  user_id bigint [primary key, ref: > users.id]
+  selected_mascot_code varchar(32) [not null, ref: > mascot.code]
+}
+
+Table user_mascot_seen {
+  user_id bigint [not null, ref: > users.id]
+  mascot_code varchar(32) [not null, ref: > mascot.code]
+
+  indexes {
+    (user_id, mascot_code) [pk]
+  }
+}
+
+Table shop_item {
+  id bigserial [primary key]
+  code varchar(64) [not null, unique]
+  category varchar(24) [not null, note: 'MASCOT_ACCESSORY | TIMER_BACKGROUND']
+  mascot_code varchar(32) [ref: > mascot.code, note: '소품일 때만']
+  slot varchar(8) [note: 'HEAD | FACE | BODY, 소품일 때만']
+  tag varchar(32)
+  name varchar(60) [not null]
+  image_url varchar(500)
+  price integer [note: 'NULL = 보상 상품']
+  unlock_type varchar(24) [note: 'STREAK_DAYS | TOTAL_FOCUS_HOURS, 보상 상품일 때만']
+  unlock_value integer
+  sort_order integer [not null, default: 0]
+  active boolean [not null, default: true]
+}
+
+Table user_item {
+  user_id bigint [not null, ref: > users.id]
+  item_id bigint [not null, ref: > shop_item.id]
+  acquired_at timestamptz [not null]
+
+  indexes {
+    (user_id, item_id) [pk]
+  }
+}
+
+Table user_mascot_accessory {
+  user_id bigint [not null, ref: > users.id]
+  mascot_code varchar(32) [not null, ref: > mascot.code]
+  slot varchar(8) [not null]
+  item_id bigint [not null, ref: > shop_item.id]
+
+  indexes {
+    (user_id, mascot_code, slot) [pk]
+  }
+}
+
+Table user_decoration {
+  user_id bigint [primary key, ref: > users.id]
+  timer_background_item_id bigint [ref: > shop_item.id]
+}

@@ -11,11 +11,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.NotFoundException;
 import project.study.common.time.DefaultTimeZone;
+import project.study.point.service.StudyPointService;
 import project.study.studysession.buffer.ActiveSnapshotBuffer;
 import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.dto.ActiveSessionSnapshotResponse;
@@ -37,6 +39,7 @@ import tools.jackson.databind.ObjectMapper;
 /** 진행중 세션 스냅샷(draft) 관리 — 하트비트 UPSERT와 무응답 draft 자동 확정 (BY-447). */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ActiveStudySessionService {
 
     // V12가 이름 없이 만든 FK의 PostgreSQL 자동 명명 규칙 이름
@@ -52,23 +55,7 @@ public class ActiveStudySessionService {
     private final ActiveSnapshotBuffer buffer;
     private final ActiveStudySessionBatchRepository batchRepository;
     private final UserTimeZones userTimeZones;
-
-    public ActiveStudySessionService(
-            ActiveStudySessionRepository activeStudySessionRepository,
-            StudySessionService studySessionService,
-            ObjectMapper objectMapper,
-            Clock clock,
-            ActiveSnapshotBuffer buffer,
-            ActiveStudySessionBatchRepository batchRepository,
-            UserTimeZones userTimeZones) {
-        this.activeStudySessionRepository = activeStudySessionRepository;
-        this.studySessionService = studySessionService;
-        this.objectMapper = objectMapper;
-        this.clock = clock;
-        this.buffer = buffer;
-        this.batchRepository = batchRepository;
-        this.userTimeZones = userTimeZones;
-    }
+    private final StudyPointService studyPointService;
 
     /**
      * 누적 스냅샷을 draft에 UPSERT한다. 검증은 확정 시 실행될 validateAndBuildSessions를 그대로 호출하고
@@ -173,6 +160,12 @@ public class ActiveStudySessionService {
             studySessionService.create(draft.getUserId(), request, true);
         } catch (DuplicateSessionException e) {
             // 별개 제출의 분할 조각과 시각이 충돌 — 기록이 이미 있으니 아래에서 draft만 정리한다
+        }
+        try {
+            // 앱이 최종 제출을 다시 보내지 못해도 자동 확정본의 공부 포인트는 받는다 (ADR-0047)
+            studyPointService.grantForSubmission(draft.getUserId(), draft.getStartedAt());
+        } catch (RuntimeException e) {
+            log.error("공부 포인트 지급 실패 userId={} startedAt={}", draft.getUserId(), draft.getStartedAt(), e);
         }
         // create 성공 경로는 이미 트랜잭션 안에서 draft를 지웠으므로 no-op이고,
         // 멱등 반환(클라 제출본 존재)·중복 충돌 경로에서만 실제로 지운다 (deleteById는 없으면 무시)
