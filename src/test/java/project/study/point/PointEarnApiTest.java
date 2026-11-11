@@ -49,9 +49,12 @@ class PointEarnApiTest {
                 .bodyJson()
                 .hasPathSatisfying("$.date", v -> assertThat(v).isEqualTo(today()))
                 .hasPathSatisfying("$.todayEarned", v -> assertThat(v).isEqualTo(0))
-                .hasPathSatisfying("$.dailyMax", v -> assertThat(v).isEqualTo(240 + 10 + 50))
+                .hasPathSatisfying("$.dailyMax", v -> assertThat(v).isEqualTo(240 + 10))
                 .hasPathSatisfying("$.attendance.claimed", v -> assertThat(v).isEqualTo(false))
                 .hasPathSatisfying("$.study.maxPoints", v -> assertThat(v).isEqualTo(240))
+                .hasPathSatisfying("$.study.unitSec", v -> assertThat(v).isEqualTo(1800))
+                .hasPathSatisfying("$.study.pointsPerUnit", v -> assertThat(v).isEqualTo(10))
+                .hasPathSatisfying("$.medalPoints.weekly[1]", v -> assertThat(v).isEqualTo(150))
                 .hasPathSatisfying("$.medals.length()", v -> assertThat(v).isEqualTo(0));
 
         assertThat(claim(user, "attendance"))
@@ -81,6 +84,8 @@ class PointEarnApiTest {
 
         assertThat(get(user))
                 .bodyJson()
+                .hasPathSatisfying("$.dailyMax", v -> assertThat(v).isEqualTo(240 + 10 + 2))
+                .hasPathSatisfying("$.dailyGoal.points", v -> assertThat(v).isEqualTo(2))
                 .hasPathSatisfying("$.dailyGoal.goalSec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying(
                         "$.dailyGoal.remainingSec", v -> assertThat(v).isEqualTo(1800))
@@ -96,7 +101,7 @@ class PointEarnApiTest {
         assertThat(claim(user, "daily-goal"))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.points", v -> assertThat(v).isEqualTo(50));
+                .hasPathSatisfying("$.points", v -> assertThat(v).isEqualTo(2));
         assertThat(claim(user, "daily-goal"))
                 .hasStatusOk()
                 .bodyJson()
@@ -115,19 +120,41 @@ class PointEarnApiTest {
     }
 
     @Test
-    void 목표가_없거나_최소_목표보다_짧으면_채워도_받지_못한다() {
+    void 목표가_없으면_받을_것이_없고_보상은_목표_시간에_비례한다() {
         long noGoal = fixture.member();
         fixture.measuredSession(noGoal, today(), 0, 7200);
+        assertThat(get(noGoal))
+                .bodyJson()
+                .hasPathSatisfying("$.dailyGoal.points", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.dailyGoal.achieved", v -> assertThat(v).isEqualTo(false));
         assertCode(claim(noGoal, "daily-goal"), HttpStatus.CONFLICT, "REWARD_NOT_AVAILABLE");
 
-        long shortGoal = fixture.member();
-        setDefaultGoal(shortGoal, 1800);
-        fixture.measuredSession(shortGoal, today(), 0, 7200);
-        assertThat(get(shortGoal))
+        long longGoal = fixture.member();
+        setDefaultGoal(longGoal, 3 * 3600);
+        fixture.measuredSession(longGoal, today(), 0, 3 * 3600);
+        assertThat(claim(longGoal, "daily-goal"))
+                .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.dailyGoal.minGoalSec", v -> assertThat(v).isEqualTo(3600))
-                .hasPathSatisfying("$.dailyGoal.achieved", v -> assertThat(v).isEqualTo(false));
-        assertCode(claim(shortGoal, "daily-goal"), HttpStatus.CONFLICT, "REWARD_NOT_AVAILABLE");
+                .hasPathSatisfying("$.points", v -> assertThat(v).isEqualTo(6));
+    }
+
+    @Test
+    void 안_받은_메달을_한_번에_받는다() {
+        long user = fixture.member();
+        medal(user, "FOCUS_TIME:DAILY", futurePeriod(), 1);
+        medal(user, "TIME_SLOT:DAILY:NIGHT", futurePeriod(), 3);
+
+        assertThat(claim(user, "medals"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.claimedCount", v -> assertThat(v).isEqualTo(2))
+                .hasPathSatisfying("$.points", v -> assertThat(v).isEqualTo(130))
+                .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(130));
+        assertThat(claim(user, "medals"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.claimedCount", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(130));
     }
 
     @Test

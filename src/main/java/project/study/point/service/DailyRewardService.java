@@ -12,6 +12,7 @@ import project.study.common.exception.NotFoundException;
 import project.study.planner.goal.service.PlannerGoalService;
 import project.study.point.dto.ClaimResponse;
 import project.study.point.dto.EarnOverviewResponse;
+import project.study.point.dto.MedalClaimAllResponse;
 import project.study.point.dto.MedalReward;
 import project.study.point.dto.MedalRow;
 import project.study.point.dto.PointReason;
@@ -43,39 +44,43 @@ public class DailyRewardService {
         long focusSec = repository.measuredFocusSecOn(userId, today);
         int recognized = studyPolicy.counts(today) ? studyPolicy.recognizedFocusSec(focusSec) : 0;
         Integer goalSec = goalService.get(userId, today).goalSec();
+        int goalPoints = goalPoints(goalSec);
         List<MedalReward> medals = repository.unclaimedMedals(userId, studyPolicy.startsOn()).stream()
                 .map(this::medalReward)
                 .toList();
         return new EarnOverviewResponse(
                 today,
                 repository.earnedOn(userId, today),
-                studyPolicy.maxDailyPoints() + rewardPolicy.attendancePoints() + rewardPolicy.dailyGoalPoints(),
+                studyPolicy.maxDailyPoints() + rewardPolicy.attendancePoints() + goalPoints,
                 new EarnOverviewResponse.Study(
                         recognized,
                         studyPolicy.dailyCapSec(),
+                        studyPolicy.unitSec(),
+                        studyPolicy.pointsPerUnit(),
                         repository.studyGrantedOn(userId, today),
                         studyPolicy.maxDailyPoints()),
                 new EarnOverviewResponse.Attendance(
                         rewardPolicy.attendancePoints(),
                         repository.exists(userId, PointReason.ATTENDANCE, today.toString())),
                 new EarnOverviewResponse.DailyGoal(
-                        rewardPolicy.dailyGoalPoints(),
+                        goalPoints,
                         goalSec,
-                        rewardPolicy.minGoalSec(),
                         focusSec,
                         goalSec == null ? null : Math.max(0, goalSec - focusSec),
-                        rewardPolicy.goalAchieved(goalSec, focusSec),
+                        goalPoints > 0 && focusSec >= goalSec,
                         repository.exists(userId, PointReason.DAILY_GOAL, today.toString())),
-                medals);
+                medals,
+                rewardPolicy.medalTable());
     }
 
     @Transactional
     public ClaimResponse claimAttendance(Long userId) {
         members.requireMember(userId);
         LocalDate today = startedToday(userId);
-        return claim(userId, PointReason.ATTENDANCE, today.toString(), rewardPolicy.attendancePoints(), null, today);
+        return claim(userId, PointReason.ATTENDANCE, today.toString(), rewardPolicy.attendancePoints(), today);
     }
 
+    /** 받는 포인트는 받는 순간의 목표 시간으로 정한다. 받은 뒤 목표를 올려도 더 받지 못한다. */
     @Transactional
     public ClaimResponse claimDailyGoal(Long userId) {
         members.requireMember(userId);
@@ -85,10 +90,28 @@ public class DailyRewardService {
             return new ClaimResponse(false, 0, repository.balance(userId));
         }
         Integer goalSec = goalService.get(userId, today).goalSec();
-        if (!rewardPolicy.goalAchieved(goalSec, repository.measuredFocusSecOn(userId, today))) {
+        int points = goalPoints(goalSec);
+        if (points <= 0 || repository.measuredFocusSecOn(userId, today) < goalSec) {
             throw new ConflictException(ErrorCode.REWARD_NOT_AVAILABLE, "아직 하루 목표를 채우지 않았습니다");
         }
-        return claim(userId, PointReason.DAILY_GOAL, today.toString(), rewardPolicy.dailyGoalPoints(), null, today);
+        return claim(userId, PointReason.DAILY_GOAL, today.toString(), points, today);
+    }
+
+    /** 안 받은 메달을 한 번에 받는다. 받을 메달이 없으면 지급 없이 잔액만 준다. */
+    @Transactional
+    public MedalClaimAllResponse claimAllMedals(Long userId) {
+        members.requireMember(userId);
+        pointService.lock(userId);
+        int count = 0;
+        int total = 0;
+        for (MedalRow medal : repository.unclaimedMedals(userId, studyPolicy.startsOn())) {
+            int points = medalReward(medal).points();
+            if (points > 0 && earnMedal(userId, medal, points)) {
+                count++;
+                total += points;
+            }
+        }
+        return new MedalClaimAllResponse(count, total, repository.balance(userId));
     }
 
     @Transactional
@@ -102,14 +125,22 @@ public class DailyRewardService {
         if (points <= 0) {
             throw new ConflictException(ErrorCode.REWARD_NOT_AVAILABLE, "포인트가 없는 메달입니다");
         }
-        String label = medal.boardKey() + "/" + medal.rank();
-        return claim(userId, PointReason.MEDAL, "record:" + recordId, points, label, null);
+        boolean granted = earnMedal(userId, medal, points);
+        return new ClaimResponse(granted, granted ? points : 0, repository.balance(userId));
     }
 
-    private ClaimResponse claim(
-            long userId, PointReason reason, String refKey, int points, String label, LocalDate statDate) {
-        boolean granted = pointService.earn(userId, reason, refKey, points, label, statDate);
+    private boolean earnMedal(long userId, MedalRow medal, int points) {
+        String label = medal.boardKey() + "/" + medal.rank();
+        return pointService.earn(userId, PointReason.MEDAL, "record:" + medal.recordId(), points, label, null);
+    }
+
+    private ClaimResponse claim(long userId, PointReason reason, String refKey, int points, LocalDate statDate) {
+        boolean granted = pointService.earn(userId, reason, refKey, points, null, statDate);
         return new ClaimResponse(granted, granted ? points : 0, repository.balance(userId));
+    }
+
+    private int goalPoints(Integer goalSec) {
+        return rewardPolicy.goalPoints(goalSec, studyPolicy.dailyCapSec());
     }
 
     private MedalReward medalReward(MedalRow row) {

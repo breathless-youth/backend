@@ -34,6 +34,14 @@ public class StudyPointPolicy {
         return startsOn;
     }
 
+    public int unitSec() {
+        return unitSec;
+    }
+
+    public int pointsPerUnit() {
+        return pointsPerUnit;
+    }
+
     /** 하루에 공부로 받을 수 있는 최대 포인트. */
     public int maxDailyPoints() {
         return targetPoints(dailyCapSec);

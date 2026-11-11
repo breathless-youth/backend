@@ -58,7 +58,7 @@ CREATE TABLE shop_item (
     slot varchar(8) CHECK (slot IN ('HEAD', 'FACE', 'BODY')),
     tag varchar(32),
     name varchar(60) NOT NULL,
-    -- 다른 언어 이름. 키는 주 언어(en, ja, zh)이고 없는 언어는 name(한국어)으로 보여 준다
+    -- 다른 언어 이름. 키는 주 언어(en, ja, zh)이고 zh에는 번체를 넣는다(앱이 간체를 지원하지 않는다). 없는 언어는 name(한국어)으로 보여 준다
     names jsonb NOT NULL DEFAULT '{}'::jsonb,
     image_url varchar(500),
     price integer CHECK (price > 0),

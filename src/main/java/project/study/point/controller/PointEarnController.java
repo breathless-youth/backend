@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.point.dto.ClaimResponse;
 import project.study.point.dto.EarnOverviewResponse;
+import project.study.point.dto.MedalClaimAllResponse;
 import project.study.point.service.DailyRewardService;
 
 @Tag(
@@ -47,7 +48,10 @@ public class PointEarnController {
         return service.claimAttendance(userId);
     }
 
-    @Operation(summary = "하루 목표 포인트 받기", description = "오늘 측정한 순공이 오늘의 목표 이상이고 목표가 최소 목표 이상일 때 하루 한 번.")
+    @Operation(
+            summary = "하루 목표 포인트 받기",
+            description =
+                    "오늘 측정한 순공이 오늘의 목표 이상일 때 하루 한 번. 포인트는 받는 순간의 목표 시간에 비례한다(30분마다 1P). 목표가 없거나 30분에 못 미치면 받을 것이 없어 409다.")
     @ApiResponse(
             responseCode = "409",
             description = "목표를 아직 못 채움",
@@ -62,7 +66,15 @@ public class PointEarnController {
         return service.claimDailyGoal(userId);
     }
 
-    @Operation(summary = "메달 포인트 받기", description = "오늘의 무료 포인트 응답의 medals[].recordId를 넣는다. 메달 하나에 한 번.")
+    @Operation(
+            summary = "안 받은 메달 포인트 한 번에 받기",
+            description = "오늘의 무료 포인트 응답의 medals 전부를 한 요청으로 받는다. 받을 메달이 없으면 claimedCount 0과 잔액을 준다.")
+    @PostMapping("/rewards/medals/claim")
+    public MedalClaimAllResponse claimAllMedals(@AuthenticationPrincipal Long userId) {
+        return service.claimAllMedals(userId);
+    }
+
+    @Operation(summary = "메달 포인트 하나 받기", description = "오늘의 무료 포인트 응답의 medals[].recordId를 넣는다. 메달 하나에 한 번.")
     @ApiResponse(
             responseCode = "404",
             description = "내 메달이 아니거나 없는 메달",
