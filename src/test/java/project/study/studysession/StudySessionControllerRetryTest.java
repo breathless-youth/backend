@@ -16,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import project.study.point.service.StudyPointService;
 import project.study.studysession.controller.StudySessionController;
 import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.StudySessionCreateRequest;
@@ -43,6 +44,10 @@ class StudySessionControllerRetryTest {
     // assertTasksOwned는 stub한 완료 목록을 돌려준다. 그 목록이 재시도에도 같은 인스턴스로 실리는지 verify로 본다
     @Mock
     private StudySubjectService subjectService;
+
+    // 제출이 끝난 뒤 불리는 공부 포인트 지급 — 재시도 흐름과 무관해 아무 일도 하지 않는 목이다
+    @Mock
+    private StudyPointService studyPointService;
 
     @InjectMocks
     private StudySessionController controller;

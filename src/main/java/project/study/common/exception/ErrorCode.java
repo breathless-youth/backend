@@ -114,6 +114,36 @@ public enum ErrorCode {
     /** 측정한 기록은 수동 기록에서 고치거나 지울 수 없다 (409) */
     MEASURED_RECORD_LOCKED,
 
+    /** 비회원은 쓸 수 없다. 소셜 로그인한 사용자만 포인트·상점·마스코트를 쓴다 (403) */
+    MEMBER_ONLY,
+
+    /** 포인트가 모자라다 (409) */
+    INSUFFICIENT_POINTS,
+
+    /** 이미 가진 상품이다 (409) — 같은 구매 요청이 두 번 와도 포인트는 한 번만 빠진다 */
+    ITEM_ALREADY_OWNED,
+
+    /** 포인트로 살 수 없는 보상 상품이다 (409) */
+    ITEM_NOT_PURCHASABLE,
+
+    /** 가지지 않은 상품은 착용·적용할 수 없다 (409) */
+    ITEM_NOT_OWNED,
+
+    /** 없거나 내린 상품이다 (404) */
+    SHOP_ITEM_NOT_FOUND,
+
+    /** 아직 열리지 않은 마스코트다 — 선택하거나 그 소품을 살 수 없다 (409) */
+    MASCOT_LOCKED,
+
+    /** 없는 마스코트다 (404) */
+    MASCOT_NOT_FOUND,
+
+    /** 아직 받을 수 없는 보상이다 — 하루 목표를 못 채웠거나 포인트 시작 날짜 전이다 (409) */
+    REWARD_NOT_AVAILABLE,
+
+    /** 내 메달이 아니거나 없는 메달이다 (404) */
+    MEDAL_NOT_FOUND,
+
     /** Spring MVC 표준 4xx (405·415 등) */
     REQUEST_FAILED,
 
