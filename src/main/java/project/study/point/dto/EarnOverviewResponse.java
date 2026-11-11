@@ -50,6 +50,12 @@ public record EarnOverviewResponse(
             @Schema(description = "오늘 목표를 채우면 받는 포인트. 목표 시간에 비례하고(30분마다 1P) 목표가 없으면 0", example = "4")
             int points,
 
+            @Schema(description = "보상을 주는 목표 시간 단위(초). 목표 시간의 이만큼마다 pointsPerUnit을 준다", example = "1800")
+            int unitSec,
+
+            @Schema(description = "단위마다 주는 포인트", example = "1")
+            int pointsPerUnit,
+
             @Schema(description = "오늘의 목표(초). 플래너·홈의 목표와 같은 값이고 정한 적이 없으면 null", example = "7200")
             Integer goalSec,
 

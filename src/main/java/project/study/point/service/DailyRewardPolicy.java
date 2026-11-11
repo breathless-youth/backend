@@ -30,6 +30,15 @@ public class DailyRewardPolicy {
         return attendancePoints;
     }
 
+    /** 하루 목표 보상을 주는 목표 시간 단위(초). */
+    public int goalUnitSec() {
+        return HALF_HOUR_SEC;
+    }
+
+    public int goalPointsPerUnit() {
+        return goalPointsPerHalfHour;
+    }
+
     public MedalPointTable medalTable() {
         return medals;
     }

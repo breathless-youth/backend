@@ -86,6 +86,9 @@ class PointEarnApiTest {
                 .bodyJson()
                 .hasPathSatisfying("$.dailyMax", v -> assertThat(v).isEqualTo(240 + 10 + 2))
                 .hasPathSatisfying("$.dailyGoal.points", v -> assertThat(v).isEqualTo(2))
+                .hasPathSatisfying("$.dailyGoal.unitSec", v -> assertThat(v).isEqualTo(1800))
+                .hasPathSatisfying(
+                        "$.dailyGoal.pointsPerUnit", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying("$.dailyGoal.goalSec", v -> assertThat(v).isEqualTo(3600))
                 .hasPathSatisfying(
                         "$.dailyGoal.remainingSec", v -> assertThat(v).isEqualTo(1800))

@@ -64,6 +64,8 @@ public class DailyRewardService {
                         repository.exists(userId, PointReason.ATTENDANCE, today.toString())),
                 new EarnOverviewResponse.DailyGoal(
                         goalPoints,
+                        rewardPolicy.goalUnitSec(),
+                        rewardPolicy.goalPointsPerUnit(),
                         goalSec,
                         focusSec,
                         goalSec == null ? null : Math.max(0, goalSec - focusSec),
