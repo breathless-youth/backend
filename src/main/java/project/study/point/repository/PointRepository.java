@@ -165,12 +165,22 @@ public class PointRepository {
         return byDate;
     }
 
-    /** 그날의 무료 포인트(공부·출석·하루 목표) 합계. 메달은 날짜가 없어 들지 않는다. */
+    /** 그날의 무료 포인트(공부·출석·하루 목표·광고) 합계. 메달은 날짜가 없어 들지 않는다. */
     public int earnedOn(long userId, LocalDate date) {
         return jdbc.sql("""
                         SELECT COALESCE(SUM(amount), 0) FROM point_ledger
-                        WHERE user_id = :u AND stat_date = :d AND reason IN ('STUDY', 'STUDY_ADJUST', 'ATTENDANCE', 'DAILY_GOAL')""")
+                        WHERE user_id = :u AND stat_date = :d AND reason IN ('STUDY', 'STUDY_ADJUST', 'ATTENDANCE', 'DAILY_GOAL', 'AD')""")
                 .param("u", userId)
+                .param("d", date)
+                .query(Integer.class)
+                .single();
+    }
+
+    /** 그날 그 사유로 받은 횟수. */
+    public int countOn(long userId, PointReason reason, LocalDate date) {
+        return jdbc.sql("SELECT COUNT(*) FROM point_ledger WHERE user_id = :u AND reason = :r AND stat_date = :d")
+                .param("u", userId)
+                .param("r", reason.name())
                 .param("d", date)
                 .query(Integer.class)
                 .single();

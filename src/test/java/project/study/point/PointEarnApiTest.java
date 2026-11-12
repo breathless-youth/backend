@@ -51,6 +51,9 @@ class PointEarnApiTest {
                 .hasPathSatisfying("$.todayEarned", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.dailyMax", v -> assertThat(v).isEqualTo(240 + 10))
                 .hasPathSatisfying("$.attendance.claimed", v -> assertThat(v).isEqualTo(false))
+                // 광고 단위가 설정되지 않은 서버는 광고 보상이 꺼져 있고 하루 최대에도 들지 않는다
+                .hasPathSatisfying("$.ad.available", v -> assertThat(v).isEqualTo(false))
+                .hasPathSatisfying("$.ad.watchedToday", v -> assertThat(v).isEqualTo(0))
                 .hasPathSatisfying("$.study.maxPoints", v -> assertThat(v).isEqualTo(240))
                 .hasPathSatisfying("$.study.unitSec", v -> assertThat(v).isEqualTo(1800))
                 .hasPathSatisfying("$.study.pointsPerUnit", v -> assertThat(v).isEqualTo(10))

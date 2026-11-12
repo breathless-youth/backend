@@ -35,6 +35,7 @@ public class DailyRewardService {
     private final Clock clock;
     private final StudyPointPolicy studyPolicy;
     private final DailyRewardPolicy rewardPolicy;
+    private final AdRewardPolicy adPolicy;
     private final PlannerGoalService goalService;
 
     @Transactional(readOnly = true)
@@ -45,13 +46,14 @@ public class DailyRewardService {
         int recognized = studyPolicy.counts(today) ? studyPolicy.recognizedFocusSec(focusSec) : 0;
         Integer goalSec = goalService.get(userId, today).goalSec();
         int goalPoints = goalPoints(goalSec);
+        int adMax = adPolicy.available() ? adPolicy.points() * adPolicy.dailyLimit() : 0;
         List<MedalReward> medals = repository.unclaimedMedals(userId, studyPolicy.startsOn()).stream()
                 .map(this::medalReward)
                 .toList();
         return new EarnOverviewResponse(
                 today,
                 repository.earnedOn(userId, today),
-                studyPolicy.maxDailyPoints() + rewardPolicy.attendancePoints() + goalPoints,
+                studyPolicy.maxDailyPoints() + rewardPolicy.attendancePoints() + goalPoints + adMax,
                 new EarnOverviewResponse.Study(
                         recognized,
                         studyPolicy.dailyCapSec(),
@@ -71,6 +73,11 @@ public class DailyRewardService {
                         goalSec == null ? null : Math.max(0, goalSec - focusSec),
                         goalPoints > 0 && focusSec >= goalSec,
                         repository.exists(userId, PointReason.DAILY_GOAL, today.toString())),
+                new EarnOverviewResponse.Ad(
+                        adPolicy.available(),
+                        adPolicy.points(),
+                        repository.countOn(userId, PointReason.AD, today),
+                        adPolicy.dailyLimit()),
                 medals,
                 rewardPolicy.medalTable());
     }

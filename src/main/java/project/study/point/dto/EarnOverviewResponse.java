@@ -8,15 +8,16 @@ public record EarnOverviewResponse(
         @Schema(description = "오늘 날짜(사용자 시간대 자정 기준)", example = "2026-11-12")
         LocalDate date,
 
-        @Schema(description = "오늘 받은 무료 포인트 합계(공부·출석·하루 목표). 메달은 들지 않는다", example = "80")
+        @Schema(description = "오늘 받은 무료 포인트 합계(공부·출석·하루 목표·광고). 메달은 들지 않는다", example = "80")
         int todayEarned,
 
-        @Schema(description = "하루에 받을 수 있는 최대(공부 상한 + 출석 + 오늘 목표의 보상). 메달은 들지 않는다", example = "254")
+        @Schema(description = "하루에 받을 수 있는 최대(공부 상한 + 출석 + 오늘 목표의 보상 + 광고 한도). 메달은 들지 않는다", example = "254")
         int dailyMax,
 
         Study study,
         Attendance attendance,
         DailyGoal dailyGoal,
+        Ad ad,
 
         @Schema(description = "포인트를 아직 안 받은 메달. 최근 마감 순, 없으면 []")
         List<MedalReward> medals,
@@ -69,4 +70,16 @@ public record EarnOverviewResponse(
             boolean achieved,
 
             @Schema(description = "오늘 받았는지") boolean claimed) {}
+
+    public record Ad(
+            @Schema(description = "광고 보상을 쓸 수 있는지. false면 광고 칸을 숨긴다(서버에 광고 단위가 설정되지 않음)")
+            boolean available,
+
+            @Schema(description = "광고 한 번에 받는 포인트", example = "10")
+            int points,
+
+            @Schema(description = "오늘 광고로 보상을 받은 횟수", example = "1")
+            int watchedToday,
+
+            @Schema(description = "하루 한도(번)", example = "3") int dailyLimit) {}
 }
