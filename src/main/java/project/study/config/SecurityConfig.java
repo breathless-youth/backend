@@ -66,6 +66,10 @@ public class SecurityConfig {
                         // 요청만 지급한다 (AdRewardService)
                         .requestMatchers(HttpMethod.GET, "/api/points/ads/admob/callback")
                         .permitAll()
+                        // RevenueCat 결제 알림 — RevenueCat 서버가 우리 토큰 없이 부른다. 대시보드에 넣은 Authorization
+                        // 값이 서버 설정과 같은 요청만 처리한다 (ChargeService)
+                        .requestMatchers(HttpMethod.POST, "/api/points/purchases/revenuecat/webhook")
+                        .permitAll()
                         // WebSocket 핸드셰이크 — 인증은 CONNECT 프레임에서 한다 (WebSocketConfig)
                         .requestMatchers("/ws")
                         .permitAll()

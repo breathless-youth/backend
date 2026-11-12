@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.point.dto.MedalRow;
+import project.study.point.dto.PointAccount;
 import project.study.point.dto.PointFund;
 import project.study.point.dto.PointHistoryItem;
 import project.study.point.dto.PointHistoryType;
@@ -32,15 +33,38 @@ public class PointRepository {
                 .orElse(0);
     }
 
-    /** 같은 (사유, 참조 키)가 이미 있으면 넣지 않고 false. */
+    /** 잔액과 그 가운데 결제 몫. 행이 없으면 둘 다 0. */
+    public PointAccount account(long userId) {
+        return jdbc.sql("SELECT balance, paid_balance FROM point_account WHERE user_id = :u")
+                .param("u", userId)
+                .query((rs, n) -> new PointAccount(rs.getInt("balance"), rs.getInt("paid_balance")))
+                .optional()
+                .orElse(new PointAccount(0, 0));
+    }
+
+    /** 같은 (사유, 참조 키)가 이미 있으면 넣지 않고 false. 무료 포인트만 오간 줄이다. */
     public boolean insertLedger(
             long userId, int amount, PointReason reason, String refKey, String label, LocalDate statDate) {
+        return insertLedger(userId, amount, 0, reason, refKey, label, statDate);
+    }
+
+    /** paidAmount는 amount 가운데 결제 몫이고 부호가 같다. 0이 아니면 fund를 PAID로 적는다. */
+    public boolean insertLedger(
+            long userId,
+            int amount,
+            int paidAmount,
+            PointReason reason,
+            String refKey,
+            String label,
+            LocalDate statDate) {
         return jdbc.sql("""
-                        INSERT INTO point_ledger (user_id, amount, fund, reason, ref_key, label, stat_date)
-                        VALUES (:u, :amount, 'FREE', :reason, :ref, :label, :statDate)
+                        INSERT INTO point_ledger (user_id, amount, paid_amount, fund, reason, ref_key, label, stat_date)
+                        VALUES (:u, :amount, :paid, :fund, :reason, :ref, :label, :statDate)
                         ON CONFLICT ON CONSTRAINT uq_point_ledger_ref DO NOTHING""")
                         .param("u", userId)
                         .param("amount", amount)
+                        .param("paid", paidAmount)
+                        .param("fund", paidAmount == 0 ? "FREE" : "PAID")
                         .param("reason", reason.name())
                         .param("ref", refKey)
                         .param("label", label)
@@ -50,19 +74,28 @@ public class PointRepository {
     }
 
     public void addBalance(long userId, int amount) {
-        jdbc.sql("""
-                INSERT INTO point_account (user_id, balance) VALUES (:u, :amount)
-                ON CONFLICT (user_id) DO UPDATE SET balance = point_account.balance + EXCLUDED.balance""").param("u", userId).param("amount", amount).update();
+        addBalance(userId, amount, 0);
     }
 
-    /** 잔액이 모자라면 빼지 않고 false. */
-    public boolean subtractBalance(long userId, int amount) {
-        return jdbc.sql(
-                                "UPDATE point_account SET balance = balance - :amount WHERE user_id = :u AND balance >= :amount")
-                        .param("u", userId)
-                        .param("amount", amount)
-                        .update()
-                > 0;
+    /** paidAmount는 amount 가운데 결제 몫이다. */
+    public void addBalance(long userId, int amount, int paidAmount) {
+        jdbc.sql("""
+                INSERT INTO point_account (user_id, balance, paid_balance) VALUES (:u, :amount, :paid)
+                ON CONFLICT (user_id) DO UPDATE SET balance = point_account.balance + EXCLUDED.balance,
+                    paid_balance = point_account.paid_balance + EXCLUDED.paid_balance""")
+                .param("u", userId)
+                .param("amount", amount)
+                .param("paid", paidAmount)
+                .update();
+    }
+
+    /** 포인트 사용자 락을 잡고 읽은 값에서 계산한 새 잔액을 적는다. */
+    public void setAccount(long userId, PointAccount account) {
+        jdbc.sql("UPDATE point_account SET balance = :b, paid_balance = :p WHERE user_id = :u")
+                .param("b", account.balance())
+                .param("p", account.paidBalance())
+                .param("u", userId)
+                .update();
     }
 
     /** 최신순. beforeId가 있으면 그보다 오래된 기록만. 구매 기록의 label은 그 상품의 language 이름으로 바꿔 준다. */
@@ -76,7 +109,7 @@ public class PointRepository {
                 };
         String before = beforeId == null ? "" : " AND l.id < :before";
         JdbcClient.StatementSpec spec = jdbc.sql("""
-                        SELECT l.id, l.amount, l.reason, l.fund, l.stat_date, l.created_at,
+                        SELECT l.id, l.amount, l.paid_amount, l.reason, l.fund, l.stat_date, l.created_at,
                                COALESCE(i.names ->> :lang, i.name, l.label) AS label
                         FROM point_ledger l
                         LEFT JOIN shop_item i ON l.reason = 'PURCHASE' AND l.ref_key = 'item:' || i.id
@@ -92,6 +125,7 @@ public class PointRepository {
                         rs.getInt("amount"),
                         PointReason.valueOf(rs.getString("reason")),
                         PointFund.valueOf(rs.getString("fund")),
+                        rs.getInt("paid_amount"),
                         rs.getString("label"),
                         rs.getObject("stat_date", LocalDate.class),
                         rs.getTimestamp("created_at").toInstant()))

@@ -93,6 +93,11 @@ app:
   points:
     ad:
       units: ca-app-pub-4724067415486202/6730214745,ca-app-pub-4724067415486202/5416473931
+    # 충전 알림(RevenueCat 웹훅). 대시보드의 웹훅에 넣은 Authorization 값과 같은 값을 .env에 둔다. 비어 있으면 충전이 꺼진다.
+    # 샌드박스 결제는 dev에서만 받는다 — prod에는 accept-sandbox를 넣지 않는다
+    charge:
+      revenuecat-webhook-auth: ${REVENUECAT_WEBHOOK_AUTH:}
+      accept-sandbox: true
   # 데모 데이터 시딩 + Swagger 목데이터 안내 (BY-640: 프로필 대신 스위치). dev 서버 전용 편의 기능
   seed:
     enabled: true

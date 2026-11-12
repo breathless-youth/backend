@@ -357,14 +357,16 @@ Table live_task {
 Table point_account {
   user_id bigint [primary key, ref: > users.id]
   balance integer [not null, default: 0, note: 'CHECK >= 0']
+  paid_balance integer [not null, default: 0, note: '잔액 가운데 결제로 산 몫. 0 이상 balance 이하']
 }
 
 Table point_ledger {
   id bigserial [primary key]
   user_id bigint [not null, ref: > users.id]
   amount integer [not null, note: '받은 것 양수, 쓴 것 음수']
+  paid_amount integer [not null, default: 0, note: 'amount 가운데 결제 몫(부호 같음)']
   fund varchar(8) [not null, default: 'FREE', note: 'FREE | PAID']
-  reason varchar(32) [not null, note: 'STUDY | STUDY_ADJUST | PURCHASE | ATTENDANCE | DAILY_GOAL | MEDAL']
+  reason varchar(32) [not null, note: 'STUDY | STUDY_ADJUST | PURCHASE | ATTENDANCE | DAILY_GOAL | MEDAL | AD | CHARGE | REFUND']
   ref_key varchar(128) [not null, note: '같은 지급·차감을 한 번만 넣는 키']
   label varchar(100)
   stat_date date [note: 'STUDY일 때 공부한 날짜']
@@ -374,6 +376,37 @@ Table point_ledger {
     (user_id, reason, ref_key) [unique, name: 'uq_point_ledger_ref']
     (user_id, id) [name: 'idx_point_ledger_user_id']
     (user_id, stat_date) [name: 'idx_point_ledger_day', note: 'WHERE stat_date IS NOT NULL']
+  }
+}
+
+Table point_product {
+  id bigserial [primary key]
+  store_product_id varchar(100) [not null, unique, note: '스토어·RevenueCat의 상품 ID']
+  points integer [not null, note: '결제로 사는 포인트']
+  bonus_points integer [not null, default: 0, note: '덤(무료 몫)']
+  sort_order integer [not null, default: 0]
+  active boolean [not null, default: true]
+}
+
+Table point_purchase {
+  id bigserial [primary key]
+  user_id bigint [ref: > users.id, note: '탈퇴하면 NULL']
+  store varchar(24) [not null]
+  transaction_id varchar(128) [not null, note: '스토어 거래 ID']
+  store_product_id varchar(100) [not null]
+  points integer [not null]
+  bonus_points integer [not null]
+  sandbox boolean [not null]
+  status varchar(12) [not null, note: 'GRANTED | REFUNDED']
+  reclaimed_points integer [not null, default: 0, note: '환불 때 되돌린 포인트']
+  shortfall_points integer [not null, default: 0, note: '이미 써서 되돌리지 못한 포인트']
+  purchased_at timestamptz
+  created_at timestamptz [not null]
+  refunded_at timestamptz
+
+  indexes {
+    (store, transaction_id) [unique, name: 'uq_point_purchase_tx']
+    user_id [name: 'idx_point_purchase_user', note: 'WHERE user_id IS NOT NULL']
   }
 }
 

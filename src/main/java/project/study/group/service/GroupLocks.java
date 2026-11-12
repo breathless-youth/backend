@@ -34,6 +34,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *   <li>이 락: {@code 2^42 + userId}
  *   <li>공개 그룹 이름 락({@link #lockPublicName}): {@code 2^43 + hashtext(이름 키)} — {@code hashtext}가 32비트라 {@code 2^43 ± 2^31}
  *   <li>포인트 사용자 락({@code PointLocks}): {@code 2^44 + userId}
+ *   <li>포인트 결제 락({@code PointLocks.lockPurchase}): {@code 2^45 + hashtext(스토어:거래 ID)} — {@code 2^45 ± 2^31}
  * </ul>
  *
  * <p>2^41은 수동 기록 락이 이미 쓰고 있어 같은 사용자의 수동 기록 저장과 그룹 만들기가 서로를 기다리게 되므로 2^42를 쓴다. 사용자 ID는
