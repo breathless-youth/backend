@@ -17,7 +17,7 @@ import project.study.user.service.MemberGuard;
 
 /**
  * 잔액과 포인트 기록. 잔액을 바꾸는 길은 {@link #earn}·{@link #charge}·{@link #spend}·{@link #reclaim}뿐이고 모두 기록 한 줄을 함께
- * 남긴다. 잔액은 무료 몫과 결제 몫으로 나뉘고, 쓸 때는 무료 몫부터 빠진다.
+ * 남긴다. 잔액은 무료 몫과 결제 몫으로 나뉘고, 쓸 때는 무료 몫부터 빠진다. 환불로만 음수가 될 수 있다.
  */
 @Service
 @RequiredArgsConstructor
@@ -68,7 +68,8 @@ public class PointService {
     }
 
     /**
-     * 결제로 산 포인트(paid)와 덤(bonus)을 준다. 덤은 무료 몫이다. 같은 참조 키로 이미 받았으면 아무것도 하지 않고 false.
+     * 결제로 산 포인트(paid)와 덤(bonus)을 준다. 덤은 무료 몫이다. 같은 참조 키로 이미 받았으면 아무것도 하지 않고 false. 환불로 잔액이
+     * 음수였다면 그만큼을 먼저 메우고, 0 위로 남은 만큼만 결제 몫이 된다.
      */
     @Transactional
     public boolean charge(long userId, String refKey, int paid, int bonus, String label) {
@@ -76,10 +77,13 @@ public class PointService {
             throw new IllegalArgumentException("충전 금액은 양수여야 한다");
         }
         locks.lockUser(userId);
-        if (!repository.insertLedger(userId, paid + bonus, paid, PointReason.CHARGE, refKey, label, null)) {
+        PointAccount account = repository.account(userId);
+        int balance = account.balance() + paid + bonus;
+        int paidDelta = Math.min(account.paidBalance() + paid, Math.max(balance, 0)) - account.paidBalance();
+        if (!repository.insertLedger(userId, paid + bonus, paidDelta, PointReason.CHARGE, refKey, label, null)) {
             return false;
         }
-        repository.addBalance(userId, paid + bonus, paid);
+        repository.addBalance(userId, paid + bonus, paidDelta);
         return true;
     }
 
@@ -103,24 +107,26 @@ public class PointService {
     }
 
     /**
-     * 환불된 결제의 포인트(paid + bonus)를 되돌린다. 이미 써서 잔액이 모자라면 남은 만큼만 0까지 빼고, 잔액을 음수로 두지 않는다. 되돌린
-     * 포인트를 돌려준다(0일 수 있다). 결제 몫은 그 결제로 산 만큼까지만 줄인다.
+     * 환불된 결제의 포인트(paid + bonus)를 전부 되돌린다. 이미 써서 잔액이 모자라면 잔액이 음수가 된다. 되돌린 뒤의 잔액을 돌려준다. 결제
+     * 몫은 그 결제로 산 만큼까지만 줄이고, 잔액이 음수면 0이다.
      */
     @Transactional
     public int reclaim(long userId, String refKey, int paid, int bonus, String label) {
         locks.lockUser(userId);
         PointAccount account = repository.account(userId);
-        int take = Math.min(account.balance(), paid + bonus);
-        if (take <= 0) {
-            return 0;
-        }
-        int balance = account.balance() - take;
-        int paidBalance = Math.min(account.paidBalance() - Math.min(account.paidBalance(), paid), balance);
+        int balance = account.balance() - paid - bonus;
+        int paidBalance = Math.min(Math.max(account.paidBalance() - paid, 0), Math.max(balance, 0));
         if (!repository.insertLedger(
-                userId, -take, paidBalance - account.paidBalance(), PointReason.REFUND, refKey, label, null)) {
-            return 0;
+                userId,
+                -(paid + bonus),
+                paidBalance - account.paidBalance(),
+                PointReason.REFUND,
+                refKey,
+                label,
+                null)) {
+            throw new IllegalStateException("같은 참조 키로 이미 되돌린 기록이 있다: " + refKey);
         }
         repository.setAccount(userId, new PointAccount(balance, paidBalance));
-        return take;
+        return balance;
     }
 }
