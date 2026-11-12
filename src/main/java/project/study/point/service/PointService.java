@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.BadRequestException;
+import project.study.point.dto.PointAccount;
 import project.study.point.dto.PointBalanceResponse;
 import project.study.point.dto.PointHistoryItem;
 import project.study.point.dto.PointHistoryResponse;
@@ -14,7 +15,10 @@ import project.study.point.dto.PointReason;
 import project.study.point.repository.PointRepository;
 import project.study.user.service.MemberGuard;
 
-/** 잔액과 포인트 기록. 잔액을 바꾸는 길은 {@link #earn}과 {@link #spend} 둘뿐이고 둘 다 기록 한 줄을 함께 남긴다. */
+/**
+ * 잔액과 포인트 기록. 잔액을 바꾸는 길은 {@link #earn}·{@link #charge}·{@link #spend}·{@link #reclaim}뿐이고 모두 기록 한 줄을 함께
+ * 남긴다. 잔액은 무료 몫과 결제 몫으로 나뉘고, 쓸 때는 무료 몫부터 빠진다.
+ */
 @Service
 @RequiredArgsConstructor
 public class PointService {
@@ -28,7 +32,8 @@ public class PointService {
     @Transactional(readOnly = true)
     public PointBalanceResponse balance(Long userId) {
         members.requireMember(userId);
-        return new PointBalanceResponse(repository.balance(userId));
+        PointAccount account = repository.account(userId);
+        return new PointBalanceResponse(account.balance(), account.paidBalance());
     }
 
     @Transactional(readOnly = true)
@@ -62,19 +67,60 @@ public class PointService {
         return true;
     }
 
-    /** 잔액이 모자라면 {@link InsufficientPointsException}. 쓴 뒤의 잔액을 돌려준다. */
+    /**
+     * 결제로 산 포인트(paid)와 덤(bonus)을 준다. 덤은 무료 몫이다. 같은 참조 키로 이미 받았으면 아무것도 하지 않고 false.
+     */
+    @Transactional
+    public boolean charge(long userId, String refKey, int paid, int bonus, String label) {
+        if (paid <= 0 || bonus < 0) {
+            throw new IllegalArgumentException("충전 금액은 양수여야 한다");
+        }
+        locks.lockUser(userId);
+        if (!repository.insertLedger(userId, paid + bonus, paid, PointReason.CHARGE, refKey, label, null)) {
+            return false;
+        }
+        repository.addBalance(userId, paid + bonus, paid);
+        return true;
+    }
+
+    /** 잔액이 모자라면 {@link InsufficientPointsException}. 무료 몫부터 쓰고 모자란 만큼만 결제 몫에서 뺀다. 쓴 뒤의 잔액을 돌려준다. */
     @Transactional
     public int spend(long userId, PointReason reason, String refKey, int amount, String label) {
         if (amount <= 0) {
             throw new IllegalArgumentException("쓰는 금액은 양수여야 한다");
         }
         locks.lockUser(userId);
-        if (!repository.subtractBalance(userId, amount)) {
+        PointAccount account = repository.account(userId);
+        if (account.balance() < amount) {
             throw new InsufficientPointsException();
         }
-        if (!repository.insertLedger(userId, -amount, reason, refKey, label, null)) {
+        int fromPaid = Math.max(0, amount - account.freeBalance());
+        repository.setAccount(userId, new PointAccount(account.balance() - amount, account.paidBalance() - fromPaid));
+        if (!repository.insertLedger(userId, -amount, -fromPaid, reason, refKey, label, null)) {
             throw new IllegalStateException("같은 참조 키로 이미 쓴 기록이 있다: " + reason + " " + refKey);
         }
-        return repository.balance(userId);
+        return account.balance() - amount;
+    }
+
+    /**
+     * 환불된 결제의 포인트(paid + bonus)를 되돌린다. 이미 써서 잔액이 모자라면 남은 만큼만 0까지 빼고, 잔액을 음수로 두지 않는다. 되돌린
+     * 포인트를 돌려준다(0일 수 있다). 결제 몫은 그 결제로 산 만큼까지만 줄인다.
+     */
+    @Transactional
+    public int reclaim(long userId, String refKey, int paid, int bonus, String label) {
+        locks.lockUser(userId);
+        PointAccount account = repository.account(userId);
+        int take = Math.min(account.balance(), paid + bonus);
+        if (take <= 0) {
+            return 0;
+        }
+        int balance = account.balance() - take;
+        int paidBalance = Math.min(account.paidBalance() - Math.min(account.paidBalance(), paid), balance);
+        if (!repository.insertLedger(
+                userId, -take, paidBalance - account.paidBalance(), PointReason.REFUND, refKey, label, null)) {
+            return 0;
+        }
+        repository.setAccount(userId, new PointAccount(balance, paidBalance));
+        return take;
     }
 }

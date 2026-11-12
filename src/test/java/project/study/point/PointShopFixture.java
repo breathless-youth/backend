@@ -83,9 +83,16 @@ public class PointShopFixture {
                 .update();
     }
 
-    /** 사용자 참조 컬럼이 있는 일곱 테이블에 한 행씩 넣는다. */
+    /** 사용자 참조 컬럼이 있는 여덟 테이블에 한 행씩 넣는다. */
     public void seedEverything(long userId) {
         givePoints(userId, 100);
+        jdbc.sql("""
+                INSERT INTO point_purchase (user_id, store, transaction_id, store_product_id, points, bonus_points,
+                    sandbox, status)
+                VALUES (:u, 'APP_STORE', :t, 'fixture', 100, 0, false, 'GRANTED')""")
+                .param("u", userId)
+                .param("t", "fixture-" + UUID.randomUUID())
+                .update();
         long item = pricedItem("BOOK", 10);
         jdbc.sql("INSERT INTO user_item (user_id, item_id) VALUES (:u, :i)")
                 .param("u", userId)

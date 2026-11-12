@@ -1,6 +1,6 @@
 package project.study.point.dto;
 
-/** 포인트가 오간 사유. 3단계에서 충전이 더해진다. */
+/** 포인트가 오간 사유. */
 public enum PointReason {
     /** 측정한 공부 */
     STUDY,
@@ -15,5 +15,9 @@ public enum PointReason {
     /** 랭킹 메달. label은 "판 키/순위"다 (예: FOCUS_TIME:DAILY/1) */
     MEDAL,
     /** 광고 시청 보상 */
-    AD
+    AD,
+    /** 인앱결제로 충전. label은 스토어 상품 ID다 */
+    CHARGE,
+    /** 결제 환불로 되돌림. label은 스토어 상품 ID다 */
+    REFUND
 }
