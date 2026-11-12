@@ -356,8 +356,8 @@ Table live_task {
 // 포인트·꾸미기 상점 (ADR-0047, BY-1241)
 Table point_account {
   user_id bigint [primary key, ref: > users.id]
-  balance integer [not null, default: 0, note: 'CHECK >= 0']
-  paid_balance integer [not null, default: 0, note: '잔액 가운데 결제로 산 몫. 0 이상 balance 이하']
+  balance integer [not null, default: 0, note: '환불로만 음수가 될 수 있다']
+  paid_balance integer [not null, default: 0, note: '잔액 가운데 결제로 산 몫. 0 이상 balance 이하, 잔액이 음수면 0']
 }
 
 Table point_ledger {
@@ -398,8 +398,8 @@ Table point_purchase {
   bonus_points integer [not null]
   sandbox boolean [not null]
   status varchar(12) [not null, note: 'GRANTED | REFUNDED']
-  reclaimed_points integer [not null, default: 0, note: '환불 때 되돌린 포인트']
-  shortfall_points integer [not null, default: 0, note: '이미 써서 되돌리지 못한 포인트']
+  reclaimed_points integer [not null, default: 0, note: '환불 때 되돌린 포인트(결제로 준 전부)']
+  shortfall_points integer [not null, default: 0, note: '그 가운데 이미 써서 잔액을 음수로 만든 포인트']
   purchased_at timestamptz
   created_at timestamptz [not null]
   refunded_at timestamptz

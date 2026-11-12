@@ -136,32 +136,50 @@ class ChargeApiTest {
     }
 
     @Test
-    void 이미_쓴_포인트는_남은_만큼만_0까지_되돌리고_모자란_만큼을_적어_둔다() {
+    void 이미_쓴_포인트도_전부_되돌려_잔액이_음수가_되고_그동안_상점_구매는_막힌다() {
         long user = fixture.member();
         String product = product(1000, 0);
         String tx = tx();
         webhook(AUTH, purchase(user, product, tx, "PRODUCTION"));
         long item = fixture.pricedItem(null, 700);
-        mvc.post()
-                .uri("/api/shop/items/{id}/purchase", item)
-                .with(asUser(user))
-                .header(ApiVersionConfig.HEADER, "1")
-                .exchange();
+        buy(user, item);
 
         assertThat(webhook(AUTH, refund(user, product, tx))).hasStatusOk();
 
         assertThat(balance(user))
                 .bodyJson()
-                .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(-700))
                 .hasPathSatisfying("$.paidBalance", v -> assertThat(v).isEqualTo(0));
-        assertThat(purchaseRow(tx)).isEqualTo("REFUNDED/300/700");
-        // 산 상품은 그대로 가진다
-        assertThat(jdbc.sql("SELECT COUNT(*) FROM user_item WHERE user_id = :u AND item_id = :i")
+        assertThat(purchaseRow(tx)).isEqualTo("REFUNDED/1000/700");
+        // 산 상품은 그대로 가지고, 잔액이 음수인 동안 다른 상품은 사지 못한다
+        assertThat(buy(user, fixture.pricedItem(null, 1))).hasStatus4xxClientError();
+        assertThat(jdbc.sql("SELECT COUNT(*) FROM user_item WHERE user_id = :u")
                         .param("u", user)
-                        .param("i", item)
                         .query(Integer.class)
                         .single())
                 .isEqualTo(1);
+    }
+
+    @Test
+    void 잔액이_음수일_때_충전하면_모자란_만큼을_먼저_메우고_남은_만큼만_결제_몫이_된다() {
+        long user = fixture.member();
+        String product = product(1000, 0);
+        String first = tx();
+        webhook(AUTH, purchase(user, product, first, "PRODUCTION"));
+        buy(user, fixture.pricedItem(null, 700));
+        webhook(AUTH, refund(user, product, first));
+        String second = tx();
+
+        assertThat(webhook(AUTH, purchase(user, product, second, "PRODUCTION"))).hasStatusOk();
+
+        assertThat(balance(user))
+                .bodyJson()
+                .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(300))
+                .hasPathSatisfying("$.paidBalance", v -> assertThat(v).isEqualTo(300));
+        // 그 충전까지 환불되면 준 만큼이 다시 전부 빠진다
+        webhook(AUTH, refund(user, product, second));
+        assertThat(balanceOf(user)).isEqualTo(-700);
+        assertThat(purchaseRow(second)).isEqualTo("REFUNDED/1000/700");
     }
 
     @Test
@@ -348,6 +366,14 @@ class ChargeApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body);
         return (authorization == null ? request : request.header("Authorization", authorization)).exchange();
+    }
+
+    private MvcTestResult buy(long user, long item) {
+        return mvc.post()
+                .uri("/api/shop/items/{id}/purchase", item)
+                .with(asUser(user))
+                .header(ApiVersionConfig.HEADER, "1")
+                .exchange();
     }
 
     private MvcTestResult balance(long user) {

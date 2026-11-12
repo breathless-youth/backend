@@ -117,20 +117,22 @@ public class ChargeService {
             return;
         }
         int total = purchase.points() + purchase.bonusPoints();
-        int reclaimed = purchase.userId() == null
-                ? 0
-                : pointService.reclaim(
-                        purchase.userId(),
-                        notice.refKey(),
-                        purchase.points(),
-                        purchase.bonusPoints(),
-                        purchase.storeProductId());
-        repository.markRefunded(purchase.id(), reclaimed, total - reclaimed);
-        if (reclaimed < total) {
-            log.warn(
-                    "환불된 결제의 포인트를 이미 써서 다 되돌리지 못했습니다: transaction_id={} 모자란 포인트={}",
-                    notice.transactionId(),
-                    total - reclaimed);
+        if (purchase.userId() == null) {
+            // 탈퇴한 사람의 결제다. 되돌릴 잔액이 없다
+            repository.markRefunded(purchase.id(), 0, total);
+            return;
+        }
+        int balance = pointService.reclaim(
+                purchase.userId(),
+                notice.refKey(),
+                purchase.points(),
+                purchase.bonusPoints(),
+                purchase.storeProductId());
+        // 이 환불이 잔액을 0 아래로 끌어내린 만큼
+        int shortfall = Math.min(total, Math.max(-balance, 0));
+        repository.markRefunded(purchase.id(), total, shortfall);
+        if (shortfall > 0) {
+            log.warn("환불된 결제의 포인트를 이미 써서 잔액이 음수가 됐습니다: transaction_id={} 잔액={}", notice.transactionId(), balance);
         }
     }
 
