@@ -89,6 +89,10 @@ logging:
 # 포트는 번들러마다 달라(Vite 5173, Next 3000 등) 열어둔다 — :[*]가 Spring의 포트 와일드카드 문법이다.
 # prod에는 넣지 않는다.
 app:
+  # 광고 보상을 받는 AdMob 보상형 광고 단위(iOS, Android). 비어 있으면 광고 보상이 꺼진다. 비밀 값이 아니다 (BY-1241)
+  points:
+    ad:
+      units: ca-app-pub-4724067415486202/6730214745,ca-app-pub-4724067415486202/5416473931
   # 데모 데이터 시딩 + Swagger 목데이터 안내 (BY-640: 프로필 대신 스위치). dev 서버 전용 편의 기능
   seed:
     enabled: true
