@@ -58,6 +58,10 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false)
     private String timeZone = DefaultTimeZone.ZONE.getId();
 
+    /** 기기 지역(ISO 3166-1 두 글자). 앱이 보내기 전에는 null. */
+    @Column(length = 2)
+    private String region;
+
     public User(Provider provider, String providerUserId) {
         this.provider = provider;
         this.providerUserId = providerUserId;
@@ -97,6 +101,10 @@ public class User extends BaseTimeEntity {
 
     public void changeTimeZone(ZoneId zone) {
         this.timeZone = zone.getId();
+    }
+
+    public void changeRegion(String region) {
+        this.region = region;
     }
 
     // 이전 키를 돌려준다 — 호출자가 커밋 뒤 그 파일을 지운다

@@ -175,7 +175,8 @@ class UserServiceTest {
         user.updateProfile("기존닉네임", "기존 목표", "JOB");
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
-        ProfileResponse response = userService.updateProfile(1L, new ProfileUpdateRequest(null, "새 목표", null, null));
+        ProfileResponse response =
+                userService.updateProfile(1L, new ProfileUpdateRequest(null, "새 목표", null, null, null));
 
         assertThat(response.nickname()).isEqualTo("기존닉네임");
         assertThat(response.goal()).isEqualTo("새 목표");
@@ -187,7 +188,8 @@ class UserServiceTest {
         User user = userWithId(1L, DEVICE_ID);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
-        ProfileResponse response = userService.updateProfile(1L, new ProfileUpdateRequest("숨벅찬청년들", null, null, null));
+        ProfileResponse response =
+                userService.updateProfile(1L, new ProfileUpdateRequest("숨벅찬청년들", null, null, null, null));
 
         assertThat(response.nickname()).isEqualTo("숨벅찬청년들");
         assertThat(response.initial()).isEqualTo("숨");
@@ -202,7 +204,8 @@ class UserServiceTest {
                 .when(userRepository)
                 .flush();
 
-        assertThatThrownBy(() -> userService.updateProfile(1L, new ProfileUpdateRequest("사용중닉네임", null, null, null)))
+        assertThatThrownBy(
+                        () -> userService.updateProfile(1L, new ProfileUpdateRequest("사용중닉네임", null, null, null, null)))
                 .isInstanceOf(ConflictException.class);
     }
 
