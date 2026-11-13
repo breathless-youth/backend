@@ -43,4 +43,10 @@ public record ProfileUpdateRequest(
                 description = "기기의 IANA 시간대 이름. 스트릭·그날 할 일·05시 하루·D-Day의 오늘을 이 시간대로 정한다. "
                         + "생략하면 미변경이고, 읽을 수 없는 값이면 거절하지 않고 무시한다(저장된 값 유지, 기본 Asia/Seoul). 응답에는 싣지 않는다",
                 example = "Asia/Seoul")
-        String timeZone) {}
+        String timeZone,
+
+        @Schema(
+                description = "기기의 지역(ISO 3166-1 두 글자 국가 코드, 대소문자 무관). 광고 나라별 분석에 쓴다. "
+                        + "생략하면 미변경이고, 국가 코드가 아니면 거절하지 않고 무시한다(저장된 값 유지). 응답에는 싣지 않는다",
+                example = "TW")
+        String region) {}

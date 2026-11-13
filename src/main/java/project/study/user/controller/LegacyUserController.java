@@ -57,6 +57,6 @@ public class LegacyUserController {
     public ProfileResponse updateProfile(@PathVariable Long userId, @Valid @RequestBody ProfileUpdateRequest request) {
         legacyGuestGuard.requireGuest(userId);
         return userController.updateProfile(
-                userId, new ProfileUpdateRequest(request.nickname(), request.goal(), request.category(), null));
+                userId, new ProfileUpdateRequest(request.nickname(), request.goal(), request.category(), null, null));
     }
 }
