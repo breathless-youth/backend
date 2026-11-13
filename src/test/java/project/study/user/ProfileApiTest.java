@@ -169,6 +169,36 @@ class ProfileApiTest {
         assertThat(timeZoneOf(userId)).isEqualTo("Europe/London");
     }
 
+    private String regionOf(long userId) {
+        return jdbc.queryForObject("SELECT region FROM users WHERE id = ?", String.class, userId);
+    }
+
+    @Test
+    void 지역을_보내면_대문자_두_글자로_저장하고_응답에는_싣지_않는다() {
+        long userId = registerUser();
+        assertThat(regionOf(userId)).isNull();
+
+        assertThat(patchProfile(userId, "{\"region\": \"tw\", \"timeZone\": \"Asia/Taipei\"}"))
+                .hasStatusOk()
+                .bodyJson()
+                .doesNotHavePath("$.region");
+        assertThat(regionOf(userId)).isEqualTo("TW");
+        assertThat(timeZoneOf(userId)).isEqualTo("Asia/Taipei");
+    }
+
+    @Test
+    void 읽을_수_없는_지역은_거절하지_않고_저장된_값을_둔다() {
+        long userId = registerUser();
+        assertThat(patchProfile(userId, "{\"region\": \"SG\"}")).hasStatusOk();
+
+        assertThat(patchProfile(userId, "{\"region\": \"ZZ\"}")).hasStatusOk();
+        assertThat(patchProfile(userId, "{\"region\": \"Singapore\", \"goal\": \"합격\"}"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.goal", v -> assertThat(v).isEqualTo("합격"));
+        assertThat(regionOf(userId)).isEqualTo("SG");
+    }
+
     @Test
     void 닉네임을_바꾸면_이니셜도_갱신된다() {
         long userId = registerUser();

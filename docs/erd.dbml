@@ -14,6 +14,7 @@ Table users {
   status varchar [default: 'ACTIVE']   // ACTIVE, DELETE
   notify_enabled boolean [default: false]
   delete_at timestamptz
+  region varchar(2)              // 기기 지역(ISO 3166-1 두 글자, 예: KR·TW). 광고 나라별 분석용, 앱이 보내기 전에는 null
   created_at timestamptz
   updated_at timestamptz
 

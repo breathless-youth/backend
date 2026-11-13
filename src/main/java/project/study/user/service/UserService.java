@@ -120,6 +120,7 @@ public class UserService {
         }
         user.updateProfile(nickname, request.goal(), request.category());
         UserTimeZones.parse(request.timeZone()).ifPresent(user::changeTimeZone);
+        UserRegions.parse(request.region()).ifPresent(user::changeRegion);
         try {
             // 닉네임 유니크 제약이 최종 판정이다 — 커밋 시점의 위반이 500으로 새지 않도록 여기서 flush해 409로 변환한다
             userRepository.flush();
