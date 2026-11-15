@@ -12,12 +12,38 @@ class ShopProgressTest {
 
     private static ShopItem priced(long id) {
         return new ShopItem(
-                id, "P" + id, ShopCategory.TIMER_BACKGROUND, null, null, null, "상품", null, null, 1, 100, null, null);
+                id,
+                "P" + id,
+                ShopCategory.TIMER_BACKGROUND,
+                null,
+                null,
+                null,
+                "상품",
+                null,
+                null,
+                1,
+                100,
+                null,
+                null,
+                null);
     }
 
     private static ShopItem reward(long id, UnlockType type, int value) {
         return new ShopItem(
-                id, "R" + id, ShopCategory.TIMER_BACKGROUND, null, null, null, "보상", null, null, 1, null, type, value);
+                id,
+                "R" + id,
+                ShopCategory.TIMER_BACKGROUND,
+                null,
+                null,
+                null,
+                "보상",
+                null,
+                null,
+                1,
+                null,
+                type,
+                value,
+                null);
     }
 
     @Test

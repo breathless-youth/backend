@@ -30,12 +30,18 @@ public record ShopItemResponse(
 
         @Schema(description = "등급. 1·2·3", example = "1") int grade,
 
-        @Schema(description = "가격(P). 포인트로 살 수 없는 보상 상품이면 null", example = "600")
+        @Schema(description = "가격(P). 포인트로 사는 상품이 아니면(보상 상품·결제 상품) null", example = "600")
         Integer price,
 
         @Schema(description = "가졌는지. 보상 상품은 조건을 채우면 true") boolean owned,
 
         @Schema(description = "쓰는 중인지(착용·적용)") boolean inUse,
 
-        @Schema(description = "보상 상품의 조건과 진행. 포인트로 사는 상품이면 null")
-        ShopItemUnlock unlock) {}
+        @Schema(description = "보상 상품의 조건과 진행. 보상 상품이 아니면 null")
+        ShopItemUnlock unlock,
+
+        @Schema(
+                description = "스토어 결제로 사는 상품의 스토어 상품 ID. RevenueCat으로 이 ID를 결제하면 서버가 알림을 받아 보유 처리한다(owned가 true가 된다)."
+                        + " 이 상품은 price와 unlock이 null이고 포인트로 살 수 없다. 결제 상품이 아니면 null",
+                example = "item_crown_gold")
+        String storeProductId) {}

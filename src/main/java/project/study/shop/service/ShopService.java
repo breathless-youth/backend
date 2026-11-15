@@ -51,7 +51,8 @@ public class ShopService {
                         item.price(),
                         progress.owns(item),
                         inUse(item, accessories, decoration),
-                        progress.unlockOf(item)))
+                        progress.unlockOf(item),
+                        item.storeProductId()))
                 .toList();
         return new ShopItemListResponse(items);
     }
@@ -68,7 +69,7 @@ public class ShopService {
                 .findById(itemId)
                 .filter(found -> repository.isActive(found.id()))
                 .orElseThrow(() -> new NotFoundException(ErrorCode.SHOP_ITEM_NOT_FOUND, "없는 상품입니다: " + itemId));
-        if (item.isReward()) {
+        if (!item.isPriced()) {
             throw new ConflictException(ErrorCode.ITEM_NOT_PURCHASABLE, "포인트로 살 수 없는 상품입니다");
         }
         if (repository.ownedItemIds(userId).contains(itemId)) {

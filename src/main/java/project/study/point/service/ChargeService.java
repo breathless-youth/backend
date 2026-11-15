@@ -15,10 +15,12 @@ import project.study.point.dto.PointProduct;
 import project.study.point.dto.PointProductsResponse;
 import project.study.point.dto.PointPurchase;
 import project.study.point.repository.PointChargeRepository;
+import project.study.shop.dto.ShopItem;
+import project.study.shop.service.PaidItemService;
 import project.study.user.service.MemberGuard;
 
 /**
- * 포인트 충전과 환불. 결제는 앱의 RevenueCat SDK가 하고, RevenueCat이 스토어 영수증을 확인한 뒤 서버로 알림(웹훅)을 보낸다. 서버는 그
+ * 포인트 충전, 결제로 사는 상점 상품, 그 환불. 결제는 앱의 RevenueCat SDK가 하고, RevenueCat이 스토어 영수증을 확인한 뒤 서버로 알림(웹훅)을 보낸다. 서버는 그
  * 알림으로만 지급하고 되돌린다. 앱은 RevenueCat에 사용자 ID(토큰의 sub)로 로그인해야 알림에서 사용자를 찾을 수 있다.
  *
  * <p>알림은 같은 것이 다시 오거나 순서가 바뀔 수 있다. 결제 한 건은 (스토어, 거래 ID)로 한 번만 지급하고, 환불이 먼저 오면 환불된 결제로
@@ -42,6 +44,7 @@ public class ChargeService {
     private final ChargePolicy policy;
     private final PointLocks locks;
     private final MemberGuard members;
+    private final PaidItemService paidItems;
 
     @Transactional(readOnly = true)
     public PointProductsResponse products(Long userId) {
@@ -69,19 +72,51 @@ public class ChargeService {
             return;
         }
         Optional<PointProduct> product = repository.findProduct(notice.productId());
-        if (product.isEmpty()) {
-            // 구독 같은 다른 상품의 알림일 수 있다. 충전 상품인데 표에 없다면 돈을 받고 못 준 것이라 눈에 띄게 남긴다
+        Long itemId = itemIdOf(notice, product.isPresent());
+        if (product.isEmpty() && itemId == null) {
+            // 구독 같은 다른 상품의 알림일 수 있다. 우리 상품인데 표에 없다면 돈을 받고 못 준 것이라 눈에 띄게 남긴다
             log.error(
-                    "충전 상품 표에 없는 상품의 알림: product_id={} transaction_id={}", notice.productId(), notice.transactionId());
+                    "충전 상품 표에도 상점에도 없는 상품의 알림: product_id={} transaction_id={}",
+                    notice.productId(),
+                    notice.transactionId());
             return;
         }
         // 같은 결제의 지급과 환불을 한 줄로 세운다. 이 락 → 사용자 락 → 결제 행 순서로만 잡는다
         locks.lockPurchase(notice.store(), notice.transactionId());
         Long userId = memberOf(event);
-        if (notice.refund()) {
+        if (itemId != null) {
+            handleItem(notice, itemId, userId);
+        } else if (notice.refund()) {
             refund(notice, product.get(), userId);
         } else {
             grant(notice, product.get(), userId);
+        }
+    }
+
+    /**
+     * 이 알림이 상점 상품의 결제면 그 상품, 포인트 충전이거나 모르는 상품이면 null. 이미 처리한 상품 결제의 환불은 저장된 결제가 기준이다 —
+     * 그 뒤에 스토어 상품 ID를 바꾸거나 지웠어도 산 상품을 거둔다.
+     */
+    private Long itemIdOf(Notice notice, boolean pointProduct) {
+        if (notice.refund()) {
+            Optional<Long> bought = repository.findItemId(notice.store(), notice.transactionId());
+            if (bought.isPresent()) {
+                return bought.get();
+            }
+        }
+        return pointProduct
+                ? null
+                : paidItems
+                        .findByStoreProductId(notice.productId())
+                        .map(ShopItem::id)
+                        .orElse(null);
+    }
+
+    private void handleItem(Notice notice, long itemId, Long userId) {
+        if (notice.refund()) {
+            refundItem(notice, itemId, userId);
+        } else {
+            grantItem(notice, itemId, userId);
         }
     }
 
@@ -133,6 +168,46 @@ public class ChargeService {
         repository.markRefunded(purchase.id(), total, shortfall);
         if (shortfall > 0) {
             log.warn("환불된 결제의 포인트를 이미 써서 잔액이 음수가 됐습니다: transaction_id={} 잔액={}", notice.transactionId(), balance);
+        }
+    }
+
+    /** 결제로 사는 상점 상품. 포인트는 오가지 않고 보유만 준다. 한 번에 여러 개를 사도 하나다. */
+    private void grantItem(Notice notice, long itemId, Long userId) {
+        if (userId == null) {
+            log.error("사용자를 찾지 못한 상품 결제 알림 — 돈을 받고 상품을 주지 못했습니다: transaction_id={}", notice.transactionId());
+            return;
+        }
+        pointService.lock(userId);
+        if (!repository.insert(notice.itemPurchase(userId, itemId), false)) {
+            return;
+        }
+        paidItems.grant(userId, itemId);
+    }
+
+    /** 환불되면 보유를 거두고 착용도 바로 푼다. 같은 상품을 산 다른 결제가 살아 있으면 보유는 그대로 둔다. */
+    private void refundItem(Notice notice, long noticeItemId, Long eventUserId) {
+        Long owner =
+                repository.findOwner(notice.store(), notice.transactionId()).orElse(eventUserId);
+        if (owner != null) {
+            pointService.lock(owner);
+        }
+        Optional<PointPurchase> found = repository.findForUpdate(notice.store(), notice.transactionId());
+        if (found.isEmpty()) {
+            repository.insert(notice.itemPurchase(eventUserId, noticeItemId), true);
+            return;
+        }
+        PointPurchase purchase = found.get();
+        if (purchase.refunded()) {
+            return;
+        }
+        repository.markRefunded(purchase.id(), 0, 0);
+        // 결제할 때의 상품을 거둔다. 그 뒤에 스토어 상품 ID를 다른 상품으로 옮겼어도 산 것이 기준이다
+        Long itemId = purchase.itemId();
+        if (purchase.userId() == null || itemId == null) {
+            return;
+        }
+        if (!repository.hasOtherGrantedItem(purchase.userId(), itemId, purchase.id())) {
+            paidItems.revoke(purchase.userId(), itemId);
         }
     }
 
@@ -217,7 +292,12 @@ public class ChargeService {
 
         PointChargeRepository.NewPurchase purchase(Long userId, PointProduct product, int points, int bonus) {
             return new PointChargeRepository.NewPurchase(
-                    userId, store, transactionId, product.storeProductId(), points, bonus, sandbox, purchasedAt);
+                    userId, store, transactionId, product.storeProductId(), points, bonus, sandbox, purchasedAt, null);
+        }
+
+        PointChargeRepository.NewPurchase itemPurchase(Long userId, long itemId) {
+            return new PointChargeRepository.NewPurchase(
+                    userId, store, transactionId, productId, 0, 0, sandbox, purchasedAt, itemId);
         }
     }
 
