@@ -65,6 +65,7 @@ public class HomeMissionController {
                                     @ExampleObject(
                                             value =
                                                     "{\"code\":\"BAD_REQUEST\",\"message\":\"현재 단계의 완료 조건을 충족하지 않았습니다\"}")))
+    @ApiResponse(responseCode = "200", description = "성공")
     @PostMapping("/steps/{step}/complete")
     public HomeMissionResponse complete(@AuthenticationPrincipal Long userId, @PathVariable int step) {
         return withGrantedRewards(userId, service.complete(userId, step));
@@ -82,6 +83,7 @@ public class HomeMissionController {
                             examples =
                                     @ExampleObject(
                                             value = "{\"code\":\"MEMBER_ONLY\",\"message\":\"로그인한 사용자만 쓸 수 있습니다\"}")))
+    @ApiResponse(responseCode = "200", description = "성공")
     @PostMapping("/rewards/claim")
     public ClaimResponse claimRewards(@AuthenticationPrincipal Long userId) {
         return rewards.claim(userId);
