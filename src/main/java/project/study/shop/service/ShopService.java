@@ -46,6 +46,8 @@ public class ShopService {
                         item.tag(),
                         item.name(),
                         item.imageUrl(),
+                        item.backImageUrl(),
+                        item.grade(),
                         item.price(),
                         progress.owns(item),
                         inUse(item, accessories, decoration),

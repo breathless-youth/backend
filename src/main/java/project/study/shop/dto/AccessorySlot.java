@@ -4,5 +4,9 @@ package project.study.shop.dto;
 public enum AccessorySlot {
     HEAD,
     FACE,
-    BODY
+    BODY,
+    WINGS,
+    HELD,
+    UNDERFOOT,
+    EFFECT
 }

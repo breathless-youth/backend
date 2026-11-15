@@ -14,7 +14,7 @@ public record ShopItemResponse(
         @Schema(description = "소품이 속한 마스코트 코드. 소품이 아니면 null", example = "STOPWATCH")
         String mascotCode,
 
-        @Schema(description = "소품 부위. 소품이 아니면 null", example = "HEAD")
+        @Schema(description = "소품 부위(HEAD·FACE·BODY·WINGS·HELD·UNDERFOOT·EFFECT). 소품이 아니면 null", example = "HEAD")
         AccessorySlot slot,
 
         @Schema(description = "화면에서 거르는 분류 코드(타이머 배경의 NATURE 등). 보여 줄 이름은 앱이 정한다. 없으면 null", example = "NATURE")
@@ -24,6 +24,11 @@ public record ShopItemResponse(
         String name,
 
         @Schema(description = "그림 주소. 아직 없으면 null") String imageUrl,
+
+        @Schema(description = "마스코트 뒤에 그리는 조각의 그림 주소. 뒤 조각이 없는 상품이면 null")
+        String backImageUrl,
+
+        @Schema(description = "등급. 1·2·3", example = "1") int grade,
 
         @Schema(description = "가격(P). 포인트로 살 수 없는 보상 상품이면 null", example = "600")
         Integer price,

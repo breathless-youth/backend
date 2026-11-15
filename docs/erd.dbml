@@ -436,10 +436,12 @@ Table shop_item {
   code varchar(64) [not null, unique]
   category varchar(24) [not null, note: 'MASCOT_ACCESSORY | TIMER_BACKGROUND']
   mascot_code varchar(32) [ref: > mascot.code, note: '소품일 때만']
-  slot varchar(8) [note: 'HEAD | FACE | BODY, 소품일 때만']
+  slot varchar(16) [note: 'HEAD | FACE | BODY | WINGS | HELD | UNDERFOOT | EFFECT, 소품일 때만']
   tag varchar(32)
   name varchar(60) [not null]
   image_url varchar(500)
+  back_image_url varchar(500) [note: '마스코트 뒤에 그리는 조각. 없으면 NULL']
+  grade smallint [not null, default: 1, note: '1 | 2 | 3']
   price integer [note: 'NULL = 보상 상품']
   unlock_type varchar(24) [note: 'STREAK_DAYS | TOTAL_FOCUS_HOURS, 보상 상품일 때만']
   unlock_value integer
@@ -460,7 +462,7 @@ Table user_item {
 Table user_mascot_accessory {
   user_id bigint [not null, ref: > users.id]
   mascot_code varchar(32) [not null, ref: > mascot.code]
-  slot varchar(8) [not null]
+  slot varchar(16) [not null]
   item_id bigint [not null, ref: > shop_item.id]
 
   indexes {
