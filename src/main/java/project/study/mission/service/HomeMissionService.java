@@ -1,6 +1,7 @@
 package project.study.mission.service;
 
 import java.time.LocalDate;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -86,6 +87,6 @@ public class HomeMissionService {
                 .single();
         Integer current = completed == 2 ? null : completed + 1;
         boolean eligible = current != null && (current == 1 ? hasSubject : seconds >= 300);
-        return new HomeMissionResponse(VERSION, startsOn, completed, current, eligible, seconds, 0, 0);
+        return new HomeMissionResponse(VERSION, startsOn, completed, current, eligible, seconds, 0, 0, List.of());
     }
 }

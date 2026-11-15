@@ -397,6 +397,7 @@ sequenceDiagram
   <tr><td>2026-11-04</td><td>BY-1126</td><td>OWNER_CHANGED(§11.4)가 그룹장 넘기기 말고도 그룹장이 탈퇴할 때(가장 먼저 들어온 멤버가 새 그룹장)와 그룹장 계정이 소셜 로그인으로 다른 계정에 병합될 때(남는 계정이 새 그룹장)도 온다. 탈퇴 때는 이어서 방 토픽에 탈퇴한 사람의 MEMBER_LEFT가 올 수 있다. 메시지 모양은 그대로다</td></tr>
   <tr><td>2026-11-15</td><td>BY-1288</td><td>멤버 객체에 <code>mascot</code>(고른 마스코트와 낀 소품) 추가(§5). 초대코드 방과 그룹 공부방 모두 싣는다. 다른 필드와 메시지 종류는 그대로다</td></tr>
   <tr><td>2026-11-15</td><td>BY-1289</td><td>멤버 객체 <code>mascot.accessories[]</code>의 <code>slot</code>이 7종(<code>HEAD</code>·<code>FACE</code>·<code>BODY</code>·<code>WINGS</code>·<code>HELD</code>·<code>UNDERFOOT</code>·<code>EFFECT</code>)으로 늘고, <code>item</code>에 <code>backImageUrl</code>(string | null, 마스코트 뒤에 그리는 조각)이 더해진다</td></tr>
+  <tr><td>2026-11-16</td><td>BY-1293</td><td>멤버 객체 <code>mascot.accessories[]</code>의 <code>slot</code>에 <code>SET</code>(캐릭터의 한 벌 옷, 낱개 7칸과 함께 오지 않는다)이 더해지고, <code>item</code>에 <code>effectImageUrl</code>(string | null), <code>effectPieces</code>(조각별 <code>x</code>·<code>y</code>·<code>width</code>·<code>height</code> 비율과 <code>motion</code>의 목록 | null), <code>effectType</code>(string | null)이 더해진다</td></tr>
 </table>
 
 </main>

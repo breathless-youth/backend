@@ -52,7 +52,8 @@ public class DecorationController {
 
     @Operation(
             summary = "마스코트 소품 착용·벗기",
-            description = "부위마다 하나만 낀다. itemId가 null이면 그 부위를 벗는다. 다른 마스코트나 다른 부위의 소품이면 400.")
+            description =
+                    "부위마다 하나만 낀다. itemId가 null이면 그 부위를 벗는다. 다른 마스코트나 다른 부위의 소품이면 400. 세트(SET)를 끼면 그 마스코트의 나머지 7칸이 모두 풀리고, 7칸 가운데 하나를 끼면 세트가 풀린다. 풀린 결과는 응답의 accessories에 그대로 실린다.")
     @PutMapping("/mascots/{mascotCode}/accessories")
     public DecorationResponse equipAccessory(
             @AuthenticationPrincipal Long userId,

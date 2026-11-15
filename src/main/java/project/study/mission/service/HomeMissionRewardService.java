@@ -1,5 +1,7 @@
 package project.study.mission.service;
 
+import java.util.Arrays;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,6 +65,11 @@ public class HomeMissionRewardService {
             }
         }
         return claimable;
+    }
+
+    /** 단계별 포인트. 1단계부터 차례대로. */
+    public List<Integer> stepPoints() {
+        return Arrays.stream(stepPoints).boxed().toList();
     }
 
     private static String refKey(int step) {

@@ -52,7 +52,10 @@ public class ShopService {
                         progress.owns(item),
                         inUse(item, accessories, decoration),
                         progress.unlockOf(item),
-                        item.storeProductId()))
+                        item.storeProductId(),
+                        item.effectImageUrl(),
+                        item.effectPieces(),
+                        item.effectType()))
                 .toList();
         return new ShopItemListResponse(items);
     }

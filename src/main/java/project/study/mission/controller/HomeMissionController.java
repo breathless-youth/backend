@@ -45,11 +45,11 @@ public class HomeMissionController {
                             examples =
                                     @ExampleObject(
                                             value =
-                                                    "{\"version\":\"home-v3\",\"startsOn\":\"2026-11-07\",\"completedSteps\":0,\"currentStep\":1,\"eligible\":true,\"measuredFocusSec\":0,\"rewardedPoints\":0,\"claimablePoints\":0}")))
+                                                    "{\"version\":\"home-v3\",\"startsOn\":\"2026-11-07\",\"completedSteps\":0,\"currentStep\":1,\"eligible\":true,\"measuredFocusSec\":0,\"rewardedPoints\":0,\"claimablePoints\":0,\"stepPoints\":[50,100]}")))
     @GetMapping
     public HomeMissionResponse get(@AuthenticationPrincipal Long userId) {
         HomeMissionResponse mission = service.get(userId);
-        return mission.withRewards(0, rewards.claimablePoints(userId, mission.completedSteps()));
+        return mission.withRewards(0, rewards.claimablePoints(userId, mission.completedSteps()), rewards.stepPoints());
     }
 
     @Operation(
@@ -93,10 +93,11 @@ public class HomeMissionController {
     private HomeMissionResponse withGrantedRewards(long userId, HomeMissionResponse mission) {
         try {
             int rewarded = members.isMember(userId) ? rewards.claim(userId).points() : 0;
-            return mission.withRewards(rewarded, rewards.claimablePoints(userId, mission.completedSteps()));
+            return mission.withRewards(
+                    rewarded, rewards.claimablePoints(userId, mission.completedSteps()), rewards.stepPoints());
         } catch (RuntimeException e) {
             log.warn("미션 포인트 지급 실패: userId={}", userId, e);
-            return mission;
+            return mission.withRewards(0, 0, rewards.stepPoints());
         }
     }
 }

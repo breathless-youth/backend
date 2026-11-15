@@ -279,7 +279,12 @@ class HomeMissionApiTest {
                         .with(asUser(user))
                         .exchange())
                 .bodyJson()
-                .hasPathSatisfying("$.claimablePoints", v -> assertThat(v).isEqualTo(150));
+                .hasPathSatisfying("$.claimablePoints", v -> assertThat(v).isEqualTo(150))
+                .hasPathSatisfying(
+                        "$.stepPoints",
+                        v -> assertThat(v)
+                                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                                .containsExactly(50, 100));
         assertThat(post(user, "/api/home/mission/rewards/claim"))
                 .hasStatusOk()
                 .bodyJson()

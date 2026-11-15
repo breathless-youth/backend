@@ -57,6 +57,12 @@ public class DecorationService {
         if (!mascotCode.equals(item.mascotCode()) || slot != item.slot()) {
             throw new BadRequestException("그 마스코트의 그 부위에 끼는 소품이 아닙니다");
         }
+        // 세트와 낱개 소품은 함께 끼지 않는다. 같은 요청에서 반대쪽을 벗긴다
+        if (slot == AccessorySlot.SET) {
+            repository.deletePieces(userId, mascotCode);
+        } else {
+            repository.deleteSet(userId, mascotCode);
+        }
         repository.saveAccessory(userId, mascotCode, slot, itemId);
         return get(userId);
     }
