@@ -138,6 +138,12 @@ public enum ErrorCode {
     /** 없는 마스코트다 (404) */
     MASCOT_NOT_FOUND,
 
+    /** 이미 산 마스코트다 (409) — 같은 구매 요청이 두 번 와도 포인트는 한 번만 빠진다 */
+    MASCOT_ALREADY_OWNED,
+
+    /** 포인트로 사는 마스코트가 아니다 — 공부 시간으로 여는 마스코트다 (409) */
+    MASCOT_NOT_PURCHASABLE,
+
     /** 아직 받을 수 없는 보상이다 — 하루 목표를 못 채웠거나 포인트 시작 날짜 전이다 (409) */
     REWARD_NOT_AVAILABLE,
 

@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
+import project.study.mascot.service.MascotService;
 import project.study.point.PointShopFixture;
 
 @SpringBootTest
@@ -30,6 +31,9 @@ class MascotApiTest {
 
     @Autowired
     PointShopFixture fixture;
+
+    @Autowired
+    MascotService mascots;
 
     @Test
     void 처음에는_첫_마스코트만_열려_있고_선택돼_있다() {
@@ -93,6 +97,85 @@ class MascotApiTest {
                 .bodyJson()
                 .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("MASCOT_NOT_FOUND"));
         assertThat(list(fixture.guest())).hasStatus(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void 포인트로_사는_마스코트는_사야_열리고_한_번만_살_수_있다() {
+        long user = fixture.member();
+        fixture.givePoints(user, 500);
+        // 누적 순공이 아무리 많아도 사기 전에는 열리지 않는다
+        fixture.measuredSession(user, "2026-01-10", 1, 600000);
+        jdbc.sql("UPDATE mascot SET price = 300 WHERE code = 'CAMCORDER'").update();
+        try {
+            assertThat(list(user))
+                    .bodyJson()
+                    .hasPathSatisfying(
+                            "$.mascots[6].unlockType", v -> assertThat(v).isEqualTo("POINTS"))
+                    .hasPathSatisfying("$.mascots[6].price", v -> assertThat(v).isEqualTo(300))
+                    .hasPathSatisfying(
+                            "$.mascots[6].unlocked", v -> assertThat(v).isEqualTo(false))
+                    .hasPathSatisfying(
+                            "$.mascots[5].unlockType", v -> assertThat(v).isEqualTo("FOCUS_TIME"))
+                    .hasPathSatisfying("$.mascots[5].price", v -> assertThat(v).isNull());
+            assertCode(select(user, "CAMCORDER"), "MASCOT_LOCKED");
+            assertCode(post(user, "/api/mascots/LAMP/purchase"), "MASCOT_NOT_PURCHASABLE");
+
+            assertThat(post(user, "/api/mascots/CAMCORDER/purchase"))
+                    .hasStatusOk()
+                    .bodyJson()
+                    .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(200));
+            assertCode(post(user, "/api/mascots/CAMCORDER/purchase"), "MASCOT_ALREADY_OWNED");
+            assertThat(select(user, "CAMCORDER"))
+                    .hasStatusOk()
+                    .bodyJson()
+                    .hasPathSatisfying(
+                            "$.mascots[6].unlocked", v -> assertThat(v).isEqualTo(true))
+                    .hasPathSatisfying(
+                            "$.mascots[6].newlyUnlocked", v -> assertThat(v).isEqualTo(false));
+            assertThat(mvc.get()
+                            .uri("/api/points/history?type=SPENT")
+                            .header(ApiVersionConfig.HEADER, "1")
+                            .with(asUser(user))
+                            .exchange())
+                    .bodyJson()
+                    .hasPathSatisfying("$.items[0].reason", v -> assertThat(v).isEqualTo("MASCOT_PURCHASE"))
+                    .hasPathSatisfying("$.items[0].label", v -> assertThat(v).isEqualTo("CAMCORDER"))
+                    .hasPathSatisfying("$.items[0].amount", v -> assertThat(v).isEqualTo(-300));
+
+            long poor = fixture.member();
+            assertCode(post(poor, "/api/mascots/CAMCORDER/purchase"), "INSUFFICIENT_POINTS");
+        } finally {
+            jdbc.sql("DELETE FROM user_mascot WHERE selected_mascot_code = 'CAMCORDER' AND user_id = :u")
+                    .param("u", user)
+                    .update();
+            jdbc.sql("UPDATE mascot SET price = NULL WHERE code = 'CAMCORDER'").update();
+        }
+    }
+
+    @Test
+    void 고른_마스코트가_포인트로_사는_것으로_바뀌면_사지_않은_사람은_첫_마스코트로_돌아간다() {
+        long user = fixture.member();
+        fixture.measuredSession(user, "2026-01-10", 1, 18000);
+        assertThat(select(user, "PLANNER")).hasStatusOk();
+        jdbc.sql("UPDATE mascot SET price = 300 WHERE code = 'PLANNER'").update();
+        try {
+            assertThat(list(user))
+                    .bodyJson()
+                    .hasPathSatisfying(
+                            "$.selectedMascotCode", v -> assertThat(v).isEqualTo("BOOK"))
+                    .hasPathSatisfying(
+                            "$.mascots[1].unlocked", v -> assertThat(v).isEqualTo(false));
+            assertThat(mascots.selectedCodes(java.util.List.of(user))).containsEntry(user, "BOOK");
+        } finally {
+            jdbc.sql("UPDATE mascot SET price = NULL WHERE code = 'PLANNER'").update();
+        }
+    }
+
+    private static void assertCode(MvcTestResult result, String code) {
+        assertThat(result)
+                .hasStatus(HttpStatus.CONFLICT)
+                .bodyJson()
+                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo(code));
     }
 
     private MvcTestResult list(long user) {

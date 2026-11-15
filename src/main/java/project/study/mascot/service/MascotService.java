@@ -14,15 +14,19 @@ import project.study.common.exception.ErrorCode;
 import project.study.common.exception.NotFoundException;
 import project.study.mascot.dto.Mascot;
 import project.study.mascot.dto.MascotListResponse;
+import project.study.mascot.dto.MascotPurchaseResponse;
 import project.study.mascot.dto.MascotResponse;
+import project.study.mascot.dto.MascotUnlockType;
 import project.study.mascot.dto.NextMascot;
 import project.study.mascot.repository.MascotRepository;
+import project.study.point.dto.PointReason;
 import project.study.point.service.PointLocks;
+import project.study.point.service.PointService;
 import project.study.user.service.MemberGuard;
 
 /**
- * 마스코트는 누적 순공으로 열린다. 열림 여부는 저장하지 않고 조회할 때마다 누적 순공과 기준을 견줘 정한다. 쓰기는 탈퇴와 겹치지 않게 포인트 사용자 락을
- * 잡는다.
+ * 마스코트는 누적 순공으로 열리거나(열림 여부를 저장하지 않고 조회할 때마다 견준다) 포인트로 사서 연다(산 것은 저장한다). 쓰기는 탈퇴와
+ * 겹치지 않게 포인트 사용자 락을 잡는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -31,24 +35,28 @@ public class MascotService {
     private final MascotRepository repository;
     private final MemberGuard members;
     private final PointLocks locks;
+    private final PointService points;
 
     @Transactional(readOnly = true)
     public MascotListResponse list(Long userId) {
         members.requireMember(userId);
         List<Mascot> all = repository.findAll();
         long total = repository.totalFocusSec(userId);
+        Set<String> owned = repository.ownedCodes(userId);
         String selected = selectedOrDefault(userId, all);
         Set<String> seen = repository.seenCodes(userId);
         List<MascotResponse> mascots = all.stream()
                 .map(m -> {
-                    boolean unlocked = total >= m.unlockFocusSec();
+                    boolean unlocked = unlocked(m, total, owned);
                     return new MascotResponse(
                             m.code(),
-                            m.unlockFocusSec(),
+                            m.priced() ? MascotUnlockType.POINTS : MascotUnlockType.FOCUS_TIME,
+                            m.priced() ? 0 : m.unlockFocusSec(),
+                            m.price(),
                             unlocked,
-                            Math.max(0, m.unlockFocusSec() - total),
+                            m.priced() ? 0 : Math.max(0, m.unlockFocusSec() - total),
                             m.code().equals(selected),
-                            unlocked && m.unlockFocusSec() > 0 && !seen.contains(m.code()));
+                            celebrates(m) && unlocked && !seen.contains(m.code()));
                 })
                 .toList();
         return new MascotListResponse(total, selected, mascots);
@@ -63,7 +71,27 @@ public class MascotService {
         return list(userId);
     }
 
-    /** 지금 열려 있는 마스코트를 모두 축하 화면을 본 것으로 표시한다. 여러 번 불러도 같다. */
+    /**
+     * 포인트로 사는 마스코트를 산다. 포인트 사용자 락을 먼저 잡고 가졌는지 본 뒤 잔액을 빼므로, 같은 요청이 두 번 와도 두 번째는
+     * {@code MASCOT_ALREADY_OWNED}를 받고 포인트는 한 번만 빠진다.
+     */
+    @Transactional
+    public MascotPurchaseResponse purchase(Long userId, String code) {
+        members.requireMember(userId);
+        locks.lockUser(userId);
+        Mascot mascot = find(code);
+        if (!mascot.priced()) {
+            throw new ConflictException(ErrorCode.MASCOT_NOT_PURCHASABLE, "포인트로 사는 마스코트가 아닙니다");
+        }
+        if (repository.ownedCodes(userId).contains(code)) {
+            throw new ConflictException(ErrorCode.MASCOT_ALREADY_OWNED, "이미 가진 마스코트입니다");
+        }
+        int balance = points.spend(userId, PointReason.MASCOT_PURCHASE, "mascot:" + code, mascot.price(), code);
+        repository.insertOwned(userId, code);
+        return new MascotPurchaseResponse(code, balance);
+    }
+
+    /** 지금 공부 시간으로 열려 있는 마스코트를 모두 축하 화면을 본 것으로 표시한다. 여러 번 불러도 같다. */
     @Transactional
     public MascotListResponse markUnlocksSeen(Long userId) {
         members.requireMember(userId);
@@ -72,30 +100,30 @@ public class MascotService {
         repository.markSeen(
                 userId,
                 repository.findAll().stream()
-                        .filter(m -> total >= m.unlockFocusSec())
+                        .filter(m -> !m.priced() && total >= m.unlockFocusSec())
                         .map(Mascot::code)
                         .toList());
         return list(userId);
     }
 
-    /** 없는 마스코트면 404 {@code MASCOT_NOT_FOUND}, 잠겨 있으면 409 {@code MASCOT_LOCKED}. */
+    /** 없는 마스코트면 404 {@code MASCOT_NOT_FOUND}, 잠겨 있으면(사지 않은 포인트 마스코트 포함) 409 {@code MASCOT_LOCKED}. */
     @Transactional(readOnly = true)
     public void requireUnlocked(long userId, String code) {
-        Mascot mascot = repository.findAll().stream()
-                .filter(m -> m.code().equals(code))
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException(ErrorCode.MASCOT_NOT_FOUND, "없는 마스코트입니다: " + code));
-        if (repository.totalFocusSec(userId) < mascot.unlockFocusSec()) {
+        Mascot mascot = find(code);
+        boolean unlocked = mascot.priced()
+                ? repository.ownedCodes(userId).contains(code)
+                : repository.totalFocusSec(userId) >= mascot.unlockFocusSec();
+        if (!unlocked) {
             throw new ConflictException(ErrorCode.MASCOT_LOCKED, "아직 열리지 않은 마스코트입니다");
         }
     }
 
-    /** 아직 잠긴 것 가운데 기준이 가장 낮은 마스코트. 다 열었으면 빈 값. */
+    /** 공부 시간으로 여는 것 가운데 아직 잠긴, 기준이 가장 낮은 마스코트. 다 열었으면 빈 값. */
     @Transactional(readOnly = true)
     public Optional<NextMascot> next(long userId) {
         long total = repository.totalFocusSec(userId);
         return repository.findAll().stream()
-                .filter(m -> total < m.unlockFocusSec())
+                .filter(m -> !m.priced() && total < m.unlockFocusSec())
                 .findFirst()
                 .map(m -> new NextMascot(m.code(), m.unlockFocusSec(), m.unlockFocusSec() - total));
     }
@@ -118,6 +146,22 @@ public class MascotService {
         Map<Long, String> codes = new HashMap<>();
         userIds.forEach(userId -> codes.put(userId, selected.getOrDefault(userId, first)));
         return codes;
+    }
+
+    private Mascot find(String code) {
+        return repository.findAll().stream()
+                .filter(m -> m.code().equals(code))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException(ErrorCode.MASCOT_NOT_FOUND, "없는 마스코트입니다: " + code));
+    }
+
+    private static boolean unlocked(Mascot mascot, long totalFocusSec, Set<String> owned) {
+        return mascot.priced() ? owned.contains(mascot.code()) : totalFocusSec >= mascot.unlockFocusSec();
+    }
+
+    /** 공부해서 연 마스코트만 축하 화면을 띄운다. 처음부터 열려 있거나 직접 산 것은 띄우지 않는다. */
+    private static boolean celebrates(Mascot mascot) {
+        return !mascot.priced() && mascot.unlockFocusSec() > 0;
     }
 
     private String selectedOrDefault(long userId, List<Mascot> all) {

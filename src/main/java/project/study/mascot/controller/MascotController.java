@@ -9,12 +9,14 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.mascot.dto.MascotListResponse;
+import project.study.mascot.dto.MascotPurchaseResponse;
 import project.study.mascot.dto.MascotSelectRequest;
 import project.study.mascot.service.MascotService;
 
@@ -67,6 +69,32 @@ public class MascotController {
     public MascotListResponse select(
             @AuthenticationPrincipal Long userId, @Valid @RequestBody MascotSelectRequest request) {
         return service.select(userId, request.code());
+    }
+
+    @Operation(
+            summary = "마스코트를 포인트로 사기",
+            description = "unlockType이 POINTS인 마스코트만 살 수 있다. 사면 unlocked가 true가 되고 선택할 수 있다. 선택은 따로 한다.")
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "포인트 부족(INSUFFICIENT_POINTS), 이미 가짐(MASCOT_ALREADY_OWNED), 공부 시간으로 여는 마스코트(MASCOT_NOT_PURCHASABLE)",
+            content =
+                    @Content(
+                            examples =
+                                    @ExampleObject(
+                                            value =
+                                                    "{\"code\":\"MASCOT_ALREADY_OWNED\",\"message\":\"이미 가진 마스코트입니다\"}")))
+    @ApiResponse(
+            responseCode = "404",
+            description = "없는 마스코트",
+            content =
+                    @Content(
+                            examples =
+                                    @ExampleObject(
+                                            value = "{\"code\":\"MASCOT_NOT_FOUND\",\"message\":\"없는 마스코트입니다: X\"}")))
+    @PostMapping("/{code}/purchase")
+    public MascotPurchaseResponse purchase(@AuthenticationPrincipal Long userId, @PathVariable String code) {
+        return service.purchase(userId, code);
     }
 
     @Operation(
