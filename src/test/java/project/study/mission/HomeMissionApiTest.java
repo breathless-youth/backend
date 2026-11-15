@@ -12,12 +12,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
+import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
 import project.study.mission.service.HomeMissionService;
 import project.study.mission.service.HomeMissionUserDataHandler;
+import project.study.point.PointShopFixture;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -35,10 +38,13 @@ class HomeMissionApiTest {
     @Autowired
     HomeMissionService service;
 
+    @Autowired
+    PointShopFixture fixture;
+
     @Test
     void 기존_과목으로_첫_단계를_확인하고_재시도해도_다음_단계를_건너뛰지_않는다() {
         long user = jdbc.sql(
-                        "INSERT INTO users (provider, provider_user_id, nickname) VALUES ('test', :p, :n) RETURNING id")
+                        "INSERT INTO users (provider, provider_user_id, nickname) VALUES ('GOOGLE', :p, :n) RETURNING id")
                 .param("p", UUID.randomUUID().toString())
                 .param("n", "mission-" + UUID.randomUUID())
                 .query(Long.class)
@@ -225,8 +231,93 @@ class HomeMissionApiTest {
         assertThat(service.get(user).completedSteps()).isEqualTo(2);
     }
 
+    @Test
+    void 단계를_끝내면_포인트를_바로_받고_다시_요청해도_두_번_받지_않는다() {
+        long user = fixture.member();
+        jdbc.sql("INSERT INTO study_subject (user_id, name) VALUES (:u, '수학')")
+                .param("u", user)
+                .update();
+        insertSession(user, "2026-11-07T15:30:00Z", "2026-11-07T15:30:00Z", 300, "MEASURED");
+
+        assertThat(post(user, "/api/home/mission/steps/1/complete"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.rewardedPoints", v -> assertThat(v).isEqualTo(50))
+                .hasPathSatisfying("$.claimablePoints", v -> assertThat(v).isEqualTo(0));
+        assertThat(post(user, "/api/home/mission/steps/1/complete"))
+                .bodyJson()
+                .hasPathSatisfying("$.rewardedPoints", v -> assertThat(v).isEqualTo(0));
+        assertThat(post(user, "/api/home/mission/steps/2/complete"))
+                .bodyJson()
+                .hasPathSatisfying("$.rewardedPoints", v -> assertThat(v).isEqualTo(100));
+        assertThat(post(user, "/api/home/mission/rewards/claim"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.granted", v -> assertThat(v).isEqualTo(false))
+                .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(150));
+        assertThat(mvc.get()
+                        .uri("/api/points/history")
+                        .header(ApiVersionConfig.HEADER, "1")
+                        .with(asUser(user))
+                        .exchange())
+                .bodyJson()
+                .hasPathSatisfying("$.items[0].reason", v -> assertThat(v).isEqualTo("MISSION"))
+                .hasPathSatisfying("$.items[0].label", v -> assertThat(v).isEqualTo("home-v3/2"));
+    }
+
+    @Test
+    void 포인트가_생기기_전에_미션을_끝낸_사용자는_받기_요청으로_한_번_받는다() {
+        long user = fixture.member();
+        jdbc.sql("INSERT INTO home_mission_progress (user_id, mission_version, completed_steps)"
+                        + " VALUES (:u, 'home-v3', 2)")
+                .param("u", user)
+                .update();
+
+        assertThat(mvc.get()
+                        .uri("/api/home/mission")
+                        .header(ApiVersionConfig.HEADER, "1")
+                        .with(asUser(user))
+                        .exchange())
+                .bodyJson()
+                .hasPathSatisfying("$.claimablePoints", v -> assertThat(v).isEqualTo(150));
+        assertThat(post(user, "/api/home/mission/rewards/claim"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.granted", v -> assertThat(v).isEqualTo(true))
+                .hasPathSatisfying("$.points", v -> assertThat(v).isEqualTo(150))
+                .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(150));
+        assertThat(post(user, "/api/home/mission/rewards/claim"))
+                .bodyJson()
+                .hasPathSatisfying("$.points", v -> assertThat(v).isEqualTo(0));
+    }
+
+    @Test
+    void 비회원은_미션은_끝내도_포인트는_받지_못하고_받기_요청은_403이다() {
+        long guest = fixture.guest();
+        jdbc.sql("INSERT INTO study_subject (user_id, name) VALUES (:u, '수학')")
+                .param("u", guest)
+                .update();
+
+        assertThat(post(guest, "/api/home/mission/steps/1/complete"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.completedSteps", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying("$.rewardedPoints", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.claimablePoints", v -> assertThat(v).isEqualTo(0));
+        assertThat(post(guest, "/api/home/mission/rewards/claim")).hasStatus(HttpStatus.FORBIDDEN);
+    }
+
+    private MvcTestResult post(long user, String uri) {
+        return mvc.post()
+                .uri(uri)
+                .header(ApiVersionConfig.HEADER, "1")
+                .with(asUser(user))
+                .exchange();
+    }
+
     private long insertUser() {
-        return jdbc.sql("INSERT INTO users (provider, provider_user_id, nickname) VALUES ('test', :p, :n) RETURNING id")
+        return jdbc.sql(
+                        "INSERT INTO users (provider, provider_user_id, nickname) VALUES ('GOOGLE', :p, :n) RETURNING id")
                 .param("p", UUID.randomUUID().toString())
                 .param("n", "mission-" + UUID.randomUUID())
                 .query(Long.class)

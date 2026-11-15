@@ -11,7 +11,7 @@ import project.study.subject.repository.StudySubjectLockRepository;
 
 @Service
 public class HomeMissionService {
-    private static final String VERSION = "home-v3";
+    static final String VERSION = "home-v3";
     private final JdbcClient jdbc;
     private final StudySubjectLockRepository locks;
 
@@ -28,14 +28,18 @@ public class HomeMissionService {
 
     @Transactional(readOnly = true)
     public HomeMissionResponse get(long userId) {
-        int completed = jdbc.sql(
-                        "SELECT completed_steps FROM home_mission_progress WHERE user_id = :u AND mission_version = :v")
+        return response(userId, completedSteps(userId));
+    }
+
+    /** 완료 확인한 단계 수. */
+    @Transactional(readOnly = true)
+    public int completedSteps(long userId) {
+        return jdbc.sql("SELECT completed_steps FROM home_mission_progress WHERE user_id = :u AND mission_version = :v")
                 .param("u", userId)
                 .param("v", VERSION)
                 .query(Integer.class)
                 .optional()
                 .orElse(0);
-        return response(userId, completed);
     }
 
     @Transactional
@@ -82,6 +86,6 @@ public class HomeMissionService {
                 .single();
         Integer current = completed == 2 ? null : completed + 1;
         boolean eligible = current != null && (current == 1 ? hasSubject : seconds >= 300);
-        return new HomeMissionResponse(VERSION, startsOn, completed, current, eligible, seconds);
+        return new HomeMissionResponse(VERSION, startsOn, completed, current, eligible, seconds, 0, 0);
     }
 }
