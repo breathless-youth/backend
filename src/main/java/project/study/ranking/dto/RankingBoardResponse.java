@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.List;
 import project.study.ranking.RankingBoardType;
 import project.study.ranking.RankingPeriod;
+import project.study.shop.dto.MascotAppearance;
 import project.study.studysession.entity.TimeSlot;
 
 /**
@@ -61,12 +62,27 @@ public record RankingBoardResponse(
         List<GoalExample> goalExamples) {
 
     public record BoardEntry(
-            int rank, String nickname, String profileImageUrl, Number value, boolean focusing, boolean me) {}
+            int rank,
+            String nickname,
+            String profileImageUrl,
+            Number value,
+            boolean focusing,
+            boolean me,
+
+            @Schema(description = "고른 마스코트와 낀 소품 — 그룹 구성원의 mascot과 같은 모양. 고른 적이 없으면 첫 마스코트에 소품이 없다")
+            MascotAppearance mascot) {}
 
     public record BoardMe(int rank, Number value, boolean focusing, int topPercent) {}
 
     public record BoardNeighbor(
-            String nickname, String profileImageUrl, Number gap, boolean focusing, Long catchUpFocusSec) {}
+            String nickname,
+            String profileImageUrl,
+            Number gap,
+            boolean focusing,
+            Long catchUpFocusSec,
+
+            @Schema(description = "고른 마스코트와 낀 소품 — BoardEntry의 mascot과 같다")
+            MascotAppearance mascot) {}
 
     public record RateEligibility(
             boolean eligible,

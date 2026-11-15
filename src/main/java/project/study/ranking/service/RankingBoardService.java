@@ -3,7 +3,10 @@ package project.study.ranking.service;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import project.study.ranking.RankingBoard;
@@ -21,6 +24,8 @@ import project.study.ranking.engine.Placement;
 import project.study.ranking.engine.RankedEntry;
 import project.study.ranking.engine.RankingEntry;
 import project.study.ranking.engine.StandingsProvider;
+import project.study.shop.dto.MascotAppearance;
+import project.study.shop.service.DecorationService;
 import project.study.studysession.entity.TimeSlot;
 import project.study.user.image.ProfileImageUrls;
 
@@ -33,6 +38,7 @@ public class RankingBoardService {
     private final BoardExtras extras;
     private final Clock clock;
     private final ProfileImageUrls profileImageUrls;
+    private final DecorationService decorations;
 
     public RankingBoardResponse board(
             long userId, RankingBoardType type, RankingPeriod period, TimeSlot slot, int offset) {
@@ -49,6 +55,9 @@ public class RankingBoardService {
         Placement placement = view.placement().withSharedRanks(sharedRanks);
         RankingEntry me = placement.me();
         RateEligibility eligibility = extras.eligibility(board, window, view, userId, now);
+        List<RankedEntry> podium = placement.sharedRanks() ? List.of() : placement.podium();
+        List<RankedEntry> around = around(placement, eligibility);
+        Map<Long, MascotAppearance> mascots = mascotsOf(podium, around, placement.above(), placement.below());
         return new RankingBoardResponse(
                 type,
                 board.period(),
@@ -56,11 +65,11 @@ public class RankingBoardService {
                 periodStart(board, window),
                 window.closesAt(),
                 now,
-                placement.sharedRanks() ? List.of() : entries(placement.podium(), userId, type),
+                entries(podium, userId, type, mascots),
                 myRank(placement, type),
-                around(placement, eligibility, userId, type),
-                neighbor(placement.above(), me, type, true),
-                neighbor(placement.below(), me, type, false),
+                entries(around, userId, type, mascots),
+                neighbor(placement.above(), me, type, true, mascots),
+                neighbor(placement.below(), me, type, false, mascots),
                 startNowRank(placement, type, offset),
                 eligibility,
                 extras.nextTier(board, placement, userId, now),
@@ -93,15 +102,29 @@ public class RankingBoardService {
                 placement.myRank(), BoardValues.value(type, me.value()), me.focusing(), placement.topPercent());
     }
 
-    private List<BoardEntry> around(
-            Placement placement, RateEligibility eligibility, long userId, RankingBoardType type) {
+    private static List<RankedEntry> around(Placement placement, RateEligibility eligibility) {
         if (placement.sharedRanks()) {
             return List.of();
         }
         if (eligibility != null && !eligibility.eligible()) {
-            return entries(placement.windowAround(eligibility.expectedRank() - 1), userId, type);
+            return placement.windowAround(eligibility.expectedRank() - 1);
         }
-        return entries(placement.around(), userId, type);
+        return placement.around();
+    }
+
+    /** 응답에 이름이 실리는 사람들의 마스코트를 한 번에 읽는다 (BY-1288). */
+    private Map<Long, MascotAppearance> mascotsOf(
+            List<RankedEntry> podium, List<RankedEntry> around, RankingEntry above, RankingEntry below) {
+        Set<Long> userIds = new HashSet<>();
+        podium.forEach(row -> userIds.add(row.entry().userId()));
+        around.forEach(row -> userIds.add(row.entry().userId()));
+        if (above != null) {
+            userIds.add(above.userId());
+        }
+        if (below != null) {
+            userIds.add(below.userId());
+        }
+        return userIds.isEmpty() ? Map.of() : decorations.appearancesOf(userIds);
     }
 
     /**
@@ -116,7 +139,8 @@ public class RankingBoardService {
         return placement.sharedRanks() ? placement.tiedRankOf(1) : placement.size() + 1;
     }
 
-    private List<BoardEntry> entries(List<RankedEntry> ranked, long userId, RankingBoardType type) {
+    private List<BoardEntry> entries(
+            List<RankedEntry> ranked, long userId, RankingBoardType type, Map<Long, MascotAppearance> mascots) {
         return ranked.stream()
                 .map(row -> new BoardEntry(
                         row.rank(),
@@ -124,11 +148,17 @@ public class RankingBoardService {
                         profileImageUrls.of(row.entry().profileImage()),
                         BoardValues.value(type, row.entry().value()),
                         row.entry().focusing(),
-                        row.entry().userId() == userId))
+                        row.entry().userId() == userId,
+                        mascots.get(row.entry().userId())))
                 .toList();
     }
 
-    private BoardNeighbor neighbor(RankingEntry other, RankingEntry me, RankingBoardType type, boolean above) {
+    private BoardNeighbor neighbor(
+            RankingEntry other,
+            RankingEntry me,
+            RankingBoardType type,
+            boolean above,
+            Map<Long, MascotAppearance> mascots) {
         if (other == null || me == null) {
             return null;
         }
@@ -138,6 +168,7 @@ public class RankingBoardService {
                 profileImageUrls.of(other.profileImage()),
                 BoardValues.gap(type, other.value(), me.value()),
                 other.focusing(),
-                catchUp);
+                catchUp,
+                mascots.get(other.userId()));
     }
 }

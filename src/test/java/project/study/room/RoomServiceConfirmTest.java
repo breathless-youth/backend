@@ -1,12 +1,15 @@
 package project.study.room;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.TestcontainersConfiguration;
 import project.study.room.dto.RoomMember;
@@ -16,6 +19,9 @@ import project.study.room.support.RoomTestBase;
 @Import(TestcontainersConfiguration.class)
 @Transactional
 class RoomServiceConfirmTest extends RoomTestBase {
+
+    @Autowired
+    private JdbcClient mascotJdbc;
 
     @Test
     void STOMP_확정_후_멤버_목록에_포함된다() {
@@ -45,6 +51,28 @@ class RoomServiceConfirmTest extends RoomTestBase {
 
         assertThat(members.getFirst().nickname()).isEqualTo("숨벅찬포메");
         assertThat(members.getFirst().goal()).isEqualTo("정처기 합격");
+    }
+
+    @Test
+    void 스냅샷_멤버에_고른_마스코트가_실리고_고른_적_없으면_첫_마스코트다() {
+        String code = createRoom();
+        long picked = user();
+        long plain = user();
+        mascotJdbc
+                .sql("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (:u, 'PLANNER')")
+                .param("u", picked)
+                .update();
+        long roomId = join(picked, code).response().roomId();
+        join(plain, code);
+        confirm(roomId, picked, "session-1");
+
+        List<RoomMember> members = confirm(roomId, plain, "session-2");
+
+        assertThat(members)
+                .extracting(RoomMember::userId, member -> member.mascot().mascotCode())
+                .containsExactlyInAnyOrder(tuple(picked, "PLANNER"), tuple(plain, "BOOK"));
+        assertThat(roomState.getMembers(roomId))
+                .allSatisfy(member -> assertThat(member.mascot()).isNotNull());
     }
 
     @Test
