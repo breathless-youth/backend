@@ -123,7 +123,8 @@ public class RoomParticipationRepository {
                 rs.getBoolean("disconnected"),
                 rs.getObject("mic_on", Boolean.class),
                 rs.getObject("on_break", Boolean.class),
-                rs.getObject("is_owner", Boolean.class));
+                rs.getObject("is_owner", Boolean.class),
+                null);
     }
 
     public Optional<Long> findLiveRoomIdOfUser(Long userId) {

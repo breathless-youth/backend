@@ -101,7 +101,8 @@ public class StompEventListener {
         RoomMember self = members.stream()
                 .filter(m -> m.userId().equals(userId))
                 .findFirst()
-                .orElse(new RoomMember(userId, null, null, null, null, false, "FOCUS", 0, false, null, null, null));
+                .orElse(new RoomMember(
+                        userId, null, null, null, null, false, "FOCUS", 0, false, null, null, null, null));
         messenger.broadcast(roomId, Map.of("type", RoomMessageType.MEMBER_JOINED.name(), "member", self));
     }
 
