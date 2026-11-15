@@ -10,6 +10,8 @@ public enum PointReason {
     PURCHASE,
     /** 포인트로 마스코트 사기. label은 마스코트 코드다 */
     MASCOT_PURCHASE,
+    /** 시작 미션 보상. label은 "미션 버전/단계"다 (예: home-v3/1) */
+    MISSION,
     /** 출석 */
     ATTENDANCE,
     /** 하루 목표 달성 */

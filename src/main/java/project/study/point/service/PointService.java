@@ -48,6 +48,18 @@ public class PointService {
         return new PointHistoryResponse(items, hasNext ? items.getLast().id() : null);
     }
 
+    /** 같은 (사유, 참조 키)로 이미 받았는지. */
+    @Transactional(readOnly = true)
+    public boolean granted(long userId, PointReason reason, String refKey) {
+        return repository.exists(userId, reason, refKey);
+    }
+
+    /** 회원인지 보지 않는 잔액. 지급을 끝낸 호출자가 응답에 실을 때 쓴다. */
+    @Transactional(readOnly = true)
+    public int balanceOf(long userId) {
+        return repository.balance(userId);
+    }
+
     /** 포인트 사용자 락을 잡는다. 검사와 차감 사이를 막아야 하는 호출자(상점)가 검사 전에 부른다. */
     public void lock(long userId) {
         locks.lockUser(userId);
