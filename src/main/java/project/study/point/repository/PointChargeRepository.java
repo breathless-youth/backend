@@ -47,10 +47,20 @@ public class PointChargeRepository {
                 .flatMap(owner -> owner);
     }
 
+    /** 그 결제가 상점 상품을 산 것이면 그 상품. 환불 알림을 어느 길로 처리할지 정하려고 잠그지 않고 읽는다. */
+    public Optional<Long> findItemId(String store, String transactionId) {
+        return jdbc.sql("SELECT item_id FROM point_purchase WHERE store = :s AND transaction_id = :t")
+                .param("s", store)
+                .param("t", transactionId)
+                .query((rs, n) -> Optional.ofNullable(rs.getObject("item_id", Long.class)))
+                .optional()
+                .flatMap(itemId -> itemId);
+    }
+
     /** 결제 한 건을 잠그고 읽는다. 같은 결제의 지급 알림과 환불 알림이 겹쳐도 한 줄로 선다. */
     public Optional<PointPurchase> findForUpdate(String store, String transactionId) {
         return jdbc.sql("""
-                        SELECT id, user_id, store_product_id, points, bonus_points, status FROM point_purchase
+                        SELECT id, user_id, store_product_id, points, bonus_points, status, item_id FROM point_purchase
                         WHERE store = :s AND transaction_id = :t FOR UPDATE""")
                 .param("s", store)
                 .param("t", transactionId)
@@ -60,7 +70,8 @@ public class PointChargeRepository {
                         rs.getString("store_product_id"),
                         rs.getInt("points"),
                         rs.getInt("bonus_points"),
-                        "REFUNDED".equals(rs.getString("status"))))
+                        "REFUNDED".equals(rs.getString("status")),
+                        rs.getObject("item_id", Long.class)))
                 .optional();
     }
 
@@ -73,15 +84,16 @@ public class PointChargeRepository {
             int points,
             int bonusPoints,
             boolean sandbox,
-            Instant purchasedAt) {}
+            Instant purchasedAt,
+            Long itemId) {}
 
     /** 같은 결제가 이미 있으면 넣지 않고 false. refunded면 지급 없이 환불된 결제로 적는다. */
     public boolean insert(NewPurchase purchase, boolean refunded) {
         return jdbc.sql("""
                         INSERT INTO point_purchase (user_id, store, transaction_id, store_product_id, points,
-                            bonus_points, sandbox, status, purchased_at, refunded_at)
+                            bonus_points, sandbox, status, purchased_at, refunded_at, item_id)
                         VALUES (:u, :s, :t, :p, :points, :bonus, :sandbox, :status, :purchasedAt,
-                            CASE WHEN :status = 'REFUNDED' THEN now() END)
+                            CASE WHEN :status = 'REFUNDED' THEN now() END, :item)
                         ON CONFLICT ON CONSTRAINT uq_point_purchase_tx DO NOTHING""")
                         .param("u", purchase.userId())
                         .param("s", purchase.store())
@@ -91,11 +103,24 @@ public class PointChargeRepository {
                         .param("bonus", purchase.bonusPoints())
                         .param("sandbox", purchase.sandbox())
                         .param("status", refunded ? "REFUNDED" : "GRANTED")
+                        .param("item", purchase.itemId())
                         .param(
                                 "purchasedAt",
                                 purchase.purchasedAt() == null ? null : Timestamp.from(purchase.purchasedAt()))
                         .update()
                 > 0;
+    }
+
+    /** 그 사용자가 같은 상품을 산, 환불되지 않은 다른 결제가 있는지. */
+    public boolean hasOtherGrantedItem(long userId, long itemId, long exceptPurchaseId) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM point_purchase
+                        WHERE user_id = :u AND item_id = :i AND status = 'GRANTED' AND id <> :id)""")
+                .param("u", userId)
+                .param("i", itemId)
+                .param("id", exceptPurchaseId)
+                .query(Boolean.class)
+                .single();
     }
 
     public void markRefunded(long purchaseId, int reclaimed, int shortfall) {

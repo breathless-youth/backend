@@ -395,6 +395,7 @@ Table point_purchase {
   store varchar(24) [not null]
   transaction_id varchar(128) [not null, note: '스토어 거래 ID']
   store_product_id varchar(100) [not null]
+  item_id bigint [ref: > shop_item.id, note: '상점 상품을 산 결제면 그 상품. 포인트 충전이면 NULL']
   points integer [not null]
   bonus_points integer [not null]
   sandbox boolean [not null]
@@ -453,9 +454,10 @@ Table shop_item {
   image_url varchar(500)
   back_image_url varchar(500) [note: '마스코트 뒤에 그리는 조각. 없으면 NULL']
   grade smallint [not null, default: 1, note: '1 | 2 | 3']
-  price integer [note: 'NULL = 보상 상품']
+  price integer [note: '포인트로 사는 상품의 가격. 아니면 NULL']
   unlock_type varchar(24) [note: 'STREAK_DAYS | TOTAL_FOCUS_HOURS, 보상 상품일 때만']
   unlock_value integer
+  store_product_id varchar(100) [unique, note: '스토어 결제로 사는 상품의 스토어 상품 ID. 아니면 NULL']
   sort_order integer [not null, default: 0]
   active boolean [not null, default: true]
 }

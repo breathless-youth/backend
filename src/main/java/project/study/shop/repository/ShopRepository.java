@@ -25,7 +25,8 @@ import project.study.studysession.StudySessionThresholds;
 public class ShopRepository {
 
     private static final String ITEM_COLUMNS =
-            "id, code, category, mascot_code, slot, tag, name, image_url, back_image_url, grade, price, unlock_type, unlock_value";
+            "id, code, category, mascot_code, slot, tag, name, image_url, back_image_url, grade, price, unlock_type, unlock_value, "
+                    + "store_product_id";
 
     private final JdbcClient jdbc;
 
@@ -46,6 +47,14 @@ public class ShopRepository {
                 .optional();
     }
 
+    /** 스토어 결제로 사는 상품. 내린 상품도 찾는다 — 내리기 직전에 한 결제의 알림이 늦게 올 수 있다. */
+    public Optional<ShopItem> findByStoreProductId(String storeProductId) {
+        return jdbc.sql("SELECT " + ITEM_COLUMNS + " FROM shop_item WHERE store_product_id = :p")
+                .param("p", storeProductId)
+                .query(ShopRepository::item)
+                .optional();
+    }
+
     public boolean isActive(long itemId) {
         return jdbc.sql("SELECT active FROM shop_item WHERE id = :id")
                 .param("id", itemId)
@@ -59,6 +68,31 @@ public class ShopRepository {
                 .param("u", userId)
                 .query(Long.class)
                 .set();
+    }
+
+    /** 이미 가졌으면 아무것도 하지 않는다. */
+    public void insertOwnedIfAbsent(long userId, long itemId) {
+        jdbc.sql("INSERT INTO user_item (user_id, item_id) VALUES (:u, :i) ON CONFLICT DO NOTHING")
+                .param("u", userId)
+                .param("i", itemId)
+                .update();
+    }
+
+    /** 가진 것을 지우고, 끼고 있거나 배경으로 쓰고 있으면 함께 푼다. */
+    public void deleteOwned(long userId, long itemId) {
+        jdbc.sql("DELETE FROM user_mascot_accessory WHERE user_id = :u AND item_id = :i")
+                .param("u", userId)
+                .param("i", itemId)
+                .update();
+        jdbc.sql("UPDATE user_decoration SET timer_background_item_id = NULL"
+                        + " WHERE user_id = :u AND timer_background_item_id = :i")
+                .param("u", userId)
+                .param("i", itemId)
+                .update();
+        jdbc.sql("DELETE FROM user_item WHERE user_id = :u AND item_id = :i")
+                .param("u", userId)
+                .param("i", itemId)
+                .update();
     }
 
     public void insertOwned(long userId, long itemId) {
@@ -171,6 +205,7 @@ public class ShopRepository {
                 rs.getInt("grade"),
                 rs.getObject("price", Integer.class),
                 unlockType == null ? null : UnlockType.valueOf(unlockType),
-                rs.getObject("unlock_value", Integer.class));
+                rs.getObject("unlock_value", Integer.class),
+                rs.getString("store_product_id"));
     }
 }
