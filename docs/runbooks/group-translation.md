@@ -22,7 +22,7 @@
 3. Google은 결제 계정의 다른 프로젝트 사용량도 함께 확인한다. 일반 NMT만 사용하는지, 다른 호출 경로가 같은 무료분을 소비하지 않는지 확인한다. Google 콘솔은 백엔드 검증 후에만 목표 15,000자/일로 변경한다. 이 문서는 콘솔 변경을 실행하지 않는다.
 4. Google 오늘/이번 달, Azure 실제 무료 주기, DeepL 영구 누적 기사용량을 확인한다. DeepL은 애플리케이션의 영구 장부를 월간 usage 응답으로 감소시키지 않는다. 월간 수치만 확인 가능하고 기존 총 사용량을 모르면 DeepL은 off를 유지한다.
 5. 아래 SQL로 확인한 기사용량을 증가 방향으로만 반영한다. 공급자들을 켠 채 실행하지 않는다. 각 공급자의 확인이 완료되지 않았다면 해당 공급자 초기화/활성화를 생략한다.
-6. 확인된 공급자만 enabled=true로 설정한 뒤 전역을 켠다. Google → Azure → DeepL 순서는 고정이다. 첫 소량 요청에서 reservation·cache hit·fallback을 확인한다.
+6. 확인된 공급자만 enabled=true로 설정한 뒤 전역을 켠다. Azure → Google → DeepL 순서는 고정이다(BY-1294, `TranslationProvider` 선언 순서). 첫 소량 요청에서 reservation·cache hit·fallback을 확인한다.
 
 ### 기사용량 반영 예시 (psql)
 

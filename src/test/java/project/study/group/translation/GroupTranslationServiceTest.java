@@ -129,25 +129,26 @@ class GroupTranslationServiceTest {
 
     @Test
     void failuresReserveEachAttemptThenSwitchToNextFreeProvider() {
+        // 넘긴 목록 순서와 관계없이 Azure → Google → DeepL 순서로 시도한다 (BY-1294)
         var service = service(List.of(
+                translator(DEEPL, TextTranslator.Failure.NONE),
                 translator(GOOGLE, TextTranslator.Failure.TEMPORARY),
-                translator(AZURE, TextTranslator.Failure.QUOTA),
-                translator(DEEPL, TextTranslator.Failure.NONE)));
+                translator(AZURE, TextTranslator.Failure.QUOTA)));
         assertThat(service.translate(texts, TranslationLanguage.JA)).hasSize(2);
-        assertThat(calls).containsExactly(GOOGLE, AZURE, DEEPL);
+        assertThat(calls).containsExactly(AZURE, GOOGLE, DEEPL);
         assertThat(budget.available(DEEPL)).isEqualTo(999993);
         assertThat(budget.available(AZURE)).isZero();
     }
 
     @Test
-    void exhaustedOrPartlyAvailableBudgetRoutesRemainderToAzure() {
-        assertThat(budget.tryReserve(GOOGLE, 12998)).isTrue();
+    void exhaustedOrPartlyAvailableAzureBudgetRoutesRemainderToGoogle() {
+        assertThat(budget.tryReserve(AZURE, 1999998)).isTrue();
         var service = service(List.of(
                 translator(GOOGLE, TextTranslator.Failure.NONE), translator(AZURE, TextTranslator.Failure.NONE)));
         assertThat(service.translate(texts, TranslationLanguage.ZH_TW)).hasSize(2);
-        assertThat(calls).containsExactly(GOOGLE, AZURE);
-        assertThat(budget.available(GOOGLE)).isZero();
-        assertThat(budget.available(AZURE)).isEqualTo(1999995);
+        assertThat(calls).containsExactly(AZURE, GOOGLE);
+        assertThat(budget.available(AZURE)).isZero();
+        assertThat(budget.available(GOOGLE)).isEqualTo(12995);
     }
 
     @Test
@@ -173,11 +174,11 @@ class GroupTranslationServiceTest {
     void deadlinePreventsStartingAnotherProviderAfterSlowFailure() {
         TextTranslator slow = new TextTranslator() {
             public TranslationProvider provider() {
-                return GOOGLE;
+                return AZURE;
             }
 
             public TranslationReply translate(List<String> input, TranslationLanguage language, Duration timeout) {
-                calls.add(GOOGLE);
+                calls.add(AZURE);
                 try {
                     Thread.sleep(3050);
                 } catch (InterruptedException e) {
@@ -186,10 +187,10 @@ class GroupTranslationServiceTest {
                 return TranslationReply.failed(Failure.TEMPORARY);
             }
         };
-        assertThat(service(List.of(slow, translator(AZURE, TextTranslator.Failure.NONE)))
+        assertThat(service(List.of(slow, translator(GOOGLE, TextTranslator.Failure.NONE)))
                         .translate(texts, TranslationLanguage.EN))
                 .isEmpty();
-        assertThat(calls).containsExactly(GOOGLE);
+        assertThat(calls).containsExactly(AZURE);
     }
 
     @Test
