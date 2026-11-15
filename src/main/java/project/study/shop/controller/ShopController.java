@@ -19,6 +19,8 @@ import project.study.shop.dto.ShopItemListResponse;
 import project.study.shop.service.ShopService;
 
 @Tag(name = "Shop", description = "API-Version 1, 토큰 인증 필요. 상품과 가격은 서버 값이라 앱 배포 없이 추가되거나 바뀐다.")
+// 200을 적지 않으면 springdoc이 아래 403만 싣고 성공 응답의 모양을 문서에서 뺀다. 내용은 반환 타입에서 채운다
+@ApiResponse(responseCode = "200", description = "성공")
 @ApiResponse(
         responseCode = "403",
         description = "비회원",

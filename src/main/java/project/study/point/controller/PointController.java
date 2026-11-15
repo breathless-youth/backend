@@ -25,6 +25,8 @@ import project.study.point.service.PointService;
 import project.study.point.service.StudyPointService;
 
 @Tag(name = "Point", description = "API-Version 1, 토큰 인증 필요. 잔액과 지급 여부는 전부 서버가 판단한다. 공부 포인트는 세션 제출 때 서버가 계산해 준다.")
+// 200을 적지 않으면 springdoc이 아래 403만 싣고 성공 응답의 모양을 문서에서 뺀다. 내용은 반환 타입에서 채운다
+@ApiResponse(responseCode = "200", description = "성공")
 @ApiResponse(
         responseCode = "403",
         description = "비회원",

@@ -24,6 +24,8 @@ import project.study.mascot.service.MascotService;
         name = "Mascot",
         description =
                 "API-Version 1, 토큰 인증 필요. 마스코트는 측정한 누적 순공으로 열린다. 이름과 그림은 앱이 code로 고른다. 해금 기준은 서버 값이라 앱 배포 없이 바뀔 수 있다.")
+// 200을 적지 않으면 springdoc이 아래 403만 싣고 성공 응답의 모양을 문서에서 뺀다. 내용은 반환 타입에서 채운다
+@ApiResponse(responseCode = "200", description = "성공")
 @ApiResponse(
         responseCode = "403",
         description = "비회원",

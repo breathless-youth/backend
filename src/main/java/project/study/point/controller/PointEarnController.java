@@ -21,6 +21,8 @@ import project.study.point.service.DailyRewardService;
         name = "Point earn",
         description = "API-Version 1, 토큰 인증 필요. 포인트 받기 탭과 보상 받기. 오늘은 사용자 시간대의 자정 기준이다. "
                 + "같은 보상은 한 번만 지급되고, 다시 요청하면 granted=false와 지금 잔액을 준다(에러가 아니다).")
+// 200을 적지 않으면 springdoc이 아래 403만 싣고 성공 응답의 모양을 문서에서 뺀다. 내용은 반환 타입에서 채운다
+@ApiResponse(responseCode = "200", description = "성공")
 @ApiResponse(
         responseCode = "403",
         description = "비회원",
