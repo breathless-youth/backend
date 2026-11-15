@@ -413,8 +413,19 @@ Table point_purchase {
 
 Table mascot {
   code varchar(32) [primary key, note: '이름과 그림은 앱이 갖는다']
-  unlock_focus_sec integer [not null, note: '해금 기준 누적 순공(초)']
+  unlock_focus_sec integer [not null, note: '해금 기준 누적 순공(초). price가 있으면 쓰지 않는다']
+  price integer [note: 'NULL = 공부 시간으로 연다. 값이 있으면 포인트로 사서 연다']
   sort_order integer [not null]
+}
+
+Table user_mascot_owned {
+  user_id bigint [not null, ref: > users.id]
+  mascot_code varchar(32) [not null, ref: > mascot.code]
+  acquired_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, mascot_code) [pk]
+  }
 }
 
 Table user_mascot {

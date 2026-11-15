@@ -8,6 +8,8 @@ public enum PointReason {
     STUDY_ADJUST,
     /** 상점 구매 */
     PURCHASE,
+    /** 포인트로 마스코트 사기. label은 마스코트 코드다 */
+    MASCOT_PURCHASE,
     /** 출석 */
     ATTENDANCE,
     /** 하루 목표 달성 */

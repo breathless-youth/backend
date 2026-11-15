@@ -19,8 +19,9 @@ public class MascotRepository {
 
     /** 해금 기준 오름차순. */
     public List<Mascot> findAll() {
-        return jdbc.sql("SELECT code, unlock_focus_sec FROM mascot ORDER BY sort_order, code")
-                .query((rs, n) -> new Mascot(rs.getString("code"), rs.getInt("unlock_focus_sec")))
+        return jdbc.sql("SELECT code, unlock_focus_sec, price FROM mascot ORDER BY sort_order, code")
+                .query((rs, n) -> new Mascot(
+                        rs.getString("code"), rs.getInt("unlock_focus_sec"), rs.getObject("price", Integer.class)))
                 .list();
     }
 
@@ -33,20 +34,30 @@ public class MascotRepository {
                 .single();
     }
 
+    // 선택해 둔 마스코트가 나중에 포인트로 사는 것으로 바뀌면, 사지 않은 사람의 선택은 없는 것으로 본다
+    private static final String USABLE_SELECTION = """
+            SELECT s.user_id, s.selected_mascot_code FROM user_mascot s
+              JOIN mascot m ON m.code = s.selected_mascot_code
+             WHERE (m.price IS NULL OR EXISTS (
+                       SELECT 1 FROM user_mascot_owned o
+                        WHERE o.user_id = s.user_id AND o.mascot_code = m.code))
+            """;
+
+    /** 고른 마스코트. 고른 적이 없거나, 고른 것이 사지 않은 포인트 마스코트면 빈 값. */
     public Optional<String> selectedCode(long userId) {
-        return jdbc.sql("SELECT selected_mascot_code FROM user_mascot WHERE user_id = :u")
+        return jdbc.sql("SELECT selected_mascot_code FROM (" + USABLE_SELECTION + ") usable WHERE user_id = :u")
                 .param("u", userId)
                 .query(String.class)
                 .optional();
     }
 
-    /** 고른 적이 있는 사람만 담긴다. */
+    /** 쓸 수 있는 마스코트를 고른 사람만 담긴다. */
     public Map<Long, String> selectedCodes(Collection<Long> userIds) {
         Map<Long, String> codes = new HashMap<>();
         if (userIds.isEmpty()) {
             return codes;
         }
-        jdbc.sql("SELECT user_id, selected_mascot_code FROM user_mascot WHERE user_id IN (:ids)")
+        jdbc.sql(USABLE_SELECTION + " AND s.user_id IN (:ids)")
                 .param("ids", userIds)
                 .query((rs, n) -> codes.put(rs.getLong("user_id"), rs.getString("selected_mascot_code")))
                 .list();
@@ -57,6 +68,21 @@ public class MascotRepository {
         jdbc.sql("""
                 INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (:u, :code)
                 ON CONFLICT (user_id) DO UPDATE SET selected_mascot_code = EXCLUDED.selected_mascot_code""").param("u", userId).param("code", code).update();
+    }
+
+    /** 포인트로 산 마스코트. */
+    public Set<String> ownedCodes(long userId) {
+        return jdbc.sql("SELECT mascot_code FROM user_mascot_owned WHERE user_id = :u")
+                .param("u", userId)
+                .query(String.class)
+                .set();
+    }
+
+    public void insertOwned(long userId, String code) {
+        jdbc.sql("INSERT INTO user_mascot_owned (user_id, mascot_code) VALUES (:u, :code)")
+                .param("u", userId)
+                .param("code", code)
+                .update();
     }
 
     public Set<String> seenCodes(long userId) {

@@ -83,7 +83,7 @@ public class PointShopFixture {
                 .update();
     }
 
-    /** 사용자 참조 컬럼이 있는 여덟 테이블에 한 행씩 넣는다. */
+    /** 사용자 참조 컬럼이 있는 아홉 테이블에 한 행씩 넣는다. */
     public void seedEverything(long userId) {
         givePoints(userId, 100);
         jdbc.sql("""
@@ -110,6 +110,9 @@ public class PointShopFixture {
                 .param("u", userId)
                 .update();
         jdbc.sql("INSERT INTO user_mascot_seen (user_id, mascot_code) VALUES (:u, 'BOOK')")
+                .param("u", userId)
+                .update();
+        jdbc.sql("INSERT INTO user_mascot_owned (user_id, mascot_code) VALUES (:u, 'BOOK')")
                 .param("u", userId)
                 .update();
     }
