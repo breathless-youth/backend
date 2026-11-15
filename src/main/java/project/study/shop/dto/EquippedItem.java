@@ -8,9 +8,12 @@ public record EquippedItem(
         @Schema(description = "상품 코드", example = "STOPWATCH_HEAD_CROWN")
         String code,
 
-        @Schema(description = "그림 주소. 아직 없으면 null") String imageUrl) {
+        @Schema(description = "그림 주소. 아직 없으면 null") String imageUrl,
+
+        @Schema(description = "마스코트 뒤에 그리는 조각의 그림 주소. 뒤 조각이 없으면 null")
+        String backImageUrl) {
 
     public static EquippedItem from(ShopItem item) {
-        return item == null ? null : new EquippedItem(item.id(), item.code(), item.imageUrl());
+        return item == null ? null : new EquippedItem(item.id(), item.code(), item.imageUrl(), item.backImageUrl());
     }
 }

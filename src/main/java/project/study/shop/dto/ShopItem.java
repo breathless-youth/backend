@@ -10,6 +10,8 @@ public record ShopItem(
         String tag,
         String name,
         String imageUrl,
+        String backImageUrl,
+        int grade,
         Integer price,
         UnlockType unlockType,
         Integer unlockValue) {

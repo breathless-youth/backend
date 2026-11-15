@@ -166,6 +166,32 @@ class ShopApiTest {
     }
 
     @Test
+    void 새_칸의_소품을_끼면_뒤_조각_그림이_함께_오고_상품에는_등급이_실린다() {
+        long user = fixture.member();
+        fixture.givePoints(user, 1000);
+        long wings = fixture.pricedItem("BOOK", 100);
+        jdbc.sql("UPDATE shop_item SET slot = 'UNDERFOOT', back_image_url = 'https://cdn.test/wings-back.png',"
+                        + " grade = 2 WHERE id = :id")
+                .param("id", wings)
+                .update();
+        assertThat(purchase(user, wings)).hasStatusOk();
+
+        assertThat(put(
+                        user,
+                        "/api/decorations/mascots/BOOK/accessories",
+                        "{\"slot\":\"UNDERFOOT\",\"itemId\":" + wings + "}"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.accessories[0].slot", v -> assertThat(v).isEqualTo("UNDERFOOT"))
+                .hasPathSatisfying(
+                        "$.accessories[0].item.backImageUrl",
+                        v -> assertThat(v).isEqualTo("https://cdn.test/wings-back.png"));
+        assertThat(item(user, wings).grade()).isEqualTo(2);
+        assertThat(item(user, wings).backImageUrl()).isEqualTo("https://cdn.test/wings-back.png");
+        assertThat(item(user, fixture.pricedItem(null, 10)).grade()).isEqualTo(1);
+    }
+
+    @Test
     void 타이머_배경을_적용하고_기본으로_되돌린다() {
         long user = fixture.member();
         fixture.givePoints(user, 1000);

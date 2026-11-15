@@ -25,7 +25,7 @@ import project.study.studysession.StudySessionThresholds;
 public class ShopRepository {
 
     private static final String ITEM_COLUMNS =
-            "id, code, category, mascot_code, slot, tag, name, image_url, price, unlock_type, unlock_value";
+            "id, code, category, mascot_code, slot, tag, name, image_url, back_image_url, grade, price, unlock_type, unlock_value";
 
     private final JdbcClient jdbc;
 
@@ -167,6 +167,8 @@ public class ShopRepository {
                 rs.getString("tag"),
                 rs.getString("name"),
                 rs.getString("image_url"),
+                rs.getString("back_image_url"),
+                rs.getInt("grade"),
                 rs.getObject("price", Integer.class),
                 unlockType == null ? null : UnlockType.valueOf(unlockType),
                 rs.getObject("unlock_value", Integer.class));
