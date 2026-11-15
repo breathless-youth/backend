@@ -7,35 +7,42 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.shop.dto.AccessoryRow;
 import project.study.shop.dto.AccessorySlot;
 import project.study.shop.dto.DecorationRow;
+import project.study.shop.dto.EffectPiece;
 import project.study.shop.dto.ShopCategory;
 import project.study.shop.dto.ShopItem;
 import project.study.shop.dto.UnlockType;
 import project.study.studysession.StudySessionThresholds;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
+@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class ShopRepository {
 
     private static final String ITEM_COLUMNS =
             "id, code, category, mascot_code, slot, tag, name, image_url, back_image_url, grade, price, unlock_type, unlock_value, "
-                    + "store_product_id";
+                    + "store_product_id, effect_image_url, effect_pieces, effect_type";
 
     private final JdbcClient jdbc;
+    private final ObjectMapper mapper;
 
     /** 파는 중인 상품. 종류, 진열 순서 순. 이름은 language 번역이 있으면 그것, 없으면 한국어다. */
     public List<ShopItem> findActive(String language) {
         return jdbc.sql("SELECT " + ITEM_COLUMNS.replace(" name,", " COALESCE(names ->> :lang, name) AS name,")
                         + " FROM shop_item WHERE active ORDER BY category, sort_order, id")
                 .param("lang", language)
-                .query(ShopRepository::item)
+                .query(this::item)
                 .list();
     }
 
@@ -43,7 +50,7 @@ public class ShopRepository {
     public Optional<ShopItem> findById(long itemId) {
         return jdbc.sql("SELECT " + ITEM_COLUMNS + " FROM shop_item WHERE id = :id")
                 .param("id", itemId)
-                .query(ShopRepository::item)
+                .query(this::item)
                 .optional();
     }
 
@@ -51,7 +58,7 @@ public class ShopRepository {
     public Optional<ShopItem> findByStoreProductId(String storeProductId) {
         return jdbc.sql("SELECT " + ITEM_COLUMNS + " FROM shop_item WHERE store_product_id = :p")
                 .param("p", storeProductId)
-                .query(ShopRepository::item)
+                .query(this::item)
                 .optional();
     }
 
@@ -147,6 +154,19 @@ public class ShopRepository {
                 .update();
     }
 
+    /** 그 마스코트의 세트만 벗긴다. */
+    public void deleteSet(long userId, String mascotCode) {
+        deleteAccessory(userId, mascotCode, AccessorySlot.SET);
+    }
+
+    /** 그 마스코트의 세트가 아닌 소품을 모두 벗긴다. */
+    public void deletePieces(long userId, String mascotCode) {
+        jdbc.sql("DELETE FROM user_mascot_accessory WHERE user_id = :u AND mascot_code = :m AND slot <> 'SET'")
+                .param("u", userId)
+                .param("m", mascotCode)
+                .update();
+    }
+
     public void deleteAccessory(long userId, String mascotCode, AccessorySlot slot) {
         jdbc.sql("DELETE FROM user_mascot_accessory WHERE user_id = :u AND mascot_code = :m AND slot = :s")
                 .param("u", userId)
@@ -189,7 +209,7 @@ public class ShopRepository {
                 .single();
     }
 
-    private static ShopItem item(ResultSet rs, int rowNum) throws SQLException {
+    private ShopItem item(ResultSet rs, int rowNum) throws SQLException {
         String slot = rs.getString("slot");
         String unlockType = rs.getString("unlock_type");
         return new ShopItem(
@@ -206,6 +226,23 @@ public class ShopRepository {
                 rs.getObject("price", Integer.class),
                 unlockType == null ? null : UnlockType.valueOf(unlockType),
                 rs.getObject("unlock_value", Integer.class),
-                rs.getString("store_product_id"));
+                rs.getString("store_product_id"),
+                rs.getString("effect_image_url"),
+                effectPieces(rs.getString("effect_pieces")),
+                rs.getString("effect_type"));
+    }
+
+    private List<EffectPiece> effectPieces(String json) {
+        if (json == null) {
+            return null;
+        }
+        // 손으로 넣는 값이다. 한 상품의 값이 잘못됐다고 상품 목록과 그 상품을 낀 사람이 나오는 응답 전체를 깨뜨리지 않는다
+        try {
+            List<EffectPiece> pieces = mapper.readValue(json, new TypeReference<List<EffectPiece>>() {});
+            return pieces.stream().filter(Objects::nonNull).toList();
+        } catch (RuntimeException e) {
+            log.error("읽을 수 없는 effect_pieces — 움직임 없이 내려 준다: {}", json, e);
+            return null;
+        }
     }
 }

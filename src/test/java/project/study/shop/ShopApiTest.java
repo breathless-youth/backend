@@ -192,6 +192,60 @@ class ShopApiTest {
     }
 
     @Test
+    void 세트를_끼면_그_마스코트의_낱개_소품이_모두_풀리고_낱개를_끼면_세트가_풀린다() {
+        long user = fixture.member();
+        fixture.givePoints(user, 1000);
+        long hat = fixture.pricedItem("BOOK", 100);
+        long otherMascotHat = fixture.pricedItem("PLANNER", 100);
+        long set = effectSet();
+        for (long owned : new long[] {set, otherMascotHat}) {
+            jdbc.sql("INSERT INTO user_item (user_id, item_id) VALUES (:u, :i)")
+                    .param("u", user)
+                    .param("i", owned)
+                    .update();
+        }
+        assertThat(purchase(user, hat)).hasStatusOk();
+        String uri = "/api/decorations/mascots/BOOK/accessories";
+        put(user, uri, "{\"slot\":\"HEAD\",\"itemId\":" + hat + "}");
+        // 다른 마스코트의 소품은 건드리지 않는다
+        jdbc.sql("INSERT INTO user_mascot_accessory (user_id, mascot_code, slot, item_id)"
+                        + " VALUES (:u, 'PLANNER', 'HEAD', :i)")
+                .param("u", user)
+                .param("i", otherMascotHat)
+                .update();
+
+        assertThat(put(user, uri, "{\"slot\":\"SET\",\"itemId\":" + set + "}"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.accessories.length()", v -> assertThat(v).isEqualTo(2))
+                .hasPathSatisfying(
+                        "$.accessories[?(@.slot=='SET')].item.effectImageUrl",
+                        v -> assertThat(v).asList().containsExactly("https://cdn.test/set-effect.png"))
+                .hasPathSatisfying(
+                        "$.accessories[?(@.slot=='SET')].item.effectPieces[0].motion",
+                        v -> assertThat(v).asList().containsExactly("float"))
+                .hasPathSatisfying(
+                        "$.accessories[?(@.slot=='SET')].item.effectType",
+                        v -> assertThat(v).asList().containsExactly("aurora"));
+        assertThat(inUse(user, hat)).isFalse();
+        assertThat(inUse(user, otherMascotHat)).isTrue();
+        assertThat(item(user, set).effectPieces()).singleElement().satisfies(piece -> {
+            assertThat(piece.x()).isEqualTo(0.1);
+            assertThat(piece.height()).isEqualTo(0.4);
+        });
+
+        assertThat(put(user, uri, "{\"slot\":\"HEAD\",\"itemId\":" + hat + "}")).hasStatusOk();
+        assertThat(inUse(user, set)).isFalse();
+        assertThat(inUse(user, hat)).isTrue();
+
+        // 조각 값이 잘못 들어가도 상품 목록은 깨지지 않고 움직임만 빠진다
+        jdbc.sql("UPDATE shop_item SET effect_pieces = CAST('[{\"x\":\"left\"}]' AS jsonb) WHERE id = :id")
+                .param("id", set)
+                .update();
+        assertThat(item(user, set).effectPieces()).isNull();
+    }
+
+    @Test
     void 타이머_배경을_적용하고_기본으로_되돌린다() {
         long user = fixture.member();
         fixture.givePoints(user, 1000);
@@ -233,6 +287,20 @@ class ShopApiTest {
                 .bodyJson()
                 .hasPathSatisfying(
                         "$.timerBackground.itemId", v -> assertThat(v).isEqualTo((int) reward));
+    }
+
+    /** 효과 그림과 움직임 정보가 있는 BOOK의 세트 상품. */
+    private long effectSet() {
+        return jdbc.sql("""
+                        INSERT INTO shop_item (code, category, mascot_code, slot, name, store_product_id,
+                            effect_image_url, effect_pieces, effect_type)
+                        VALUES (:code, 'MASCOT_ACCESSORY', 'BOOK', 'SET', '세트', :p, 'https://cdn.test/set-effect.png',
+                            CAST('[{"x":0.1,"y":0.2,"width":0.3,"height":0.4,"motion":"float"}]' AS jsonb), 'aurora')
+                        RETURNING id""")
+                .param("code", "SET_" + java.util.UUID.randomUUID())
+                .param("p", "set_" + java.util.UUID.randomUUID())
+                .query(Long.class)
+                .single();
     }
 
     private boolean inUse(long user, long itemId) {

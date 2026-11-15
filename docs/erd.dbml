@@ -448,11 +448,14 @@ Table shop_item {
   code varchar(64) [not null, unique]
   category varchar(24) [not null, note: 'MASCOT_ACCESSORY | TIMER_BACKGROUND']
   mascot_code varchar(32) [ref: > mascot.code, note: '소품일 때만']
-  slot varchar(16) [note: 'HEAD | FACE | BODY | WINGS | HELD | UNDERFOOT | EFFECT, 소품일 때만']
+  slot varchar(16) [note: 'HEAD | FACE | BODY | WINGS | HELD | UNDERFOOT | EFFECT | SET, 소품일 때만. SET은 결제로만 판다']
   tag varchar(32)
   name varchar(60) [not null]
   image_url varchar(500)
   back_image_url varchar(500) [note: '마스코트 뒤에 그리는 조각. 없으면 NULL']
+  effect_image_url varchar(500) [note: '세트의 움직이는 효과 그림. 없으면 NULL']
+  effect_pieces jsonb [note: '효과 그림의 조각별 위치(비율)와 움직임 종류의 목록. 없으면 NULL']
+  effect_type varchar(32) [note: '앱이 코드로 그리는 빛 효과의 종류. 아니면 NULL']
   grade smallint [not null, default: 1, note: '1 | 2 | 3']
   price integer [note: '포인트로 사는 상품의 가격. 아니면 NULL']
   unlock_type varchar(24) [note: 'STREAK_DAYS | TOTAL_FOCUS_HOURS, 보상 상품일 때만']

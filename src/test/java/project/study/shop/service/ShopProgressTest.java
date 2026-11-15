@@ -25,6 +25,9 @@ class ShopProgressTest {
                 100,
                 null,
                 null,
+                null,
+                null,
+                null,
                 null);
     }
 
@@ -43,6 +46,9 @@ class ShopProgressTest {
                 null,
                 type,
                 value,
+                null,
+                null,
+                null,
                 null);
     }
 
