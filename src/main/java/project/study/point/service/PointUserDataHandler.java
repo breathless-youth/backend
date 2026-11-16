@@ -45,8 +45,9 @@ public class PointUserDataHandler implements UserDataHandler {
         jdbc.sql("DELETE FROM point_ledger WHERE user_id = :u")
                 .param("u", userId)
                 .update();
-        // 결제 기록은 남기고 사용자만 비운다 — 지우면 같은 결제의 알림이 다시 올 때 한 번 더 지급된다
-        jdbc.sql("UPDATE point_purchase SET user_id = NULL WHERE user_id = :u")
+        // 결제 기록은 남기고 사용자만 비운다 — 지우면 같은 결제의 알림이 다시 올 때 한 번 더 지급된다. 남은 유료 포인트(paid_remaining)는
+        // 그대로 두고 삭제 시각을 적는다. 약관상 삭제 뒤에도 남은 유료 포인트의 환불 요청에 답해야 한다 (BY-1304)
+        jdbc.sql("UPDATE point_purchase SET user_id = NULL, owner_deleted_at = now() WHERE user_id = :u")
                 .param("u", userId)
                 .update();
         jdbc.sql("DELETE FROM point_account WHERE user_id = :u")

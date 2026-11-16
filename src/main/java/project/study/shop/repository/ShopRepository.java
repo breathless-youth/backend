@@ -54,7 +54,16 @@ public class ShopRepository {
                 .optional();
     }
 
-    /** 스토어 결제로 사는 상품. 내린 상품도 찾는다 — 내리기 직전에 한 결제의 알림이 늦게 올 수 있다. */
+    /**
+     * 결제로 산 상품을 처음 착용(또는 배경으로 설정)한 때를 적는다 (BY-1304). 약관상 입기 전이어야 환불되므로 그 결제 기록에 남긴다. 이미
+     * 적혀 있으면 그대로 둔다. 포인트로 산 상품은 결제 기록이 없어 아무것도 하지 않는다.
+     */
+    public void markPaidItemWorn(long userId, long itemId) {
+        jdbc.sql("""
+                UPDATE point_purchase SET item_first_worn_at = now()
+                WHERE user_id = :u AND item_id = :i AND status = 'GRANTED' AND item_first_worn_at IS NULL""").param("u", userId).param("i", itemId).update();
+    }
+
     public Optional<Long> findIdByCode(String code) {
         return jdbc.sql("SELECT id FROM shop_item WHERE code = :code")
                 .param("code", code)
@@ -62,6 +71,7 @@ public class ShopRepository {
                 .optional();
     }
 
+    /** 스토어 결제로 사는 상품. 내린 상품도 찾는다 — 내리기 직전에 한 결제의 알림이 늦게 올 수 있다. */
     public Optional<ShopItem> findByStoreProductId(String storeProductId) {
         return jdbc.sql("SELECT " + ITEM_COLUMNS + " FROM shop_item WHERE store_product_id = :p")
                 .param("p", storeProductId)
