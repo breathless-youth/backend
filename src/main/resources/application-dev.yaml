@@ -98,6 +98,12 @@ app:
     charge:
       revenuecat-webhook-auth: ${REVENUECAT_WEBHOOK_AUTH:}
       accept-sandbox: true
+  # 심사용 로그인의 출시 버전을 App Store에 맞춘다(BY-1312). 매시 정각에 조회해 스토어 버전이 더 높으면 올린다.
+  # 앱스토어 앱 ID는 비밀 값이 아니다
+  review-login:
+    release-sync:
+      enabled: true
+      app-store-id: "6797220287"
   # 데모 데이터 시딩 + Swagger 목데이터 안내 (BY-640: 프로필 대신 스위치). dev 서버 전용 편의 기능
   seed:
     enabled: true
