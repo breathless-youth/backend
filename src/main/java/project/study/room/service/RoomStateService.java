@@ -24,6 +24,7 @@ public class RoomStateService {
 
     private final RoomParticipationRepository participations;
     private final GroupSeatRepository groupSeats;
+    private final RoomMemberMascots mascots;
 
     /** 갱신 1행 = 인가(현재 세션의 확정 멤버) + 저장. 필드별 검증은 핸들러가 SQL 전에 한다. */
     @Transactional
@@ -69,12 +70,12 @@ public class RoomStateService {
         if (sessionId == null) {
             return List.of();
         }
-        return participations.findConfirmedMembersForActiveSession(roomId, userId, sessionId);
+        return mascots.attach(participations.findConfirmedMembersForActiveSession(roomId, userId, sessionId));
     }
 
     @Transactional(readOnly = true)
     public List<RoomMember> getMembers(Long roomId) {
-        return participations.findConfirmedMembers(roomId);
+        return mascots.attach(participations.findConfirmedMembers(roomId));
     }
 
     /** SUBSCRIBE 인가 — 자리 예약자(미확정 포함)만 방 토픽을 구독할 수 있다. */

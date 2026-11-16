@@ -113,6 +113,31 @@ class RankingBoardApiTest extends RankingIntegrationTestBase {
     }
 
     @Test
+    void 시상대와_주변_줄과_바로_위_사람에_고른_마스코트가_실린다() {
+        long me = user("me");
+        long other = user("other");
+        session(me, kst(10, 6, 9, 0), 60, 3000);
+        session(other, kst(10, 7, 9, 0), 60, 3300);
+        jdbc.update("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (?, 'PENCIL')", other);
+
+        assertThat(request("type=FOCUS_TIME&period=WEEKLY", me))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.podium[0].mascot.mascotCode", v -> assertThat(v).isEqualTo("PENCIL"))
+                .hasPathSatisfying(
+                        "$.above.mascot.mascotCode", v -> assertThat(v).isEqualTo("PENCIL"))
+                // 고른 적이 없으면 첫 마스코트에 소품이 없다
+                .hasPathSatisfying(
+                        "$.around[1].mascot.mascotCode", v -> assertThat(v).isEqualTo("STOPWATCH"))
+                .hasPathSatisfying(
+                        "$.around[1].mascot.accessories",
+                        v -> assertThat(v)
+                                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                                .isEmpty());
+    }
+
+    @Test
     void 순공_1초만_있어도_주간_순공_판에_오르고_0초는_오르지_않는다() {
         long me = user("me");
         long oneSec = user("one");

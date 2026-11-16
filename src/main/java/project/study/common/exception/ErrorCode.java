@@ -114,6 +114,42 @@ public enum ErrorCode {
     /** 측정한 기록은 수동 기록에서 고치거나 지울 수 없다 (409) */
     MEASURED_RECORD_LOCKED,
 
+    /** 비회원은 쓸 수 없다. 소셜 로그인한 사용자만 포인트·상점·마스코트를 쓴다 (403) */
+    MEMBER_ONLY,
+
+    /** 포인트가 모자라다 (409) */
+    INSUFFICIENT_POINTS,
+
+    /** 이미 가진 상품이다 (409) — 같은 구매 요청이 두 번 와도 포인트는 한 번만 빠진다 */
+    ITEM_ALREADY_OWNED,
+
+    /** 포인트로 살 수 없는 상품이다 — 조건으로 받는 보상 상품이거나 스토어 결제로 사는 상품 (409) */
+    ITEM_NOT_PURCHASABLE,
+
+    /** 가지지 않은 상품은 착용·적용할 수 없다 (409) */
+    ITEM_NOT_OWNED,
+
+    /** 없거나 내린 상품이다 (404) */
+    SHOP_ITEM_NOT_FOUND,
+
+    /** 아직 열리지 않은 마스코트다 — 선택하거나 그 소품을 살 수 없다 (409) */
+    MASCOT_LOCKED,
+
+    /** 없는 마스코트다 (404) */
+    MASCOT_NOT_FOUND,
+
+    /** 이미 산 마스코트다 (409) — 같은 구매 요청이 두 번 와도 포인트는 한 번만 빠진다 */
+    MASCOT_ALREADY_OWNED,
+
+    /** 포인트로 사는 마스코트가 아니다 — 공부 시간으로 여는 마스코트다 (409) */
+    MASCOT_NOT_PURCHASABLE,
+
+    /** 아직 받을 수 없는 보상이다 — 하루 목표를 못 채웠거나 포인트 시작 날짜 전이다 (409) */
+    REWARD_NOT_AVAILABLE,
+
+    /** 내 메달이 아니거나 없는 메달이다 (404) */
+    MEDAL_NOT_FOUND,
+
     /** Spring MVC 표준 4xx (405·415 등) */
     REQUEST_FAILED,
 
@@ -124,5 +160,14 @@ public enum ErrorCode {
      * 소셜 프로바이더 검증 서버가 응답하지 않거나 5xx를 줬다 (503) — 토큰 문제가 아니므로 클라이언트는 같은 소셜 로그인을 잠시 뒤 다시 시도한다.
      * 400 {@code INVALID_SOCIAL_TOKEN}과 갈라 두는 것은 장애 때 사용자를 소셜 로그인 처음으로 돌려보내지 않기 위해서다
      */
-    SOCIAL_PROVIDER_UNAVAILABLE
+    SOCIAL_PROVIDER_UNAVAILABLE,
+
+    /** 심사용 로그인이 꺼져 있다 (403) — 설정이 없거나 앱 버전이 출시된 버전 이하다 (BY-1300) */
+    REVIEW_LOGIN_DISABLED,
+
+    /** 심사용 로그인의 아이디나 비밀번호가 틀렸다 (400). 401이 아닌 것은 앱이 401을 토큰 재발급으로 받기 때문이다 */
+    INVALID_REVIEW_CREDENTIALS,
+
+    /** 짧은 시간에 너무 많이 시도했다 (429) */
+    TOO_MANY_REQUESTS
 }

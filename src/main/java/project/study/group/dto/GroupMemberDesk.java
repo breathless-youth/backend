@@ -3,6 +3,7 @@ package project.study.group.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import project.study.group.DeskStatus;
+import project.study.shop.dto.MascotAppearance;
 
 /**
  * 멤버 책상 — 내 그룹 카드, 그룹 홈, 공개 그룹 보기가 함께 쓴다. 순공은 앱 전체 기준이다: 측정 세션만, 1초 미만 조각 제외, 진행 중인 세션 포함
@@ -32,4 +33,7 @@ public record GroupMemberDesk(
         long weekFocusSec,
 
         @Schema(description = "앱에서 마지막으로 공부한 때(UTC ISO-8601) — 공부 기록이 없으면 null", example = "2026-11-03T05:30:00Z")
-        Instant lastStudiedAt) {}
+        Instant lastStudiedAt,
+
+        @Schema(description = "책상에 앉힐 마스코트와 낀 소품 (BY-1241). 고른 적이 없으면 첫 마스코트에 소품이 없다")
+        MascotAppearance mascot) {}

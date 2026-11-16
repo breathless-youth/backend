@@ -159,6 +159,15 @@ public class UserService {
                         : user.getProvider().name());
     }
 
+    /** 스토어 심사 계정의 회원번호 (BY-1300). 지표에서 뺀다. */
+    @Transactional(readOnly = true)
+    public Set<Long> findReviewUserIds() {
+        return userRepository
+                .findIdByProviderAndProviderUserId(Provider.REVIEW, ReviewAccountService.PROVIDER_USER_ID)
+                .map(Set::of)
+                .orElse(Set.of());
+    }
+
     /** 회원번호 중 users에 있는 것 — Amplitude에만 있는 id(타 환경·지운 행)를 리포트에서 거른다 (스펙 §7.4, BY-904). */
     @Transactional(readOnly = true)
     public Set<Long> findExistingUserIds(Collection<Long> userIds) {

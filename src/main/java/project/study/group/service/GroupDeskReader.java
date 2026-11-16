@@ -16,6 +16,8 @@ import project.study.group.repository.GroupDeskQueries.MemberProfile;
 import project.study.group.repository.GroupMemberRepository;
 import project.study.group.repository.GroupMemberRepository.MemberRow;
 import project.study.group.repository.GroupRepository.GroupRow;
+import project.study.shop.dto.MascotAppearance;
+import project.study.shop.service.DecorationService;
 import project.study.studysession.dto.MemberStudy;
 import project.study.studysession.service.MemberStudySource;
 import project.study.user.image.ProfileImageUrls;
@@ -36,6 +38,7 @@ public class GroupDeskReader {
     private final GroupDeskQueries deskQueries;
     private final MemberStudySource studySource;
     private final ProfileImageUrls profileImageUrls;
+    private final DecorationService decorations;
 
     /** 그룹 ID → 그 그룹의 멤버 책상(들어간 순). 넘긴 그룹마다 값이 있다. */
     public Map<Long, List<GroupMemberDesk>> desks(List<GroupRow> groups, Instant asOf) {
@@ -52,6 +55,7 @@ public class GroupDeskReader {
         Map<Long, MemberProfile> profiles = deskQueries.profiles(userIds);
         Map<Long, MemberStudy> studies = studySource.of(userIds, asOf);
         Map<Long, Set<Long>> roomSeats = deskQueries.confirmedRoomSeats(groupIds);
+        Map<Long, MascotAppearance> mascots = decorations.appearancesOf(userIds);
 
         Map<Long, List<GroupMemberDesk>> desks = new LinkedHashMap<>();
         groupIds.forEach(groupId -> desks.put(groupId, new ArrayList<>()));
@@ -64,7 +68,8 @@ public class GroupDeskReader {
                             byId.get(row.groupId()).ownerId() == row.userId(),
                             profiles.get(row.userId()),
                             studies.get(row.userId()),
-                            inRoom));
+                            inRoom,
+                            mascots.get(row.userId())));
         }
         desks.replaceAll((groupId, list) -> List.copyOf(list));
         return desks;
@@ -77,7 +82,13 @@ public class GroupDeskReader {
                 .count();
     }
 
-    private GroupMemberDesk desk(long userId, boolean owner, MemberProfile profile, MemberStudy study, boolean inRoom) {
+    private GroupMemberDesk desk(
+            long userId,
+            boolean owner,
+            MemberProfile profile,
+            MemberStudy study,
+            boolean inRoom,
+            MascotAppearance mascot) {
         return new GroupMemberDesk(
                 userId,
                 profile == null ? null : profile.nickname(),
@@ -87,7 +98,8 @@ public class GroupDeskReader {
                 study.accumulating(),
                 study.todayFocusSec(),
                 study.weekFocusSec(),
-                study.lastStudiedAt());
+                study.lastStudiedAt(),
+                mascot);
     }
 
     private static DeskStatus status(MemberStudy.Presence presence) {

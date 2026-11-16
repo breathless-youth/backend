@@ -22,7 +22,7 @@
 3. Google은 결제 계정의 다른 프로젝트 사용량도 함께 확인한다. 일반 NMT만 사용하는지, 다른 호출 경로가 같은 무료분을 소비하지 않는지 확인한다. Google 콘솔은 백엔드 검증 후에만 목표 15,000자/일로 변경한다. 이 문서는 콘솔 변경을 실행하지 않는다.
 4. Google 오늘/이번 달, Azure 실제 무료 주기, DeepL 영구 누적 기사용량을 확인한다. DeepL은 애플리케이션의 영구 장부를 월간 usage 응답으로 감소시키지 않는다. 월간 수치만 확인 가능하고 기존 총 사용량을 모르면 DeepL은 off를 유지한다.
 5. 아래 SQL로 확인한 기사용량을 증가 방향으로만 반영한다. 공급자들을 켠 채 실행하지 않는다. 각 공급자의 확인이 완료되지 않았다면 해당 공급자 초기화/활성화를 생략한다.
-6. 확인된 공급자만 enabled=true로 설정한 뒤 전역을 켠다. Google → Azure → DeepL 순서는 고정이다. 첫 소량 요청에서 reservation·cache hit·fallback을 확인한다.
+6. 확인된 공급자만 enabled=true로 설정한 뒤 전역을 켠다. Azure → Google → DeepL 순서는 고정이다(BY-1294, `TranslationProvider` 선언 순서). 첫 소량 요청에서 reservation·cache hit·fallback을 확인한다.
 
 ### 기사용량 반영 예시 (psql)
 
@@ -63,6 +63,12 @@ const description = group.translation?.description ?? group.description;
 ```
 
 목록은 이름만 요청하며 소개는 상세에서 요청한다. 모든 공급자가 소진되거나 실패해도 GET은 원문으로 성공한다. 같은 원문/필드/언어의 성공 번역은 사용자끼리 공유하고 서버 재시작에도 유지된다. 수정 전 번역은 새 원문에 붙지 않는다. 원문이 이미 요청 언어로 읽히면(한글이 과반인 원문의 ko, 가나가 섞인 일본어 원문의 ja, 기본 라틴 글자뿐인 원문의 en, 숫자·이모지·기호뿐인 원문) translation 필드가 null이고 공급자를 부르지 않는다. zh-TW는 항상 번역한다(BY-1216, ADR-0046 결정 10). 같은 필드를 여러 요청이 동시에 처음 조회하면 임차권을 얻은 한 요청만 번역하고 나머지는 원문을 받는다. 중복 과금을 막는 의도된 동작이며 다음 조회부터 캐시 번역이 나간다. 대만·홍콩·마카오와 zh-Hant 별칭은 모두 zh-TW로 정규화해 캐시를 공유하며, 같은 표준 번체 모델을 사용하므로 광둥어 또는 홍콩 고유 표현을 보장하지 않는다. DeepL 영어는 현재 capability API에서 사용 가능한 EN-US를 대상으로 한다.
+
+그룹장용 신청 목록 `GET /api/groups/{groupId}/applications`도 Accept-Language를 받는다(BY-1301, ADR-0046 결정 11). 각 신청의 `translation`이 있으면 번역 소개 글을 쓰고, null이면 원문을 쓴다. 같은 언어·미번역·번역 off일 때 null이다.
+
+```javascript
+const introduction = application.translation?.introduction ?? application.introduction;
+```
 
 Swagger는 translation 객체와 name/description 각각의 null을 명시한다. 네 그룹 GET 응답에는 Vary: Accept-Language를 포함한다. dev Swagger 반영은 PR #159의 dev 머지 후 자동 배포 성공 시점이다.
 

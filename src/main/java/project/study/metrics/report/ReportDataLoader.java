@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -126,18 +127,27 @@ public class ReportDataLoader {
 
     // Amplitude에는 타 환경·지운 행의 id가 섞일 수 있어 users에 있는 회원만 센다 (스펙 §7.4)
     private Set<Long> appOpened(List<AmplitudeDailyCount> counts, LocalDate anchor) {
+        Set<Long> excluded = excluded();
         Set<Long> opened = counts.stream()
                 .filter(count -> count.date().equals(anchor) && count.count() > 0)
                 .filter(count -> AmplitudeKeys.APP_OPEN.contains(count.key()))
                 .map(AmplitudeDailyCount::userId)
-                .filter(userId -> !excludedUserIds.contains(userId))
+                .filter(userId -> !excluded.contains(userId))
                 .collect(toSet());
         return opened.isEmpty() ? Set.of() : Set.copyOf(userService.findExistingUserIds(opened));
     }
 
     private <T> List<T> kept(List<T> facts, Function<T, Long> userId) {
+        Set<Long> excluded = excluded();
         return facts.stream()
-                .filter(fact -> !excludedUserIds.contains(userId.apply(fact)))
+                .filter(fact -> !excluded.contains(userId.apply(fact)))
                 .toList();
+    }
+
+    /** 설정으로 뺀 회원과 스토어 심사 계정 (BY-1300). 심사 계정은 삭제 뒤 다시 만들면 번호가 바뀌어 그때마다 찾는다. */
+    private Set<Long> excluded() {
+        Set<Long> excluded = new HashSet<>(excludedUserIds);
+        excluded.addAll(userService.findReviewUserIds());
+        return excluded;
     }
 }

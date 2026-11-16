@@ -58,9 +58,23 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/refresh")
                         .permitAll()
+                        // 스토어 심사용 로그인 (BY-1300, ADR-0048) — 로그인 전이라 토큰이 없다. 비밀번호 해시 비교와 IP별 시도
+                        // 제한으로 막고, 설정이 없거나 앱 버전이 출시 버전 이하면 거절한다 (ReviewLoginService)
+                        .requestMatchers(HttpMethod.POST, "/api/auth/review-login")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/review-login/status")
+                        .permitAll()
                         // 안드로이드 애플 웹 로그인 콜백 — 애플이 결과를 form_post로 보내 인증 헤더가 없다.
                         // 고정된 앱 딥링크로 넘기기만 하고 로그인 처리는 하지 않는다 (AppleCallbackController)
                         .requestMatchers(HttpMethod.POST, "/api/auth/apple/callback")
+                        .permitAll()
+                        // AdMob 광고 보상 콜백 — 구글 서버가 인증 헤더 없이 부른다. 구글 서명과 우리 광고 단위가 맞는
+                        // 요청만 지급한다 (AdRewardService)
+                        .requestMatchers(HttpMethod.GET, "/api/points/ads/admob/callback")
+                        .permitAll()
+                        // RevenueCat 결제 알림 — RevenueCat 서버가 우리 토큰 없이 부른다. 대시보드에 넣은 Authorization
+                        // 값이 서버 설정과 같은 요청만 처리한다 (ChargeService)
+                        .requestMatchers(HttpMethod.POST, "/api/points/purchases/revenuecat/webhook")
                         .permitAll()
                         // WebSocket 핸드셰이크 — 인증은 CONNECT 프레임에서 한다 (WebSocketConfig)
                         .requestMatchers("/ws")

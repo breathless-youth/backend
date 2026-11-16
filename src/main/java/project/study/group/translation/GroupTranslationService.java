@@ -5,7 +5,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -45,7 +44,7 @@ public class GroupTranslationService {
         // 이미 요청 언어인 원문은 예약·호출·캐시 조회 없이 원문을 쓴다. 예전에 저장된 같은 언어 결과도 쓰지 않는다.
         var texts = candidates.stream()
                 .filter(t -> !SourceLanguage.needsNoTranslation(t.source(), language))
-                .sorted(Comparator.comparingLong(TranslationText::groupId).thenComparing(TranslationText::field))
+                .sorted(TranslationCacheRepository.ORDER)
                 .toList();
         metrics.counter("group.translation.skipped", "language", language.locale())
                 .increment(candidates.size() - texts.size());
@@ -189,6 +188,6 @@ public class GroupTranslationService {
     }
 
     private static CacheKey key(TranslationText text, TranslationLanguage language) {
-        return new CacheKey(text.groupId(), text.field(), language);
+        return new CacheKey(text.subjectId(), text.field(), language);
     }
 }

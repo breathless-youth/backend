@@ -4,8 +4,9 @@
 
 Table users {
   id bigint [primary key, increment]
-  provider varchar [not null]          // GOOGLE, KAKAO, APPLE, DEVICE(익명 기기, ADR-0004)
+  provider varchar [not null]          // GOOGLE, KAKAO, APPLE, DEVICE(익명 기기, ADR-0004), REVIEW(스토어 심사 계정, ADR-0048)
   provider_user_id varchar [not null]
+  purchase_id uuid [not null, unique, note: 'RevenueCat 사용자 ID로 쓰는 결제용 ID (BY-1299). 가입 때 무작위로 발급']
   email varchar                  // 소셜 로그인 시 수집 (미제공 시 null)
   nickname varchar [unique]      // 영문 대소문자 무시 유일(아래 lower 인덱스, ADR-0044)
   nickname_auto boolean [not null, default: false]  // 가입 때 받은 기본 닉네임을 그대로 쓰는 중 (ADR-0044)
@@ -345,6 +346,7 @@ Table room_participations {
     (disconnected_at) [name: 'rp_disconnected_idx', note: 'WHERE left_at IS NULL AND disconnected_at IS NOT NULL']
     (task_id) [name: 'rp_task_idx', note: 'WHERE task_id IS NOT NULL']
     (user_id, joined_at) [name: 'rp_user_joined_idx']
+    (room_id, joined_at) [name: 'rp_room_joined_idx', note: '같이 공부한 시간 조회 (BY-1298)']
   }
 }
 
@@ -352,4 +354,172 @@ Table live_task {
   task_id varchar [primary key, note: 'ECS 태스크 ID(로그 스트림과 일치), 없으면 UUID']
   heartbeat_at timestamptz [not null]
   reclaimed_at timestamptz [note: 'NOT NULL = 다른 태스크가 죽었다고 보고 참가자를 회수함(펜싱 신호)']
+}
+
+// 스토어 심사용 로그인 (ADR-0048, BY-1300)
+Table review_login {
+  id smallint [primary key, note: '늘 1. 행이 없으면 꺼져 있다']
+  login_id varchar(64) [not null]
+  password_hash varchar(100) [not null, note: 'BCrypt']
+  released_version varchar(32) [note: '스토어에 출시된 앱 버전. 앱 버전이 이보다 높을 때만 켜진다. NULL이면 꺼짐']
+  initial_points integer [not null, default: 0]
+  initial_item_codes text [not null, note: '처음 상태로 줄 상점 상품 코드(쉼표)']
+  updated_at timestamptz [not null]
+}
+
+Table review_login_failure {
+  id bigserial [primary key]
+  client varchar(64) [not null, note: '요청이 온 IP']
+  failed_at timestamptz [not null]
+
+  indexes {
+    (failed_at) [name: 'idx_review_login_failure_at']
+  }
+}
+
+// 포인트·꾸미기 상점 (ADR-0047, BY-1241)
+Table point_account {
+  user_id bigint [primary key, ref: > users.id]
+  balance integer [not null, default: 0, note: '환불로만 음수가 될 수 있다']
+  paid_balance integer [not null, default: 0, note: '잔액 가운데 결제로 산 몫. 0 이상 balance 이하, 잔액이 음수면 0']
+}
+
+Table point_ledger {
+  id bigserial [primary key]
+  user_id bigint [not null, ref: > users.id]
+  amount integer [not null, note: '받은 것 양수, 쓴 것 음수']
+  paid_amount integer [not null, default: 0, note: 'amount 가운데 결제 몫(부호 같음)']
+  fund varchar(8) [not null, default: 'FREE', note: 'FREE | PAID']
+  reason varchar(32) [not null, note: 'STUDY | STUDY_ADJUST | PURCHASE | ATTENDANCE | DAILY_GOAL | MEDAL | AD | CHARGE | REFUND']
+  ref_key varchar(128) [not null, note: '같은 지급·차감을 한 번만 넣는 키']
+  label varchar(100)
+  stat_date date [note: 'STUDY일 때 공부한 날짜']
+  created_at timestamptz [not null]
+
+  indexes {
+    (user_id, reason, ref_key) [unique, name: 'uq_point_ledger_ref']
+    (user_id, id) [name: 'idx_point_ledger_user_id']
+    (user_id, stat_date) [name: 'idx_point_ledger_day', note: 'WHERE stat_date IS NOT NULL']
+  }
+}
+
+Table point_product {
+  id bigserial [primary key]
+  store_product_id varchar(100) [not null, unique, note: '스토어·RevenueCat의 상품 ID']
+  points integer [not null, note: '결제로 사는 포인트']
+  bonus_points integer [not null, default: 0, note: '덤(무료 몫)']
+  sort_order integer [not null, default: 0]
+  active boolean [not null, default: true]
+}
+
+Table purchase_transfer_event {
+  event_id varchar(128) [primary key, note: '처리한 RevenueCat TRANSFER 알림 ID (BY-1297). 같은 알림을 한 번만 처리한다']
+  created_at timestamptz [not null]
+}
+
+Table point_purchase {
+  id bigserial [primary key]
+  user_id bigint [ref: > users.id, note: '탈퇴하면 NULL']
+  store varchar(24) [not null]
+  transaction_id varchar(128) [not null, note: '스토어 거래 ID']
+  store_product_id varchar(100) [not null]
+  item_id bigint [ref: > shop_item.id, note: '상점 상품을 산 결제면 그 상품. 포인트 충전이면 NULL']
+  paid_remaining integer [not null, default: 0, note: '이 충전 건에서 아직 쓰지 않은 유료 포인트. 먼저 충전한 건부터 쓴다 (BY-1304)']
+  owner_deleted_at timestamptz [note: '주인이 계정을 삭제한 때. 삭제해도 행과 paid_remaining은 남는다']
+  item_first_worn_at timestamptz [note: '결제로 산 상품을 처음 착용·설정한 때. NULL이면 입기 전']
+  manual_refunded_at timestamptz [note: '스토어 밖에서 직접 환불한 때(사람이 적는다)']
+  manual_refund_points integer [note: '직접 환불한 유료 포인트 수']
+  points integer [not null]
+  bonus_points integer [not null]
+  sandbox boolean [not null]
+  status varchar(12) [not null, note: 'GRANTED | REFUNDED']
+  reclaimed_points integer [not null, default: 0, note: '환불 때 되돌린 포인트(결제로 준 전부)']
+  shortfall_points integer [not null, default: 0, note: '그 가운데 이미 써서 잔액을 음수로 만든 포인트']
+  purchased_at timestamptz
+  created_at timestamptz [not null]
+  refunded_at timestamptz
+
+  indexes {
+    (store, transaction_id) [unique, name: 'uq_point_purchase_tx']
+    user_id [name: 'idx_point_purchase_user', note: 'WHERE user_id IS NOT NULL']
+  }
+}
+
+Table mascot {
+  code varchar(32) [primary key, note: '이름과 그림은 앱이 갖는다']
+  unlock_focus_sec integer [not null, note: '해금 기준 누적 순공(초). price가 있으면 쓰지 않는다']
+  price integer [note: 'NULL = 공부 시간으로 연다. 값이 있으면 포인트로 사서 연다']
+  sort_order integer [not null]
+}
+
+Table user_mascot_owned {
+  user_id bigint [not null, ref: > users.id]
+  mascot_code varchar(32) [not null, ref: > mascot.code]
+  acquired_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, mascot_code) [pk]
+  }
+}
+
+Table user_mascot {
+  user_id bigint [primary key, ref: > users.id]
+  selected_mascot_code varchar(32) [not null, ref: > mascot.code]
+}
+
+Table user_mascot_seen {
+  user_id bigint [not null, ref: > users.id]
+  mascot_code varchar(32) [not null, ref: > mascot.code]
+
+  indexes {
+    (user_id, mascot_code) [pk]
+  }
+}
+
+Table shop_item {
+  id bigserial [primary key]
+  code varchar(64) [not null, unique]
+  category varchar(24) [not null, note: 'MASCOT_ACCESSORY | TIMER_BACKGROUND']
+  mascot_code varchar(32) [ref: > mascot.code, note: '소품일 때만']
+  slot varchar(16) [note: 'HEAD | FACE | BODY | WINGS | HELD | UNDERFOOT | EFFECT | SET, 소품일 때만. SET은 결제로만 판다']
+  tag varchar(32)
+  name varchar(60) [not null]
+  image_url varchar(500)
+  back_image_url varchar(500) [note: '마스코트 뒤에 그리는 조각. 없으면 NULL']
+  effect_image_url varchar(500) [note: '세트의 움직이는 효과 그림. 없으면 NULL']
+  effect_pieces jsonb [note: '효과 그림의 조각별 위치(비율)와 움직임 종류의 목록. 없으면 NULL']
+  effect_type varchar(32) [note: '앱이 코드로 그리는 빛 효과의 종류. 아니면 NULL']
+  grade smallint [not null, default: 1, note: '1 | 2 | 3']
+  price integer [note: '포인트로 사는 상품의 가격. 아니면 NULL']
+  unlock_type varchar(24) [note: 'STREAK_DAYS | TOTAL_FOCUS_HOURS, 보상 상품일 때만']
+  unlock_value integer
+  store_product_id varchar(100) [unique, note: '스토어 결제로 사는 상품의 스토어 상품 ID. 아니면 NULL']
+  sort_order integer [not null, default: 0]
+  active boolean [not null, default: true]
+}
+
+Table user_item {
+  user_id bigint [not null, ref: > users.id]
+  item_id bigint [not null, ref: > shop_item.id]
+  acquired_at timestamptz [not null]
+
+  indexes {
+    (user_id, item_id) [pk]
+  }
+}
+
+Table user_mascot_accessory {
+  user_id bigint [not null, ref: > users.id]
+  mascot_code varchar(32) [not null, ref: > mascot.code]
+  slot varchar(16) [not null]
+  item_id bigint [not null, ref: > shop_item.id]
+
+  indexes {
+    (user_id, mascot_code, slot) [pk]
+  }
+}
+
+Table user_decoration {
+  user_id bigint [primary key, ref: > users.id]
+  timer_background_item_id bigint [ref: > shop_item.id]
 }

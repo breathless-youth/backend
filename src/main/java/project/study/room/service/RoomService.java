@@ -79,6 +79,7 @@ public class RoomService {
     private final RoomParticipationRepository participations;
     private final GroupSeatRepository groupSeats;
     private final ParticipantRemover remover;
+    private final RoomMemberMascots mascots;
     private final TurnCredentialIssuer turnCredentials;
     private final TransactionTemplate tx;
     private final Clock clock;
@@ -294,7 +295,7 @@ public class RoomService {
             return List.of();
         }
         log.debug("STOMP 확정: roomId={}, userId={}, stompSessionId={}", roomId, userId, sessionId);
-        return participations.findConfirmedMembers(roomId);
+        return mascots.attach(participations.findConfirmedMembers(roomId));
     }
 
     /** 끊김 — 세션 ID로 바로 찾는다. 재접속이 먼저 도착했으면 0행(옛 세션의 뒤늦은 끊김)이라 무시된다. */

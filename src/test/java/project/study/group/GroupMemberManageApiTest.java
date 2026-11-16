@@ -187,6 +187,18 @@ class GroupMemberManageApiTest {
     }
 
     @Test
+    void 멤버마다_고른_마스코트가_실리고_고른_적이_없으면_첫_마스코트다() {
+        jdbc.sql("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (:u, 'PENCIL')")
+                .param("u", member)
+                .update();
+
+        List<GroupMemberItem> items = members(owner, group).members();
+
+        assertThat(items).extracting(item -> item.mascot().mascotCode()).containsExactly("STOPWATCH", "PENCIL");
+        assertThat(items.get(0).mascot().accessories()).isEmpty();
+    }
+
+    @Test
     void 멤버_목록은_멤버만_보고_사라진_그룹은_404다() {
         long left = probe.insertUser();
         probe.insertMember(group, left, "INVITE_CODE");

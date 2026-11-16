@@ -49,8 +49,9 @@ class RoomStompHandlerTest {
     @Test
     void 활성_세션_멤버의_스냅샷_재요청은_요청_세션의_개인_큐로만_SNAPSHOT을_보낸다() {
         List<RoomMember> members = List.of(
-                new RoomMember(1L, "닉네임", "목표", "수능", "/avatars/1/a.jpg", true, "FOCUS", 120, false, null, null, null),
-                new RoomMember(2L, "친구", "목표2", "수능", null, false, "DISTRACTED", 45, false, null, null, null));
+                new RoomMember(
+                        1L, "닉네임", "목표", "수능", "/avatars/1/a.jpg", true, "FOCUS", 120, false, null, null, null, null),
+                new RoomMember(2L, "친구", "목표2", "수능", null, false, "DISTRACTED", 45, false, null, null, null, null));
         when(roomStateService.getMembersForActiveSession(ROOM_ID, 1L, "session-1"))
                 .thenReturn(members);
 
@@ -67,7 +68,7 @@ class RoomStompHandlerTest {
     void 스냅샷_재요청은_방_상태를_변경하지_않는다() {
         when(roomStateService.getMembersForActiveSession(ROOM_ID, 1L, "session-1"))
                 .thenReturn(List.of(
-                        new RoomMember(1L, "닉네임", null, null, null, false, "FOCUS", 0, false, null, null, null)));
+                        new RoomMember(1L, "닉네임", null, null, null, false, "FOCUS", 0, false, null, null, null, null)));
 
         handler.handleSnapshotRequest(ROOM_ID, USER_1, accessorWithSession("session-1"));
         handler.handleSnapshotRequest(ROOM_ID, USER_1, accessorWithSession("session-1"));

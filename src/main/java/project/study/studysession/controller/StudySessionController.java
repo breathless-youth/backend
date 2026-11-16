@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.common.exception.ErrorResponse;
+import project.study.point.service.StudyPointService;
 import project.study.studysession.dto.CompletedTask;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.StudySessionResponse;
@@ -36,10 +38,12 @@ import project.study.subject.service.StudySubjectService;
 // 토큰 계약(v2). 구 앱(API-Version 없음/1)은 Legacy 컨트롤러가 받는다 — 강제 업데이트 뒤 contract 시 ADR-0020 참고
 @RequestMapping(value = "/api/study-sessions", version = "2")
 @RequiredArgsConstructor
+@Slf4j
 public class StudySessionController {
 
     private final StudySessionService studySessionService;
     private final StudySubjectService subjectService;
+    private final StudyPointService studyPointService;
 
     @Operation(summary = "공부 세션 제출", description = """
                     공부를 마칠 때(방 퇴장 시) 세션 전체를 한 번에 제출한다. \
@@ -139,6 +143,17 @@ public class StudySessionController {
     @ResponseStatus(HttpStatus.CREATED)
     public List<StudySessionResponse> create(
             @AuthenticationPrincipal Long userId, @Valid @RequestBody StudySessionCreateRequest request) {
+        List<StudySessionResponse> saved = submit(userId, request);
+        try {
+            studyPointService.grantForSubmission(userId, request.startedAt());
+        } catch (RuntimeException e) {
+            // 포인트 지급이 실패해도 공부 기록 저장은 성공으로 돌려준다. 빠진 지급은 같은 날 다음 제출이나 재전송이 메운다
+            log.error("공부 포인트 지급 실패 userId={} startedAt={}", userId, request.startedAt(), e);
+        }
+        return saved;
+    }
+
+    private List<StudySessionResponse> submit(Long userId, StudySessionCreateRequest request) {
         // 과목·할 일 소유 검증은 세션 도메인 밖에서 먼저 한다 (ADR-0021·0022) — 재시도·멱등 경로와 무관한 순수 400 검증
         subjectService.assertOwned(userId, request.subjectIds());
         List<CompletedTask> completedTasks = subjectService.assertTasksOwned(userId, request.completedTaskIdsOrEmpty());

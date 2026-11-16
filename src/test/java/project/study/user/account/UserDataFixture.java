@@ -25,6 +25,7 @@ public class UserDataFixture {
 
     private final JdbcClient jdbc;
     private final project.study.planner.record.PlannerRecordFixture plannerRecordFixture;
+    private final project.study.point.PointShopFixture pointShopFixture;
     private final List<UserDataHandler> handlers;
 
     public long seedUser() {
@@ -366,6 +367,7 @@ public class UserDataFixture {
         seedDday(user, "d");
         seedPlannerGoals(user, day);
         plannerRecordFixture.seed(user);
+        pointShopFixture.seedEverything(user);
         seedAcquisition(user, "s");
         seedPushToken(user, "tok-" + user);
         seedPushSend(user, day);

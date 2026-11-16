@@ -8,6 +8,7 @@ import static project.study.ranking.RankingPeriod.WEEKLY;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import project.study.ranking.RankingIntegrationTestBase;
@@ -16,12 +17,15 @@ import project.study.ranking.dto.RankingBoardResponse.BoardEntry;
 import project.study.ranking.dto.RankingBoardResponse.BoardMe;
 import project.study.ranking.dto.RankingBoardResponse.BoardNeighbor;
 import project.study.ranking.dto.RankingBoardResponse.GoalExample;
+import project.study.shop.dto.MascotAppearance;
 
 /** 순공 판으로 공통 응답(시상대·내 순위·앞뒤·실시간·직전 기간)을 확인한다 (BY-828). */
 class RankingBoardServiceTest extends RankingIntegrationTestBase {
 
     @Autowired
     private RankingBoardService service;
+
+    private static final MascotAppearance PLAIN = new MascotAppearance("STOPWATCH", List.of());
 
     /** 이번 주 화요일(10/6) 09:00에 분 단위 순공 세션 하나 */
     private long weekly(String nickname, int focusMinutes) {
@@ -53,8 +57,8 @@ class RankingBoardServiceTest extends RankingIntegrationTestBase {
                 .filteredOn(BoardEntry::me)
                 .extracting(BoardEntry::nickname)
                 .containsExactly("u4");
-        assertThat(r.above()).isEqualTo(new BoardNeighbor("u3", null, 600L, false, null));
-        assertThat(r.below()).isEqualTo(new BoardNeighbor("u5", null, 600L, false, null));
+        assertThat(r.above()).isEqualTo(new BoardNeighbor("u3", null, 600L, false, null, PLAIN));
+        assertThat(r.below()).isEqualTo(new BoardNeighbor("u5", null, 600L, false, null, PLAIN));
         assertThat(r.startNowRank()).isNull();
         assertThat(r.goalExamples()).isNull();
     }
@@ -70,7 +74,7 @@ class RankingBoardServiceTest extends RankingIntegrationTestBase {
 
         assertThat(r.around()).extracting(BoardEntry::rank).containsExactly(1, 2, 3, 4, 5);
         assertThat(r.above()).isNull();
-        assertThat(r.below()).isEqualTo(new BoardNeighbor("u2", null, 600L, false, null));
+        assertThat(r.below()).isEqualTo(new BoardNeighbor("u2", null, 600L, false, null, PLAIN));
     }
 
     @Test
