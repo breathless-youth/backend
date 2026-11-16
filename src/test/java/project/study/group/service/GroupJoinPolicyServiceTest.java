@@ -33,6 +33,7 @@ import project.study.group.repository.GroupDeskQueries;
 import project.study.group.repository.GroupMemberRepository;
 import project.study.group.repository.GroupRepository;
 import project.study.group.repository.GroupRepository.GroupRow;
+import project.study.shop.service.DecorationService;
 import project.study.studysession.service.MemberStudySource;
 import project.study.user.image.ProfileImageUrls;
 
@@ -67,6 +68,7 @@ class GroupJoinPolicyServiceTest {
             mock(GroupDeskQueries.class),
             mock(MemberStudySource.class),
             mock(ProfileImageUrls.class),
+            mock(DecorationService.class),
             mock(GroupRoomService.class),
             mock(GroupOwnership.class),
             mock(GroupNotifications.class),

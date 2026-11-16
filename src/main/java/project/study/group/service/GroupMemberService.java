@@ -37,6 +37,8 @@ import project.study.group.repository.GroupMemberRepository.MemberRow;
 import project.study.group.repository.GroupRepository;
 import project.study.group.repository.GroupRepository.GroupRow;
 import project.study.group.repository.ReportRepository;
+import project.study.shop.dto.MascotAppearance;
+import project.study.shop.service.DecorationService;
 import project.study.studysession.dto.MemberStudy;
 import project.study.studysession.service.MemberStudySource;
 import project.study.user.image.ProfileImageUrls;
@@ -63,6 +65,7 @@ public class GroupMemberService {
     private final GroupDeskQueries deskQueries;
     private final MemberStudySource studySource;
     private final ProfileImageUrls profileImageUrls;
+    private final DecorationService decorations;
     private final GroupRoomService groupRooms;
     private final GroupOwnership ownership;
     private final GroupNotifications notifications;
@@ -82,6 +85,7 @@ public class GroupMemberService {
         rows.forEach(row -> userIds.add(row.userId()));
         Map<Long, MemberProfile> profiles = deskQueries.profiles(userIds);
         Map<Long, MemberStudy> studies = studySource.of(userIds, clock.instant());
+        Map<Long, MascotAppearance> mascots = decorations.appearancesOf(userIds);
 
         List<GroupMemberItem> items = rows.stream()
                 .map(row -> {
@@ -92,7 +96,8 @@ public class GroupMemberService {
                             profile == null ? null : profileImageUrls.of(profile.profileImage()),
                             group.ownerId() == row.userId(),
                             row.joinedAt(),
-                            studies.get(row.userId()).lastStudiedAt());
+                            studies.get(row.userId()).lastStudiedAt(),
+                            mascots.get(row.userId()));
                 })
                 .toList();
         return new GroupMembersResponse(items);
