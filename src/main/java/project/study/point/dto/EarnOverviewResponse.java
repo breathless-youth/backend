@@ -28,7 +28,7 @@ public record EarnOverviewResponse(
             @Schema(description = "오늘 인정된 순공(초)", example = "7800")
             int recognizedFocusSec,
 
-            @Schema(description = "하루 인정 상한(초)", example = "43200")
+            @Schema(description = "하루 인정 상한(초)", example = "36000")
             int dailyCapFocusSec,
 
             @Schema(description = "포인트를 주는 순공 단위(초). 이만큼마다 pointsPerUnit을 준다", example = "1800")
@@ -40,7 +40,7 @@ public record EarnOverviewResponse(
             @Schema(description = "오늘 공부로 받은 포인트", example = "40")
             int earnedPoints,
 
-            @Schema(description = "하루에 공부로 받을 수 있는 최대 포인트(상한까지 모두 같이 한 경우)", example = "104")
+            @Schema(description = "하루에 공부로 받을 수 있는 최대 포인트(상한까지 모두 같이 한 경우)", example = "200")
             int maxPoints,
 
             @Schema(description = "오늘 측정한 순공 가운데 같이 한 시간(초). 방에 나 말고 한 명 이상 있던 시간이다 (BY-1298)", example = "3600")

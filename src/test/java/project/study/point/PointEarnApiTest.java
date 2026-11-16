@@ -21,8 +21,9 @@ import project.study.config.ApiVersionConfig;
 /** 포인트 받기 탭과 보상 받기. 사용자 시간대는 기본값(서울)이라 오늘은 서울 날짜다. 받는 흐름을 보는 테스트라 숫자는 단순한 값으로 고정한다. */
 @SpringBootTest(
         properties = {
-            "app.points.study.solo-points=10,10,10",
-            "app.points.study.together-points=10,10,10",
+            "app.points.study.tier-ends-sec=43200",
+            "app.points.study.solo-points=10",
+            "app.points.study.together-points=10",
             "app.points.attendance.points=10",
             "app.points.daily-goal.tier-ends-sec=43200",
             "app.points.daily-goal.tier-points=1",
