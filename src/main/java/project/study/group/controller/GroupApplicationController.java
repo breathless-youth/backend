@@ -6,13 +6,16 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import project.study.group.dto.GroupApplicationCreateRequest;
@@ -21,6 +24,7 @@ import project.study.group.dto.GroupApplicationsResponse;
 import project.study.group.dto.MyApplicationsResponse;
 import project.study.group.dto.ReportRequest;
 import project.study.group.service.GroupApplicationService;
+import project.study.group.translation.LocalizedGroupReader;
 
 /**
  * 공개 그룹 신청·수락·거절·신고. 경로가 {@code /api/groups/{groupId}/applications}와 {@code /api/group-applications/...}로
@@ -32,6 +36,7 @@ import project.study.group.service.GroupApplicationService;
 public class GroupApplicationController {
 
     private final GroupApplicationService groupApplicationService;
+    private final LocalizedGroupReader localizedGroups;
 
     @Operation(summary = "그룹에 신청하기", description = """
         APPROVAL 공개 그룹만. OPEN 그룹은 409 `GROUP_JOIN_OPEN`이므로 바로 입장 API를 쓴다. 답이 없으면 3일 뒤 취소된다(`expiresAt`). 비공개 그룹은 신청 없이 초대코드로 들어온다 — 비공개 그룹에 신청하면 공개 그룹 보기처럼 404 `GROUP_NOT_FOUND`이고, 비공개 그룹이 있는지는 알려 주지 않는다. \
@@ -69,16 +74,20 @@ public class GroupApplicationController {
     @Operation(summary = "그룹장용 신청 목록", description = """
         이 그룹에서 답을 기다리는 신청을 신청한 순서(오래된 것부터)로 준다 — 그룹장만 볼 수 있다. \
         기한이 지난 신청은 만료 작업이 돌기 전이라도 나오지 않는다. \
-        `remainingSeats`가 0이면 수락할 수 없다(`GROUP_FULL`).""")
+        `remainingSeats`가 0이면 수락할 수 없다(`GROUP_FULL`). \
+        `Accept-Language`(ko·en·ja·zh-TW)를 보내면 신청 소개 글을 그 언어로 옮긴 `translation`을 싣는다 — 같은 언어·미번역이면 null이고 원문 `introduction`을 표시한다.""")
     @ApiResponse(responseCode = "200", description = "조회 성공 — 신청이 없으면 `applications`가 빈 배열")
     @ApiResponse(responseCode = "401", description = "토큰 없음·만료 (`UNAUTHORIZED`)")
     @ApiResponse(responseCode = "403", description = "`NOT_GROUP_OWNER` 그룹장이 아님")
     @ApiResponse(responseCode = "404", description = "`GROUP_NOT_FOUND` 없거나 사라진 그룹")
     @GetMapping(value = "/api/groups/{groupId}/applications", version = "1")
-    public GroupApplicationsResponse applications(
+    public ResponseEntity<GroupApplicationsResponse> applications(
             @AuthenticationPrincipal Long userId,
-            @Parameter(description = "그룹 ID", example = "10") @PathVariable long groupId) {
-        return groupApplicationService.applications(userId, groupId);
+            @Parameter(description = "그룹 ID", example = "10") @PathVariable long groupId,
+            @RequestHeader(name = "Accept-Language", required = false) String language) {
+        return ResponseEntity.ok()
+                .varyBy(HttpHeaders.ACCEPT_LANGUAGE)
+                .body(localizedGroups.applications(userId, groupId, language));
     }
 
     @Operation(summary = "내 신청 목록", description = """

@@ -34,5 +34,14 @@ public record GroupApplicationsResponse(
             @Schema(
                     description = "신청 만료 시각(UTC ISO-8601) — 신청한 지 3일 뒤. 이때까지 답이 없으면 사라진다",
                     example = "2026-11-06T05:30:00Z")
-            Instant expiresAt) {}
+            Instant expiresAt,
+
+            @Schema(description = "Accept-Language로 옮긴 신청 소개 글 — 같은 언어·미번역·번역 꺼짐이면 null, 원문 introduction을 표시")
+            GroupApplicationTranslation translation) {
+
+        public GroupApplicationItem withTranslation(GroupApplicationTranslation translation) {
+            return new GroupApplicationItem(
+                    applicationId, userId, nickname, profileImageUrl, introduction, appliedAt, expiresAt, translation);
+        }
+    }
 }

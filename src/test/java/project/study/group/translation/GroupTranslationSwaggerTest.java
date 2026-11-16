@@ -46,6 +46,15 @@ class GroupTranslationSwaggerTest {
                     .isTrue();
         }
         assertThat(fields.path("language").path("enum").toString()).isEqualTo("[\"ko\",\"en\",\"ja\",\"zh-TW\"]");
+        var application =
+                schemas.path("GroupApplicationItem").path("properties").path("translation");
+        assertThat(application.toString()).contains("#/components/schemas/GroupApplicationTranslation");
+        assertThat(nullable(application))
+                .as("GroupApplicationItem.translation: %s", application)
+                .isTrue();
+        assertThat(schemas.path("GroupApplicationTranslation").path("required").toString())
+                .contains("language")
+                .contains("introduction");
     }
 
     private static boolean nullable(JsonNode schema) {

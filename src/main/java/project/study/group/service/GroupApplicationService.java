@@ -134,7 +134,8 @@ public class GroupApplicationService {
                         profileImageUrls.of(row.profileImage()),
                         row.introduction(),
                         row.createdAt(),
-                        row.expiresAt()))
+                        row.expiresAt(),
+                        null))
                 .toList();
         return new GroupApplicationsResponse(remainingSeats, items);
     }
