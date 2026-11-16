@@ -29,6 +29,7 @@ import project.study.config.ApiVersionConfig;
             "app.points.medal.daily=100,50,30",
             "app.points.medal.weekly=300,150,100",
             "app.points.medal.monthly=1000,500,300",
+            "app.points.medal.starts-on=2026-01-01",
             "app.points.ad.points=10"
         })
 @AutoConfigureMockMvc

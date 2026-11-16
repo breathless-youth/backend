@@ -403,6 +403,12 @@ Table point_ledger {
   }
 }
 
+Table point_launch {
+  version varchar(32) [primary key, note: '포인트 기능이 든 앱 버전 (BY-1314)']
+  started_on date [not null, note: '그 버전이 App Store에 출시된 것을 서버가 처음 본 날(서울). 이날부터 포인트를 준다']
+  created_at timestamptz [not null]
+}
+
 Table point_product {
   id bigserial [primary key]
   store_product_id varchar(100) [not null, unique, note: '스토어·RevenueCat의 상품 ID']

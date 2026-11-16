@@ -1,14 +1,14 @@
 package project.study.user.service;
 
 /** 점으로 나눈 숫자 버전 비교 (예: 26.47.0). */
-final class AppVersions {
+public final class AppVersions {
 
     private static final int MAX_PARTS = 6;
 
     private AppVersions() {}
 
     /** version이 base보다 높으면 true. 둘 중 하나라도 읽을 수 없으면 false다. */
-    static boolean isNewer(String version, String base) {
+    public static boolean isNewer(String version, String base) {
         int[] left = parse(version);
         int[] right = parse(base);
         if (left == null || right == null) {
@@ -22,6 +22,11 @@ final class AppVersions {
             }
         }
         return false;
+    }
+
+    /** version이 base 이상이면 true. 둘 중 하나라도 읽을 수 없으면 false다. */
+    public static boolean atLeast(String version, String base) {
+        return parse(version) != null && parse(base) != null && !isNewer(base, version);
     }
 
     private static int[] parse(String version) {
