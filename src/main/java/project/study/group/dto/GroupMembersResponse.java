@@ -3,6 +3,7 @@ package project.study.group.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
+import project.study.shop.dto.MascotAppearance;
 
 /** 멤버 목록 — 그룹 멤버만 볼 수 있다. 지금 공부 중인지 같은 책상 정보는 그룹 홈의 멤버 책상이 준다. */
 public record GroupMembersResponse(
@@ -22,5 +23,8 @@ public record GroupMembersResponse(
             Instant joinedAt,
 
             @Schema(description = "앱에서 마지막으로 공부한 때(UTC ISO-8601) — 공부 기록이 없으면 null", example = "2026-11-03T05:30:00Z")
-            Instant lastStudiedAt) {}
+            Instant lastStudiedAt,
+
+            @Schema(description = "멤버의 마스코트와 낀 소품 (BY-1295). 책상의 mascot과 같은 값이다. 고른 적이 없으면 첫 마스코트에 소품이 없다")
+            MascotAppearance mascot) {}
 }
