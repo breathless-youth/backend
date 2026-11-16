@@ -16,6 +16,7 @@ import project.study.common.exception.NotFoundException;
 import project.study.point.dto.PointProduct;
 import project.study.point.dto.PointProductsResponse;
 import project.study.point.dto.PointPurchase;
+import project.study.point.repository.PaidLotRepository;
 import project.study.point.repository.PointChargeRepository;
 import project.study.shop.dto.ShopItem;
 import project.study.shop.service.PaidItemService;
@@ -44,6 +45,7 @@ public class ChargeService {
     private static final int MAX_QUANTITY = 100;
 
     private final PointChargeRepository repository;
+    private final PaidLotRepository paidLots;
     private final PointService pointService;
     private final ChargePolicy policy;
     private final PointLocks locks;
@@ -140,7 +142,11 @@ public class ChargeService {
         if (!repository.insert(notice.purchase(userId, product, points, bonus), false)) {
             return;
         }
-        pointService.charge(userId, notice.refKey(), points, bonus, product.storeProductId());
+        long purchaseId = repository
+                .findForUpdate(notice.store(), notice.transactionId())
+                .orElseThrow()
+                .id();
+        pointService.charge(userId, purchaseId, notice.refKey(), points, bonus, product.storeProductId());
     }
 
     private void refund(Notice notice, PointProduct product, Long eventUserId) {
@@ -162,12 +168,14 @@ public class ChargeService {
         }
         int total = purchase.points() + purchase.bonusPoints();
         if (purchase.userId() == null) {
-            // 탈퇴한 사람의 결제다. 되돌릴 잔액이 없다
+            // 탈퇴한 사람의 결제다. 되돌릴 잔액이 없고, 남겨 둔 미사용 유료 포인트도 환불됐으니 지운다 (BY-1304)
             repository.markRefunded(purchase.id(), 0, total);
+            paidLots.setRemaining(purchase.id(), 0);
             return;
         }
         int balance = pointService.reclaim(
                 purchase.userId(),
+                purchase.id(),
                 notice.refKey(),
                 purchase.points(),
                 purchase.bonusPoints(),

@@ -63,6 +63,7 @@ public class DecorationService {
             repository.deleteSet(userId, mascotCode);
         }
         repository.saveAccessory(userId, mascotCode, slot, itemId);
+        repository.markPaidItemWorn(userId, itemId);
         return get(userId);
     }
 
@@ -74,6 +75,9 @@ public class DecorationService {
                 ? null
                 : ownedItem(userId, itemId, ShopCategory.TIMER_BACKGROUND).id();
         repository.saveDecoration(userId, new DecorationRow(checked));
+        if (checked != null) {
+            repository.markPaidItemWorn(userId, checked);
+        }
         return get(userId);
     }
 

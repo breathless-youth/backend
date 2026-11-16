@@ -12,6 +12,7 @@ import project.study.point.dto.PointHistoryItem;
 import project.study.point.dto.PointHistoryResponse;
 import project.study.point.dto.PointHistoryType;
 import project.study.point.dto.PointReason;
+import project.study.point.repository.PaidLotRepository;
 import project.study.point.repository.PointRepository;
 import project.study.user.service.MemberGuard;
 
@@ -26,6 +27,7 @@ public class PointService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final PointRepository repository;
+    private final PaidLotRepository paidLots;
     private final PointLocks locks;
     private final MemberGuard members;
 
@@ -79,10 +81,10 @@ public class PointService {
 
     /**
      * 결제로 산 포인트(paid)와 덤(bonus)을 준다. 덤은 무료 몫이다. 같은 참조 키로 이미 받았으면 아무것도 하지 않고 false. 환불로 잔액이
-     * 음수였다면 그만큼을 먼저 메우고, 0 위로 남은 만큼만 결제 몫이 된다.
+     * 음수였다면 그만큼을 먼저 메우고, 0 위로 남은 만큼만 결제 몫이 된다. 그 결제 몫이 그 충전 건(purchaseId)의 남은 유료 포인트다.
      */
     @Transactional
-    public boolean charge(long userId, String refKey, int paid, int bonus, String label) {
+    public boolean charge(long userId, long purchaseId, String refKey, int paid, int bonus, String label) {
         if (paid <= 0 || bonus < 0) {
             throw new IllegalArgumentException("충전 금액은 양수여야 한다");
         }
@@ -94,10 +96,14 @@ public class PointService {
             return false;
         }
         repository.addBalance(userId, paid + bonus, paidDelta);
+        paidLots.setRemaining(purchaseId, paidDelta);
         return true;
     }
 
-    /** 잔액이 모자라면 {@link InsufficientPointsException}. 무료 몫부터 쓰고 모자란 만큼만 결제 몫에서 뺀다. 쓴 뒤의 잔액을 돌려준다. */
+    /**
+     * 잔액이 모자라면 {@link InsufficientPointsException}. 무료 몫부터 쓰고 모자란 만큼만 결제 몫에서 빼며, 결제 몫은 먼저 충전한 건부터
+     * 쓴다. 쓴 뒤의 잔액을 돌려준다.
+     */
     @Transactional
     public int spend(long userId, PointReason reason, String refKey, int amount, String label) {
         if (amount <= 0) {
@@ -110,6 +116,8 @@ public class PointService {
         }
         int fromPaid = Math.max(0, amount - account.freeBalance());
         repository.setAccount(userId, new PointAccount(account.balance() - amount, account.paidBalance() - fromPaid));
+        // 유료 몫은 먼저 충전한 건부터 쓴다 (BY-1304)
+        paidLots.consume(userId, fromPaid);
         if (!repository.insertLedger(userId, -amount, -fromPaid, reason, refKey, label, null)) {
             throw new IllegalStateException("같은 참조 키로 이미 쓴 기록이 있다: " + reason + " " + refKey);
         }
@@ -118,14 +126,20 @@ public class PointService {
 
     /**
      * 환불된 결제의 포인트(paid + bonus)를 전부 되돌린다. 이미 써서 잔액이 모자라면 잔액이 음수가 된다. 되돌린 뒤의 잔액을 돌려준다. 결제
-     * 몫은 그 결제로 산 만큼까지만 줄이고, 잔액이 음수면 0이다.
+     * 몫은 그 건의 남은 양과, 이미 쓴 몫을 무료 몫으로 다 갚지 못한 만큼 줄고, 잔액이 음수면 0이다. 그 충전 건(purchaseId)의 남은 유료
+     * 포인트는 0이 된다.
      */
     @Transactional
-    public int reclaim(long userId, String refKey, int paid, int bonus, String label) {
+    public int reclaim(long userId, long purchaseId, String refKey, int paid, int bonus, String label) {
         locks.lockUser(userId);
         PointAccount account = repository.account(userId);
         int balance = account.balance() - paid - bonus;
-        int paidBalance = Math.min(Math.max(account.paidBalance() - paid, 0), Math.max(balance, 0));
+        // 환불된 건에서 아직 쓰지 않은 유료 몫은 그대로 사라진다. 나머지(이미 쓴 몫과 덤)는 빚이라 쓸 때와 같은 순서로 갚는다 — 무료 몫부터,
+        // 모자라면 다른 건의 유료 몫에서, 그래도 모자라면 잔액이 음수가 된다 (BY-1304)
+        int lotRemaining = paidLots.remainingOf(purchaseId);
+        int debt = paid + bonus - lotRemaining;
+        int fromPaid = Math.max(0, debt - account.freeBalance());
+        int paidBalance = Math.max(0, account.paidBalance() - lotRemaining - fromPaid);
         if (!repository.insertLedger(
                 userId,
                 -(paid + bonus),
@@ -137,6 +151,8 @@ public class PointService {
             throw new IllegalStateException("같은 참조 키로 이미 되돌린 기록이 있다: " + refKey);
         }
         repository.setAccount(userId, new PointAccount(balance, paidBalance));
+        paidLots.setRemaining(purchaseId, 0);
+        paidLots.consume(userId, account.paidBalance() - lotRemaining - paidBalance);
         return balance;
     }
 }
