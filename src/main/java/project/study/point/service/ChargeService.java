@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import project.study.common.exception.NotFoundException;
@@ -34,6 +35,7 @@ public class ChargeService {
 
     private static final String PURCHASE = "NON_RENEWING_PURCHASE";
     private static final String CANCELLATION = "CANCELLATION";
+    private static final String TRANSFER = "TRANSFER";
     private static final int PURCHASE_ID_LENGTH = 36;
     /** 스토어가 환불해 준 취소. 구독 해지(UNSUBSCRIBE) 같은 다른 사유는 환불이 아니다. */
     private static final String REFUND_REASON = "CUSTOMER_SUPPORT";
@@ -47,6 +49,7 @@ public class ChargeService {
     private final PointLocks locks;
     private final MemberGuard members;
     private final PaidItemService paidItems;
+    private final PurchaseTransferService transfers;
 
     @Transactional(readOnly = true)
     public PointProductsResponse products(Long userId) {
@@ -65,6 +68,10 @@ public class ChargeService {
     /** event는 RevenueCat 웹훅 본문의 {@code event} 객체다. */
     @Transactional
     public void handle(Map<String, Object> event) {
+        if (TRANSFER.equals(text(event, "type"))) {
+            handleTransfer(event);
+            return;
+        }
         Notice notice = Notice.of(event);
         if (notice == null) {
             return;
@@ -202,6 +209,10 @@ public class ChargeService {
         if (purchase.refunded()) {
             return;
         }
+        if (purchase.userId() != null && !purchase.userId().equals(owner)) {
+            // 락을 잡는 사이 구매 복원이 이 결제를 다른 회원에게 옮겼다. 실패로 답해 RevenueCat이 다시 보내게 한다
+            throw new ConcurrencyFailureException("환불 처리 중 결제의 주인이 바뀌었습니다: " + notice.transactionId());
+        }
         repository.markRefunded(purchase.id(), 0, 0);
         // 결제할 때의 상품을 거둔다. 그 뒤에 스토어 상품 ID를 다른 상품으로 옮겼어도 산 것이 기준이다
         Long itemId = purchase.itemId();
@@ -239,6 +250,29 @@ public class ChargeService {
         if (userId != null) {
             into.add(userId);
         }
+    }
+
+    /** 구매 복원. 알림의 사용자 ID들을 회원으로 바꿔 넘긴다. */
+    private void handleTransfer(Map<String, Object> event) {
+        boolean sandbox = !"PRODUCTION".equals(text(event, "environment"));
+        String eventId = text(event, "id");
+        if (invalidId(eventId) || (sandbox && !policy.acceptSandbox())) {
+            return;
+        }
+        transfers.transfer(
+                eventId,
+                membersIn(event.get("transferred_from")),
+                membersIn(event.get("transferred_to")),
+                text(event, "store"),
+                sandbox);
+    }
+
+    private Set<Long> membersIn(Object appUserIds) {
+        Set<Long> found = new LinkedHashSet<>();
+        if (appUserIds instanceof List<?> list) {
+            list.forEach(id -> addMember(found, id == null ? null : id.toString()));
+        }
+        return found;
     }
 
     /**

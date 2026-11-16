@@ -140,6 +140,35 @@ public class PointChargeRepository {
                 .single();
     }
 
+    /**
+     * 구매 복원: 한 사용자가 결제로 산(환불되지 않은) 상점 상품 결제를 다른 사용자에게 옮기고, 옮긴 상품들을 돌려준다. 그 스토어의, 같은 환경(샌드박스·운영)의
+     * 결제만 옮긴다.
+     */
+    public List<Long> moveItemPurchases(long fromUserId, long toUserId, String store, boolean sandbox) {
+        return jdbc.sql("""
+                        WITH moved AS (
+                            UPDATE point_purchase SET user_id = :to
+                            WHERE user_id = :from AND item_id IS NOT NULL AND status = 'GRANTED'
+                              AND sandbox = :sandbox
+                              AND store = :store
+                            RETURNING item_id)
+                        SELECT DISTINCT item_id FROM moved ORDER BY item_id""")
+                .param("from", fromUserId)
+                .param("to", toUserId)
+                .param("store", store)
+                .param("sandbox", sandbox)
+                .query(Long.class)
+                .list();
+    }
+
+    /** 구매 복원 알림을 처음 받았으면 적고 true. 이미 처리한 알림이면 false. */
+    public boolean insertTransferEvent(String eventId) {
+        int inserted = jdbc.sql("""
+                        INSERT INTO purchase_transfer_event (event_id) VALUES (:e)
+                        ON CONFLICT (event_id) DO NOTHING""").param("e", eventId).update();
+        return inserted == 1;
+    }
+
     public void markRefunded(long purchaseId, int reclaimed, int shortfall) {
         jdbc.sql("""
                 UPDATE point_purchase SET status = 'REFUNDED', reclaimed_points = :r, shortfall_points = :s,
