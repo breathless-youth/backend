@@ -25,7 +25,7 @@ class RankingBoardServiceTest extends RankingIntegrationTestBase {
     @Autowired
     private RankingBoardService service;
 
-    private static final MascotAppearance PLAIN = new MascotAppearance("BOOK", List.of());
+    private static final MascotAppearance PLAIN = new MascotAppearance("STOPWATCH", List.of());
 
     /** 이번 주 화요일(10/6) 09:00에 분 단위 순공 세션 하나 */
     private long weekly(String nickname, int focusMinutes) {

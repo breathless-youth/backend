@@ -41,22 +41,22 @@ class ShopAppearanceTest {
     void 선택한_마스코트가_낀_소품만_보이고_고른_적_없으면_첫_마스코트다() {
         long dressed = fixture.member();
         long plain = fixture.guest();
-        long plannerHat = fixture.pricedItem("PLANNER", 10);
-        long bookHat = fixture.pricedItem("BOOK", 10);
-        wear(dressed, "PLANNER", plannerHat);
-        wear(dressed, "BOOK", bookHat);
-        jdbc.sql("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (:u, 'PLANNER')")
+        long plannerHat = fixture.pricedItem("PENCIL", 10);
+        long bookHat = fixture.pricedItem("STOPWATCH", 10);
+        wear(dressed, "PENCIL", plannerHat);
+        wear(dressed, "STOPWATCH", bookHat);
+        jdbc.sql("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (:u, 'PENCIL')")
                 .param("u", dressed)
                 .update();
 
         Map<Long, MascotAppearance> appearances = decorations.appearancesOf(List.of(dressed, plain));
 
-        assertThat(appearances.get(dressed).mascotCode()).isEqualTo("PLANNER");
+        assertThat(appearances.get(dressed).mascotCode()).isEqualTo("PENCIL");
         assertThat(appearances.get(dressed).accessories()).singleElement().satisfies(accessory -> {
             assertThat(accessory.slot()).isEqualTo(AccessorySlot.HEAD);
             assertThat(accessory.item().itemId()).isEqualTo(plannerHat);
         });
-        assertThat(appearances.get(plain)).isEqualTo(new MascotAppearance("BOOK", List.of()));
+        assertThat(appearances.get(plain)).isEqualTo(new MascotAppearance("STOPWATCH", List.of()));
         assertThat(decorations.appearancesOf(List.of())).isEmpty();
     }
 

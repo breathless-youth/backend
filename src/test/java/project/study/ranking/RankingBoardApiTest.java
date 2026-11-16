@@ -118,18 +118,18 @@ class RankingBoardApiTest extends RankingIntegrationTestBase {
         long other = user("other");
         session(me, kst(10, 6, 9, 0), 60, 3000);
         session(other, kst(10, 7, 9, 0), 60, 3300);
-        jdbc.update("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (?, 'PLANNER')", other);
+        jdbc.update("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (?, 'PENCIL')", other);
 
         assertThat(request("type=FOCUS_TIME&period=WEEKLY", me))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying(
-                        "$.podium[0].mascot.mascotCode", v -> assertThat(v).isEqualTo("PLANNER"))
+                        "$.podium[0].mascot.mascotCode", v -> assertThat(v).isEqualTo("PENCIL"))
                 .hasPathSatisfying(
-                        "$.above.mascot.mascotCode", v -> assertThat(v).isEqualTo("PLANNER"))
+                        "$.above.mascot.mascotCode", v -> assertThat(v).isEqualTo("PENCIL"))
                 // 고른 적이 없으면 첫 마스코트에 소품이 없다
                 .hasPathSatisfying(
-                        "$.around[1].mascot.mascotCode", v -> assertThat(v).isEqualTo("BOOK"))
+                        "$.around[1].mascot.mascotCode", v -> assertThat(v).isEqualTo("STOPWATCH"))
                 .hasPathSatisfying(
                         "$.around[1].mascot.accessories",
                         v -> assertThat(v)

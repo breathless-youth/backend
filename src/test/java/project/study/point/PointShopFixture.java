@@ -101,26 +101,26 @@ public class PointShopFixture {
                 .param("u", userId)
                 .param("t", "fixture-" + UUID.randomUUID())
                 .update();
-        long item = pricedItem("BOOK", 10);
+        long item = pricedItem("STOPWATCH", 10);
         jdbc.sql("INSERT INTO user_item (user_id, item_id) VALUES (:u, :i)")
                 .param("u", userId)
                 .param("i", item)
                 .update();
         jdbc.sql(
-                        "INSERT INTO user_mascot_accessory (user_id, mascot_code, slot, item_id) VALUES (:u, 'BOOK', 'HEAD', :i)")
+                        "INSERT INTO user_mascot_accessory (user_id, mascot_code, slot, item_id) VALUES (:u, 'STOPWATCH', 'HEAD', :i)")
                 .param("u", userId)
                 .param("i", item)
                 .update();
         jdbc.sql("INSERT INTO user_decoration (user_id) VALUES (:u)")
                 .param("u", userId)
                 .update();
-        jdbc.sql("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (:u, 'BOOK')")
+        jdbc.sql("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (:u, 'STOPWATCH')")
                 .param("u", userId)
                 .update();
-        jdbc.sql("INSERT INTO user_mascot_seen (user_id, mascot_code) VALUES (:u, 'BOOK')")
+        jdbc.sql("INSERT INTO user_mascot_seen (user_id, mascot_code) VALUES (:u, 'STOPWATCH')")
                 .param("u", userId)
                 .update();
-        jdbc.sql("INSERT INTO user_mascot_owned (user_id, mascot_code) VALUES (:u, 'BOOK')")
+        jdbc.sql("INSERT INTO user_mascot_owned (user_id, mascot_code) VALUES (:u, 'STOPWATCH')")
                 .param("u", userId)
                 .update();
     }

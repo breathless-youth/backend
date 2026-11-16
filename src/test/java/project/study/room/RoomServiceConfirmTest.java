@@ -59,7 +59,7 @@ class RoomServiceConfirmTest extends RoomTestBase {
         long picked = user();
         long plain = user();
         mascotJdbc
-                .sql("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (:u, 'PLANNER')")
+                .sql("INSERT INTO user_mascot (user_id, selected_mascot_code) VALUES (:u, 'PENCIL')")
                 .param("u", picked)
                 .update();
         long roomId = join(picked, code).response().roomId();
@@ -70,7 +70,7 @@ class RoomServiceConfirmTest extends RoomTestBase {
 
         assertThat(members)
                 .extracting(RoomMember::userId, member -> member.mascot().mascotCode())
-                .containsExactlyInAnyOrder(tuple(picked, "PLANNER"), tuple(plain, "BOOK"));
+                .containsExactlyInAnyOrder(tuple(picked, "PENCIL"), tuple(plain, "STOPWATCH"));
         assertThat(roomState.getMembers(roomId))
                 .allSatisfy(member -> assertThat(member.mascot()).isNotNull());
     }

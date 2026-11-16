@@ -51,9 +51,9 @@ class StudyPointApiTest {
                 .hasPathSatisfying("$.statDate", v -> assertThat(v).isEqualTo("2026-01-10"))
                 .hasPathSatisfying("$.recognizedFocusSec", v -> assertThat(v).isEqualTo(4200))
                 .hasPathSatisfying("$.dailyCapFocusSec", v -> assertThat(v).isEqualTo(43200))
-                .hasPathSatisfying("$.nextMascot.code", v -> assertThat(v).isEqualTo("PLANNER"))
+                .hasPathSatisfying("$.nextMascot.code", v -> assertThat(v).isEqualTo("PENCIL"))
                 .hasPathSatisfying(
-                        "$.nextMascot.remainingFocusSec", v -> assertThat(v).isEqualTo(18000 - 4200));
+                        "$.nextMascot.remainingFocusSec", v -> assertThat(v).isEqualTo(7200 - 4200));
     }
 
     @Test

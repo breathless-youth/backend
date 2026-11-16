@@ -43,20 +43,29 @@ class MascotApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(0))
-                .hasPathSatisfying("$.selectedMascotCode", v -> assertThat(v).isEqualTo("BOOK"))
+                .hasPathSatisfying("$.selectedMascotCode", v -> assertThat(v).isEqualTo("STOPWATCH"))
                 .hasPathSatisfying("$.mascots.length()", v -> assertThat(v).isEqualTo(7))
+                .extractingPath("$.mascots[*].code")
+                .asArray()
+                .containsExactly("STOPWATCH", "PENCIL", "PLANNER", "LOCK", "BOOK", "LAMP", "CAMCORDER");
+        assertThat(list(user))
+                .bodyJson()
+                .hasPathSatisfying("$.mascots[6].unlockType", v -> assertThat(v).isEqualTo("POINTS"))
+                .hasPathSatisfying("$.mascots[6].price", v -> assertThat(v).isEqualTo(1000))
+                .hasPathSatisfying(
+                        "$.mascots[4].unlockFocusSec", v -> assertThat(v).isEqualTo(108000))
                 .hasPathSatisfying("$.mascots[0].unlocked", v -> assertThat(v).isEqualTo(true))
                 .hasPathSatisfying(
                         "$.mascots[0].newlyUnlocked", v -> assertThat(v).isEqualTo(false))
                 .hasPathSatisfying("$.mascots[1].unlocked", v -> assertThat(v).isEqualTo(false))
                 .hasPathSatisfying(
-                        "$.mascots[1].remainingFocusSec", v -> assertThat(v).isEqualTo(18000));
+                        "$.mascots[1].remainingFocusSec", v -> assertThat(v).isEqualTo(7200));
     }
 
     @Test
     void 누적_순공이_기준을_넘으면_열리고_축하는_한_번만_알린다() {
         long user = fixture.member();
-        fixture.measuredSession(user, "2026-01-10", 1, 18000);
+        fixture.measuredSession(user, "2026-01-10", 1, 7200);
         // 직접 입력한 기록은 누적 순공에 넣지 않는다
         jdbc.sql("""
                 INSERT INTO study_session (user_id, stat_date, started_at, ended_at, study_sec, focus_sec, source)
@@ -64,7 +73,7 @@ class MascotApiTest {
 
         assertThat(list(user))
                 .bodyJson()
-                .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(18000))
+                .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(7200))
                 .hasPathSatisfying("$.mascots[1].unlocked", v -> assertThat(v).isEqualTo(true))
                 .hasPathSatisfying(
                         "$.mascots[1].newlyUnlocked", v -> assertThat(v).isEqualTo(true))
@@ -81,12 +90,12 @@ class MascotApiTest {
     @Test
     void 열린_마스코트만_선택할_수_있다() {
         long user = fixture.member();
-        fixture.measuredSession(user, "2026-01-10", 1, 18000);
+        fixture.measuredSession(user, "2026-01-10", 1, 7200);
 
-        assertThat(select(user, "PLANNER"))
+        assertThat(select(user, "PENCIL"))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.selectedMascotCode", v -> assertThat(v).isEqualTo("PLANNER"))
+                .hasPathSatisfying("$.selectedMascotCode", v -> assertThat(v).isEqualTo("PENCIL"))
                 .hasPathSatisfying("$.mascots[1].selected", v -> assertThat(v).isEqualTo(true));
         assertThat(select(user, "LAMP"))
                 .hasStatus(HttpStatus.CONFLICT)
@@ -98,7 +107,7 @@ class MascotApiTest {
                 .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("MASCOT_NOT_FOUND"));
         long guest = fixture.guest();
         assertThat(list(guest)).hasStatusOk();
-        assertThat(select(guest, "BOOK")).hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(select(guest, "STOPWATCH")).hasStatus(HttpStatus.FORBIDDEN);
     }
 
     @Test
@@ -150,26 +159,26 @@ class MascotApiTest {
             jdbc.sql("DELETE FROM user_mascot WHERE selected_mascot_code = 'CAMCORDER' AND user_id = :u")
                     .param("u", user)
                     .update();
-            jdbc.sql("UPDATE mascot SET price = NULL WHERE code = 'CAMCORDER'").update();
+            jdbc.sql("UPDATE mascot SET price = 1000 WHERE code = 'CAMCORDER'").update();
         }
     }
 
     @Test
     void 고른_마스코트가_포인트로_사는_것으로_바뀌면_사지_않은_사람은_첫_마스코트로_돌아간다() {
         long user = fixture.member();
-        fixture.measuredSession(user, "2026-01-10", 1, 18000);
-        assertThat(select(user, "PLANNER")).hasStatusOk();
-        jdbc.sql("UPDATE mascot SET price = 300 WHERE code = 'PLANNER'").update();
+        fixture.measuredSession(user, "2026-01-10", 1, 7200);
+        assertThat(select(user, "PENCIL")).hasStatusOk();
+        jdbc.sql("UPDATE mascot SET price = 300 WHERE code = 'PENCIL'").update();
         try {
             assertThat(list(user))
                     .bodyJson()
                     .hasPathSatisfying(
-                            "$.selectedMascotCode", v -> assertThat(v).isEqualTo("BOOK"))
+                            "$.selectedMascotCode", v -> assertThat(v).isEqualTo("STOPWATCH"))
                     .hasPathSatisfying(
                             "$.mascots[1].unlocked", v -> assertThat(v).isEqualTo(false));
-            assertThat(mascots.selectedCodes(java.util.List.of(user))).containsEntry(user, "BOOK");
+            assertThat(mascots.selectedCodes(java.util.List.of(user))).containsEntry(user, "STOPWATCH");
         } finally {
-            jdbc.sql("UPDATE mascot SET price = NULL WHERE code = 'PLANNER'").update();
+            jdbc.sql("UPDATE mascot SET price = NULL WHERE code = 'PENCIL'").update();
         }
     }
 
