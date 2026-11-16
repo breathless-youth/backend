@@ -315,6 +315,35 @@ class ShopApiTest {
                 .orElseThrow();
     }
 
+    @Test
+    void 비회원은_상점과_꾸미기와_기록을_보기만_하고_사거나_끼지_못한다() {
+        long guest = fixture.guest();
+        long item = fixture.pricedItem(null, 1);
+
+        assertThat(get(guest, "/api/shop/items")).hasStatusOk();
+        assertThat(get(guest, "/api/decorations"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.selectedMascotCode", v -> assertThat(v).isEqualTo("BOOK"));
+        assertThat(get(guest, "/api/points/history"))
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.items")
+                .asArray()
+                .isEmpty();
+        assertCode(purchase(guest, item), HttpStatus.FORBIDDEN, "MEMBER_ONLY");
+        assertCode(
+                mvc.put()
+                        .uri("/api/decorations/timer-background")
+                        .header(ApiVersionConfig.HEADER, "1")
+                        .with(asUser(guest))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"itemId\":null}")
+                        .exchange(),
+                HttpStatus.FORBIDDEN,
+                "MEMBER_ONLY");
+    }
+
     private static void assertCode(MvcTestResult result, HttpStatus status, String code) {
         assertThat(result)
                 .hasStatus(status)

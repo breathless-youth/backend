@@ -32,7 +32,6 @@ public class ShopService {
 
     @Transactional(readOnly = true)
     public ShopItemListResponse list(Long userId, String language) {
-        members.requireMember(userId);
         ShopProgress progress = progressOf(userId);
         List<AccessoryRow> accessories = repository.accessories(userId);
         DecorationRow decoration = repository.decoration(userId);

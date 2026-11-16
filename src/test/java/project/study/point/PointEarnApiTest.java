@@ -205,11 +205,16 @@ class PointEarnApiTest {
     }
 
     @Test
-    void 비회원은_받기_탭과_보상을_쓰지_못한다() {
+    void 비회원은_받기_탭을_보기만_하고_보상은_받지_못한다() {
         long guest = fixture.guest();
 
-        assertCode(get(guest), HttpStatus.FORBIDDEN, "MEMBER_ONLY");
+        assertThat(get(guest))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.todayEarned", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.attendance.claimed", v -> assertThat(v).isEqualTo(false));
         assertCode(claim(guest, "attendance"), HttpStatus.FORBIDDEN, "MEMBER_ONLY");
+        assertCode(claim(guest, "daily-goal"), HttpStatus.FORBIDDEN, "MEMBER_ONLY");
     }
 
     private static LocalDate futurePeriod() {

@@ -28,7 +28,7 @@ import project.study.mascot.service.MascotService;
 @ApiResponse(responseCode = "200", description = "성공")
 @ApiResponse(
         responseCode = "403",
-        description = "비회원",
+        description = "비회원이 받기·사기·바꾸기를 요청함. 조회(GET)는 비회원도 200이다 (BY-1296)",
         content =
                 @Content(
                         examples =

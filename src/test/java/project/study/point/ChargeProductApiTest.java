@@ -67,7 +67,7 @@ class ChargeProductApiTest {
                         .with(asUser(fixture.guest()))
                         .header(ApiVersionConfig.HEADER, "1")
                         .exchange())
-                .hasStatus(HttpStatus.FORBIDDEN);
+                .hasStatusOk();
     }
 
     @Test

@@ -29,7 +29,7 @@ public class ChargeController {
     @Operation(summary = "충전 상품 목록", description = """
                     토큰 인증 필요. 스토어 상품 ID와 받는 포인트만 준다. 가격과 통화는 앱이 RevenueCat SDK(스토어)에서 읽는다. \
                     결제 전에 RevenueCat에 사용자 ID(토큰의 sub)로 로그인해야 한다. 결제가 끝나면 서버가 RevenueCat의 알림을 받아 \
-                    포인트를 주므로, 앱은 `GET /api/points`의 잔액을 다시 읽는다(알림은 보통 몇 초, 길면 1분쯤 걸린다). 비회원은 403 `MEMBER_ONLY`.""")
+                    포인트를 주므로, 앱은 `GET /api/points`의 잔액을 다시 읽는다(알림은 보통 몇 초, 길면 1분쯤 걸린다). 비회원도 목록은 볼 수 있지만, 비회원의 결제 알림은 지급하지 않는다.""")
     @GetMapping(value = "/products", version = "1")
     public PointProductsResponse products(@AuthenticationPrincipal Long userId) {
         return service.products(userId);

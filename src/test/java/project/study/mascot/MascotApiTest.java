@@ -96,7 +96,9 @@ class MascotApiTest {
                 .hasStatus(HttpStatus.NOT_FOUND)
                 .bodyJson()
                 .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("MASCOT_NOT_FOUND"));
-        assertThat(list(fixture.guest())).hasStatus(HttpStatus.FORBIDDEN);
+        long guest = fixture.guest();
+        assertThat(list(guest)).hasStatusOk();
+        assertThat(select(guest, "BOOK")).hasStatus(HttpStatus.FORBIDDEN);
     }
 
     @Test

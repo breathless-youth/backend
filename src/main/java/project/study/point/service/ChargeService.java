@@ -48,7 +48,6 @@ public class ChargeService {
 
     @Transactional(readOnly = true)
     public PointProductsResponse products(Long userId) {
-        members.requireMember(userId);
         return new PointProductsResponse(repository.activeProducts());
     }
 

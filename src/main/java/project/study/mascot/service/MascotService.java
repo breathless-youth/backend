@@ -39,7 +39,6 @@ public class MascotService {
 
     @Transactional(readOnly = true)
     public MascotListResponse list(Long userId) {
-        members.requireMember(userId);
         List<Mascot> all = repository.findAll();
         long total = repository.totalFocusSec(userId);
         Set<String> owned = repository.ownedCodes(userId);

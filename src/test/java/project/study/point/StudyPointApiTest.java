@@ -257,7 +257,7 @@ class StudyPointApiTest {
     }
 
     @Test
-    void 비회원은_포인트를_받지_못하고_조회도_거절된다() {
+    void 비회원은_포인트를_받지_못하고_조회하면_잔액이_0이다() {
         long guest = fixture.guest();
 
         submit(guest, "2026-01-10T01:00:00Z", 4200);
@@ -268,9 +268,9 @@ class StudyPointApiTest {
                         .single())
                 .isZero();
         assertThat(get(guest, "/api/points"))
-                .hasStatus(HttpStatus.FORBIDDEN)
+                .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.code", v -> assertThat(v).isEqualTo("MEMBER_ONLY"));
+                .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(0));
     }
 
     @Test

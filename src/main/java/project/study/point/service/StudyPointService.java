@@ -95,7 +95,6 @@ public class StudyPointService {
     /** 그 제출이 받은 포인트와 그 제출 날짜(제출이 없으면 오늘)의 인정 순공. */
     @Transactional(readOnly = true)
     public StudyReward reward(Long userId, Instant submissionStartedAt) {
-        members.requireMember(userId);
         Instant stored =
                 repository.storedSubmissionStart(userId, submissionStartedAt).orElse(submissionStartedAt);
         LocalDate date = repository.lastDateOf(userId, stored);
