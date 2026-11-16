@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class ChargeService {
 
     private static final String PURCHASE = "NON_RENEWING_PURCHASE";
     private static final String CANCELLATION = "CANCELLATION";
+    private static final int PURCHASE_ID_LENGTH = 36;
     /** 스토어가 환불해 준 취소. 구독 해지(UNSUBSCRIBE) 같은 다른 사유는 환불이 아니다. */
     private static final String REFUND_REASON = "CUSTOMER_SUPPORT";
 
@@ -48,7 +50,8 @@ public class ChargeService {
 
     @Transactional(readOnly = true)
     public PointProductsResponse products(Long userId) {
-        return new PointProductsResponse(repository.activeProducts());
+        return new PointProductsResponse(
+                repository.activeProducts(), members.isMember(userId) ? repository.purchaseIdOf(userId) : null);
     }
 
     /** Authorization 값이 설정과 같은지. 충전이 꺼진 서버면 404. */
@@ -238,17 +241,22 @@ public class ChargeService {
         }
     }
 
-    /** 숫자이고 우리 회원이면 그 ID. $RCAnonymousID 같은 익명 ID나 비회원은 null. */
+    /**
+     * 결제용 ID(BY-1299)이고 그 주인이 회원이면 그 회원. $RCAnonymousID 같은 익명 ID, 비회원, 그리고 회원번호는 null이다 — 회원번호는
+     * 추측할 수 있어 사용자 ID로 받지 않는다.
+     */
     private Long member(String candidate) {
-        try {
-            if (candidate != null) {
-                long userId = Long.parseLong(candidate);
-                return members.isMember(userId) ? userId : null;
-            }
-        } catch (NumberFormatException e) {
-            // 익명 ID
+        if (candidate == null || candidate.length() != PURCHASE_ID_LENGTH) {
+            return null;
         }
-        return null;
+        try {
+            return repository
+                    .findUserByPurchaseId(UUID.fromString(candidate))
+                    .filter(members::isMember)
+                    .orElse(null);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** 알림에서 읽은 결제 또는 환불 한 건. */

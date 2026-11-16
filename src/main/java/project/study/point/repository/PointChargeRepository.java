@@ -4,6 +4,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -38,6 +39,22 @@ public class PointChargeRepository {
     }
 
     /** 그 결제를 지급받은 사용자. 락을 잡기 전에 누구의 락을 잡을지 알려고 잠그지 않고 읽는다. */
+    /** 그 사용자의 결제용 ID. */
+    public String purchaseIdOf(long userId) {
+        return jdbc.sql("SELECT purchase_id FROM users WHERE id = :u")
+                .param("u", userId)
+                .query(String.class)
+                .single();
+    }
+
+    /** 결제용 ID의 주인. 없으면 비어 있다. */
+    public Optional<Long> findUserByPurchaseId(UUID purchaseId) {
+        return jdbc.sql("SELECT id FROM users WHERE purchase_id = :p")
+                .param("p", purchaseId)
+                .query(Long.class)
+                .optional();
+    }
+
     public Optional<Long> findOwner(String store, String transactionId) {
         return jdbc.sql("SELECT user_id FROM point_purchase WHERE store = :s AND transaction_id = :t")
                 .param("s", store)
