@@ -36,6 +36,13 @@ public class ReviewLoginRepository {
                 .optional();
     }
 
+    /** 출시 버전이 아직 from이면 to로 바꾼다. 그 사이 사람이 바꿨으면 그대로 두고 false. */
+    public boolean raiseReleasedVersion(String from, String to) {
+        return jdbc.sql("""
+                                UPDATE review_login SET released_version = :to, updated_at = now()
+                                WHERE id = 1 AND released_version = :from""").param("from", from).param("to", to).update() == 1;
+    }
+
     public int failuresOf(String client, Instant since) {
         return jdbc.sql("SELECT COUNT(*) FROM review_login_failure WHERE client = :c AND failed_at > :since")
                 .param("c", client)
