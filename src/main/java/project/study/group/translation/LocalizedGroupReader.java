@@ -5,17 +5,47 @@ import java.util.List;
 import java.util.Map;
 import project.study.common.category.StudyCategory;
 import project.study.group.dto.*;
+import project.study.group.service.GroupApplicationService;
 import project.study.group.service.GroupService;
 import project.study.group.translation.TranslationCacheRepository.CacheKey;
 
 /** 기존 읽기 서비스의 권한 검사와 트랜잭션이 끝난 뒤 번역을 붙인다. */
 public class LocalizedGroupReader {
     private final GroupService groups;
+    private final GroupApplicationService applications;
     private final GroupTranslationService translations;
 
-    public LocalizedGroupReader(GroupService groups, GroupTranslationService translations) {
+    public LocalizedGroupReader(
+            GroupService groups, GroupApplicationService applications, GroupTranslationService translations) {
         this.groups = groups;
+        this.applications = applications;
         this.translations = translations;
+    }
+
+    /** 한 번에 옮기는 신청 수. 잠금·예약을 한 트랜잭션에서 하므로 신청이 쌓인 그룹이 수락·취소를 오래 막지 않게 앞쪽만 옮긴다. */
+    static final int MAX_TRANSLATED_APPLICATIONS = 20;
+
+    /** 그룹장용 신청 목록 — 그룹장 확인이 끝난 응답의 신청 소개 글만 옮긴다. 오래된 신청부터 일정 수까지다 (BY-1301). */
+    public GroupApplicationsResponse applications(Long userId, long groupId, String acceptLanguage) {
+        var response = applications.applications(userId, groupId);
+        var language = TranslationLanguage.resolve(acceptLanguage);
+        if (language.isEmpty()) return response;
+        var texts = response.applications().stream()
+                .limit(MAX_TRANSLATED_APPLICATIONS)
+                .map(a -> new TranslationText(a.applicationId(), TranslationField.INTRODUCTION, a.introduction()))
+                .toList();
+        var results = translations.translate(texts, language.get());
+        var items = response.applications().stream()
+                .map(a -> {
+                    String text =
+                            results.get(new CacheKey(a.applicationId(), TranslationField.INTRODUCTION, language.get()));
+                    return text == null
+                            ? a
+                            : a.withTranslation(new GroupApplicationTranslation(
+                                    language.get().locale(), text));
+                })
+                .toList();
+        return new GroupApplicationsResponse(response.remainingSeats(), items);
     }
 
     public MyGroupsResponse myGroups(Long userId, String acceptLanguage) {

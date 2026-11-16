@@ -2,7 +2,7 @@ package project.study.group.translation;
 
 import io.swagger.v3.oas.models.media.ComposedSchema;
 import io.swagger.v3.oas.models.media.Schema;
-import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -16,15 +16,21 @@ public class TranslationOpenApiConfig {
         return api -> {
             if (api.getComponents() == null || api.getComponents().getSchemas() == null) return;
             var schemas = api.getComponents().getSchemas();
-            for (String name :
-                    List.of("GroupHomeResponse", "PublicGroupDetailResponse", "PublicGroupCard", "MyGroupCard")) {
-                Schema<?> dto = schemas.get(name);
+            // DTO 이름 → translation 타입. 신청 소개 글 번역은 BY-1301
+            Map<String, String> translations = Map.of(
+                    "GroupHomeResponse", "GroupTranslation",
+                    "PublicGroupDetailResponse", "GroupTranslation",
+                    "PublicGroupCard", "GroupTranslation",
+                    "MyGroupCard", "GroupTranslation",
+                    "GroupApplicationItem", "GroupApplicationTranslation");
+            for (var entry : translations.entrySet()) {
+                Schema<?> dto = schemas.get(entry.getKey());
                 if (dto == null
                         || dto.getProperties() == null
                         || !dto.getProperties().containsKey("translation")) continue;
-                Schema<?> reference = new Schema<>().$ref("#/components/schemas/GroupTranslation");
+                Schema<?> reference = new Schema<>().$ref("#/components/schemas/" + entry.getValue());
                 ComposedSchema nullable = new ComposedSchema();
-                nullable.setDescription("선택 언어 번역 — 없으면 null, 각 번역 필드도 null일 수 있어 원문으로 대체한다");
+                nullable.setDescription("선택 언어 번역 — 없으면 null이고 원문으로 대체한다");
                 nullable.addAnyOfItem(reference);
                 Schema<?> nullType = new Schema<>();
                 nullType.setTypes(Set.of("null"));
