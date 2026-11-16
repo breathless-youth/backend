@@ -33,6 +33,7 @@ public class StudyPointService {
     private final UserTimeZones userTimeZones;
     private final Clock clock;
     private final StudyPointPolicy policy;
+    private final StudyPieces pieces;
 
     /** 세션이 저장된 직후(앱의 제출, 자동 확정) 부른다. 비회원이거나 측정 조각이 없으면 아무것도 하지 않는다. */
     @Transactional
@@ -57,7 +58,7 @@ public class StudyPointService {
         Map<LocalDate, Integer> shortBy = new LinkedHashMap<>();
         Map<LocalDate, Integer> overBy = new LinkedHashMap<>();
         for (LocalDate date : dates) {
-            int diff = policy.targetPoints(recognizedFocusSec(userId, date)) - repository.studyGrantedOn(userId, date);
+            int diff = targetPoints(userId, date) - repository.studyGrantedOn(userId, date);
             if (diff > 0 && own.contains(date)) {
                 shortBy.put(date, diff);
             } else if (diff < 0) {
@@ -106,6 +107,10 @@ public class StudyPointService {
                 date,
                 recognizedFocusSec(userId, date),
                 policy.dailyCapSec());
+    }
+
+    private int targetPoints(long userId, LocalDate date) {
+        return policy.counts(date) ? policy.targetPoints(pieces.on(userId, date)) : 0;
     }
 
     private int recognizedFocusSec(long userId, LocalDate date) {

@@ -36,6 +36,7 @@ public class DailyRewardService {
     private final StudyPointPolicy studyPolicy;
     private final DailyRewardPolicy rewardPolicy;
     private final AdRewardPolicy adPolicy;
+    private final StudyPieces studyPieces;
     private final PlannerGoalService goalService;
 
     @Transactional(readOnly = true)
@@ -59,7 +60,9 @@ public class DailyRewardService {
                         studyPolicy.unitSec(),
                         studyPolicy.pointsPerUnit(),
                         repository.studyGrantedOn(userId, today),
-                        studyPolicy.maxDailyPoints()),
+                        studyPolicy.maxDailyPoints(),
+                        togetherFocusSec(userId, today),
+                        studyPolicy.tiers()),
                 new EarnOverviewResponse.Attendance(
                         rewardPolicy.attendancePoints(),
                         repository.exists(userId, PointReason.ATTENDANCE, today.toString())),
@@ -71,7 +74,9 @@ public class DailyRewardService {
                         focusSec,
                         goalSec == null ? null : Math.max(0, goalSec - focusSec),
                         goalPoints > 0 && focusSec >= goalSec,
-                        repository.exists(userId, PointReason.DAILY_GOAL, today.toString())),
+                        repository.exists(userId, PointReason.DAILY_GOAL, today.toString()),
+                        rewardPolicy.goalCapSec(),
+                        rewardPolicy.goalTiers()),
                 new EarnOverviewResponse.Ad(
                         adPolicy.available(),
                         adPolicy.points(),
@@ -147,8 +152,16 @@ public class DailyRewardService {
         return new ClaimResponse(granted, granted ? points : 0, repository.balance(userId));
     }
 
+    private int togetherFocusSec(long userId, LocalDate date) {
+        return studyPolicy.counts(date)
+                ? studyPieces.on(userId, date).stream()
+                        .mapToInt(StudyPointPolicy.Piece::togetherSec)
+                        .sum()
+                : 0;
+    }
+
     private int goalPoints(Integer goalSec) {
-        return rewardPolicy.goalPoints(goalSec, studyPolicy.dailyCapSec());
+        return rewardPolicy.goalPoints(goalSec);
     }
 
     private MedalReward medalReward(MedalRow row) {

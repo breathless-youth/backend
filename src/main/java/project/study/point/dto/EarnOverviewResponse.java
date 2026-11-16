@@ -34,27 +34,33 @@ public record EarnOverviewResponse(
             @Schema(description = "포인트를 주는 순공 단위(초). 이만큼마다 pointsPerUnit을 준다", example = "1800")
             int unitSec,
 
-            @Schema(description = "단위마다 주는 포인트", example = "10")
+            @Schema(description = "첫 구간의 혼자 값. 구간을 그리는 앱은 tiers를 쓴다", example = "7")
             int pointsPerUnit,
 
             @Schema(description = "오늘 공부로 받은 포인트", example = "40")
             int earnedPoints,
 
-            @Schema(description = "하루에 공부로 받을 수 있는 최대 포인트", example = "240")
-            int maxPoints) {}
+            @Schema(description = "하루에 공부로 받을 수 있는 최대 포인트(상한까지 모두 같이 한 경우)", example = "104")
+            int maxPoints,
+
+            @Schema(description = "오늘 측정한 순공 가운데 같이 한 시간(초). 방에 나 말고 한 명 이상 있던 시간이다 (BY-1298)", example = "3600")
+            int togetherFocusSec,
+
+            @Schema(description = "구간별 지급 기준. 하루 순공이 쌓일수록 다음 구간의 값을 받는다 (BY-1298)")
+            List<StudyPointTier> tiers) {}
 
     public record Attendance(
             @Schema(description = "출석 포인트", example = "10") int points,
             @Schema(description = "오늘 받았는지") boolean claimed) {}
 
     public record DailyGoal(
-            @Schema(description = "오늘 목표를 채우면 받는 포인트. 목표 시간에 비례하고(30분마다 1P) 목표가 없으면 0", example = "4")
+            @Schema(description = "오늘 목표를 채우면 받는 포인트. 목표 시간에 비례하고(tiers) 목표가 없으면 0", example = "80")
             int points,
 
             @Schema(description = "보상을 주는 목표 시간 단위(초). 목표 시간의 이만큼마다 pointsPerUnit을 준다", example = "1800")
             int unitSec,
 
-            @Schema(description = "단위마다 주는 포인트", example = "1")
+            @Schema(description = "첫 구간의 값. 구간을 그리는 앱은 tiers를 쓴다", example = "20")
             int pointsPerUnit,
 
             @Schema(description = "오늘의 목표(초). 플래너·홈의 목표와 같은 값이고 정한 적이 없으면 null", example = "7200")
@@ -69,7 +75,13 @@ public record EarnOverviewResponse(
             @Schema(description = "받을 조건을 채웠는지(받을 포인트가 있고 순공이 목표 이상)")
             boolean achieved,
 
-            @Schema(description = "오늘 받았는지") boolean claimed) {}
+            @Schema(description = "오늘 받았는지") boolean claimed,
+
+            @Schema(description = "이보다 긴 목표 시간은 세지 않는다(초) (BY-1298)", example = "28800")
+            int capSec,
+
+            @Schema(description = "구간별 지급 기준. 목표 시간의 앞부분부터 구간 값을 받는다 (BY-1298)")
+            List<GoalPointTier> tiers) {}
 
     public record Ad(
             @Schema(description = "광고 보상을 쓸 수 있는지. false면 광고 칸을 숨긴다(서버에 광고 단위가 설정되지 않음)")
