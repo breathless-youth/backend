@@ -1,5 +1,6 @@
 package project.study.point.service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +17,7 @@ public class DailyRewardPolicy {
     private final int attendancePoints;
     private final List<GoalPointTier> goalTiers;
     private final MedalPointTable medals;
+    private final LocalDate medalStartsOn;
 
     public DailyRewardPolicy(
             @Value("${app.points.attendance.points:15}") int attendancePoints,
@@ -23,9 +25,11 @@ public class DailyRewardPolicy {
             @Value("${app.points.daily-goal.tier-points:20,5}") List<Integer> goalTierPoints,
             @Value("${app.points.medal.daily:5,3,1}") List<Integer> dailyMedal,
             @Value("${app.points.medal.weekly:10,5,3}") List<Integer> weeklyMedal,
-            @Value("${app.points.medal.monthly:50,30,10}") List<Integer> monthlyMedal) {
+            @Value("${app.points.medal.monthly:50,30,10}") List<Integer> monthlyMedal,
+            @Value("${app.points.medal.starts-on:2000-01-01}") LocalDate medalStartsOn) {
         this.attendancePoints = attendancePoints;
         this.goalTiers = goalTiers(goalTierEndsSec, goalTierPoints);
+        this.medalStartsOn = medalStartsOn;
         this.medals = new MedalPointTable(List.copyOf(dailyMedal), List.copyOf(weeklyMedal), List.copyOf(monthlyMedal));
     }
 
@@ -67,6 +71,14 @@ public class DailyRewardPolicy {
     /** 이보다 긴 목표 시간은 세지 않는다. */
     public int goalCapSec() {
         return goalTiers.getLast().toSec();
+    }
+
+    /**
+     * 이날 이후에 시작한 랭킹 기간의 메달만 포인트를 준다 (BY-1314). 공부 포인트 시작일과 따로 두어, 포인트 기능이 나오기 전에 받은 메달도
+     * 받을 수 있다. 기본값은 제한 없음.
+     */
+    public LocalDate medalStartsOn() {
+        return medalStartsOn;
     }
 
     public MedalPointTable medalTable() {
