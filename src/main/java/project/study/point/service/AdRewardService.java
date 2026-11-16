@@ -31,6 +31,7 @@ public class AdRewardService {
     private final AdMobSsvVerifier verifier;
     private final AdRewardPolicy policy;
     private final StudyPointPolicy studyPolicy;
+    private final PointStart pointStart;
     private final PointService pointService;
     private final PointRepository repository;
     private final MemberGuard members;
@@ -64,7 +65,7 @@ public class AdRewardService {
             return;
         }
         LocalDate today = clock.instant().atZone(userTimeZones.zoneOf(userId)).toLocalDate();
-        if (!studyPolicy.counts(today)) {
+        if (!pointStart.counts(today)) {
             return;
         }
         pointService.lock(userId);

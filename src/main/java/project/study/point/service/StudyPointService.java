@@ -33,6 +33,7 @@ public class StudyPointService {
     private final UserTimeZones userTimeZones;
     private final Clock clock;
     private final StudyPointPolicy policy;
+    private final PointStart pointStart;
     private final StudyPieces pieces;
 
     /** 세션이 저장된 직후(앱의 제출, 자동 확정) 부른다. 비회원이거나 측정 조각이 없으면 아무것도 하지 않는다. */
@@ -110,11 +111,11 @@ public class StudyPointService {
     }
 
     private int targetPoints(long userId, LocalDate date) {
-        return policy.counts(date) ? policy.targetPoints(pieces.on(userId, date)) : 0;
+        return pointStart.counts(date) ? policy.targetPoints(pieces.on(userId, date)) : 0;
     }
 
     private int recognizedFocusSec(long userId, LocalDate date) {
-        if (!policy.counts(date)) {
+        if (!pointStart.counts(date)) {
             return 0;
         }
         return policy.recognizedFocusSec(repository.measuredFocusSecOn(userId, date));

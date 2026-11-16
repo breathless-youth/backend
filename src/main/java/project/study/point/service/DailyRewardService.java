@@ -34,6 +34,7 @@ public class DailyRewardService {
     private final UserTimeZones userTimeZones;
     private final Clock clock;
     private final StudyPointPolicy studyPolicy;
+    private final PointStart pointStart;
     private final DailyRewardPolicy rewardPolicy;
     private final AdRewardPolicy adPolicy;
     private final StudyPieces studyPieces;
@@ -43,11 +44,11 @@ public class DailyRewardService {
     public EarnOverviewResponse overview(Long userId) {
         LocalDate today = today(userId);
         long focusSec = repository.measuredFocusSecOn(userId, today);
-        int recognized = studyPolicy.counts(today) ? studyPolicy.recognizedFocusSec(focusSec) : 0;
+        int recognized = pointStart.counts(today) ? studyPolicy.recognizedFocusSec(focusSec) : 0;
         Integer goalSec = goalService.get(userId, today).goalSec();
         int goalPoints = goalPoints(goalSec);
         int adMax = adPolicy.available() ? adPolicy.points() * adPolicy.dailyLimit() : 0;
-        List<MedalReward> medals = repository.unclaimedMedals(userId, studyPolicy.startsOn()).stream()
+        List<MedalReward> medals = repository.unclaimedMedals(userId, rewardPolicy.medalStartsOn()).stream()
                 .map(this::medalReward)
                 .toList();
         return new EarnOverviewResponse(
@@ -117,7 +118,7 @@ public class DailyRewardService {
         pointService.lock(userId);
         int count = 0;
         int total = 0;
-        for (MedalRow medal : repository.unclaimedMedals(userId, studyPolicy.startsOn())) {
+        for (MedalRow medal : repository.unclaimedMedals(userId, rewardPolicy.medalStartsOn())) {
             int points = medalReward(medal).points();
             if (points > 0 && earnMedal(userId, medal, points)) {
                 count++;
@@ -132,7 +133,7 @@ public class DailyRewardService {
         members.requireMember(userId);
         MedalRow medal = repository
                 .findMedal(userId, recordId)
-                .filter(row -> !row.periodStart().isBefore(studyPolicy.startsOn()))
+                .filter(row -> !row.periodStart().isBefore(rewardPolicy.medalStartsOn()))
                 .orElseThrow(() -> new NotFoundException(ErrorCode.MEDAL_NOT_FOUND, "받을 수 있는 메달이 아닙니다"));
         int points = medalReward(medal).points();
         if (points <= 0) {
@@ -153,7 +154,7 @@ public class DailyRewardService {
     }
 
     private int togetherFocusSec(long userId, LocalDate date) {
-        return studyPolicy.counts(date)
+        return pointStart.counts(date)
                 ? studyPieces.on(userId, date).stream()
                         .mapToInt(StudyPointPolicy.Piece::togetherSec)
                         .sum()
@@ -179,7 +180,7 @@ public class DailyRewardService {
     /** 포인트 시작 날짜 전이면 409 {@code REWARD_NOT_AVAILABLE}. 출시 전에 배포돼도 받아 가지 못하게 한다. */
     private LocalDate startedToday(long userId) {
         LocalDate today = today(userId);
-        if (!studyPolicy.counts(today)) {
+        if (!pointStart.counts(today)) {
             throw new ConflictException(ErrorCode.REWARD_NOT_AVAILABLE, "아직 포인트를 받을 수 없습니다");
         }
         return today;

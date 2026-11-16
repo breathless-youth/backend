@@ -64,7 +64,13 @@ class StudyPointPolicyTest {
     @Test
     void 하루_목표는_처음_두_시간은_20P_그_뒤는_5P이고_여덟_시간까지만_센다() {
         DailyRewardPolicy reward = new DailyRewardPolicy(
-                15, List.of(7200, 28800), List.of(20, 5), List.of(5, 3, 1), List.of(10, 5, 3), List.of(50, 30, 10));
+                15,
+                List.of(7200, 28800),
+                List.of(20, 5),
+                List.of(5, 3, 1),
+                List.of(10, 5, 3),
+                List.of(50, 30, 10),
+                LocalDate.of(2000, 1, 1));
 
         assertThat(reward.goalPoints(null)).isZero();
         assertThat(reward.goalPoints(1799)).isZero();
