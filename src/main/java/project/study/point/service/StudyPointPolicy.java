@@ -8,9 +8,9 @@ import org.springframework.stereotype.Component;
 import project.study.point.dto.StudyPointTier;
 
 /**
- * 공부 포인트 숫자와 시작 날짜 (BY-1298). 하루 순공을 구간으로 나눠 구간마다 30분에 주는 포인트가 다르고, 방에 나 말고 한 명 이상 있던 시간(같이)은
- * 혼자보다 많이 준다. 기본값은 처음 2시간 7P(같이 10P), 2~6시간 4P(5P), 6~12시간 1P(2P)이고 프로퍼티로 바꾼다. 마지막 구간의 끝이 하루
- * 상한이다.
+ * 공부 포인트 숫자와 시작 날짜 (BY-1298). 하루 순공을 구간으로 나눠 구간마다 30분에 주는 포인트를 다르게 줄 수 있고, 방에 나 말고 한 명
+ * 이상 있던 시간(같이)은 혼자보다 많이 준다. 기본값은 구간 하나로 하루 공부 시간과 상관없이 30분마다 혼자 7P, 같이 10P, 하루 10시간까지다
+ * (BY-1316). 프로퍼티로 구간을 다시 나눌 수 있다. 마지막 구간의 끝이 하루 상한이다.
  */
 @Component
 public class StudyPointPolicy {
@@ -23,9 +23,9 @@ public class StudyPointPolicy {
 
     public StudyPointPolicy(
             @Value("${app.points.study.unit-sec:1800}") int unitSec,
-            @Value("${app.points.study.tier-ends-sec:7200,21600,43200}") List<Integer> tierEndsSec,
-            @Value("${app.points.study.solo-points:7,4,1}") List<Integer> soloPoints,
-            @Value("${app.points.study.together-points:10,5,2}") List<Integer> togetherPoints,
+            @Value("${app.points.study.tier-ends-sec:36000}") List<Integer> tierEndsSec,
+            @Value("${app.points.study.solo-points:7}") List<Integer> soloPoints,
+            @Value("${app.points.study.together-points:10}") List<Integer> togetherPoints,
             @Value("${app.points.study.starts-on:2026-11-11}") LocalDate startsOn) {
         if (tierEndsSec.isEmpty()
                 || tierEndsSec.size() != soloPoints.size()

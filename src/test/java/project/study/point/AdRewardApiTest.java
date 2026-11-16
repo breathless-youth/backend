@@ -64,7 +64,7 @@ class AdRewardApiTest {
                 .hasPathSatisfying("$.ad.watchedToday", v -> assertThat(v).isEqualTo(1))
                 .hasPathSatisfying("$.ad.dailyLimit", v -> assertThat(v).isEqualTo(3))
                 .hasPathSatisfying("$.todayEarned", v -> assertThat(v).isEqualTo(10))
-                .hasPathSatisfying("$.dailyMax", v -> assertThat(v).isEqualTo(104 + 15 + 30));
+                .hasPathSatisfying("$.dailyMax", v -> assertThat(v).isEqualTo(200 + 15 + 30));
         assertThat(mvc.get()
                         .uri("/api/points/history")
                         .with(asUser(user))
