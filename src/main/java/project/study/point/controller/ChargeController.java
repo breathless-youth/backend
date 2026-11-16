@@ -38,6 +38,7 @@ public class ChargeController {
     @Operation(summary = "RevenueCat 결제 알림", description = """
                     앱이 부르는 API가 아니다. RevenueCat이 결제(`NON_RENEWING_PURCHASE`)와 환불(`CANCELLATION`, \
                     `cancel_reason=CUSTOMER_SUPPORT`)을 알리면 포인트를 주거나 되돌린다. 같은 결제는 한 번만 지급한다. \
+                    구매 복원(`TRANSFER`)이 오면 옮겨 준 사용자가 결제로 산 상점 상품의 보유를 받은 사용자에게 옮긴다(포인트 충전은 옮기지 않는다). \
                     Authorization 값이 서버 설정과 다르면 401, 충전이 설정되지 않은 서버면 404.""")
     @SecurityRequirements // RevenueCat이 대시보드에 넣은 Authorization 값으로 부른다
     @PostMapping(value = "/purchases/revenuecat/webhook", version = "1")
