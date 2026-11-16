@@ -81,6 +81,11 @@ app:
   points:
     ad:
       units: ca-app-pub-4724067415486202/5967651624,ca-app-pub-4724067415486202/3528677194
+    # 충전 알림(RevenueCat 웹훅, BY-1303). 운영 RevenueCat 프로젝트의 웹훅에 넣은 Authorization 값과 같은 값을 ECS 태스크 정의가
+    # SSM revenuecat/webhook-auth에서 주입한다. 비어 있거나 SSM의 자리표시 값(CHANGE_ME) 그대로면 충전이 꺼진다(알림 경로 404).
+    # 샌드박스 결제는 운영에서 받지 않는다 — accept-sandbox를 넣지 않는다
+    charge:
+      revenuecat-webhook-auth: ${REVENUECAT_WEBHOOK_AUTH:}
   # 데모 데이터 시딩(app.seed.enabled)은 운영에서 절대 켜지 않는다 — 고정 deviceId가 곧 자격증명이다
   # 서버 FCM 발송 (BY-1029, ADR-0035). ECS 태스크 정의가 SSM fcm/service-account-json(focusmakers-prod 서비스 계정)을 주입한다.
   # 값이 없으면 발송만 꺼진 채 기동한다. 테스트 발송(app.push.test-send.enabled)은 운영에서 켜지 않는다

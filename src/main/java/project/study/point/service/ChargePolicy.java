@@ -12,13 +12,17 @@ import org.springframework.stereotype.Component;
 @Component
 public class ChargePolicy {
 
+    private static final String PLACEHOLDER = "CHANGE_ME";
+
     private final byte[] webhookAuth;
     private final boolean acceptSandbox;
 
     public ChargePolicy(
             @Value("${app.points.charge.revenuecat-webhook-auth:}") String webhookAuth,
             @Value("${app.points.charge.accept-sandbox:false}") boolean acceptSandbox) {
-        this.webhookAuth = webhookAuth.trim().getBytes(StandardCharsets.UTF_8);
+        // infra가 SSM 값을 처음 만들 때 넣는 자리표시 값이다. 누구나 아는 값이라 설정하지 않은 것으로 본다
+        String trimmed = webhookAuth.trim();
+        this.webhookAuth = (PLACEHOLDER.equals(trimmed) ? "" : trimmed).getBytes(StandardCharsets.UTF_8);
         this.acceptSandbox = acceptSandbox;
     }
 
