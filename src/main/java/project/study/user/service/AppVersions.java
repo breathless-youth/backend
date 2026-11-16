@@ -28,7 +28,7 @@ final class AppVersions {
         if (version == null) {
             return null;
         }
-        String[] parts = version.trim().split("\\.");
+        String[] parts = version.trim().split("\\.", -1);
         if (parts.length == 0 || parts.length > MAX_PARTS) {
             return null;
         }
