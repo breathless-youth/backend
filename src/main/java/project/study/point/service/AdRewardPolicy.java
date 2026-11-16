@@ -19,7 +19,7 @@ public class AdRewardPolicy {
 
     public AdRewardPolicy(
             @Value("${app.points.ad.units:}") List<String> units,
-            @Value("${app.points.ad.points:10}") int points,
+            @Value("${app.points.ad.points:20}") int points,
             @Value("${app.points.ad.daily-limit:3}") int dailyLimit) {
         this.units = units.stream()
                 .map(AdRewardPolicy::unitNumber)

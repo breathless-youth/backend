@@ -154,6 +154,49 @@ public class PointRepository {
                 .orElse(null);
     }
 
+    /** 그날 측정한 공부 조각 하나. */
+    public record MeasuredPiece(Instant startedAt, Instant endedAt, int focusSec) {}
+
+    public record Interval(Instant start, Instant end) {}
+
+    /** 그날 측정한(직접 입력 제외) 조각을 시간순으로. */
+    public List<MeasuredPiece> measuredPiecesOn(long userId, LocalDate date) {
+        return jdbc.sql("""
+                        SELECT started_at, ended_at, focus_sec FROM study_session
+                        WHERE user_id = :u AND stat_date = :d AND source = 'MEASURED' AND ended_at IS NOT NULL
+                        ORDER BY started_at""")
+                .param("u", userId)
+                .param("d", date)
+                .query((rs, n) -> new MeasuredPiece(
+                        rs.getTimestamp("started_at").toInstant(),
+                        rs.getTimestamp("ended_at").toInstant(),
+                        rs.getInt("focus_sec")))
+                .list();
+    }
+
+    /**
+     * [from, to) 사이에 내가 있던 방에 다른 사람도 자리를 갖고 있던 구간들(겹칠 수 있다). 아직 방에 있는 자리는 now까지로 본다. 입장이 확정된
+     * (joined_at이 있는) 자리만 센다.
+     */
+    public List<Interval> togetherIntervals(long userId, Instant from, Instant to, Instant now) {
+        return jdbc.sql("""
+                        SELECT GREATEST(mine.joined_at, other.joined_at) AS s,
+                               LEAST(COALESCE(mine.left_at, :now), COALESCE(other.left_at, :now)) AS e
+                        FROM room_participations mine
+                        JOIN room_participations other
+                          ON other.room_id = mine.room_id AND other.user_id <> mine.user_id
+                        WHERE mine.user_id = :u
+                          AND mine.joined_at < :to AND COALESCE(mine.left_at, :now) > :from
+                          AND other.joined_at < :to AND COALESCE(other.left_at, :now) > :from""")
+                .param("u", userId)
+                .param("from", Timestamp.from(from))
+                .param("to", Timestamp.from(to))
+                .param("now", Timestamp.from(now))
+                .query((rs, n) -> new Interval(
+                        rs.getTimestamp("s").toInstant(), rs.getTimestamp("e").toInstant()))
+                .list();
+    }
+
     public long measuredFocusSecOn(long userId, LocalDate date) {
         return jdbc.sql("""
                         SELECT COALESCE(SUM(focus_sec), 0) FROM study_session

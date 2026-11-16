@@ -346,6 +346,7 @@ Table room_participations {
     (disconnected_at) [name: 'rp_disconnected_idx', note: 'WHERE left_at IS NULL AND disconnected_at IS NOT NULL']
     (task_id) [name: 'rp_task_idx', note: 'WHERE task_id IS NOT NULL']
     (user_id, joined_at) [name: 'rp_user_joined_idx']
+    (room_id, joined_at) [name: 'rp_room_joined_idx', note: '같이 공부한 시간 조회 (BY-1298)']
   }
 }
 
