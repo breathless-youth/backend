@@ -133,9 +133,9 @@ class ShopApiTest {
     void 가진_소품만_끼고_벗을_수_있다() {
         long user = fixture.member();
         fixture.givePoints(user, 1000);
-        long crown = fixture.pricedItem("BOOK", 100);
-        long notOwned = fixture.pricedItem("BOOK", 100);
-        String uri = "/api/decorations/mascots/BOOK/accessories";
+        long crown = fixture.pricedItem("STOPWATCH", 100);
+        long notOwned = fixture.pricedItem("STOPWATCH", 100);
+        String uri = "/api/decorations/mascots/STOPWATCH/accessories";
 
         assertCode(
                 put(user, uri, "{\"slot\":\"HEAD\",\"itemId\":" + notOwned + "}"),
@@ -145,7 +145,7 @@ class ShopApiTest {
         assertThat(purchase(user, crown)).hasStatusOk();
         assertThat(put(
                         user,
-                        "/api/decorations/mascots/PLANNER/accessories",
+                        "/api/decorations/mascots/PENCIL/accessories",
                         "{\"slot\":\"HEAD\",\"itemId\":" + crown + "}"))
                 .hasStatus(HttpStatus.BAD_REQUEST);
         assertThat(put(user, uri, "{\"slot\":\"FACE\",\"itemId\":" + crown + "}"))
@@ -153,7 +153,7 @@ class ShopApiTest {
         assertThat(put(user, uri, "{\"slot\":\"HEAD\",\"itemId\":" + crown + "}"))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.selectedMascotCode", v -> assertThat(v).isEqualTo("BOOK"))
+                .hasPathSatisfying("$.selectedMascotCode", v -> assertThat(v).isEqualTo("STOPWATCH"))
                 .hasPathSatisfying(
                         "$.accessories[0].item.itemId", v -> assertThat(v).isEqualTo((int) crown));
         assertThat(inUse(user, crown)).isTrue();
@@ -169,7 +169,7 @@ class ShopApiTest {
     void 새_칸의_소품을_끼면_뒤_조각_그림이_함께_오고_상품에는_등급이_실린다() {
         long user = fixture.member();
         fixture.givePoints(user, 1000);
-        long wings = fixture.pricedItem("BOOK", 100);
+        long wings = fixture.pricedItem("STOPWATCH", 100);
         jdbc.sql("UPDATE shop_item SET slot = 'UNDERFOOT', back_image_url = 'https://cdn.test/wings-back.png',"
                         + " grade = 2 WHERE id = :id")
                 .param("id", wings)
@@ -178,7 +178,7 @@ class ShopApiTest {
 
         assertThat(put(
                         user,
-                        "/api/decorations/mascots/BOOK/accessories",
+                        "/api/decorations/mascots/STOPWATCH/accessories",
                         "{\"slot\":\"UNDERFOOT\",\"itemId\":" + wings + "}"))
                 .hasStatusOk()
                 .bodyJson()
@@ -195,8 +195,8 @@ class ShopApiTest {
     void 세트를_끼면_그_마스코트의_낱개_소품이_모두_풀리고_낱개를_끼면_세트가_풀린다() {
         long user = fixture.member();
         fixture.givePoints(user, 1000);
-        long hat = fixture.pricedItem("BOOK", 100);
-        long otherMascotHat = fixture.pricedItem("PLANNER", 100);
+        long hat = fixture.pricedItem("STOPWATCH", 100);
+        long otherMascotHat = fixture.pricedItem("PENCIL", 100);
         long set = effectSet();
         for (long owned : new long[] {set, otherMascotHat}) {
             jdbc.sql("INSERT INTO user_item (user_id, item_id) VALUES (:u, :i)")
@@ -205,11 +205,11 @@ class ShopApiTest {
                     .update();
         }
         assertThat(purchase(user, hat)).hasStatusOk();
-        String uri = "/api/decorations/mascots/BOOK/accessories";
+        String uri = "/api/decorations/mascots/STOPWATCH/accessories";
         put(user, uri, "{\"slot\":\"HEAD\",\"itemId\":" + hat + "}");
         // 다른 마스코트의 소품은 건드리지 않는다
         jdbc.sql("INSERT INTO user_mascot_accessory (user_id, mascot_code, slot, item_id)"
-                        + " VALUES (:u, 'PLANNER', 'HEAD', :i)")
+                        + " VALUES (:u, 'PENCIL', 'HEAD', :i)")
                 .param("u", user)
                 .param("i", otherMascotHat)
                 .update();
@@ -289,12 +289,12 @@ class ShopApiTest {
                         "$.timerBackground.itemId", v -> assertThat(v).isEqualTo((int) reward));
     }
 
-    /** 효과 그림과 움직임 정보가 있는 BOOK의 세트 상품. */
+    /** 효과 그림과 움직임 정보가 있는 STOPWATCH의 세트 상품. */
     private long effectSet() {
         return jdbc.sql("""
                         INSERT INTO shop_item (code, category, mascot_code, slot, name, store_product_id,
                             effect_image_url, effect_pieces, effect_type)
-                        VALUES (:code, 'MASCOT_ACCESSORY', 'BOOK', 'SET', '세트', :p, 'https://cdn.test/set-effect.png',
+                        VALUES (:code, 'MASCOT_ACCESSORY', 'STOPWATCH', 'SET', '세트', :p, 'https://cdn.test/set-effect.png',
                             CAST('[{"x":0.1,"y":0.2,"width":0.3,"height":0.4,"motion":"float"}]' AS jsonb), 'aurora')
                         RETURNING id""")
                 .param("code", "SET_" + java.util.UUID.randomUUID())
@@ -324,7 +324,7 @@ class ShopApiTest {
         assertThat(get(guest, "/api/decorations"))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.selectedMascotCode", v -> assertThat(v).isEqualTo("BOOK"));
+                .hasPathSatisfying("$.selectedMascotCode", v -> assertThat(v).isEqualTo("STOPWATCH"));
         assertThat(get(guest, "/api/points/history"))
                 .hasStatusOk()
                 .bodyJson()
