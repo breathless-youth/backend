@@ -13,7 +13,7 @@ public record PointHistoryItem(
 
         @Schema(
                 description =
-                        "사유. STUDY(공부)·PURCHASE(상점 구매)·MASCOT_PURCHASE(마스코트 구매)·ATTENDANCE(출석)·DAILY_GOAL(하루 목표)·MISSION(시작 미션)·MEDAL(랭킹 메달)·AD(광고)"
+                        "사유. STUDY(공부)·PURCHASE(상점 구매)·MASCOT_PURCHASE(마스코트 구매)·ATTENDANCE(출석)·DAILY_GOAL(하루 목표)·MISSION(시작 미션)·GRANT(운영 지급)·MEDAL(랭킹 메달)·AD(광고)"
                                 + "·CHARGE(충전)·REFUND(환불로 되돌림)",
                 example = "PURCHASE")
         PointReason reason,

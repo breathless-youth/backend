@@ -160,5 +160,14 @@ public enum ErrorCode {
      * 소셜 프로바이더 검증 서버가 응답하지 않거나 5xx를 줬다 (503) — 토큰 문제가 아니므로 클라이언트는 같은 소셜 로그인을 잠시 뒤 다시 시도한다.
      * 400 {@code INVALID_SOCIAL_TOKEN}과 갈라 두는 것은 장애 때 사용자를 소셜 로그인 처음으로 돌려보내지 않기 위해서다
      */
-    SOCIAL_PROVIDER_UNAVAILABLE
+    SOCIAL_PROVIDER_UNAVAILABLE,
+
+    /** 심사용 로그인이 꺼져 있다 (403) — 설정이 없거나 앱 버전이 출시된 버전 이하다 (BY-1300) */
+    REVIEW_LOGIN_DISABLED,
+
+    /** 심사용 로그인의 아이디나 비밀번호가 틀렸다 (400). 401이 아닌 것은 앱이 401을 토큰 재발급으로 받기 때문이다 */
+    INVALID_REVIEW_CREDENTIALS,
+
+    /** 짧은 시간에 너무 많이 시도했다 (429) */
+    TOO_MANY_REQUESTS
 }

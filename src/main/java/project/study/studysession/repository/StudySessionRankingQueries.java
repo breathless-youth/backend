@@ -35,7 +35,8 @@ import project.study.studysession.entity.TimeSlot;
 @RequiredArgsConstructor
 public class StudySessionRankingQueries {
 
-    private static final String RANKED_USER = "u.status IS DISTINCT FROM 'DELETE' AND u.time_zone = 'Asia/Seoul'";
+    private static final String RANKED_USER =
+            "u.status IS DISTINCT FROM 'DELETE' AND u.time_zone = 'Asia/Seoul' AND u.provider <> 'REVIEW'";
 
     private static final String SEOUL_SESSION = "s.time_zone = 'Asia/Seoul'";
 

@@ -55,6 +55,13 @@ public class ShopRepository {
     }
 
     /** 스토어 결제로 사는 상품. 내린 상품도 찾는다 — 내리기 직전에 한 결제의 알림이 늦게 올 수 있다. */
+    public Optional<Long> findIdByCode(String code) {
+        return jdbc.sql("SELECT id FROM shop_item WHERE code = :code")
+                .param("code", code)
+                .query(Long.class)
+                .optional();
+    }
+
     public Optional<ShopItem> findByStoreProductId(String storeProductId) {
         return jdbc.sql("SELECT " + ITEM_COLUMNS + " FROM shop_item WHERE store_product_id = :p")
                 .param("p", storeProductId)
