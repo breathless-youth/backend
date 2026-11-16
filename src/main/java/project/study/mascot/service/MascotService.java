@@ -53,7 +53,7 @@ public class MascotService {
                             m.priced() ? 0 : m.unlockFocusSec(),
                             m.price(),
                             unlocked,
-                            m.priced() ? 0 : Math.max(0, m.unlockFocusSec() - total),
+                            m.priced() || unlocked ? 0 : Math.max(0, m.unlockFocusSec() - total),
                             m.code().equals(selected),
                             celebrates(m) && unlocked && !seen.contains(m.code()));
                 })
@@ -105,14 +105,23 @@ public class MascotService {
         return list(userId);
     }
 
+    /**
+     * 모든 마스코트를 보유로 넣고 축하 화면은 본 것으로 둔다. 스토어 심사 계정을 만들 때 쓴다 (BY-1310) — 잠긴 마스코트의 세트는 상점에
+     * 보이지 않아, 심사자가 모든 세트를 찾으려면 다 열려 있어야 한다.
+     */
+    @Transactional
+    public void grantAll(long userId) {
+        locks.lockUser(userId);
+        List<String> codes = repository.findAll().stream().map(Mascot::code).toList();
+        codes.forEach(code -> repository.insertOwnedIfAbsent(userId, code));
+        repository.markSeen(userId, codes);
+    }
+
     /** 없는 마스코트면 404 {@code MASCOT_NOT_FOUND}, 잠겨 있으면(사지 않은 포인트 마스코트 포함) 409 {@code MASCOT_LOCKED}. */
     @Transactional(readOnly = true)
     public void requireUnlocked(long userId, String code) {
         Mascot mascot = find(code);
-        boolean unlocked = mascot.priced()
-                ? repository.ownedCodes(userId).contains(code)
-                : repository.totalFocusSec(userId) >= mascot.unlockFocusSec();
-        if (!unlocked) {
+        if (!unlocked(mascot, repository.totalFocusSec(userId), repository.ownedCodes(userId))) {
             throw new ConflictException(ErrorCode.MASCOT_LOCKED, "아직 열리지 않은 마스코트입니다");
         }
     }
@@ -121,8 +130,9 @@ public class MascotService {
     @Transactional(readOnly = true)
     public Optional<NextMascot> next(long userId) {
         long total = repository.totalFocusSec(userId);
+        Set<String> owned = repository.ownedCodes(userId);
         return repository.findAll().stream()
-                .filter(m -> !m.priced() && total < m.unlockFocusSec())
+                .filter(m -> !m.priced() && !owned.contains(m.code()) && total < m.unlockFocusSec())
                 .findFirst()
                 .map(m -> new NextMascot(m.code(), m.unlockFocusSec(), m.unlockFocusSec() - total));
     }
@@ -155,7 +165,8 @@ public class MascotService {
     }
 
     private static boolean unlocked(Mascot mascot, long totalFocusSec, Set<String> owned) {
-        return mascot.priced() ? owned.contains(mascot.code()) : totalFocusSec >= mascot.unlockFocusSec();
+        // 보유한 것은 공부 시간과 상관없이 열려 있다. 공부 시간으로 여는 마스코트를 보유하는 것은 심사 계정뿐이다 (BY-1310)
+        return owned.contains(mascot.code()) || (!mascot.priced() && totalFocusSec >= mascot.unlockFocusSec());
     }
 
     /** 공부해서 연 마스코트만 축하 화면을 띄운다. 처음부터 열려 있거나 직접 산 것은 띄우지 않는다. */

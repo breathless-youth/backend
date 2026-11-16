@@ -108,6 +108,36 @@ class ReviewLoginApiTest {
         long user = reviewUser();
         assertThat(balanceOf(user)).isEqualTo(5000);
         assertThat(ownedCodes(user)).isEqualTo(1);
+        // 세트를 모두 찾을 수 있게 마스코트 7종이 다 열려 있고, 열림 축하는 뜨지 않는다
+        assertThat(mvc.get()
+                        .uri("/api/mascots")
+                        .header(ApiVersionConfig.HEADER, "1")
+                        .with(asUser(user)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying(
+                        "$.mascots[*].unlocked",
+                        v -> assertThat(v)
+                                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                                .hasSize(7)
+                                .containsOnly(true))
+                .hasPathSatisfying(
+                        "$.mascots[*].remainingFocusSec",
+                        v -> assertThat(v)
+                                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                                .containsOnly(0))
+                .hasPathSatisfying(
+                        "$.mascots[*].newlyUnlocked",
+                        v -> assertThat(v)
+                                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                                .containsOnly(false));
+        assertThat(mvc.put()
+                        .uri("/api/mascots/selected")
+                        .header(ApiVersionConfig.HEADER, "1")
+                        .with(asUser(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"CAMCORDER\"}"))
+                .hasStatusOk();
         // 회원이라 받기도 된다
         assertThat(mvc.post()
                         .uri("/api/points/rewards/attendance/claim")

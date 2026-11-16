@@ -4,6 +4,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import project.study.mascot.service.MascotService;
 import project.study.point.dto.PointReason;
 import project.study.point.service.PointService;
 import project.study.shop.service.ShopGrantService;
@@ -13,7 +14,7 @@ import project.study.user.repository.UserRepository;
 
 /**
  * 심사 계정 (BY-1300). 계정은 하나이고 없으면 만든다 — 심사자가 계정 삭제를 시험한 뒤 다시 로그인하면 새로 만들어 처음 상태(포인트와 상품
- * 몇 개)로 채운다. 심사자 여럿이 동시에 쓸 수 있어 로그인할 때 다른 기기의 토큰을 지우지 않는다.
+ * 몇 개, 모든 마스코트 열림)로 채운다. 심사자 여럿이 동시에 쓸 수 있어 로그인할 때 다른 기기의 토큰을 지우지 않는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,6 +30,7 @@ public class ReviewAccountService {
     private final TokenIssuer tokenIssuer;
     private final PointService pointService;
     private final ShopGrantService shopGrants;
+    private final MascotService mascots;
 
     @Transactional
     public AuthService.TokenPair signIn(Settings settings) {
@@ -57,6 +59,7 @@ public class ReviewAccountService {
                 pointService.earn(userId, PointReason.GRANT, INITIAL_GRANT, settings.initialPoints(), null, null);
             }
             shopGrants.grantByCodes(userId, settings.itemCodes());
+            mascots.grantAll(userId);
         }
         return tokenIssuer.issue(userId);
     }
