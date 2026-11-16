@@ -4,7 +4,7 @@
 
 Table users {
   id bigint [primary key, increment]
-  provider varchar [not null]          // GOOGLE, KAKAO, APPLE, DEVICE(익명 기기, ADR-0004)
+  provider varchar [not null]          // GOOGLE, KAKAO, APPLE, DEVICE(익명 기기, ADR-0004), REVIEW(스토어 심사 계정, ADR-0048)
   provider_user_id varchar [not null]
   purchase_id uuid [not null, unique, note: 'RevenueCat 사용자 ID로 쓰는 결제용 ID (BY-1299). 가입 때 무작위로 발급']
   email varchar                  // 소셜 로그인 시 수집 (미제공 시 null)
@@ -354,6 +354,27 @@ Table live_task {
   task_id varchar [primary key, note: 'ECS 태스크 ID(로그 스트림과 일치), 없으면 UUID']
   heartbeat_at timestamptz [not null]
   reclaimed_at timestamptz [note: 'NOT NULL = 다른 태스크가 죽었다고 보고 참가자를 회수함(펜싱 신호)']
+}
+
+// 스토어 심사용 로그인 (ADR-0048, BY-1300)
+Table review_login {
+  id smallint [primary key, note: '늘 1. 행이 없으면 꺼져 있다']
+  login_id varchar(64) [not null]
+  password_hash varchar(100) [not null, note: 'BCrypt']
+  released_version varchar(32) [note: '스토어에 출시된 앱 버전. 앱 버전이 이보다 높을 때만 켜진다. NULL이면 꺼짐']
+  initial_points integer [not null, default: 0]
+  initial_item_codes text [not null, note: '처음 상태로 줄 상점 상품 코드(쉼표)']
+  updated_at timestamptz [not null]
+}
+
+Table review_login_failure {
+  id bigserial [primary key]
+  client varchar(64) [not null, note: '요청이 온 IP']
+  failed_at timestamptz [not null]
+
+  indexes {
+    (failed_at) [name: 'idx_review_login_failure_at']
+  }
 }
 
 // 포인트·꾸미기 상점 (ADR-0047, BY-1241)

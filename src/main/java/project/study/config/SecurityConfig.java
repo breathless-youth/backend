@@ -58,6 +58,12 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/refresh")
                         .permitAll()
+                        // 스토어 심사용 로그인 (BY-1300, ADR-0048) — 로그인 전이라 토큰이 없다. 비밀번호 해시 비교와 IP별 시도
+                        // 제한으로 막고, 설정이 없거나 앱 버전이 출시 버전 이하면 거절한다 (ReviewLoginService)
+                        .requestMatchers(HttpMethod.POST, "/api/auth/review-login")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/review-login/status")
+                        .permitAll()
                         // 안드로이드 애플 웹 로그인 콜백 — 애플이 결과를 form_post로 보내 인증 헤더가 없다.
                         // 고정된 앱 딥링크로 넘기기만 하고 로그인 처리는 하지 않는다 (AppleCallbackController)
                         .requestMatchers(HttpMethod.POST, "/api/auth/apple/callback")

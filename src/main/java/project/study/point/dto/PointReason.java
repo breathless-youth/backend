@@ -12,6 +12,8 @@ public enum PointReason {
     MASCOT_PURCHASE,
     /** 시작 미션 보상. label은 "미션 버전/단계"다 (예: home-v3/1) */
     MISSION,
+    /** 운영이 그냥 준 포인트. 심사 계정의 처음 상태에 쓴다 (BY-1300) */
+    GRANT,
     /** 출석 */
     ATTENDANCE,
     /** 하루 목표 달성 */
