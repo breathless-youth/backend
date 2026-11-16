@@ -20,6 +20,7 @@
 
 - 유료 포인트는 무료 포인트를 다 쓴 뒤에, 먼저 충전한 건부터 쓴다.
 - 다른 건이 스토어에서 환불되며 생긴 빚을 갚느라 쓰지 않은 건의 `paid_remaining`이 줄 수 있다. 빚은 무료 포인트부터 갚는다.
+  이렇게 줄어든 건도 "일부라도 쓴 건"으로 보고 7일 환불을 하지 않는다.
 - 가격과 통화는 DB에 없다. 실제 결제 금액은 스토어·RevenueCat에서 본다. 덤은 환불하지 않는다.
 - `purchased_at`이 비어 있는 옛 행은 `created_at`(알림을 받은 때)을 쓴다.
 
@@ -36,15 +37,15 @@
 
 ```sql
 SELECT store, transaction_id, store_product_id, points, paid_remaining,
-       COALESCE(purchased_at, created_at) AS purchased_at
+       COALESCE(purchased_at, created_at) AS purchased_at, paid_remaining = points AS refundable
 FROM point_purchase
 WHERE user_id = :회원번호 AND item_id IS NULL AND status = 'GRANTED' AND manual_refunded_at IS NULL
   AND COALESCE(purchased_at, created_at) > CAST(:요청시각 AS timestamptz) - interval '7 days'
 ORDER BY 6;
 ```
 
-`paid_remaining = points`면 그 건은 하나도 쓰지 않았다. 일부만 썼으면(`0 < paid_remaining < points`) 스토어 환불은 건 전체를
-되돌리므로(아래 "환불을 실행하면") 어떻게 할지 정해 처리한다.
+**하나도 쓰지 않은 건(`paid_remaining = points`)만 환불한다**(2026-11-16 결정). 일부라도 쓴 건(`paid_remaining < points`)은
+환불하지 않는다 — 스토어 환불은 건 전체를 되돌리므로, 일부 쓴 건을 환불하면 이미 쓴 포인트까지 거두게 된다. 위 결과의 `refundable`이 true인 건만 환불한다.
 
 ## 입기 전인 세트 (결제 뒤 7일 안)
 
