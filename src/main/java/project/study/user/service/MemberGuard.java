@@ -23,6 +23,15 @@ public class MemberGuard {
                 .isPresent();
     }
 
+    /** 스토어 심사 계정인지 (ADR-0048). */
+    @Transactional(readOnly = true)
+    public boolean isReviewAccount(long userId) {
+        return userRepository
+                .findProviderById(userId)
+                .filter(provider -> provider == Provider.REVIEW)
+                .isPresent();
+    }
+
     /** 회원이 아니면 403 {@code MEMBER_ONLY}. */
     public void requireMember(Long userId) {
         if (userId == null || !isMember(userId)) {

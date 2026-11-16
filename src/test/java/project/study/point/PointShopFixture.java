@@ -17,6 +17,11 @@ public class PointShopFixture {
         return user("GOOGLE");
     }
 
+    /** 스토어 심사 계정. */
+    public long reviewer() {
+        return user("REVIEW");
+    }
+
     /** 비회원. */
     public long guest() {
         return user("DEVICE");
