@@ -37,6 +37,10 @@ UPDATE review_login SET released_version = '26.47.0', updated_at = now() WHERE i
 UPDATE review_login SET released_version = NULL WHERE id = 1;
 ```
 
+## 처음 상태
+
+포인트(`initial_points`), 상품(`initial_item_codes`), 그리고 마스코트 7종 전부의 보유다. 마스코트는 설정 없이 늘 전부 열린다.
+
 ## 처음 상태를 바꿨을 때
 
 이미 만들어진 심사 계정에는 반영되지 않는다. 앱에서 심사 계정으로 로그인해 계정을 삭제한 뒤 다시 로그인하면 새 값으로 만들어진다.

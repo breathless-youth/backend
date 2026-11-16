@@ -85,6 +85,13 @@ public class MascotRepository {
                 .update();
     }
 
+    public void insertOwnedIfAbsent(long userId, String code) {
+        jdbc.sql("INSERT INTO user_mascot_owned (user_id, mascot_code) VALUES (:u, :code) ON CONFLICT DO NOTHING")
+                .param("u", userId)
+                .param("code", code)
+                .update();
+    }
+
     public Set<String> seenCodes(long userId) {
         return jdbc.sql("SELECT mascot_code FROM user_mascot_seen WHERE user_id = :u")
                 .param("u", userId)
