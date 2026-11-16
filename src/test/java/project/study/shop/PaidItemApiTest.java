@@ -160,6 +160,18 @@ class PaidItemApiTest {
                 .isZero();
     }
 
+    @Test
+    void 회원번호를_사용자_ID로_보낸_알림은_주지_않는다() {
+        long user = fixture.member();
+        String product = productId();
+        long item = paidAccessory(product);
+        String body = purchase(user, product, tx()).replace(fixture.purchaseId(user), String.valueOf(user));
+
+        assertThat(webhook(AUTH, body)).hasStatusOk();
+
+        assertThat(item(user, item).owned()).isFalse();
+    }
+
     private long paidAccessory(String storeProductId) {
         return jdbc.sql("""
                         INSERT INTO shop_item (code, category, mascot_code, slot, name, grade, store_product_id)
@@ -185,20 +197,20 @@ class PaidItemApiTest {
         return UUID.randomUUID().toString().replace("-", "");
     }
 
-    private static String purchase(long user, String product, String tx) {
+    private String purchase(long user, String product, String tx) {
         return """
-                {"api_version":"1.0","event":{"type":"NON_RENEWING_PURCHASE","id":"%s","app_user_id":"%d",
+                {"api_version":"1.0","event":{"type":"NON_RENEWING_PURCHASE","id":"%s","app_user_id":"%s",
                  "product_id":"%s","transaction_id":"%s","store":"APP_STORE","environment":"PRODUCTION",
                  "purchased_at_ms":1762900000000,"price":3.0}}
-                """.formatted(UUID.randomUUID(), user, product, tx);
+                """.formatted(UUID.randomUUID(), fixture.purchaseId(user), product, tx);
     }
 
-    private static String refund(long user, String product, String tx) {
+    private String refund(long user, String product, String tx) {
         return """
-                {"api_version":"1.0","event":{"type":"CANCELLATION","id":"%s","app_user_id":"%d",
+                {"api_version":"1.0","event":{"type":"CANCELLATION","id":"%s","app_user_id":"%s",
                  "product_id":"%s","transaction_id":"%s","cancel_reason":"CUSTOMER_SUPPORT","store":"APP_STORE",
                  "environment":"PRODUCTION","price":-3.0}}
-                """.formatted(UUID.randomUUID(), user, product, tx);
+                """.formatted(UUID.randomUUID(), fixture.purchaseId(user), product, tx);
     }
 
     private MvcTestResult webhook(String authorization, String body) {

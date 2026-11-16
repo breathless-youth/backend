@@ -234,9 +234,9 @@ class ChargeApiTest {
         String body = """
                 {"api_version":"1.0","event":{"type":"NON_RENEWING_PURCHASE","id":"%s",
                  "app_user_id":"$RCAnonymousID:abc","original_app_user_id":"$RCAnonymousID:abc",
-                 "aliases":["$RCAnonymousID:abc","%d"],"product_id":"%s","transaction_id":"%s",
+                 "aliases":["$RCAnonymousID:abc","%s"],"product_id":"%s","transaction_id":"%s",
                  "store":"PLAY_STORE","environment":"PRODUCTION","quantity":3,"purchased_at_ms":1762900000000}}
-                """.formatted(UUID.randomUUID(), user, product, tx());
+                """.formatted(UUID.randomUUID(), fixture.purchaseId(user), product, tx());
 
         assertThat(webhook(AUTH, body)).hasStatusOk();
 
@@ -253,14 +253,14 @@ class ChargeApiTest {
         String product = product(100, 0);
         String ambiguous = """
                 {"api_version":"1.0","event":{"type":"NON_RENEWING_PURCHASE","id":"x",
-                 "app_user_id":"$RCAnonymousID:abc","aliases":["%d","%d"],"product_id":"%s",
+                 "app_user_id":"$RCAnonymousID:abc","aliases":["%s","%s"],"product_id":"%s",
                  "transaction_id":"%s","store":"APP_STORE","environment":"PRODUCTION"}}
-                """.formatted(first, second, product, tx());
+                """.formatted(fixture.purchaseId(first), fixture.purchaseId(second), product, tx());
         String loggedIn = """
                 {"api_version":"1.0","event":{"type":"NON_RENEWING_PURCHASE","id":"y",
-                 "app_user_id":"%d","aliases":["%d","%d"],"product_id":"%s",
-                 "transaction_id":"%s","store":"APP_STORE","environment":"PRODUCTION"}}
-                """.formatted(second, first, second, product, tx());
+                 "app_user_id":"%2$s","aliases":["%1$s","%2$s"],"product_id":"%3$s",
+                 "transaction_id":"%4$s","store":"APP_STORE","environment":"PRODUCTION"}}
+                """.formatted(fixture.purchaseId(first), fixture.purchaseId(second), product, tx());
 
         assertThat(webhook(AUTH, ambiguous)).hasStatusOk();
         assertThat(balanceOf(first)).isZero();
@@ -343,21 +343,21 @@ class ChargeApiTest {
         return UUID.randomUUID().toString().replace("-", "");
     }
 
-    private static String purchase(long user, String product, String tx, String environment) {
+    private String purchase(long user, String product, String tx, String environment) {
         return """
-                {"api_version":"1.0","event":{"type":"NON_RENEWING_PURCHASE","id":"%s","app_user_id":"%d",
+                {"api_version":"1.0","event":{"type":"NON_RENEWING_PURCHASE","id":"%s","app_user_id":"%s",
                  "original_app_user_id":"$RCAnonymousID:abc","aliases":["$RCAnonymousID:abc"],
                  "product_id":"%s","transaction_id":"%s","original_transaction_id":"%s","store":"APP_STORE",
                  "environment":"%s","purchased_at_ms":1762900000000,"expiration_at_ms":null,"price":1.5}}
-                """.formatted(UUID.randomUUID(), user, product, tx, tx, environment);
+                """.formatted(UUID.randomUUID(), fixture.purchaseId(user), product, tx, tx, environment);
     }
 
-    private static String refund(long user, String product, String tx) {
+    private String refund(long user, String product, String tx) {
         return """
-                {"api_version":"1.0","event":{"type":"CANCELLATION","id":"%s","app_user_id":"%d",
+                {"api_version":"1.0","event":{"type":"CANCELLATION","id":"%s","app_user_id":"%s",
                  "product_id":"%s","transaction_id":"%s","cancel_reason":"CUSTOMER_SUPPORT","store":"APP_STORE",
                  "environment":"PRODUCTION","price":-1.5}}
-                """.formatted(UUID.randomUUID(), user, product, tx);
+                """.formatted(UUID.randomUUID(), fixture.purchaseId(user), product, tx);
     }
 
     private MvcTestResult webhook(String authorization, String body) {

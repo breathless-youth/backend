@@ -6,6 +6,7 @@ Table users {
   id bigint [primary key, increment]
   provider varchar [not null]          // GOOGLE, KAKAO, APPLE, DEVICE(익명 기기, ADR-0004)
   provider_user_id varchar [not null]
+  purchase_id uuid [not null, unique, note: 'RevenueCat 사용자 ID로 쓰는 결제용 ID (BY-1299). 가입 때 무작위로 발급']
   email varchar                  // 소셜 로그인 시 수집 (미제공 시 null)
   nickname varchar [unique]      // 영문 대소문자 무시 유일(아래 lower 인덱스, ADR-0044)
   nickname_auto boolean [not null, default: false]  // 가입 때 받은 기본 닉네임을 그대로 쓰는 중 (ADR-0044)

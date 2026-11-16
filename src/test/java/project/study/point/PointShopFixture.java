@@ -22,6 +22,14 @@ public class PointShopFixture {
         return user("DEVICE");
     }
 
+    /** RevenueCat 알림의 사용자 ID로 쓰는 결제용 ID. */
+    public String purchaseId(long userId) {
+        return jdbc.sql("SELECT purchase_id FROM users WHERE id = :u")
+                .param("u", userId)
+                .query(String.class)
+                .single();
+    }
+
     private long user(String provider) {
         return jdbc.sql("INSERT INTO users (provider, provider_user_id, nickname) VALUES (:p, :id, :n) RETURNING id")
                 .param("p", provider)

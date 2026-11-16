@@ -67,7 +67,23 @@ class ChargeProductApiTest {
                         .with(asUser(fixture.guest()))
                         .header(ApiVersionConfig.HEADER, "1")
                         .exchange())
-                .hasStatusOk();
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.revenueCatAppUserId", v -> assertThat(v).isNull());
+    }
+
+    @Test
+    void 회원은_충전_상품과_함께_자기_결제용_ID를_받는다() {
+        long user = fixture.member();
+
+        assertThat(mvc.get()
+                        .uri("/api/points/products")
+                        .with(asUser(user))
+                        .header(ApiVersionConfig.HEADER, "1")
+                        .exchange())
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.revenueCatAppUserId", v -> assertThat(v).isEqualTo(fixture.purchaseId(user)));
     }
 
     @Test
