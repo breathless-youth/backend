@@ -172,6 +172,57 @@ class PaidItemApiTest {
         assertThat(item(user, item).owned()).isFalse();
     }
 
+    @Test
+    void 구매_복원_알림이_오면_결제_상품_보유가_받은_회원에게_옮겨지고_포인트_충전은_그대로다() {
+        long giver = fixture.member();
+        long receiver = fixture.member();
+        String product = productId();
+        long item = paidAccessory(product);
+        String tx = tx();
+        webhook(AUTH, purchase(giver, product, tx));
+        fixture.givePoints(giver, 500);
+        String event = transfer(giver, receiver);
+
+        assertThat(webhook(AUTH, event)).hasStatusOk();
+
+        assertThat(item(giver, item).owned()).isFalse();
+        assertThat(item(receiver, item).owned()).isTrue();
+        assertThat(balanceOf(giver)).isEqualTo(500);
+        assertThat(balanceOf(receiver)).isZero();
+        // 되돌아간 뒤 옛 알림이 다시 와도 또 옮기지 않는다
+        webhook(AUTH, transfer(receiver, giver));
+        webhook(AUTH, event);
+        assertThat(item(giver, item).owned()).isTrue();
+        // 옮긴 뒤의 환불은 알림이 옛 주인을 가리켜도 지금 가진 회원에게서 거둔다
+        webhook(AUTH, transfer(giver, receiver));
+        webhook(AUTH, refund(giver, product, tx));
+        assertThat(item(receiver, item).owned()).isFalse();
+    }
+
+    @Test
+    void 받는_쪽이_회원이_아니거나_스토어를_모르면_옮기지_않는다() {
+        long giver = fixture.member();
+        long other = fixture.member();
+        String product = productId();
+        long item = paidAccessory(product);
+        webhook(AUTH, purchase(giver, product, tx()));
+
+        webhook(AUTH, transfer(giver, fixture.guest()));
+        webhook(AUTH, transfer(giver, other).replace(fixture.purchaseId(other), "$RCAnonymousID:abc"));
+        webhook(AUTH, transfer(giver, other).replace(fixture.purchaseId(other), String.valueOf(other)));
+        // 스토어를 모르면 어느 결제인지 좁힐 수 없어 옮기지 않는다
+        webhook(AUTH, transfer(giver, other).replace("\"store\":\"APP_STORE\",", ""));
+
+        assertThat(item(giver, item).owned()).isTrue();
+    }
+
+    private String transfer(long from, long to) {
+        return """
+                {"api_version":"1.0","event":{"type":"TRANSFER","id":"%s","store":"APP_STORE",
+                 "environment":"PRODUCTION","transferred_from":["%s"],"transferred_to":["%s"]}}
+                """.formatted(UUID.randomUUID(), fixture.purchaseId(from), fixture.purchaseId(to));
+    }
+
     private long paidAccessory(String storeProductId) {
         return jdbc.sql("""
                         INSERT INTO shop_item (code, category, mascot_code, slot, name, grade, store_product_id)
