@@ -223,6 +223,20 @@ class PaidItemApiTest {
                 """.formatted(UUID.randomUUID(), fixture.purchaseId(from), fixture.purchaseId(to));
     }
 
+    @Test
+    void 샌드박스_결제는_심사_계정에게만_준다() {
+        long member = fixture.member();
+        long reviewer = fixture.reviewer();
+        String product = productId();
+        long item = paidAccessory(product);
+
+        webhook(AUTH, purchase(member, product, tx()).replace("PRODUCTION", "SANDBOX"));
+        webhook(AUTH, purchase(reviewer, product, tx()).replace("PRODUCTION", "SANDBOX"));
+
+        assertThat(item(member, item).owned()).isFalse();
+        assertThat(item(reviewer, item).owned()).isTrue();
+    }
+
     private long paidAccessory(String storeProductId) {
         return jdbc.sql("""
                         INSERT INTO shop_item (code, category, mascot_code, slot, name, grade, store_product_id)

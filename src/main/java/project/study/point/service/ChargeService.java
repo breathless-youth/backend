@@ -76,7 +76,7 @@ public class ChargeService {
         if (notice == null) {
             return;
         }
-        if (notice.sandbox() && !policy.acceptSandbox()) {
+        if (notice.sandbox() && !sandboxAllowed(memberOf(event))) {
             log.warn("샌드박스 결제 알림은 받지 않습니다: transaction_id={}", notice.transactionId());
             return;
         }
@@ -252,19 +252,24 @@ public class ChargeService {
         }
     }
 
+    /**
+     * 샌드박스 결제를 받는지. 샌드박스는 실제 돈이 나가지 않아 운영에서는 받지 않는데, 스토어 심사자의 결제는 샌드박스로 온다. 그래서 운영에서도
+     * 심사 계정(ADR-0048)의 샌드박스 결제만은 받는다.
+     */
+    private boolean sandboxAllowed(Long userId) {
+        return policy.acceptSandbox() || (userId != null && members.isReviewAccount(userId));
+    }
+
     /** 구매 복원. 알림의 사용자 ID들을 회원으로 바꿔 넘긴다. */
     private void handleTransfer(Map<String, Object> event) {
         boolean sandbox = !"PRODUCTION".equals(text(event, "environment"));
         String eventId = text(event, "id");
-        if (invalidId(eventId) || (sandbox && !policy.acceptSandbox())) {
+        Set<Long> receivers = membersIn(event.get("transferred_to"));
+        boolean allowed = !sandbox || receivers.stream().allMatch(this::sandboxAllowed);
+        if (invalidId(eventId) || !allowed) {
             return;
         }
-        transfers.transfer(
-                eventId,
-                membersIn(event.get("transferred_from")),
-                membersIn(event.get("transferred_to")),
-                text(event, "store"),
-                sandbox);
+        transfers.transfer(eventId, membersIn(event.get("transferred_from")), receivers, text(event, "store"), sandbox);
     }
 
     private Set<Long> membersIn(Object appUserIds) {
