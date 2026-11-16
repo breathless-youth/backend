@@ -31,14 +31,12 @@ public class PointService {
 
     @Transactional(readOnly = true)
     public PointBalanceResponse balance(Long userId) {
-        members.requireMember(userId);
         PointAccount account = repository.account(userId);
         return new PointBalanceResponse(account.balance(), account.paidBalance());
     }
 
     @Transactional(readOnly = true)
     public PointHistoryResponse history(Long userId, PointHistoryType type, Long cursor, int size, String language) {
-        members.requireMember(userId);
         if (size < 1 || size > MAX_PAGE_SIZE) {
             throw new BadRequestException("size는 1 이상 " + MAX_PAGE_SIZE + " 이하여야 합니다");
         }

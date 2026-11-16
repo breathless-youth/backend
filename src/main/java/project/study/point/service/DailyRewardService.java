@@ -40,7 +40,6 @@ public class DailyRewardService {
 
     @Transactional(readOnly = true)
     public EarnOverviewResponse overview(Long userId) {
-        members.requireMember(userId);
         LocalDate today = today(userId);
         long focusSec = repository.measuredFocusSecOn(userId, today);
         int recognized = studyPolicy.counts(today) ? studyPolicy.recognizedFocusSec(focusSec) : 0;

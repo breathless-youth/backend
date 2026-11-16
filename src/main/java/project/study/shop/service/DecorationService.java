@@ -36,7 +36,6 @@ public class DecorationService {
 
     @Transactional(readOnly = true)
     public DecorationResponse get(Long userId) {
-        members.requireMember(userId);
         List<EquippedAccessory> accessories = repository.accessories(userId).stream()
                 .map(row -> new EquippedAccessory(row.mascotCode(), row.slot(), equipped(row.itemId())))
                 .toList();
