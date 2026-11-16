@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
+import project.study.group.service.GroupApplicationService;
 import project.study.group.service.GroupService;
 
 @Configuration(proxyBeanMethods = false)
@@ -121,7 +122,8 @@ public class TranslationConfig {
     }
 
     @Bean
-    LocalizedGroupReader localizedGroupReader(GroupService groups, GroupTranslationService translations) {
-        return new LocalizedGroupReader(groups, translations);
+    LocalizedGroupReader localizedGroupReader(
+            GroupService groups, GroupApplicationService applications, GroupTranslationService translations) {
+        return new LocalizedGroupReader(groups, applications, translations);
     }
 }

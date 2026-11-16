@@ -6,7 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Objects;
 
-public record TranslationText(long groupId, TranslationField field, String source) {
+public record TranslationText(long subjectId, TranslationField field, String source) {
     public TranslationText {
         Objects.requireNonNull(field);
         Objects.requireNonNull(source);
