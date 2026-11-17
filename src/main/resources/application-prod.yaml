@@ -90,7 +90,7 @@ app:
     launch:
       version: "26.47.0"
     # 출시 전에도 포인트를 받고 샌드박스(시험) 결제를 지급받는 팀 테스트 계정 회원번호 (BY-1318). 심사 계정은 따로 적지 않아도 된다
-    testers: 324
+    testers: 324,14
     ad:
       units: ca-app-pub-4724067415486202/5967651624,ca-app-pub-4724067415486202/3528677194
     # 충전 알림(RevenueCat 웹훅, BY-1303). 운영 RevenueCat 프로젝트의 웹훅에 넣은 Authorization 값과 같은 값을 ECS 태스크 정의가
