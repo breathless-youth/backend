@@ -13,6 +13,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import project.study.studysession.dto.SubjectLookup;
@@ -143,10 +145,11 @@ class StudySessionMidnightSplitTest {
         assertThat(sessions.get(1).getFocusSec()).isEqualTo(3600);
     }
 
-    @Test
-    void 자정_분할_시_SLEEP은_PAUSE가_아니라_PHONE과_같은_가중치로_배분된다() {
-        // 졸음은 순공 타이머만 멈춘다 — 총공부시간 배분엔 영향이 없어야 한다 (BY-706)
-        List<StatusEvent> events = List.of(event(EventStatus.SLEEP, "2026-07-23T14:00:00Z", "2026-07-23T14:10:00Z"));
+    @ParameterizedTest
+    @EnumSource(names = {"SLEEP", "SCREEN"})
+    void 자정_분할_시_순공_정지_상태는_PAUSE가_아니라_PHONE과_같은_가중치로_배분된다(EventStatus status) {
+        // 졸음·화면 응시는 순공 타이머만 멈춘다 — 총공부시간 배분엔 영향이 없어야 한다
+        List<StatusEvent> events = List.of(event(status, "2026-07-23T14:00:00Z", "2026-07-23T14:10:00Z"));
 
         List<StudySession> sessions = service.validateAndBuildSessions(1L, CROSS_START, CROSS_END, 7200, 6600, events);
 
