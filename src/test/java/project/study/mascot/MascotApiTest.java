@@ -47,19 +47,19 @@ class MascotApiTest {
                 .hasPathSatisfying("$.mascots.length()", v -> assertThat(v).isEqualTo(7))
                 .extractingPath("$.mascots[*].code")
                 .asArray()
-                .containsExactly("STOPWATCH", "PENCIL", "PLANNER", "LOCK", "BOOK", "LAMP", "CAMCORDER");
+                .containsExactly("STOPWATCH", "PENCIL", "BOOK", "LOCK", "PLANNER", "LAMP", "CAMCORDER");
         assertThat(list(user))
                 .bodyJson()
                 .hasPathSatisfying("$.mascots[6].unlockType", v -> assertThat(v).isEqualTo("POINTS"))
                 .hasPathSatisfying("$.mascots[6].price", v -> assertThat(v).isEqualTo(1000))
                 .hasPathSatisfying(
-                        "$.mascots[4].unlockFocusSec", v -> assertThat(v).isEqualTo(108000))
+                        "$.mascots[4].unlockFocusSec", v -> assertThat(v).isEqualTo(180000))
                 .hasPathSatisfying("$.mascots[0].unlocked", v -> assertThat(v).isEqualTo(true))
                 .hasPathSatisfying(
                         "$.mascots[0].newlyUnlocked", v -> assertThat(v).isEqualTo(false))
                 .hasPathSatisfying("$.mascots[1].unlocked", v -> assertThat(v).isEqualTo(false))
                 .hasPathSatisfying(
-                        "$.mascots[1].remainingFocusSec", v -> assertThat(v).isEqualTo(7200));
+                        "$.mascots[1].remainingFocusSec", v -> assertThat(v).isEqualTo(3600));
     }
 
     @Test
