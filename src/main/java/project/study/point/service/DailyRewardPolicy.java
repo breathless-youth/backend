@@ -8,7 +8,10 @@ import org.springframework.stereotype.Component;
 import project.study.point.dto.GoalPointTier;
 import project.study.point.dto.MedalPointTable;
 
-/** 출석·하루 목표·메달 포인트 숫자. 기본값은 2026-11-15에 정한 값이고(BY-1298) 프로퍼티로 바꾼다. 메달은 1·2·3위 순서로 적는다. */
+/**
+ * 출석·하루 목표·메달 포인트 숫자. 기본값은 2026-11-15에 정한 값이고(BY-1298) 프로퍼티로 바꾼다. 월간 메달만 2026-11-18에 150·100·50으로
+ * 올렸다. 메달은 1·2·3위 순서로 적는다.
+ */
 @Component
 public class DailyRewardPolicy {
 
@@ -25,7 +28,7 @@ public class DailyRewardPolicy {
             @Value("${app.points.daily-goal.tier-points:20,5}") List<Integer> goalTierPoints,
             @Value("${app.points.medal.daily:5,3,1}") List<Integer> dailyMedal,
             @Value("${app.points.medal.weekly:10,5,3}") List<Integer> weeklyMedal,
-            @Value("${app.points.medal.monthly:50,30,10}") List<Integer> monthlyMedal,
+            @Value("${app.points.medal.monthly:150,100,50}") List<Integer> monthlyMedal,
             @Value("${app.points.medal.starts-on:2000-01-01}") LocalDate medalStartsOn) {
         this.attendancePoints = attendancePoints;
         this.goalTiers = goalTiers(goalTierEndsSec, goalTierPoints);
