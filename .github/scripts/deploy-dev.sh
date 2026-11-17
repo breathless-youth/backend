@@ -1,23 +1,13 @@
 #!/bin/sh
-# dev 서버 배포 절차 — SSM AWS-RunShellScript가 root·/bin/sh로 실행한다 (BY-670).
-# 손으로 하던 "git pull → docker compose up --build"를 그대로 옮기고, 기동 확인을 더했다.
-# bash 전용 문법은 쓰지 않는다 (dash 호환). 파이프는 진단 출력과 if 조건에만 있어 pipefail이 필요 없다(조건은 마지막 명령의 상태만 본다).
+# dev 앱 서버 배포 — 워크플로가 SSH로 이 스크립트를 stdin에 흘려 `sh -s <이미지>`로 실행한다 (BY-1317).
+# 서버에는 git·소스가 없다. 이미지는 GHCR에서 받고, compose 파일은 워크플로가 미리 복사해 둔다.
 set -eu
 
+IMAGE="${1:?usage: deploy-dev.sh <image-ref>}"
 APP_DIR=/home/ubuntu/app-dev
-HEALTH_URL=http://localhost:8080/actuator/health
-# 빌드 전체 로그는 리포 밖 서버 파일에 남긴다(워킹트리 안에 두면 git status에 계속 뜬다). SSM이 워크플로로 돌려주는
-# 인라인 출력은 stdout 24,000자·stderr 8,000자까지라 빌드 출력을 그대로 흘리면 끝부분(실패 원인)이 잘린다 —
-# 실패 시 파일의 끝 120줄(최대 20,000바이트)만 stdout으로 보여준다
-LOG=/home/ubuntu/deploy-dev.log
-TAIL_LINES=120
-TAIL_BYTES=20000
-LOCK=/var/lock/app-dev-deploy.lock
-# HTTPS 자격 증명이 없으면 git이 프롬프트를 띄우고 SSM 아래에서 영원히 멈춘다 — 즉시 실패시킨다
-export GIT_TERMINAL_PROMPT=0
+HEALTH_URL=http://localhost/actuator/health
+LOCK=/tmp/app-dev-deploy.lock
 
-# 서버 측 직렬화 — 워크플로 폴링이 끝난 뒤에도 원격 명령이 살아 있으면 다음 배포와 겹칠 수 있다.
-# 잠금을 못 잡으면 기다리지 않고 바로 실패한다(재실행은 사람이 결정)
 exec 9>"$LOCK"
 if ! flock -n 9; then
   echo "another deploy is still running (lock $LOCK) — retry later"
@@ -25,66 +15,34 @@ if ! flock -n 9; then
 fi
 
 cd "$APP_DIR"
-
-# 추적 파일의 로컬 수정(스테이징 포함)이 있으면 그 수정본이 빌드되면서 origin SHA로 보고된다 — 거부한다.
-# 추적 대상이 아닌 .env는 영향 없다
-if ! sudo -u ubuntu -H git diff --quiet HEAD; then
-  echo "server has uncommitted changes to tracked files — refusing to deploy"
+if [ ! -f .env ]; then
+  echo ".env missing in $APP_DIR — see docs/runbooks/dev-deploy.md (server prerequisites)"
   exit 1
 fi
 
-# git은 디렉터리 소유자(ubuntu)로 — root로 실행하면 .git 안 파일 소유권이 root로 바뀌거나
-# git이 "dubious ownership"으로 거부한다
-sudo -u ubuntu -H git fetch origin dev
-sudo -u ubuntu -H git checkout dev
-# --ff-only: 서버에 로컬 커밋이 생겨 있으면 조용히 병합하지 않고 실패시킨다
-sudo -u ubuntu -H git merge --ff-only origin/dev
-# --ff-only는 갈라진 경우만 막는다. 서버가 origin/dev보다 앞서 있으면 "Already up to date"로 통과하므로 따로 확인한다
-if [ "$(sudo -u ubuntu -H git rev-parse HEAD)" != "$(sudo -u ubuntu -H git rev-parse origin/dev)" ]; then
-  echo "server dev is ahead of origin/dev — refusing to deploy unpushed commits"
-  exit 1
-fi
+# 직전 이미지 기록 — 기동 실패 시 되돌릴 때 쓴다
+PREV=$(docker inspect --format '{{.Config.Image}}' app-dev-app-1 2>/dev/null || true)
 
-# 리포의 docker-compose.yml에는 postgres만 있다. app 서비스는 docker-compose.dev.yml에 있고, 서버 .env의
-# COMPOSE_FILE이 두 파일을 합친다. 그 설정이 빠지면 compose up이 "빌드할 것 없음"으로 조용히 성공해 옛 코드가 초록으로 보고된다 — 미리 막는다
-if ! services=$(docker compose config --services); then
-  echo "docker compose config failed — the server's compose files are invalid"
-  exit 1
-fi
-if ! printf '%s\n' "$services" | grep -qv '^postgres$'; then
-  echo "compose project defines no app service (only postgres) — check COMPOSE_FILE in the server's .env"
-  exit 1
-fi
+echo "pull $IMAGE"
+printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null
+docker pull "$IMAGE"
+docker logout ghcr.io >/dev/null 2>&1 || true
 
-# docker는 데몬 기반이라 root로 실행해도 사람이 손으로 띄운 것과 같은 프로젝트(app-dev)를 갱신한다.
-# 빌드가 끝나야 컨테이너를 교체하므로 빌드 실패 시 기존 컨테이너는 그대로 살아 있다
-echo "building — full log on the server: $LOG"
-if ! docker compose up -d --build >"$LOG" 2>&1; then
-  echo "docker compose up --build failed — last $TAIL_LINES lines of $LOG:"
-  tail -n "$TAIL_LINES" "$LOG" | tail -c "$TAIL_BYTES"
-  exit 1
-fi
+echo "$IMAGE" > .image
+APP_IMAGE="$IMAGE" docker compose -p app-dev up -d --no-build
 
-# 기동 확인 최대 60초 — .env 시크릿 누락 등 기동 실패를 워크플로 실패로 드러낸다.
-# 여기서 실패하면 dev는 이미 새(깨진) 코드로 떠 있다 — 직전 이미지는 아래 prune 전이라 아직 남아 있다
 i=0
-while [ "$i" -lt 30 ]; do
-  if curl -sf --max-time 2 "$HEALTH_URL" >/dev/null; then
-    echo "healthy: $(sudo -u ubuntu -H git rev-parse --short HEAD)"
-    # 서버 빌드로 쌓이는 dangling 이미지 정리 — 기동 확인 뒤에 해야 실패 시 직전 이미지로 되돌릴 수 있다.
-    # 정리 실패로 배포를 실패 처리하지 않는다
-    docker image prune -f >>"$LOG" 2>&1 || true
-    # 빌드 캐시는 image prune으로 지워지지 않아 배포마다 쌓인다 — 디스크가 차면 다음 빌드·SSM이 죽는다(BY-1208).
-    # 최근 3일 치는 다음 빌드 속도를 위해 남긴다
-    # SSM 실행 시간을 넘기지 않게 2분으로 제한하고, 실패는 경고로만 남긴다
-    timeout 120 docker builder prune -af --filter until=72h >>"$LOG" 2>&1 \
-      || echo "warning: docker builder prune failed or timed out — check disk usage ($LOG)"
+while [ "$i" -lt 45 ]; do
+  if curl -sf --max-time 3 "$HEALTH_URL" >/dev/null; then
+    echo "healthy: $IMAGE (previous: ${PREV:-none})"
+    # 직전 이미지는 남기고 그 이전 것만 정리한다
+    docker image prune -f >/dev/null 2>&1 || true
     exit 0
   fi
   i=$((i + 1))
   sleep 2
 done
 
-echo "health check failed after 60s — dev is now running the NEW build; previous image is still present for rollback"
-docker compose logs --tail=50 | tail -c "$TAIL_BYTES"
+echo "health check failed after 90s — dev is running the NEW image; previous: ${PREV:-none}"
+docker compose -p app-dev logs --tail=60 app | tail -c 20000
 exit 1

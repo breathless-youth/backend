@@ -1,0 +1,11 @@
+# dev DB 서버(Oracle E2.1.Micro, 1GB) 전용 compose (BY-1317).
+# 서버 .env에 COMPOSE_FILE=docker-compose.yml:docker-compose.dev-db.yml 이 있어 `docker compose up -d`만 쳐도 합쳐진다.
+# 이 서버는 postgres만 띄우고, 앱 서버(dev-app)가 사설 IP로 5432에 붙는다. 5432는 NSG가 앱 서버에서만 열어 준다.
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?dev DB 서버 .env에 SPRING_DATASOURCE_PASSWORD가 필요하다}
+    # 1GB 호스트에서 OS·스왑 여유를 남기도록 메모리를 작게 쓴다
+    command: ["postgres", "-c", "shared_buffers=96MB", "-c", "max_connections=40", "-c", "work_mem=4MB", "-c", "maintenance_work_mem=32MB"]
+    mem_limit: 400m
+    restart: unless-stopped
