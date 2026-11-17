@@ -31,8 +31,9 @@ docker logout ghcr.io >/dev/null 2>&1 || true
 echo "$IMAGE" > .image
 APP_IMAGE="$IMAGE" docker compose -p app-dev up -d --no-build
 
+# E2.1.Micro(1/8 OCPU)는 콜드 스타트가 90초를 넘는다 — 최대 300초 기다린다
 i=0
-while [ "$i" -lt 45 ]; do
+while [ "$i" -lt 150 ]; do
   if curl -sf --max-time 3 "$HEALTH_URL" >/dev/null; then
     echo "healthy: $IMAGE (previous: ${PREV:-none})"
     # 직전 이미지는 남기고 그 이전 것만 정리한다
@@ -43,6 +44,6 @@ while [ "$i" -lt 45 ]; do
   sleep 2
 done
 
-echo "health check failed after 90s — dev is running the NEW image; previous: ${PREV:-none}"
+echo "health check failed after 300s — dev is running the NEW image; previous: ${PREV:-none}"
 docker compose -p app-dev logs --tail=60 app | tail -c 20000
 exit 1

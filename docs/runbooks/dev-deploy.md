@@ -21,7 +21,7 @@ dev AWS 계정 크레딧 소진으로 서버를 **Oracle Always Free**(E2.1.Micr
 
 1. dev push → Actions가 amd64로 이미지를 빌드해 `ghcr.io/breathless-youth/backend-dev:<sha>`에 올린다. 서버는 1GB라 직접 빌드하지 않는다.
 2. SSH로 `docker-compose.dev-app.yml`을 서버에 복사하고 `.github/scripts/deploy-dev.sh`를 stdin으로 실행한다.
-3. 스크립트가 GHCR 로그인(일회성 `GITHUB_TOKEN`) → pull → `compose up -d` → `/actuator/health` 최대 90초 확인.
+3. 스크립트가 GHCR 로그인(일회성 `GITHUB_TOKEN`) → pull → `compose up -d` → `/actuator/health` 최대 300초 확인(1/8 OCPU라 콜드 스타트가 느리다).
 
 다시 배포: Actions → Deploy dev → **Run workflow** (`dev`). 배포가 겹치면 큐에서 기다리고, 서버 잠금(`/tmp/app-dev-deploy.lock`)이 한 번 더 막는다.
 
@@ -36,7 +36,7 @@ dev AWS 계정 크레딧 소진으로 서버를 **Oracle Always Free**(E2.1.Micr
 | `Connection timed out` | 인스턴스 정지·공인 IP 변경·NSG | OCI 콘솔에서 상태·IP 확인, `DEV_APP_HOST` 갱신 |
 | `.env missing` | 서버 `.env` 없음 | 아래 "서버 준비" |
 | `pull access denied` / `unauthorized` | 패키지 권한 | 저장소 Actions 권한(packages)과 패키지 가시성 확인 |
-| `health check failed after 90s` + 로그 | 새 컨테이너 기동 실패(대개 `.env` 누락·DB 연결) | `.image`·`docker images`로 직전 이미지 확인, `.env`·DB 점검 후 재배포. 이 상태에서 dev는 새 이미지로 떠 있다 |
+| `health check failed after 300s` + 로그 | 새 컨테이너 기동 실패(대개 `.env` 누락·DB 연결) | `.image`·`docker images`로 직전 이미지 확인, `.env`·DB 점검 후 재배포. 이 상태에서 dev는 새 이미지로 떠 있다 |
 | 응답이 느리거나 OOM | 1GB 메모리 | `free -m`, `docker stats`, 스왑 사용량 확인 |
 
 ## 서버 준비 (새로 만들 때)
