@@ -151,7 +151,7 @@ class ActiveSessionSnapshotApiTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"SLEEP", "SCREEN"})
+    @ValueSource(strings = {"SLEEP", "SCREEN", "POSTURE"})
     void 순공_정지_이벤트가_실린_스냅샷도_저장되고_재접속_조회에_그대로_내려온다(String status) {
         // DB(마이크로초)·JSON 직렬화 왕복에서 표기가 어긋나지 않도록 초 단위로 자른 시각을 쓴다
         Instant started = startedAt.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
