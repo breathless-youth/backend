@@ -69,7 +69,7 @@ class StudyPointPolicyTest {
                 List.of(20, 5),
                 List.of(5, 3, 1),
                 List.of(10, 5, 3),
-                List.of(50, 30, 10),
+                List.of(150, 100, 50),
                 LocalDate.of(2000, 1, 1));
 
         assertThat(reward.goalPoints(null)).isZero();
@@ -79,6 +79,6 @@ class StudyPointPolicyTest {
         assertThat(reward.goalPoints(3 * HOUR)).isEqualTo(90);
         assertThat(reward.goalPoints(8 * HOUR)).isEqualTo(140);
         assertThat(reward.goalPoints(12 * HOUR)).isEqualTo(140);
-        assertThat(reward.medalPoints("MONTHLY", 1)).isEqualTo(50);
+        assertThat(reward.medalPoints("MONTHLY", 1)).isEqualTo(150);
     }
 }

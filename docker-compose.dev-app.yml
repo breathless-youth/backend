@@ -1,0 +1,20 @@
+# dev 앱 서버(Oracle E2.1.Micro, 1GB) 전용 compose (BY-1317).
+# 이미지는 GitHub Actions가 빌드해 GHCR에 올린다 — 1GB 서버에서 Gradle 빌드는 메모리가 모자란다.
+# 배포 워크플로가 이 파일을 서버 /home/ubuntu/app-dev/docker-compose.yml 로 복사하고 APP_IMAGE를 넘긴다.
+# 시크릿은 같은 디렉터리 .env(추적 안 함)에 두고 env_file로 주입한다(BY-642). DB는 dev-db의 사설 IP를 SPRING_DATASOURCE_URL로 지정한다.
+services:
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE가 필요하다 — deploy-dev.sh가 넘긴다}
+    ports:
+      - "80:8080"
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      JAVA_TOOL_OPTIONS: "-Xmx384m -XX:MaxMetaspaceSize=192m -XX:+UseSerialGC"
+    mem_limit: 700m
+    # dev 로그는 최근 장애 추적용 — 기본(json-file 무제한)이면 p6spy SQL 로그로 하루 100MB+ 쌓인다
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "2"
+    restart: unless-stopped
