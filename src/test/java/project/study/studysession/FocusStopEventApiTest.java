@@ -24,7 +24,7 @@ import project.study.TestcontainersConfiguration;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 나중에 더한 순공 정지 상태(졸음 SLEEP, 화면 응시 SCREEN)의 세션 제출·조회 API.
+ * 나중에 더한 순공 정지 상태(졸음 SLEEP, 화면 응시 SCREEN, 자세 이탈 POSTURE)의 세션 제출·조회 API.
  *
  * <p>StudySessionApiTest에서 분리했다(checkstyle FileLength 400줄 제약). 두 상태가 AWAY와 같은 성격이라는
  * 계산 쪽 검증은 StudySessionMidnightSplitTest가 맡고, 여기서는 값이 계약에 실제로 실리는지만 본다.
@@ -77,7 +77,7 @@ class FocusStopEventApiTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"SLEEP", "SCREEN"})
+    @ValueSource(strings = {"SLEEP", "SCREEN", "POSTURE"})
     void 순공_정지_이벤트가_섞인_세션도_저장되고_응답에_그대로_내려온다(String status) {
         String events = "["
                 + eventJson("AWAY", sessionStart.plusSeconds(600), sessionStart.plusSeconds(720))
@@ -102,7 +102,7 @@ class FocusStopEventApiTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"SLEEP", "SCREEN"})
+    @ValueSource(strings = {"SLEEP", "SCREEN", "POSTURE"})
     void 상태별_이벤트_건수에_순공_정지_키가_0이라도_포함된다(String status) {
         // 프론트가 키 존재를 가정하고 칩을 계산한다 — 그 상태가 없는 세션에도 키는 있어야 한다
         assertThat(submit(7200, 7200, "[]")).hasStatus(HttpStatus.CREATED);
