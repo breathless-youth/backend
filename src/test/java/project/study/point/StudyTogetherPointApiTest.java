@@ -66,8 +66,9 @@ class StudyTogetherPointApiTest {
                         "$.study.tiers[0].soloPoints", v -> assertThat(v).isEqualTo(7))
                 .hasPathSatisfying(
                         "$.study.tiers[0].togetherPoints", v -> assertThat(v).isEqualTo(10))
-                .hasPathSatisfying("$.study.tiers[2].toSec", v -> assertThat(v).isEqualTo(43200))
-                .hasPathSatisfying("$.study.maxPoints", v -> assertThat(v).isEqualTo(104))
+                .hasPathSatisfying("$.study.tiers.length()", v -> assertThat(v).isEqualTo(1))
+                .hasPathSatisfying("$.study.tiers[0].toSec", v -> assertThat(v).isEqualTo(36000))
+                .hasPathSatisfying("$.study.maxPoints", v -> assertThat(v).isEqualTo(200))
                 .hasPathSatisfying(
                         "$.dailyGoal.tiers[0].points", v -> assertThat(v).isEqualTo(20))
                 .hasPathSatisfying("$.dailyGoal.capSec", v -> assertThat(v).isEqualTo(28800))

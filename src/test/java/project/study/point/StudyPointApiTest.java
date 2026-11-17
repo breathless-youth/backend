@@ -20,7 +20,12 @@ import project.study.config.ApiVersionConfig;
 import project.study.point.service.StudyPointService;
 
 /** 세션 제출 → 공부 포인트 지급 → 잔액·결과 조회. 날짜는 서울 기준으로 한 날짜에 들어가게 골랐다. 지급 흐름을 보는 테스트라 숫자는 30분마다 10P로 고정한다. */
-@SpringBootTest(properties = {"app.points.study.solo-points=10,10,10", "app.points.study.together-points=10,10,10"})
+@SpringBootTest(
+        properties = {
+            "app.points.study.tier-ends-sec=43200",
+            "app.points.study.solo-points=10",
+            "app.points.study.together-points=10"
+        })
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class StudyPointApiTest {

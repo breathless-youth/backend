@@ -7,7 +7,7 @@ public record StudyPointTier(
         @Schema(description = "구간이 시작하는 하루 순공(초)", example = "0")
         int fromSec,
 
-        @Schema(description = "구간이 끝나는 하루 순공(초). 마지막 구간의 끝이 하루 상한이다", example = "7200")
+        @Schema(description = "구간이 끝나는 하루 순공(초). 마지막 구간의 끝이 하루 상한이다", example = "36000")
         int toSec,
 
         @Schema(description = "혼자 공부할 때 단위(unitSec)마다 주는 포인트", example = "7")

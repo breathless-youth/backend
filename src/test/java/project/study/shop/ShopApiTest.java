@@ -232,7 +232,9 @@ class ShopApiTest {
         assertThat(item(user, set).effectPieces()).singleElement().satisfies(piece -> {
             assertThat(piece.x()).isEqualTo(0.1);
             assertThat(piece.height()).isEqualTo(0.4);
+            assertThat(piece.spriteUrl()).isNull();
         });
+        assertSpriteFields(user, set);
 
         assertThat(put(user, uri, "{\"slot\":\"HEAD\",\"itemId\":" + hat + "}")).hasStatusOk();
         assertThat(inUse(user, set)).isFalse();
@@ -342,6 +344,19 @@ class ShopApiTest {
                         .exchange(),
                 HttpStatus.FORBIDDEN,
                 "MEMBER_ONLY");
+    }
+
+    /** 띠 그림 값이 있으면 같이 내려 준다. */
+    private void assertSpriteFields(long user, long set) {
+        jdbc.sql("""
+                UPDATE shop_item SET effect_pieces = CAST('[{"x":0.1,"y":0.1,"width":0.8,"height":0.8,"motion":"pulse",
+                  "spriteUrl":"https://cdn.test/fx-sprite.webp","spriteFrames":12,"spriteDurationMs":1200}]' AS jsonb)
+                WHERE id = :id""").param("id", set).update();
+        assertThat(item(user, set).effectPieces()).singleElement().satisfies(piece -> {
+            assertThat(piece.spriteUrl()).isEqualTo("https://cdn.test/fx-sprite.webp");
+            assertThat(piece.spriteFrames()).isEqualTo(12);
+            assertThat(piece.spriteDurationMs()).isEqualTo(1200);
+        });
     }
 
     private static void assertCode(MvcTestResult result, HttpStatus status, String code) {

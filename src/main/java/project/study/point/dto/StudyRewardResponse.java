@@ -14,7 +14,7 @@ public record StudyRewardResponse(
         @Schema(description = "그날 포인트로 인정된 순공(초). 측정한 순공만 세고(직접 입력 제외) 상한을 넘지 않는다", example = "7800")
         int recognizedFocusSec,
 
-        @Schema(description = "하루 인정 상한(초)", example = "43200")
+        @Schema(description = "하루 인정 상한(초)", example = "36000")
         int dailyCapFocusSec,
 
         @Schema(description = "다음에 열릴 마스코트. 다 열었으면 null") NextMascot nextMascot) {}
