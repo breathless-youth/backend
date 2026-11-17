@@ -65,7 +65,7 @@ public class AdRewardService {
             return;
         }
         LocalDate today = clock.instant().atZone(userTimeZones.zoneOf(userId)).toLocalDate();
-        if (!pointStart.counts(today)) {
+        if (!pointStart.counts(userId, today)) {
             return;
         }
         pointService.lock(userId);

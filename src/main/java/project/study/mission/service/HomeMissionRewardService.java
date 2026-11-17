@@ -43,7 +43,7 @@ public class HomeMissionRewardService {
     @Transactional
     public ClaimResponse claim(Long userId) {
         members.requireMember(userId);
-        if (!pointStart.started()) {
+        if (!pointStart.started(userId)) {
             // 포인트 기능이 든 앱이 나오기 전에는 주지 않는다. 끝낸 단계는 남아 있어 나온 뒤에 받는다 (BY-1314)
             return new ClaimResponse(false, 0, points.balanceOf(userId));
         }
@@ -63,7 +63,7 @@ public class HomeMissionRewardService {
     /** 완료했지만 아직 안 받은 포인트. 비회원은 0. */
     @Transactional(readOnly = true)
     public int claimablePoints(long userId, int completedSteps) {
-        if (completedSteps == 0 || !members.isMember(userId) || !pointStart.started()) {
+        if (completedSteps == 0 || !members.isMember(userId) || !pointStart.started(userId)) {
             return 0;
         }
         int claimable = 0;
