@@ -7,7 +7,7 @@ import project.study.studysession.entity.StatusEvent;
 
 public record StatusEventResponse(
         @Schema(
-                description = "비공부 상태 종류. PHONE/DEVICE/AWAY/SLEEP/SCREEN=순공 타이머만 정지, PAUSE=총공부·순공 타이머 모두 정지",
+                description = "비공부 상태 종류. PHONE/DEVICE/AWAY/SLEEP/SCREEN/POSTURE=순공 타이머만 정지, PAUSE=총공부·순공 타이머 모두 정지",
                 example = "PHONE")
         EventStatus status,
 
