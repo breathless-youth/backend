@@ -52,6 +52,7 @@ public class ChargeService {
     private final MemberGuard members;
     private final PaidItemService paidItems;
     private final PurchaseTransferService transfers;
+    private final PointTesters testers;
 
     @Transactional(readOnly = true)
     public PointProductsResponse products(Long userId) {
@@ -262,10 +263,10 @@ public class ChargeService {
 
     /**
      * 샌드박스 결제를 받는지. 샌드박스는 실제 돈이 나가지 않아 운영에서는 받지 않는데, 스토어 심사자의 결제는 샌드박스로 온다. 그래서 운영에서도
-     * 심사 계정(ADR-0048)의 샌드박스 결제만은 받는다.
+     * 심사 계정(ADR-0048)과 팀 테스트 계정({@link PointTesters})의 샌드박스 결제만은 받는다.
      */
     private boolean sandboxAllowed(Long userId) {
-        return policy.acceptSandbox() || (userId != null && members.isReviewAccount(userId));
+        return policy.acceptSandbox() || (userId != null && testers.isTester(userId));
     }
 
     /** 구매 복원. 알림의 사용자 ID들을 회원으로 바꿔 넘긴다. */

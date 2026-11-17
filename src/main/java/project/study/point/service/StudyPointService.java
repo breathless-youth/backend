@@ -111,13 +111,11 @@ public class StudyPointService {
     }
 
     private int targetPoints(long userId, LocalDate date) {
-        return pointStart.counts(date) ? policy.targetPoints(pieces.on(userId, date)) : 0;
+        return pointStart.counts(userId, date) ? policy.targetPoints(pieces.on(userId, date)) : 0;
     }
 
+    /** 포인트 시작 전에도 실제 값이다. 포인트만 시작일부터 준다 (BY-1318). */
     private int recognizedFocusSec(long userId, LocalDate date) {
-        if (!pointStart.counts(date)) {
-            return 0;
-        }
         return policy.recognizedFocusSec(repository.measuredFocusSecOn(userId, date));
     }
 

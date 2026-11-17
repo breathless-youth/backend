@@ -19,6 +19,7 @@ public class PointStart {
 
     private final StudyPointPolicy policy;
     private final PointLaunchRepository repository;
+    private final PointTesters testers;
     private final String launchVersion;
 
     private volatile LocalDate cached;
@@ -26,14 +27,22 @@ public class PointStart {
     public PointStart(
             StudyPointPolicy policy,
             PointLaunchRepository repository,
+            PointTesters testers,
             @Value("${app.points.launch.version:}") String launchVersion) {
         this.policy = policy;
         this.repository = repository;
+        this.testers = testers;
         this.launchVersion = launchVersion.trim();
     }
 
-    /** 이 날짜의 활동에 포인트를 주는지. */
-    public boolean counts(LocalDate date) {
+    /**
+     * 이 사람의 이 날짜 활동에 포인트를 주는지. 스토어 심사 계정과 팀 테스트 계정({@link PointTesters})은 시작일과 상관없이 준다 (BY-1318) — 심사자는 출시 전의 앱으로 시험하므로,
+     * 출시일을 기다리면 출석·광고·공부 포인트가 하나도 동작하지 않아 반려될 수 있다.
+     */
+    public boolean counts(long userId, LocalDate date) {
+        if (testers.isTester(userId)) {
+            return true;
+        }
         LocalDate startsOn = startsOn();
         return startsOn != null && !date.isBefore(startsOn);
     }
@@ -55,9 +64,9 @@ public class PointStart {
         return found;
     }
 
-    /** 포인트를 쌓기 시작했는지. 날짜와 상관없는 보상(시작 미션)이 쓴다. */
-    public boolean started() {
-        return startsOn() != null;
+    /** 이 사람에게 포인트를 쌓기 시작했는지. 날짜와 상관없는 보상(시작 미션)이 쓴다. 심사·테스트 계정은 늘 시작한 것으로 본다. */
+    public boolean started(long userId) {
+        return testers.isTester(userId) || startsOn() != null;
     }
 
     public String launchVersion() {

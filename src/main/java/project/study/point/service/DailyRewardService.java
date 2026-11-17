@@ -44,7 +44,8 @@ public class DailyRewardService {
     public EarnOverviewResponse overview(Long userId) {
         LocalDate today = today(userId);
         long focusSec = repository.measuredFocusSecOn(userId, today);
-        int recognized = pointStart.counts(today) ? studyPolicy.recognizedFocusSec(focusSec) : 0;
+        // 포인트 시작 전에도 오늘 공부한 시간은 그대로 보여 준다. 포인트만 시작일부터 준다 (BY-1318)
+        int recognized = studyPolicy.recognizedFocusSec(focusSec);
         Integer goalSec = goalService.get(userId, today).goalSec();
         int goalPoints = goalPoints(goalSec);
         int adMax = adPolicy.available() ? adPolicy.points() * adPolicy.dailyLimit() : 0;
@@ -153,12 +154,11 @@ public class DailyRewardService {
         return new ClaimResponse(granted, granted ? points : 0, repository.balance(userId));
     }
 
+    /** 오늘 같이 한 시간. 공부 시간처럼 포인트 시작 전에도 실제 값이다 (BY-1318). */
     private int togetherFocusSec(long userId, LocalDate date) {
-        return pointStart.counts(date)
-                ? studyPieces.on(userId, date).stream()
-                        .mapToInt(StudyPointPolicy.Piece::togetherSec)
-                        .sum()
-                : 0;
+        return studyPieces.on(userId, date).stream()
+                .mapToInt(StudyPointPolicy.Piece::togetherSec)
+                .sum();
     }
 
     private int goalPoints(Integer goalSec) {
@@ -180,7 +180,7 @@ public class DailyRewardService {
     /** 포인트 시작 날짜 전이면 409 {@code REWARD_NOT_AVAILABLE}. 출시 전에 배포돼도 받아 가지 못하게 한다. */
     private LocalDate startedToday(long userId) {
         LocalDate today = today(userId);
-        if (!pointStart.counts(today)) {
+        if (!pointStart.counts(userId, today)) {
             throw new ConflictException(ErrorCode.REWARD_NOT_AVAILABLE, "아직 포인트를 받을 수 없습니다");
         }
         return today;
