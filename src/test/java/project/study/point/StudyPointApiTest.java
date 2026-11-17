@@ -56,9 +56,10 @@ class StudyPointApiTest {
                 .hasPathSatisfying("$.statDate", v -> assertThat(v).isEqualTo("2026-01-10"))
                 .hasPathSatisfying("$.recognizedFocusSec", v -> assertThat(v).isEqualTo(4200))
                 .hasPathSatisfying("$.dailyCapFocusSec", v -> assertThat(v).isEqualTo(43200))
-                .hasPathSatisfying("$.nextMascot.code", v -> assertThat(v).isEqualTo("PENCIL"))
+                // 70분이면 몽당이(1시간)는 열리고 다음은 부기(10시간)다
+                .hasPathSatisfying("$.nextMascot.code", v -> assertThat(v).isEqualTo("BOOK"))
                 .hasPathSatisfying(
-                        "$.nextMascot.remainingFocusSec", v -> assertThat(v).isEqualTo(7200 - 4200));
+                        "$.nextMascot.remainingFocusSec", v -> assertThat(v).isEqualTo(36000 - 4200));
     }
 
     @Test
