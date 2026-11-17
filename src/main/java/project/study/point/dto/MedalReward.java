@@ -17,4 +17,6 @@ public record MedalReward(
         LocalDate periodStart,
 
         @Schema(description = "순위 1~3", example = "1") int rank,
-        @Schema(description = "받을 포인트", example = "100") int points) {}
+
+        @Schema(description = "받을 포인트. 따낸 때가 아니라 지금의 메달 포인트 표로 정한다", example = "5")
+        int points) {}
