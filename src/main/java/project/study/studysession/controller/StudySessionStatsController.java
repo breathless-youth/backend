@@ -43,7 +43,7 @@ public class StudySessionStatsController {
                     담긴다 — 날짜 상세·타임테이블·세션 바텀시트를 이 응답 하나로 그린다 (BY-734)
                     - `sessionCount` — 조회된 세션 개수 (자정 분할 세션은 각각 1개로 센다)
                     - `totalStudySec` / `totalFocusSec` — 그날 총 공부 시간·순공 시간 합계(초) — sessions[].studySec/focusSec의 합
-                    - `longestFocusSec` — 그날 최장집중시간(초). 세션 하나 안에서 이벤트(PHONE/DEVICE/AWAY/SLEEP/PAUSE)로 끊기지 \
+                    - `longestFocusSec` — 그날 최장집중시간(초). 세션 하나 안에서 이벤트(PHONE/DEVICE/AWAY/SLEEP/SCREEN/PAUSE)로 끊기지 \
                     않고 이어진 가장 긴 구간을 세션마다 구해, 그중 최댓값을 취한다
                     - `focusRate` — 그날 전체 집중률(%). 세션별 집중률의 평균이 아니라 합계(totalFocusSec ÷ totalStudySec) 기준으로 계산한다
                     - `totalEventCounts` — 그날 전체 상태별 이벤트 발생 건수 합계 — sessions[].eventCounts를 모두 더한 값. 없는 상태도 0으로 내려간다
@@ -123,7 +123,7 @@ public class StudySessionStatsController {
     @Operation(summary = "공부 리듬 조회", description = """
                     기록 탭 '나의 공부 리듬' 히트맵용. 가입 이후 전체 측정 세션(순공시간 1초 이상)의 순공을 \
                     요일(월=0 … 일=6) × 시각(KST 0~23시) 격자에 누적해 반환한다. 세션 하나의 순공은 시작~종료 사이의 \
-                    정시 경계로 잘라 이벤트(PHONE/DEVICE/AWAY/SLEEP/PAUSE)를 뺀 길이 비율로 배분하므로 격자 합은 순공 합과 같다.
+                    정시 경계로 잘라 이벤트(PHONE/DEVICE/AWAY/SLEEP/SCREEN/PAUSE)를 뺀 길이 비율로 배분하므로 격자 합은 순공 합과 같다.
 
                     - `studyDays` — 누적 공부일. `GET /api/stats/study-days`의 totalDays와 같은 값(1초 기준, 오늘까지)
                     - `focusSecByWeekdayHour` — 7 × 24 정수(초). 앱이 며칠부터 보여줄지(노출 기준)와 농도·문구를 정한다
