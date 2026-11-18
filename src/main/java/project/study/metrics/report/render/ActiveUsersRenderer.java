@@ -31,7 +31,7 @@ public final class ActiveUsersRenderer {
             out = SlackMessage.builder("🧑‍🎓 어제 공부한 사람 없음");
         } else {
             out = SlackMessage.builder("🧑‍🎓 어제 공부한 %d명".formatted(section.total()));
-            out.item("단계 기준 (New가 먼저)");
+            out.item("단계 기준 (판정은 New가 먼저)");
             for (Stage stage : Stage.values()) {
                 out.sub(stage.label() + " = " + CRITERIA.get(stage));
             }
