@@ -1,12 +1,16 @@
 package project.study.user.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,17 +35,24 @@ import project.study.user.service.AuthService;
 public class AuthController {
 
     private final AuthService authService;
+    private final RefreshTokenCookies refreshTokenCookies;
 
     @Operation(summary = "토큰 재발급", description = """
                     access 토큰이 만료(401 `UNAUTHORIZED`)됐을 때 refresh 토큰으로 새 쌍을 받는다. \
                     refresh는 **1회용**이라 응답의 새 refresh로 갈아끼워야 하며, 앱 전체에서 동시에 하나만 진행한다 — \
                     같은 refresh를 두 번 쓰면 재사용(탈취 의심)으로 보고 그 유저의 refresh를 전량 폐기한다.
 
-                    401 `INVALID_REFRESH_TOKEN`이면 저장된 토큰을 지우고 `POST /api/users`로 기기를 다시 등록해 복구한다.""")
-    @ApiResponse(responseCode = "200", description = "재발급 성공 — 새 access·refresh 쌍. 이전 refresh는 무효")
+                    401 `INVALID_REFRESH_TOKEN`이면 저장된 토큰을 지우고 `POST /api/users`로 기기를 다시 등록해 복구한다.
+
+                    **브라우저(쿠키 모드)**: `Refresh-Transport: cookie` 헤더를 붙이고 본문 없이 보낸다. \
+                    refresh는 쿠키 `__Host-refresh_token`에서 읽고, 새 refresh도 쿠키로만 준다(응답 본문에 `refreshToken` 없음). \
+                    401이면 쿠키도 만료시킨다. 본문에 `refreshToken`이 있으면 쿠키보다 본문이 먼저다.""")
+    @ApiResponse(
+            responseCode = "200",
+            description = "재발급 성공, 새 access·refresh 쌍. 이전 refresh는 무효. 쿠키 모드면 refresh는 Set-Cookie로만 온다")
     @ApiResponse(
             responseCode = "401",
-            description = "refresh 토큰이 재사용·만료·미존재 — `code`는 `INVALID_REFRESH_TOKEN`",
+            description = "refresh 토큰이 재사용·만료·미존재, `code`는 `INVALID_REFRESH_TOKEN`. 쿠키 모드면 refresh 쿠키도 만료시킨다",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -52,16 +63,28 @@ public class AuthController {
                                                     "{\"code\": \"INVALID_REFRESH_TOKEN\", \"message\": \"이미 사용된 refresh 토큰입니다\"}")))
     @ApiResponse(
             responseCode = "400",
-            description = "refreshToken 누락 또는 64자 초과(access 토큰을 잘못 넣은 경우)",
+            description = "`VALIDATION_FAILED`: refresh 토큰이 본문에도 쿠키에도 없음(쿠키는 헤더가 있을 때만 읽는다), "
+                    + "또는 64자 초과(access 토큰을 잘못 넣은 경우)",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class)))
     @SecurityRequirements // access가 만료된 상태에서 부르므로 인증 없이 열려 있다
     // 구 앱(v1.2.x)에 없던 새 경로라 기본버전 1이다 — 깨지는 변경이 생기면 그때 2를 병행한다 (ADR-0015 갱신 2026-09-22)
+    @Parameter(
+            in = ParameterIn.HEADER,
+            name = RefreshTokenCookies.TRANSPORT_HEADER,
+            description = RefreshTokenCookies.TRANSPORT_HEADER_DOC,
+            schema = @Schema(allowableValues = "cookie"))
     @PostMapping(value = "/refresh", version = "1")
-    public TokenResponse refresh(@Valid @RequestBody RefreshRequest request) {
-        return authService.refresh(request);
+    public TokenResponse refresh(
+            @RequestBody(required = false) RefreshRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
+        String refreshToken = refreshTokenCookies.resolve(request, httpRequest);
+        TokenResponse tokens = authService.refresh(new RefreshRequest(refreshToken));
+        return new TokenResponse(
+                tokens.accessToken(), refreshTokenCookies.deliver(tokens.refreshToken(), httpRequest, httpResponse));
     }
 
     @Operation(summary = "소셜 로그인", description = """
@@ -74,8 +97,13 @@ public class AuthController {
 
                     **nonce**: 앱이 매번 원문을 만들어 그 SHA-256 **소문자 hex**를 SDK에 넘기고, 원문은 `nonce`에 싣는다. \
                     ID 토큰에 nonce가 들어 있으면 원문의 해시와 같아야 하고, **애플은 필수**다. \
-                    SDK에 nonce를 넘기지 않은 구글·카카오 토큰은 `nonce` 없이 보낸다.""")
-    @ApiResponse(responseCode = "200", description = "전환(`isNewUser: true`) 또는 병합(`false`) — 새 access·refresh 쌍")
+                    SDK에 nonce를 넘기지 않은 구글·카카오 토큰은 `nonce` 없이 보낸다.
+
+                    **브라우저(쿠키 모드)**: `Refresh-Transport: cookie`를 붙이면 새 refresh를 쿠키 `__Host-refresh_token`으로만 준다 \
+                    (응답 본문에 `refreshToken` 없음).""")
+    @ApiResponse(
+            responseCode = "200",
+            description = "전환(`isNewUser: true`) 또는 병합(`false`), 새 access·refresh 쌍. 쿠키 모드면 refresh는 Set-Cookie로만 온다")
     @ApiResponse(
             responseCode = "400",
             description = """
@@ -142,20 +170,36 @@ public class AuthController {
                                     @ExampleObject(
                                             value =
                                                     "{\"code\": \"ALREADY_LINKED\", \"message\": \"이미 소셜 계정으로 로그인한 사용자입니다\"}")))
+    @Parameter(
+            in = ParameterIn.HEADER,
+            name = RefreshTokenCookies.TRANSPORT_HEADER,
+            description = RefreshTokenCookies.TRANSPORT_HEADER_DOC,
+            schema = @Schema(allowableValues = "cookie"))
     @PostMapping(value = "/link", version = "1")
-    public LinkResponse link(@AuthenticationPrincipal Long userId, @Valid @RequestBody LinkSocialRequest request) {
-        return authService.link(userId, request);
+    public LinkResponse link(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody LinkSocialRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
+        LinkResponse linked = authService.link(userId, request);
+        return new LinkResponse(
+                linked.accessToken(),
+                refreshTokenCookies.deliver(linked.refreshToken(), httpRequest, httpResponse),
+                linked.isNewUser());
     }
 
     @Operation(summary = "로그아웃", description = """
                     이 기기의 refresh 토큰만 폐기한다. 같은 계정의 다른 기기는 로그인 상태로 남는다. \
                     없는 토큰이거나 남의 토큰이어도 204다 — 앱은 응답과 상관없이 저장된 토큰을 지우고 `POST /api/users`로 새 비회원이 된다.
 
-                    이미 회전돼 쓸 수 없게 된 **내** refresh를 보내면 탈취 의심으로 보고 이 계정의 refresh를 전량 폐기한다.""")
-    @ApiResponse(responseCode = "204", description = "처리됨 — 본문 없음")
+                    이미 회전돼 쓸 수 없게 된 **내** refresh를 보내면 탈취 의심으로 보고 이 계정의 refresh를 전량 폐기한다.
+
+                    **브라우저(쿠키 모드)**: `Refresh-Transport: cookie`를 붙이고 본문 없이 보내면 쿠키 `__Host-refresh_token`의 \
+                    refresh를 폐기하고 그 쿠키를 만료시킨다. 본문에 `refreshToken`이 있으면 쿠키보다 본문이 먼저다.""")
+    @ApiResponse(responseCode = "204", description = "처리됨, 본문 없음. 쿠키 모드면 refresh 쿠키를 만료시킨다")
     @ApiResponse(
             responseCode = "400",
-            description = "refreshToken 누락 또는 64자 초과",
+            description = "`VALIDATION_FAILED`: refresh 토큰이 본문에도 쿠키에도 없음(쿠키는 헤더가 있을 때만 읽는다), 또는 64자 초과",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -169,9 +213,19 @@ public class AuthController {
                             schema = @Schema(implementation = ErrorResponse.class),
                             examples =
                                     @ExampleObject(value = "{\"code\": \"UNAUTHORIZED\", \"message\": \"인증이 필요합니다\"}")))
+    @Parameter(
+            in = ParameterIn.HEADER,
+            name = RefreshTokenCookies.TRANSPORT_HEADER,
+            description = RefreshTokenCookies.TRANSPORT_HEADER_DOC,
+            schema = @Schema(allowableValues = "cookie"))
     @PostMapping(value = "/logout", version = "1")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(@AuthenticationPrincipal Long userId, @Valid @RequestBody RefreshRequest request) {
-        authService.logout(userId, request.refreshToken());
+    public void logout(
+            @AuthenticationPrincipal Long userId,
+            @RequestBody(required = false) RefreshRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
+        authService.logout(userId, refreshTokenCookies.resolve(request, httpRequest));
+        refreshTokenCookies.expire(httpRequest, httpResponse);
     }
 }

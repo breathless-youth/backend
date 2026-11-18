@@ -1,12 +1,16 @@
 package project.study.user.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -48,6 +52,7 @@ public class UserController {
     private final DeviceRegistrationService deviceRegistrationService;
     private final ProfileImageService profileImageService;
     private final AccountDeletionService accountDeletionService;
+    private final RefreshTokenCookies refreshTokenCookies;
 
     @Operation(summary = "익명 기기 유저 등록 (토큰 발급)", description = """
                     앱은 첫 실행 때 **UUID**를 하나 생성해 기기 보안 저장소에 보관하고, \
@@ -66,7 +71,10 @@ public class UserController {
                     UUID 대소문자는 서버가 소문자로 통일해 저장하므로, 같은 기기가 표기만 다른 UUID로 \
                     중복 가입되는 일은 없다. 단, 앱 삭제 등으로 기기에 저장된 UUID가 사라지면 기존 \
                     데이터와 다시 연결할 방법이 없다 — 익명 방식의 한계로, 추후 로그인 도입 시 \
-                    계정 연동으로 해결할 예정이다.""")
+                    계정 연동으로 해결할 예정이다.
+
+                    **브라우저(쿠키 모드)**: `Refresh-Transport: cookie`를 붙이면 refresh를 HttpOnly 쿠키 `__Host-refresh_token`\
+                    (Path `/`)으로만 주고 응답 본문의 `refreshToken`은 뺀다. 이후 refresh·로그아웃도 같은 헤더로 부른다 (ADR-0049).""")
     @ApiResponse(responseCode = "201", description = "신규 등록 — 유저가 새로 생성됐고 `isNew`가 `true`다. 토큰 쌍 포함")
     @ApiResponse(
             responseCode = "200",
@@ -83,12 +91,22 @@ public class UserController {
                                 @ExampleObject(name = "값 누락", value = "{\"message\": \"deviceId: 공백일 수 없습니다\"}")
                             }))
     @SecurityRequirements // 인증 없이 호출하는 유일한 등록 경로 — 여기서 토큰이 시작된다
+    @Parameter(
+            in = ParameterIn.HEADER,
+            name = RefreshTokenCookies.TRANSPORT_HEADER,
+            description = RefreshTokenCookies.TRANSPORT_HEADER_DOC,
+            schema = @Schema(allowableValues = "cookie"))
     @PostMapping(version = "2")
-    public ResponseEntity<UserRegisterResponse> register(@Valid @RequestBody UserRegisterRequest request) {
+    public ResponseEntity<UserRegisterResponse> register(
+            @Valid @RequestBody UserRegisterRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
         DeviceRegistrationService.Registration result = deviceRegistrationService.register(request);
         AuthService.TokenPair tokens = result.tokens();
-        UserRegisterResponse response =
-                new UserRegisterResponse(result.isNew(), tokens.accessToken(), tokens.refreshToken());
+        UserRegisterResponse response = new UserRegisterResponse(
+                result.isNew(),
+                tokens.accessToken(),
+                refreshTokenCookies.deliver(tokens.refreshToken(), httpRequest, httpResponse));
         // 신규 등록은 201, 같은 기기의 재등록(멱등)은 200
         HttpStatus status = result.isNew() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(response);
