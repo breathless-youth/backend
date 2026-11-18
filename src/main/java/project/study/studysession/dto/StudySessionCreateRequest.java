@@ -3,6 +3,7 @@ package project.study.studysession.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -70,7 +71,19 @@ public record StudySessionCreateRequest(
                 description = "기기의 IANA 시간대 이름(선택). 자정 분할·statDate·시간대 구간을 이 시간대의 현지 날짜로 정하고, "
                         + "사용자 시간대로도 저장한다. 없거나 읽을 수 없는 값이면 거절하지 않고 저장된 사용자 시간대(기본 Asia/Seoul)를 쓴다",
                 example = "Asia/Seoul")
-        String timeZone) {
+        String timeZone,
+
+        @Schema(
+                description = "세션 중 관찰 기록 목록(선택) — 하품처럼 순공에 영향이 없는 기록이다. 없거나 []이면 없음. "
+                        + "기록끼리 겹쳐도 되고 순서는 무관하다. 자정을 넘는 세션은 각 기록이 시작 시각이 속한 조각에 붙는다")
+        @Size(max = 1000)
+        List<@NotNull @Valid ObservationRequest> observations) {
+
+    /** 선택 필드라 null이면 빈 목록으로 다룬다. */
+    public List<ObservationRequest> observationsOrEmpty() {
+        return observations == null ? List.of() : observations;
+    }
+
     public List<StatusEvent> getStatusEventList() {
         return this.events().stream().map(StatusEventRequest::toEntity).toList();
     }

@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import project.study.studysession.dto.ObservationRequest;
 import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.StatusEvent;
 
@@ -93,6 +94,21 @@ final class StudySessionValidator {
                 throw new InvalidSessionException("과목 구간이 서로 겹칠 수 없습니다");
             }
             previous = segment;
+        }
+    }
+
+    /** 관찰 기록은 순공과 무관해 겹쳐도 된다 — 세션 구간 안에 있고 끝이 있으면 시작보다 이르지 않은지만 본다. */
+    static void validateObservations(Instant startedAt, Instant endedAt, List<ObservationRequest> observations) {
+        for (ObservationRequest observation : observations) {
+            Instant end = observation.endedAt();
+            if (end != null && end.isBefore(observation.startedAt())) {
+                throw new InvalidSessionException("관찰 기록 끝 시각은 시작 시각보다 이를 수 없습니다");
+            }
+            if (observation.startedAt().isBefore(startedAt)
+                    || observation.startedAt().isAfter(endedAt)
+                    || (end != null && end.isAfter(endedAt))) {
+                throw new InvalidSessionException("관찰 기록은 세션 구간 안에 있어야 합니다");
+            }
         }
     }
 

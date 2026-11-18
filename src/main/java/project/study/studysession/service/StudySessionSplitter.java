@@ -4,12 +4,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import project.study.studysession.dto.CompletedTask;
+import project.study.studysession.dto.ObservationRequest;
 import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.EventStatus;
+import project.study.studysession.entity.SessionObservation;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
 
@@ -120,10 +123,11 @@ final class StudySessionSplitter {
             SegmentWeights weights,
             int studySec,
             int focusSec,
-            List<SubjectSegmentRequest> subjectSegments,
-            List<CompletedTask> completedTasks) {
+            SessionAttachments attachments) {
         int segmentCount = cuts.size() - 1;
-        List<Set<Long>> completedBySegment = splitCompletedTasks(completedTasks, cuts);
+        List<SubjectSegmentRequest> subjectSegments = attachments.subjectSegments();
+        List<Set<Long>> completedBySegment = splitCompletedTasks(attachments.completedTasks(), cuts);
+        List<List<SessionObservation>> observationsBySegment = splitObservations(attachments.observations(), cuts);
         List<StudySession> sessions = new ArrayList<>();
         long allocatedStudySec = 0;
         long allocatedFocusSec = 0;
@@ -142,6 +146,7 @@ final class StudySessionSplitter {
             session.attachSubjectSegments(SubjectSegmentSplitter.clip(
                     subjectSegments, weights.segmentEvents().get(i), cuts.get(i), cuts.get(i + 1)));
             session.attachCompletedTasks(completedBySegment.get(i));
+            session.attachObservations(observationsBySegment.get(i));
             session.attachSlots(SlotSplitter.split(
                     cuts.get(i),
                     cuts.get(i + 1),
@@ -170,6 +175,22 @@ final class StudySessionSplitter {
         for (CompletedTask task : tasks) {
             result.get(segmentOf(task.doneAt(), cuts)).add(task.taskId());
         }
+        return result;
+    }
+
+    /**
+     * 관찰 기록을 시작 시각이 속한 조각 하나에 붙인다 — 자정을 걸쳐도 자르지 않는다. 시작 순으로 정렬해 붙인다.
+     * 종료 시각과 같은 시작은 마지막 조각이다(완료 할 일과 같은 귀속 규칙).
+     */
+    static List<List<SessionObservation>> splitObservations(List<ObservationRequest> observations, List<Instant> cuts) {
+        int segmentCount = cuts.size() - 1;
+        List<List<SessionObservation>> result = new ArrayList<>(segmentCount);
+        for (int i = 0; i < segmentCount; i++) {
+            result.add(new ArrayList<>());
+        }
+        observations.stream()
+                .sorted(Comparator.comparing(ObservationRequest::startedAt))
+                .forEach(o -> result.get(segmentOf(o.startedAt(), cuts)).add(o.toEmbeddable()));
         return result;
     }
 

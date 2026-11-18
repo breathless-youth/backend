@@ -23,6 +23,7 @@ import project.study.studysession.dto.ActiveSessionSnapshotRequest;
 import project.study.studysession.dto.ActiveSessionSnapshotResponse;
 import project.study.studysession.dto.LiveDraft;
 import project.study.studysession.dto.LivePiece;
+import project.study.studysession.dto.ObservationRequest;
 import project.study.studysession.dto.StatusEventRequest;
 import project.study.studysession.dto.StudySessionCreateRequest;
 import project.study.studysession.dto.SubjectSegmentRequest;
@@ -77,7 +78,7 @@ public class ActiveStudySessionService {
                 request.studySec(),
                 request.focusSec(),
                 events,
-                new SessionAttachments(request.subjectSegmentsOrEmpty(), List.of()));
+                new SessionAttachments(request.subjectSegmentsOrEmpty(), List.of(), request.observationsOrEmpty()));
 
         // durable 요청은 별도 트랜잭션의 UPSERT 커밋 후 반환한다. 기존 클라이언트는 버퍼를 유지한다.
         if (durable) {
@@ -89,7 +90,8 @@ public class ActiveStudySessionService {
                     request.studySec(),
                     request.focusSec(),
                     objectMapper.writeValueAsString(request.events()),
-                    objectMapper.writeValueAsString(request.subjectSegmentsOrEmpty()))));
+                    objectMapper.writeValueAsString(request.subjectSegmentsOrEmpty()),
+                    objectMapper.writeValueAsString(request.observationsOrEmpty()))));
         } else {
             // 기존 버퍼 경로는 직렬화와 DB 쓰기가 flush 시점에 일어난다.
             buffer.offer(userId, request);
@@ -155,7 +157,8 @@ public class ActiveStudySessionService {
                 events,
                 parseSubjectSegments(draft),
                 null, // 자동 확정본에는 완료 할 일이 없다 — 앱이 최종 제출에만 싣는다 (ADR-0022)
-                null); // 시간대가 없으면 사용자 시간대 — 하트비트 검증과 같은 기준이다
+                null, // 시간대가 없으면 사용자 시간대 — 하트비트 검증과 같은 기준이다
+                objectMapper.readValue(draft.getObservations(), new TypeReference<List<ObservationRequest>>() {}));
         try {
             studySessionService.create(draft.getUserId(), request, true);
         } catch (DuplicateSessionException e) {
@@ -274,8 +277,7 @@ public class ActiveStudySessionService {
                 StudySessionSplitter.computeSegmentWeights(cuts, events),
                 draft.getStudySec() + extendSec,
                 draft.getFocusSec() + extendSec,
-                List.of(),
-                List.of());
+                SessionAttachments.NONE);
         Instant achievedAt = focusing ? asOf : draft.getLastSeenAt();
         List<LivePiece> pieces = new ArrayList<>(sessions.size());
         for (int i = 0; i < sessions.size(); i++) {
