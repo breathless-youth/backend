@@ -60,7 +60,7 @@ public class AdRewardService {
                 || transactionId == null
                 || transactionId.isBlank()
                 || transactionId.length() > MAX_TRANSACTION_ID_LENGTH
-                || !members.isMember(userId)) {
+                || !members.exists(userId)) {
             log.warn("지급할 수 없는 광고 보상 콜백: transaction_id={}", transactionId);
             return;
         }

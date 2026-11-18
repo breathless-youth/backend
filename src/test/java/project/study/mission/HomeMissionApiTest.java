@@ -12,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
@@ -297,7 +296,7 @@ class HomeMissionApiTest {
     }
 
     @Test
-    void 비회원은_미션은_끝내도_포인트는_받지_못하고_받기_요청은_403이다() {
+    void 비회원도_미션을_끝내면_포인트를_받는다() {
         long guest = fixture.guest();
         jdbc.sql("INSERT INTO study_subject (user_id, name) VALUES (:u, '수학')")
                 .param("u", guest)
@@ -307,9 +306,12 @@ class HomeMissionApiTest {
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.completedSteps", v -> assertThat(v).isEqualTo(1))
-                .hasPathSatisfying("$.rewardedPoints", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.rewardedPoints", v -> assertThat(v).isEqualTo(50))
                 .hasPathSatisfying("$.claimablePoints", v -> assertThat(v).isEqualTo(0));
-        assertThat(post(guest, "/api/home/mission/rewards/claim")).hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(post(guest, "/api/home/mission/rewards/claim"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.granted", v -> assertThat(v).isEqualTo(false));
     }
 
     private MvcTestResult post(long user, String uri) {

@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 import project.study.point.dto.PointReason;
 import project.study.point.dto.StudyReward;
 import project.study.point.repository.PointRepository;
-import project.study.user.service.MemberGuard;
 import project.study.user.service.UserTimeZones;
 
 /**
@@ -29,7 +28,6 @@ public class StudyPointService {
     private final PointRepository repository;
     private final PointService pointService;
     private final PointLocks locks;
-    private final MemberGuard members;
     private final UserTimeZones userTimeZones;
     private final Clock clock;
     private final StudyPointPolicy policy;
@@ -39,9 +37,6 @@ public class StudyPointService {
     /** 세션이 저장된 직후(앱의 제출, 자동 확정) 부른다. 비회원이거나 측정 조각이 없으면 아무것도 하지 않는다. */
     @Transactional
     public void grantForSubmission(long userId, Instant submissionStartedAt) {
-        if (!members.isMember(userId)) {
-            return;
-        }
         locks.lockUser(userId);
         Instant stored =
                 repository.storedSubmissionStart(userId, submissionStartedAt).orElse(null);

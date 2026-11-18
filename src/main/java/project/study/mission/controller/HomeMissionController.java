@@ -17,7 +17,6 @@ import project.study.mission.dto.HomeMissionResponse;
 import project.study.mission.service.HomeMissionRewardService;
 import project.study.mission.service.HomeMissionService;
 import project.study.point.dto.ClaimResponse;
-import project.study.user.service.MemberGuard;
 
 @Tag(name = "Home mission", description = "API-Version 1, 토큰 인증 필요. 시작 날짜 이후 같은 현지 날짜의 확정 측정 순공을 합산한다. 수동 기록은 제외한다.")
 @ApiResponse(
@@ -31,7 +30,6 @@ import project.study.user.service.MemberGuard;
 public class HomeMissionController {
     private final HomeMissionService service;
     private final HomeMissionRewardService rewards;
-    private final MemberGuard members;
 
     @Operation(
             summary = "계정별 홈 미션 조회",
@@ -74,15 +72,7 @@ public class HomeMissionController {
     @Operation(
             summary = "안 받은 미션 포인트 받기",
             description =
-                    "완료한 단계 가운데 아직 안 받은 포인트를 한 번에 받는다. 포인트가 생기기 전에 미션을 끝낸 사용자와, 비회원으로 끝낸 뒤 로그인한 사용자가 쓴다. 받을 것이 없으면 에러 없이 granted=false와 잔액을 준다.")
-    @ApiResponse(
-            responseCode = "403",
-            description = "비회원",
-            content =
-                    @Content(
-                            examples =
-                                    @ExampleObject(
-                                            value = "{\"code\":\"MEMBER_ONLY\",\"message\":\"로그인한 사용자만 쓸 수 있습니다\"}")))
+                    "완료한 단계 가운데 아직 안 받은 포인트를 한 번에 받는다. 포인트가 생기기 전에 미션을 끝낸 사용자가 쓴다. 비회원도 받는다(BY-1349). 받을 것이 없으면 에러 없이 granted=false와 잔액을 준다.")
     @ApiResponse(responseCode = "200", description = "성공")
     @PostMapping("/rewards/claim")
     public ClaimResponse claimRewards(@AuthenticationPrincipal Long userId) {
@@ -92,7 +82,7 @@ public class HomeMissionController {
     // 미션 완료는 이미 저장됐다. 포인트 지급이나 조회가 실패해도 완료 응답은 주고, 못 받은 포인트는 받기 요청으로 받는다
     private HomeMissionResponse withGrantedRewards(long userId, HomeMissionResponse mission) {
         try {
-            int rewarded = members.isMember(userId) ? rewards.claim(userId).points() : 0;
+            int rewarded = rewards.claim(userId).points();
             return mission.withRewards(
                     rewarded, rewards.claimablePoints(userId, mission.completedSteps()), rewards.stepPoints());
         } catch (RuntimeException e) {

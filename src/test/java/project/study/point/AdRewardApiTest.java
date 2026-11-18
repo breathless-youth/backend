@@ -118,17 +118,16 @@ class AdRewardApiTest {
     }
 
     @Test
-    void 비회원과_없는_사용자와_숫자가_아닌_사용자는_주지_않고_200이다() {
+    void 비회원은_주고_없는_사용자와_숫자가_아닌_사용자는_주지_않고_200이다() {
         long guest = fixture.guest();
 
         assertThat(callback(SIGNER.signed(SIGNER.content(UNIT, String.valueOf(guest), tx()))))
                 .hasStatusOk();
+        assertThat(balance(guest)).isEqualTo(10);
         assertThat(callback(SIGNER.signed(SIGNER.content(UNIT, "999999999999", tx()))))
                 .hasStatusOk();
         assertThat(callback(SIGNER.signed(SIGNER.content(UNIT, "abc", tx())))).hasStatusOk();
         assertThat(callback(SIGNER.signed(SIGNER.content(UNIT, "", tx())))).hasStatusOk();
-
-        assertThat(balance(guest)).isZero();
     }
 
     @Test
