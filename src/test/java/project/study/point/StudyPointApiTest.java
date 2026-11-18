@@ -263,20 +263,15 @@ class StudyPointApiTest {
     }
 
     @Test
-    void 비회원은_포인트를_받지_못하고_조회하면_잔액이_0이다() {
+    void 비회원도_공부_포인트를_받는다() {
         long guest = fixture.guest();
 
         submit(guest, "2026-01-10T01:00:00Z", 4200);
 
-        assertThat(jdbc.sql("SELECT count(*) FROM point_ledger WHERE user_id = :u")
-                        .param("u", guest)
-                        .query(Long.class)
-                        .single())
-                .isZero();
         assertThat(get(guest, "/api/points"))
                 .hasStatusOk()
                 .bodyJson()
-                .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(0));
+                .hasPathSatisfying("$.balance", v -> assertThat(v).isEqualTo(20));
     }
 
     @Test

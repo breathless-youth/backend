@@ -23,6 +23,12 @@ public class MemberGuard {
                 .isPresent();
     }
 
+    /** 있는 사용자인지(비회원 포함). */
+    @Transactional(readOnly = true)
+    public boolean exists(long userId) {
+        return userRepository.findProviderById(userId).isPresent();
+    }
+
     /** 스토어 심사 계정인지 (ADR-0048). */
     @Transactional(readOnly = true)
     public boolean isReviewAccount(long userId) {
