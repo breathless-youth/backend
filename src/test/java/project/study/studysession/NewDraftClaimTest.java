@@ -97,7 +97,7 @@ class NewDraftClaimTest {
     }
 
     private SnapshotRow snapshot(long userId, Instant startedAt, Instant reportedAt) {
-        return new SnapshotRow(userId, startedAt, reportedAt, reportedAt, 30, 25, "[]", "[]");
+        return new SnapshotRow(userId, startedAt, reportedAt, reportedAt, 30, 25, "[]", "[]", "[]");
     }
 
     @Test
