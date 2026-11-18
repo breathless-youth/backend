@@ -10,12 +10,15 @@ import java.util.Map;
  */
 public record ActiveUsersSection(int total, Map<Stage, List<ActiveUserRow>> byStage, Integer appOnly) {
 
-    /** 선언 순서가 요약·스레드의 표시 순서다. 판정 순서는 ActiveUserClassifier.stage. 이름은 팀이 부르는 영어 이름(BY-910). */
+    /**
+     * 선언 순서가 요약·스레드의 표시 순서다. 판정 순서는 ActiveUserClassifier.stage. 이름은 팀이 부르는 영어 이름(BY-910). New는 사람이
+     * 많아 스레드 100명 상한에서 뒤 단계를 밀어내니 맨 뒤에 둔다(BY-1350).
+     */
     public enum Stage {
-        NEW("New"),
         LOVERS("Lovers"),
         COMEBACK("Comeback"),
-        SOMETIMES("Sometimes");
+        SOMETIMES("Sometimes"),
+        NEW("New");
 
         private final String label;
 
