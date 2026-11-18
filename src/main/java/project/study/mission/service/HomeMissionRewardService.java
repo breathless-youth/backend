@@ -9,7 +9,6 @@ import project.study.point.dto.ClaimResponse;
 import project.study.point.dto.PointReason;
 import project.study.point.service.PointService;
 import project.study.point.service.PointStart;
-import project.study.user.service.MemberGuard;
 
 /**
  * 시작 미션의 단계를 끝내면 포인트를 준다 (BY-1291). 완료한 단계 가운데 아직 안 받은 것을 모두 주므로, 단계 완료 직후의 자동 지급과 이미
@@ -22,27 +21,23 @@ public class HomeMissionRewardService {
     private final HomeMissionService missions;
     private final PointService points;
     private final PointStart pointStart;
-    private final MemberGuard members;
     private final int[] stepPoints;
 
     public HomeMissionRewardService(
             HomeMissionService missions,
             PointService points,
             PointStart pointStart,
-            MemberGuard members,
             @Value("${app.points.mission.subject-points:50}") int subjectPoints,
             @Value("${app.points.mission.focus-points:100}") int focusPoints) {
         this.missions = missions;
         this.points = points;
         this.pointStart = pointStart;
-        this.members = members;
         this.stepPoints = new int[] {subjectPoints, focusPoints};
     }
 
     /** 완료한 단계 가운데 아직 안 받은 포인트를 모두 준다. 받을 것이 없으면 지급 없이 잔액만 준다. */
     @Transactional
     public ClaimResponse claim(Long userId) {
-        members.requireMember(userId);
         if (!pointStart.started(userId)) {
             // 포인트 기능이 든 앱이 나오기 전에는 주지 않는다. 끝낸 단계는 남아 있어 나온 뒤에 받는다 (BY-1314)
             return new ClaimResponse(false, 0, points.balanceOf(userId));
@@ -63,7 +58,7 @@ public class HomeMissionRewardService {
     /** 완료했지만 아직 안 받은 포인트. 비회원은 0. */
     @Transactional(readOnly = true)
     public int claimablePoints(long userId, int completedSteps) {
-        if (completedSteps == 0 || !members.isMember(userId) || !pointStart.started(userId)) {
+        if (completedSteps == 0 || !pointStart.started(userId)) {
             return 0;
         }
         int claimable = 0;

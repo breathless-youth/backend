@@ -20,17 +20,8 @@ import project.study.point.service.DailyRewardService;
 @Tag(
         name = "Point earn",
         description = "API-Version 1, 토큰 인증 필요. 포인트 받기 탭과 보상 받기. 오늘은 사용자 시간대의 자정 기준이다. "
-                + "같은 보상은 한 번만 지급되고, 다시 요청하면 granted=false와 지금 잔액을 준다(에러가 아니다).")
-// 200을 적지 않으면 springdoc이 아래 403만 싣고 성공 응답의 모양을 문서에서 뺀다. 내용은 반환 타입에서 채운다
+                + "같은 보상은 한 번만 지급되고, 다시 요청하면 granted=false와 지금 잔액을 준다(에러가 아니다). 비회원도 받는다(BY-1349).")
 @ApiResponse(responseCode = "200", description = "성공")
-@ApiResponse(
-        responseCode = "403",
-        description = "비회원이 받기·사기·바꾸기를 요청함. 조회(GET)는 비회원도 200이다 (BY-1296)",
-        content =
-                @Content(
-                        examples =
-                                @ExampleObject(
-                                        value = "{\"code\":\"MEMBER_ONLY\",\"message\":\"로그인한 사용자만 쓸 수 있습니다\"}")))
 @RestController
 @RequestMapping(value = "/api/points", version = "1")
 @RequiredArgsConstructor
