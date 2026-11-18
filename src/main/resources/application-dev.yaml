@@ -135,8 +135,8 @@ app:
   ws:
     stats-logging-period-ms: 30000   # 30초
   cors:
+    # credentials(쿠키)를 허용하므로 남이 만들 수 있는 이름의 Vercel 미리보기 도메인 패턴은 두지 않는다 (ADR-0049)
     allowed-origins:
-      - https://*-breathless-youth.vercel.app
       - http://localhost:[*]
       - http://127.0.0.1:[*]
       - https://web-dev.focusmakers.app

@@ -3,6 +3,7 @@ package project.study.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.support.AuthTestSupport.asUser;
 
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,6 +28,7 @@ class CorsIntegrationTest {
 
     private static final String ALLOWED_ORIGIN = "https://web.sunqstudio.kr";
     private static final String ALLOW_ORIGIN = "Access-Control-Allow-Origin";
+    private static final String ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials";
 
     @Autowired
     private MockMvcTester mvc;
@@ -87,8 +89,39 @@ class CorsIntegrationTest {
     }
 
     @Test
-    void credentials_허용_헤더는_응답에_실리지_않는다() {
-        assertThat(preflight(ALLOWED_ORIGIN).getResponse().getHeader("Access-Control-Allow-Credentials"))
-                .isNull();
+    void 브라우저_refresh_쿠키를_위해_credentials를_허용한다() {
+        assertThat(preflight(ALLOWED_ORIGIN).getResponse().getHeader(ALLOW_CREDENTIALS))
+                .isEqualTo("true");
+    }
+
+    @Test
+    void Refresh_Transport_헤더를_실은_preflight는_쿠키를_쓰는_POST와_보호된_GET_모두_허용된다() {
+        // 웹은 이 헤더를 인증 경로에만 붙이지만, 공통 fetch 도우미가 모든 요청에 붙여도 GET 조회가 preflight에서 막히지 않아야 한다
+        Map<String, String> requests = Map.of("POST", "/api/auth/refresh", "GET", "/api/users/me/profile");
+        requests.forEach((method, uri) -> {
+            MvcTestResult result = mvc.options()
+                    .uri(uri)
+                    .header("Origin", ALLOWED_ORIGIN)
+                    .header("Access-Control-Request-Method", method)
+                    .header("Access-Control-Request-Headers", "refresh-transport,content-type,authorization")
+                    .exchange();
+
+            assertThat(result).hasStatusOk();
+            assertThat(result.getResponse().getHeader(ALLOW_ORIGIN)).isEqualTo(ALLOWED_ORIGIN);
+            assertThat(result.getResponse().getHeader(ALLOW_CREDENTIALS)).isEqualTo("true");
+            assertThat(result.getResponse().getHeader("Access-Control-Allow-Headers"))
+                    .containsIgnoringCase("refresh-transport");
+        });
+    }
+
+    @Test
+    void 허용되지_않은_origin은_Refresh_Transport_preflight도_거부된다() {
+        assertThat(mvc.options()
+                        .uri("/api/auth/refresh")
+                        .header("Origin", "https://evil.example.com")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "refresh-transport")
+                        .exchange())
+                .hasStatus(HttpStatus.FORBIDDEN);
     }
 }
