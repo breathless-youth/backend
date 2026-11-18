@@ -195,8 +195,15 @@ class StudySessionUserDataHandlerTest {
         fixture.seedSession(other, at(10, 0), at(11, 0));
         fixture.seedActiveSession(other, at(12, 0));
 
+        jdbc.sql("INSERT INTO study_session_observation (session_id, type, started_at) VALUES (:s, 'YAWN', :t)")
+                .param("s", session)
+                .param("t", java.sql.Timestamp.from(at(10, 10)))
+                .update();
+
         accountData.erase(user);
 
+        assertThat(fixture.count("study_session_observation", "session_id", session))
+                .isZero();
         assertThat(fixture.count("study_session", "user_id", user)).isZero();
         assertThat(fixture.count("active_study_session", "user_id", user)).isZero();
         assertThat(fixture.count("study_session", "user_id", other)).isEqualTo(1);

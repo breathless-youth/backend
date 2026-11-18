@@ -3,6 +3,7 @@ package project.study.studysession.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -38,7 +39,16 @@ public record ActiveSessionSnapshotRequest(
                 description = "지금까지의 과목 구간 전체 — 최종 제출의 subjectSegments와 같은 규칙(reportedAt을 세션 끝으로 본다). "
                         + "진행 중인 구간은 reportedAt에서 닫아서 보낸다. 선택 필드라 없거나 []이면 기존과 동일")
         @Valid
-        List<SubjectSegmentRequest> subjectSegments) {
+        List<SubjectSegmentRequest> subjectSegments,
+
+        @Schema(description = "지금까지의 관찰 기록 전체 — 최종 제출의 observations와 같은 규칙(reportedAt을 세션 끝으로 본다). 선택 필드")
+        @Size(max = 1000)
+        List<@NotNull @Valid ObservationRequest> observations) {
+
+    /** 선택 필드라 null이면 빈 목록으로 다룬다. */
+    public List<ObservationRequest> observationsOrEmpty() {
+        return observations == null ? List.of() : observations;
+    }
 
     /** 선택 필드라 null이면 빈 목록으로 다룬다. */
     public List<SubjectSegmentRequest> subjectSegmentsOrEmpty() {

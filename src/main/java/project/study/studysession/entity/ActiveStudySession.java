@@ -57,4 +57,9 @@ public class ActiveStudySession {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "subject_segments", nullable = false)
     private String subjectSegments;
+
+    // 관찰 기록 스냅샷(ObservationRequest 배열의 JSON) — 확정 시 study_session_observation 행이 된다
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "observations", nullable = false)
+    private String observations;
 }

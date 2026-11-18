@@ -92,7 +92,8 @@ public class StudySessionService {
                 request.studySec(),
                 request.focusSec(),
                 events,
-                new SessionAttachments(request.subjectSegmentsOrEmpty(), completedTasks));
+                new SessionAttachments(
+                        request.subjectSegmentsOrEmpty(), completedTasks, request.observationsOrEmpty()));
         if (autoFinalized) {
             sessions.forEach(StudySession::markAutoFinalized);
         }
@@ -296,8 +297,9 @@ public class StudySessionService {
                 .sorted(Comparator.comparing(SubjectSegmentRequest::startedAt))
                 .toList();
         validateSubjectSegments(startedAt, endedAt, sortedSegments);
+        validateObservations(startedAt, endedAt, attachments.observations());
 
-        return buildSessions(owner, cuts, weights, studySec, focusSec, sortedSegments, attachments.completedTasks());
+        return buildSessions(owner, cuts, weights, studySec, focusSec, attachments.withSubjectSegments(sortedSegments));
     }
 
     /**

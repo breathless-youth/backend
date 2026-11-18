@@ -88,7 +88,8 @@ public class ActiveSnapshotBuffer {
                     r.studySec(),
                     r.focusSec(),
                     eventsJson,
-                    subjectSegmentsJson));
+                    subjectSegmentsJson,
+                    objectMapper.writeValueAsString(r.observationsOrEmpty())));
         }
         if (rows.isEmpty()) {
             return;
