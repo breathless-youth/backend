@@ -40,6 +40,8 @@ public class ShopController {
             summary = "상품 목록",
             description = "마스코트 소품과 타이머 배경을 한 번에 준다. price가 null인 상품은 포인트로 살 수 없는 보상 상품이고 unlock에 조건과 진행이 담긴다. "
                     + "보상 상품은 조건을 채우면 따로 받는 요청 없이 owned가 true가 된다. "
+                    + "price·unlock·storeProductId가 모두 null인 타이머 배경은 무료 상품이고 owned가 true다. "
+                    + "공간 상품은 assetKey·assetType으로 파일 주소를 만든다. 판매를 멈춘 상품은 이미 가진 사람에게만 준다. "
                     + "name은 Accept-Language의 언어로 주고 번역이 없는 상품은 한국어로 준다. tag는 화면에서 거르는 분류 코드이고 보여 줄 이름은 앱이 정한다.")
     @GetMapping
     public ShopItemListResponse list(
@@ -53,7 +55,7 @@ public class ShopController {
     @ApiResponse(
             responseCode = "409",
             description =
-                    "INSUFFICIENT_POINTS(잔액 부족)·ITEM_ALREADY_OWNED(이미 가짐)·MASCOT_LOCKED(잠긴 마스코트의 소품)·ITEM_NOT_PURCHASABLE(보상 상품)",
+                    "INSUFFICIENT_POINTS(잔액 부족)·ITEM_ALREADY_OWNED(이미 가짐)·MASCOT_LOCKED(잠긴 마스코트의 소품)·ITEM_NOT_PURCHASABLE(보상·결제·무료 상품)",
             content =
                     @Content(
                             examples =

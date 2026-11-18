@@ -16,6 +16,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import project.study.shop.dto.AccessoryRow;
 import project.study.shop.dto.AccessorySlot;
+import project.study.shop.dto.AssetType;
 import project.study.shop.dto.DecorationRow;
 import project.study.shop.dto.EffectPiece;
 import project.study.shop.dto.ShopCategory;
@@ -32,15 +33,15 @@ public class ShopRepository {
 
     private static final String ITEM_COLUMNS =
             "id, code, category, mascot_code, slot, tag, name, image_url, back_image_url, grade, price, unlock_type, unlock_value, "
-                    + "store_product_id, effect_image_url, effect_pieces, effect_type";
+                    + "store_product_id, effect_image_url, effect_pieces, effect_type, active, asset_key, asset_type";
 
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;
 
-    /** 파는 중인 상품. 종류, 진열 순서 순. 이름은 language 번역이 있으면 그것, 없으면 한국어다. */
-    public List<ShopItem> findActive(String language) {
+    /** 판매를 멈춘 상품까지 모든 상품. 종류, 진열 순서 순. 이름은 language 번역이 있으면 그것, 없으면 한국어다. */
+    public List<ShopItem> findAll(String language) {
         return jdbc.sql("SELECT " + ITEM_COLUMNS.replace(" name,", " COALESCE(names ->> :lang, name) AS name,")
-                        + " FROM shop_item WHERE active ORDER BY category, sort_order, id")
+                        + " FROM shop_item ORDER BY category, sort_order, id")
                 .param("lang", language)
                 .query(this::item)
                 .list();
@@ -77,14 +78,6 @@ public class ShopRepository {
                 .param("p", storeProductId)
                 .query(this::item)
                 .optional();
-    }
-
-    public boolean isActive(long itemId) {
-        return jdbc.sql("SELECT active FROM shop_item WHERE id = :id")
-                .param("id", itemId)
-                .query(Boolean.class)
-                .optional()
-                .orElse(false);
     }
 
     public Set<Long> ownedItemIds(long userId) {
@@ -229,6 +222,7 @@ public class ShopRepository {
     private ShopItem item(ResultSet rs, int rowNum) throws SQLException {
         String slot = rs.getString("slot");
         String unlockType = rs.getString("unlock_type");
+        String assetType = rs.getString("asset_type");
         return new ShopItem(
                 rs.getLong("id"),
                 rs.getString("code"),
@@ -246,7 +240,10 @@ public class ShopRepository {
                 rs.getString("store_product_id"),
                 rs.getString("effect_image_url"),
                 effectPieces(rs.getString("effect_pieces")),
-                rs.getString("effect_type"));
+                rs.getString("effect_type"),
+                rs.getBoolean("active"),
+                rs.getString("asset_key"),
+                assetType == null ? null : AssetType.valueOf(assetType));
     }
 
     private List<EffectPiece> effectPieces(String json) {
