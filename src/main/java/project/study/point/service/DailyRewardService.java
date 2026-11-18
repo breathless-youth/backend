@@ -17,7 +17,6 @@ import project.study.point.dto.MedalReward;
 import project.study.point.dto.MedalRow;
 import project.study.point.dto.PointReason;
 import project.study.point.repository.PointRepository;
-import project.study.user.service.MemberGuard;
 import project.study.user.service.UserTimeZones;
 
 /**
@@ -30,7 +29,6 @@ public class DailyRewardService {
 
     private final PointRepository repository;
     private final PointService pointService;
-    private final MemberGuard members;
     private final UserTimeZones userTimeZones;
     private final Clock clock;
     private final StudyPointPolicy studyPolicy;
@@ -90,7 +88,6 @@ public class DailyRewardService {
 
     @Transactional
     public ClaimResponse claimAttendance(Long userId) {
-        members.requireMember(userId);
         LocalDate today = startedToday(userId);
         return claim(userId, PointReason.ATTENDANCE, today.toString(), rewardPolicy.attendancePoints(), today);
     }
@@ -98,7 +95,6 @@ public class DailyRewardService {
     /** 받는 포인트는 받는 순간의 목표 시간으로 정한다. 받은 뒤 목표를 올려도 더 받지 못한다. */
     @Transactional
     public ClaimResponse claimDailyGoal(Long userId) {
-        members.requireMember(userId);
         LocalDate today = startedToday(userId);
         if (repository.exists(userId, PointReason.DAILY_GOAL, today.toString())) {
             // 받은 뒤 목표를 올려도 다시 요청하면 에러가 아니라 이미 받았다고 답한다
@@ -115,7 +111,6 @@ public class DailyRewardService {
     /** 안 받은 메달을 한 번에 받는다. 받을 메달이 없으면 지급 없이 잔액만 준다. */
     @Transactional
     public MedalClaimAllResponse claimAllMedals(Long userId) {
-        members.requireMember(userId);
         pointService.lock(userId);
         int count = 0;
         int total = 0;
@@ -131,7 +126,6 @@ public class DailyRewardService {
 
     @Transactional
     public ClaimResponse claimMedal(Long userId, long recordId) {
-        members.requireMember(userId);
         MedalRow medal = repository
                 .findMedal(userId, recordId)
                 .filter(row -> !row.periodStart().isBefore(rewardPolicy.medalStartsOn()))
