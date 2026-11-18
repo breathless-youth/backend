@@ -75,9 +75,9 @@ class StudyTogetherPointApiTest {
                 .hasPathSatisfying("$.attendance.points", v -> assertThat(v).isEqualTo(15))
                 .hasPathSatisfying("$.ad.points", v -> assertThat(v).isEqualTo(20))
                 .hasPathSatisfying(
-                        "$.medalPoints.daily", v -> assertThat(v).asList().containsExactly(5, 3, 1))
+                        "$.medalPoints.daily", v -> assertThat(v).asList().containsExactly(10, 5, 3))
                 .hasPathSatisfying(
-                        "$.medalPoints.weekly", v -> assertThat(v).asList().containsExactly(10, 5, 3))
+                        "$.medalPoints.weekly", v -> assertThat(v).asList().containsExactly(30, 15, 10))
                 .hasPathSatisfying(
                         "$.medalPoints.monthly", v -> assertThat(v).asList().containsExactly(150, 100, 50));
     }

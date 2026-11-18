@@ -26,8 +26,8 @@ public class DailyRewardPolicy {
             @Value("${app.points.attendance.points:15}") int attendancePoints,
             @Value("${app.points.daily-goal.tier-ends-sec:7200,28800}") List<Integer> goalTierEndsSec,
             @Value("${app.points.daily-goal.tier-points:20,5}") List<Integer> goalTierPoints,
-            @Value("${app.points.medal.daily:5,3,1}") List<Integer> dailyMedal,
-            @Value("${app.points.medal.weekly:10,5,3}") List<Integer> weeklyMedal,
+            @Value("${app.points.medal.daily:10,5,3}") List<Integer> dailyMedal,
+            @Value("${app.points.medal.weekly:30,15,10}") List<Integer> weeklyMedal,
             @Value("${app.points.medal.monthly:150,100,50}") List<Integer> monthlyMedal,
             @Value("${app.points.medal.starts-on:2000-01-01}") LocalDate medalStartsOn) {
         this.attendancePoints = attendancePoints;
