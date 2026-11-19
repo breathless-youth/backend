@@ -40,7 +40,7 @@ API는 CSRF 보호를 꺼 둔 무상태 서버다. 인증은 `Authorization: Bea
 
 - 쿠키 모드는 웹과 API가 같은 사이트(`focusmakers.app`)일 때만 동작한다. `web-dev.focusmakers.app`과 `api-dev.focusmakers.app`처럼 등록 가능한 도메인이 같아야 `SameSite=Strict` 쿠키가 실린다.
 - `web.sunqstudio.kr`와 Vercel 미리보기는 API와 다른 사이트라 쿠키가 실리지 않는다. 이 도메인의 웹은 쿠키 모드를 쓸 수 없다.
-- 로컬 개발은 Vite 프록시로 API를 같은 출처(`http://localhost`)처럼 부를 때만 쿠키가 오간다. Secure 쿠키를 http의 localhost에서 받는지는 브라우저마다 다르다. Chrome과 Firefox는 localhost를 안전한 출처로 보고 받지만, Safari의 동작은 직접 확인해야 한다.
+- 로컬 개발은 Vite 프록시로 API를 같은 출처(`http://localhost`)처럼 부를 때만 쿠키가 오간다. Secure 쿠키를 http의 localhost에서 받는지는 브라우저마다 다르다. Chrome과 Firefox는 localhost를 안전한 출처로 보고 받는다. Safari는 http의 localhost에서 Secure 쿠키를 받지 않아 열 때마다 새 비회원이 된다(2026-11-19 확인). 같은 웹을 https 터널(cloudflared)로 열면 Safari도 두 쿠키를 받고, Safari를 종료했다 다시 열어도 같은 비회원으로 돌아왔다. 로컬에서 Safari를 확인하려면 https 터널을 쓴다.
 - 브라우저에서 refresh를 잃으면(401·만료·로그아웃) `POST /api/users`를 다시 부른다. 기기 쿠키가 남아 있으면 같은 비회원으로 돌아온다. 시크릿 창, 다른 브라우저, 사이트 데이터 삭제는 기기 쿠키가 없어 새 비회원이 된다.
 - Safari(ITP)는 IP 주소가 웹과 다른 서버가 심은 쿠키의 수명을 7일로 줄일 수 있다. API 서버와 웹 서버가 다른 IP를 쓰면 Safari 사용자는 400일이 아니라 7일 넘게 안 들어오면 새 비회원이 될 수 있다. 실제로 그런지 확인이 필요하다.
 - 개인정보처리방침에 기기 식별 쿠키 항목(이름, 목적, 보관 기간 400일)을 더해야 한다. 후속 작업이다.
