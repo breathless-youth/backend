@@ -2,6 +2,7 @@ package project.study.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -85,5 +86,17 @@ class ApiVersionSwaggerDocsTest {
                 .bodyJson()
                 .hasPathSatisfying(
                         "$.info.description", v -> assertThat(v).asString().contains("엔드포인트 단위"));
+    }
+
+    @Test
+    void 문서에_Refresh_Transport_헤더_파라미터가_실린다() {
+        for (String path : List.of("/api/users", "/api/auth/refresh", "/api/auth/link", "/api/auth/logout")) {
+            assertThat(mvc.get().uri(API_DOCS))
+                    .hasStatusOk()
+                    .bodyJson()
+                    .hasPathSatisfying(
+                            "$.paths['" + path + "'].post.parameters[?(@.name=='Refresh-Transport')].in",
+                            v -> assertThat(v).asList().containsExactly("header"));
+        }
     }
 }

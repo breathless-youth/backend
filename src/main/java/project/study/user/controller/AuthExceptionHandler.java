@@ -1,5 +1,8 @@
 package project.study.user.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -19,11 +22,17 @@ import project.study.user.service.InvalidRefreshTokenException;
  */
 @RestControllerAdvice
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@RequiredArgsConstructor
 public class AuthExceptionHandler {
 
+    private final RefreshTokenCookies refreshTokenCookies;
+
+    // 쓸 수 없게 된 refresh 쿠키를 남겨 두면 브라우저가 매번 같은 401을 되풀이하므로 응답에서 만료시킨다
     @ExceptionHandler(InvalidRefreshTokenException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    public ErrorResponse handleInvalidRefreshToken(InvalidRefreshTokenException e) {
+    public ErrorResponse handleInvalidRefreshToken(
+            InvalidRefreshTokenException e, HttpServletRequest request, HttpServletResponse response) {
+        refreshTokenCookies.expire(request, response);
         return new ErrorResponse(ErrorCode.INVALID_REFRESH_TOKEN, e.getMessage());
     }
 
