@@ -300,6 +300,47 @@ class ActiveSessionSnapshotApiTest {
     }
 
     @Test
+    void 재접속_조회는_스냅샷의_관찰_기록을_시작_순으로_돌려준다() {
+        Instant started = startedAt.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Instant late = started.plusSeconds(40);
+        Instant early = started.plusSeconds(10);
+        String body = """
+                {"startedAt":"%s","reportedAt":"%s","studySec":60,"focusSec":60,"events":[],
+                 "observations":[{"type":"YAWN","startedAt":"%s","endedAt":"%s"},{"type":"YAWN","startedAt":"%s"}]}
+                """.formatted(started, started.plusSeconds(60), late, late.plusSeconds(4), early);
+        mvc.put()
+                .uri("/api/study-sessions/active")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(asUser(userId))
+                .exchange();
+        buffer.flush();
+
+        assertThat(restore(userId))
+                .hasStatus(HttpStatus.OK)
+                .bodyJson()
+                .hasPathSatisfying("$.observations.length()", v -> assertThat(v).isEqualTo(2))
+                .hasPathSatisfying("$.observations[0].type", v -> assertThat(v).isEqualTo("YAWN"))
+                .hasPathSatisfying(
+                        "$.observations[0].startedAt", v -> assertThat(v).isEqualTo(early.toString()))
+                .hasPathSatisfying(
+                        "$.observations[1].startedAt", v -> assertThat(v).isEqualTo(late.toString()))
+                .hasPathSatisfying(
+                        "$.observations[1].endedAt",
+                        v -> assertThat(v).isEqualTo(late.plusSeconds(4).toString()));
+    }
+
+    @Test
+    void 관찰_기록_없이_보고하면_재접속_조회의_관찰_기록은_빈_배열이다() {
+        report(userId, startedAt, startedAt.plusSeconds(30), 30, 30);
+
+        assertThat(restore(userId))
+                .hasStatus(HttpStatus.OK)
+                .bodyJson()
+                .hasPathSatisfying("$.observations.length()", v -> assertThat(v).isEqualTo(0));
+    }
+
+    @Test
     void 진행중_draft가_없으면_조회는_404다() {
         assertThat(restore(userId)).hasStatus(HttpStatus.NOT_FOUND);
     }
