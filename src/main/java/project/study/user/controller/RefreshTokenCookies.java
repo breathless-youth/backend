@@ -9,7 +9,9 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -18,11 +20,12 @@ import org.springframework.util.StringUtils;
 import project.study.common.exception.BadRequestException;
 import project.study.common.exception.ErrorCode;
 import project.study.user.dto.RefreshRequest;
+import project.study.user.dto.UserRegisterRequest;
 
 /**
- * 브라우저용 refresh 쿠키 (ADR-0049)
+ * 브라우저용 refresh·기기 쿠키 (ADR-0050)
  *
- * PC 브라우저에는 기기 보안 저장소가 없어, 요청에 {@code Refresh-Transport: cookie}가 있을 때만 refresh를 스크립트가 못 읽는 쿠키로 주고받는다.
+ * PC 브라우저에는 기기 보안 저장소가 없어, 요청에 {@code Refresh-Transport: cookie}가 있을 때만 refresh와 deviceId를 스크립트가 못 읽는 쿠키로 주고받는다.
  * 헤더가 없는 앱 요청은 예전처럼 본문으로만 오간다.
  */
 @Component
@@ -33,6 +36,10 @@ class RefreshTokenCookies {
             "`cookie`를 보내면 refresh 토큰을 응답 본문 대신 HttpOnly 쿠키 `__Host-refresh_token`으로 주고받는다. "
                     + "브라우저 전용이고 앱은 보내지 않는다. 헤더가 없으면 refresh는 본문으로만 오간다";
     private static final String COOKIE_NAME = "__Host-refresh_token";
+    private static final String DEVICE_COOKIE_NAME = "__Host-device_id";
+    // Chrome은 쿠키 수명을 400일로 잘라 받으므로 그보다 길게 줘도 소용없다
+    private static final Duration DEVICE_MAX_AGE = Duration.ofDays(400);
+    private static final Pattern DEVICE_ID = Pattern.compile(UserRegisterRequest.DEVICE_ID_PATTERN);
     private static final String COOKIE_MODE = "cookie";
 
     private final Validator validator;
@@ -60,7 +67,7 @@ class RefreshTokenCookies {
     String resolve(RefreshRequest body, HttpServletRequest request) {
         String token = body != null ? body.refreshToken() : null;
         if (!StringUtils.hasText(token) && requested(request)) {
-            token = singleCookieValue(request);
+            token = singleCookieValue(request, COOKIE_NAME);
         }
         Set<ConstraintViolation<RefreshRequest>> violations = validator.validate(new RefreshRequest(token));
         if (!violations.isEmpty()) {
@@ -78,13 +85,13 @@ class RefreshTokenCookies {
      * 같은 이름이 둘 이상이면 어느 쪽이 진짜인지 알 수 없어 하나도 고르지 않는다.
      * 그러면 토큰이 없는 요청과 같은 400이 나간다.
      */
-    private static String singleCookieValue(HttpServletRequest request) {
+    private static String singleCookieValue(HttpServletRequest request, String name) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {
             return null;
         }
         List<String> values = Arrays.stream(cookies)
-                .filter(cookie -> COOKIE_NAME.equals(cookie.getName()))
+                .filter(cookie -> name.equals(cookie.getName()))
                 .map(Cookie::getValue)
                 .toList();
         return values.size() == 1 ? values.getFirst() : null;
@@ -100,14 +107,37 @@ class RefreshTokenCookies {
         if (!requested(request)) {
             return refreshToken;
         }
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie(refreshToken, maxAge));
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie(COOKIE_NAME, refreshToken, maxAge));
         return null;
     }
 
     /** 쿠키 모드 요청이면 브라우저에 남은 refresh 쿠키를 만료시킨다. */
     void expire(HttpServletRequest request, HttpServletResponse response) {
         if (requested(request)) {
-            response.addHeader(HttpHeaders.SET_COOKIE, cookie("", Duration.ZERO));
+            response.addHeader(HttpHeaders.SET_COOKIE, cookie(COOKIE_NAME, "", Duration.ZERO));
+        }
+    }
+
+    /**
+     * 쿠키 모드 요청의 기기 쿠키에 든 deviceId(소문자)
+     *
+     * 앱이 UUID를 기기 저장소에 두듯 브라우저는 서버가 심은 이 쿠키에 둔다. 스크립트는 읽지 못한다.
+     * 쿠키 모드가 아니거나, 쿠키가 없거나 둘 이상이거나, UUID 형식이 아니면 null이다.
+     */
+    String deviceId(HttpServletRequest request) {
+        if (!requested(request)) {
+            return null;
+        }
+        String value = singleCookieValue(request, DEVICE_COOKIE_NAME);
+        return value != null && DEVICE_ID.matcher(value).matches() ? value.toLowerCase(Locale.ROOT) : null;
+    }
+
+    /** 쿠키 모드 요청이면 기기 쿠키를 이 deviceId로 다시 심어 수명을 400일로 늘린다. deviceId가 null이면 아무것도 하지 않는다. */
+    void keepDevice(String deviceId, HttpServletRequest request, HttpServletResponse response) {
+        if (deviceId != null && requested(request)) {
+            response.addHeader(
+                    HttpHeaders.SET_COOKIE,
+                    cookie(DEVICE_COOKIE_NAME, deviceId.toLowerCase(Locale.ROOT), DEVICE_MAX_AGE));
         }
     }
 
@@ -115,8 +145,8 @@ class RefreshTokenCookies {
     // 그래서 형제 하위 도메인이 Domain=상위 도메인으로 같은 이름의 쿠키를 심어 자기 계정으로 로그인시키는 공격을 막는다.
     // Path=/라 이 호스트의 모든 API 요청에 실리지만, 값은 인증 경로에서 Refresh-Transport 헤더가 있을 때만 읽고 스크립트는 HttpOnly라 못 읽는다.
     // Strict라 다른 사이트에서 시작된 요청에는 실리지 않는다.
-    private static String cookie(String value, Duration maxAge) {
-        return ResponseCookie.from(COOKIE_NAME, value)
+    private static String cookie(String name, String value, Duration maxAge) {
+        return ResponseCookie.from(name, value)
                 .httpOnly(true)
                 .secure(true)
                 .sameSite("Strict")

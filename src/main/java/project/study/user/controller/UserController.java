@@ -74,7 +74,9 @@ public class UserController {
                     계정 연동으로 해결할 예정이다.
 
                     **브라우저(쿠키 모드)**: `Refresh-Transport: cookie`를 붙이면 refresh를 HttpOnly 쿠키 `__Host-refresh_token`\
-                    (Path `/`)으로만 주고 응답 본문의 `refreshToken`은 뺀다. 이후 refresh·로그아웃도 같은 헤더로 부른다 (ADR-0049).""")
+                    (Path `/`)으로만 주고 응답 본문의 `refreshToken`은 뺀다. 이후 refresh·로그아웃도 같은 헤더로 부른다. \
+                    쓴 deviceId는 HttpOnly 쿠키 `__Host-device_id`(400일)로도 심고, 다음 등록 때 이 쿠키가 UUID 형식이면 \
+                    본문 `deviceId` 대신 쓴다. 그래서 refresh가 만료돼도 같은 비회원으로 돌아온다(본문 검증은 그대로 받는다) (ADR-0050).""")
     @ApiResponse(responseCode = "201", description = "신규 등록 — 유저가 새로 생성됐고 `isNew`가 `true`다. 토큰 쌍 포함")
     @ApiResponse(
             responseCode = "200",
@@ -101,12 +103,17 @@ public class UserController {
             @Valid @RequestBody UserRegisterRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
-        DeviceRegistrationService.Registration result = deviceRegistrationService.register(request);
+        // 브라우저는 기기 쿠키가 본문보다 먼저다. 앱처럼 refresh가 만료돼도 같은 deviceId로 같은 비회원에게 돌아온다 (ADR-0050)
+        String cookieDeviceId = refreshTokenCookies.deviceId(httpRequest);
+        UserRegisterRequest effective =
+                cookieDeviceId == null ? request : new UserRegisterRequest(cookieDeviceId, request.language());
+        DeviceRegistrationService.Registration result = deviceRegistrationService.register(effective);
         AuthService.TokenPair tokens = result.tokens();
         UserRegisterResponse response = new UserRegisterResponse(
                 result.isNew(),
                 tokens.accessToken(),
                 refreshTokenCookies.deliver(tokens.refreshToken(), httpRequest, httpResponse));
+        refreshTokenCookies.keepDevice(effective.deviceId(), httpRequest, httpResponse);
         // 신규 등록은 201, 같은 기기의 재등록(멱등)은 200
         HttpStatus status = result.isNew() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(response);

@@ -46,7 +46,8 @@ public class AuthController {
 
                     **브라우저(쿠키 모드)**: `Refresh-Transport: cookie` 헤더를 붙이고 본문 없이 보낸다. \
                     refresh는 쿠키 `__Host-refresh_token`에서 읽고, 새 refresh도 쿠키로만 준다(응답 본문에 `refreshToken` 없음). \
-                    401이면 쿠키도 만료시킨다. 본문에 `refreshToken`이 있으면 쿠키보다 본문이 먼저다.""")
+                    401이면 쿠키도 만료시킨다. 본문에 `refreshToken`이 있으면 쿠키보다 본문이 먼저다. \
+                    성공할 때 기기 쿠키 `__Host-device_id`가 함께 왔으면 수명을 400일로 다시 늘린다(없으면 새로 만들지 않는다).""")
     @ApiResponse(
             responseCode = "200",
             description = "재발급 성공, 새 access·refresh 쌍. 이전 refresh는 무효. 쿠키 모드면 refresh는 Set-Cookie로만 온다")
@@ -83,8 +84,11 @@ public class AuthController {
             HttpServletResponse httpResponse) {
         String refreshToken = refreshTokenCookies.resolve(request, httpRequest);
         TokenResponse tokens = authService.refresh(new RefreshRequest(refreshToken));
-        return new TokenResponse(
+        TokenResponse response = new TokenResponse(
                 tokens.accessToken(), refreshTokenCookies.deliver(tokens.refreshToken(), httpRequest, httpResponse));
+        // 접속할 때마다 기기 쿠키 수명을 늘린다. refresh는 deviceId를 모르므로 쿠키가 없으면 새로 만들지 않는다
+        refreshTokenCookies.keepDevice(refreshTokenCookies.deviceId(httpRequest), httpRequest, httpResponse);
+        return response;
     }
 
     @Operation(summary = "소셜 로그인", description = """
@@ -195,7 +199,8 @@ public class AuthController {
                     이미 회전돼 쓸 수 없게 된 **내** refresh를 보내면 탈취 의심으로 보고 이 계정의 refresh를 전량 폐기한다.
 
                     **브라우저(쿠키 모드)**: `Refresh-Transport: cookie`를 붙이고 본문 없이 보내면 쿠키 `__Host-refresh_token`의 \
-                    refresh를 폐기하고 그 쿠키를 만료시킨다. 본문에 `refreshToken`이 있으면 쿠키보다 본문이 먼저다.""")
+                    refresh를 폐기하고 그 쿠키를 만료시킨다. 본문에 `refreshToken`이 있으면 쿠키보다 본문이 먼저다. \
+                    기기 쿠키 `__Host-device_id`는 지우지 않는다 — 앱처럼 다음 등록이 같은 deviceId를 쓴다.""")
     @ApiResponse(responseCode = "204", description = "처리됨, 본문 없음. 쿠키 모드면 refresh 쿠키를 만료시킨다")
     @ApiResponse(
             responseCode = "400",

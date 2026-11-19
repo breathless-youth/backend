@@ -10,9 +10,7 @@ public record UserRegisterRequest(
                 description = "앱이 첫 실행 때 생성해 기기 보안 저장소에 보관하는 기기 식별 UUID. 대소문자는 서버가 소문자로 통일한다",
                 example = "0f8fad5b-d9cb-469f-a165-70867728950e")
         @NotBlank
-        @Pattern(
-                regexp = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-                message = "UUID 형식이어야 합니다")
+        @Pattern(regexp = UserRegisterRequest.DEVICE_ID_PATTERN, message = "UUID 형식이어야 합니다")
         String deviceId,
 
         @Schema(
@@ -21,6 +19,10 @@ public record UserRegisterRequest(
                 example = "ja-JP")
         @Size(max = 64, message = "언어 태그는 64자 이하여야 합니다")
         String language) {
+
+    /** deviceId가 따라야 하는 UUID 형식. 브라우저 기기 쿠키도 같은 형식만 받는다. */
+    public static final String DEVICE_ID_PATTERN =
+            "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 
     /** 언어 없이 등록 — 옛 앱과 내부 호출(시더)은 한국어 목록을 받는다. */
     public UserRegisterRequest(String deviceId) {
