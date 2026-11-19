@@ -5,6 +5,8 @@ import static project.study.support.AuthTestSupport.asUser;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,9 @@ import project.study.TestcontainersConfiguration;
 class PlannerRecordReadTest {
     @Autowired
     private PlannerRecordService service;
+
+    @Autowired
+    private PersonalRecordProjection projection;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -150,6 +155,17 @@ class PlannerRecordReadTest {
                     assertThat(record.studySec()).isEqualTo(1800);
                     assertThat(record.focusSec()).isEqualTo(1500);
                 });
+    }
+
+    @Test
+    void timerEditWhoseOriginalIsGoneIsHiddenFromPersonalRecords() {
+        // 원본 없는 수정본을 보여주는 것은 직접 입력뿐이다
+        jdbc.update("""
+                INSERT INTO planner_record_edit(user_id,record_key,source,started_at,ended_at)
+                VALUES(?,'c:2026-10-01T10:00:00Z','TIMER',?,?)
+                """, user, Timestamp.from(at("10:00")), Timestamp.from(at("11:00")));
+        LocalDate day = LocalDate.parse("2026-10-01");
+        assertThat(projection.read(user, day, day, ZoneId.of("Asia/Seoul"))).isEmpty();
     }
 
     private void edit(String action, String from, String to, Long subject) {

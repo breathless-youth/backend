@@ -1,13 +1,16 @@
 package project.study.studysession.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import project.study.studysession.entity.StudySessionSource;
 
 /** 진행중 세션의 누적 스냅샷 — 30초마다 통째로 보내 서버 draft를 덮어쓴다 (BY-447). */
 public record ActiveSessionSnapshotRequest(
@@ -43,7 +46,27 @@ public record ActiveSessionSnapshotRequest(
 
         @Schema(description = "지금까지의 관찰 기록 전체 — 최종 제출의 observations와 같은 규칙(reportedAt을 세션 끝으로 본다). 선택 필드")
         @Size(max = 1000)
-        List<@NotNull @Valid ObservationRequest> observations) {
+        List<@NotNull @Valid ObservationRequest> observations,
+
+        @Schema(
+                description =
+                        "세션 출처(선택) — MEASURED(관리 모드)·TIMER(기본 모드). 없으면 MEASURED다. MANUAL은 400이다. reportedAt이 가장 늦은 스냅샷의 값이 draft에 남는다",
+                allowableValues = {"MEASURED", "TIMER"},
+                example = "TIMER")
+        StudySessionSource source) {
+
+    /** 선택 필드라 null이면 관리 모드로 본다. */
+    public StudySessionSource sourceOrMeasured() {
+        return source == null ? StudySessionSource.MEASURED : source;
+    }
+
+    /** 검증 전용. 수동 기록은 자기 API로만 만들어서 MANUAL은 400 {@code VALIDATION_FAILED}다. */
+    @JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(message = "source는 MEASURED 또는 TIMER여야 합니다")
+    public boolean isSessionSource() {
+        return source != StudySessionSource.MANUAL;
+    }
 
     /** 선택 필드라 null이면 빈 목록으로 다룬다. */
     public List<ObservationRequest> observationsOrEmpty() {

@@ -84,6 +84,18 @@ class LegacyStudySessionApiTest {
     }
 
     @Test
+    void 구_앱_제출은_source를_보내도_MEASURED로_저장된다() {
+        String body = """
+                {"userId": %d, "startedAt": "%s", "endedAt": "%s", "studySec": 6600, "focusSec": 6000, "events": [], "source": "TIMER"}""".formatted(userId, sessionStart, sessionEnd);
+
+        assertThat(submit(body))
+                .hasStatus(HttpStatus.CREATED)
+                .bodyJson()
+                .extractingPath("$[0].source")
+                .isEqualTo("MEASURED");
+    }
+
+    @Test
     void userId_없이_세션을_제출하면_400이다() {
         String body = """
                 {"startedAt": "%s", "endedAt": "%s", "studySec": 6600, "focusSec": 6000, "events": []}""".formatted(sessionStart, sessionEnd);

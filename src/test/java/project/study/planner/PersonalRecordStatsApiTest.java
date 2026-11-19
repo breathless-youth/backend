@@ -50,6 +50,23 @@ class PersonalRecordStatsApiTest extends PlannerApiSupport {
     }
 
     @Test
+    void dayCountsTimerInTotalsButNotInFocusRateOrLongest() {
+        session("2026-10-01T09:00:00Z", "2026-10-01T10:00:00Z", 3600, 1800, "Asia/Seoul");
+        var measuredOnly = call("GET", "/api/planner/records/stats?date=2026-10-01&timeZone=Asia/Seoul", null, 200);
+        long timer = session("2026-10-01T11:00:00Z", "2026-10-01T13:00:00Z", 7200, 7200, "Asia/Seoul");
+        jdbc.update("UPDATE study_session SET source='TIMER' WHERE id=?", timer);
+
+        var response = call("GET", "/api/planner/records/stats?date=2026-10-01&timeZone=Asia/Seoul", null, 200);
+
+        assertThat(response.get("sessions").size()).isEqualTo(2);
+        assertThat(response.get("totalStudySec").asLong()).isEqualTo(3600 + 7200);
+        assertThat(response.get("totalFocusSec").asLong()).isEqualTo(1800 + 7200);
+        assertThat(response.get("focusRate")).isEqualTo(measuredOnly.get("focusRate"));
+        assertThat(response.get("longestFocusSec")).isEqualTo(measuredOnly.get("longestFocusSec"));
+        assertThat(response.get("longestFocusSec").asLong()).isLessThan(7200);
+    }
+
+    @Test
     void editedSubjectlessRecordSurvivesReloadWithPersonalSecondsButRawSecondsStayUntouched() {
         long id = session("2026-10-01T09:00:00Z", "2026-10-01T10:00:00Z", 3600, 3600, "Asia/Seoul");
         var result = call("POST", "/api/planner/records/batch", """

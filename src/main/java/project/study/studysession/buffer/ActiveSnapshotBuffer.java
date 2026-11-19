@@ -89,7 +89,8 @@ public class ActiveSnapshotBuffer {
                     r.focusSec(),
                     eventsJson,
                     subjectSegmentsJson,
-                    objectMapper.writeValueAsString(r.observationsOrEmpty())));
+                    objectMapper.writeValueAsString(r.observationsOrEmpty()),
+                    r.sourceOrMeasured().name()));
         }
         if (rows.isEmpty()) {
             return;

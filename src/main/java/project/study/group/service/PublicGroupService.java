@@ -176,7 +176,7 @@ public class PublicGroupService {
         return Comparator.comparing((PublicGroupRow group) -> group.memberCount() >= GroupService.MAX_MEMBERS)
                 .thenComparing(
                         (PublicGroupRow group) ->
-                                focus.getOrDefault(group.id(), WeekFocus.NONE).totalSec(),
+                                focus.getOrDefault(group.id(), WeekFocus.NONE).measuredTotalSec(),
                         Comparator.reverseOrder())
                 .thenComparingLong(PublicGroupRow::id);
     }

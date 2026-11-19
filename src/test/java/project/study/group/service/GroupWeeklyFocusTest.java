@@ -28,6 +28,7 @@ import project.study.group.service.GroupWeeklyFocus.WeekFocus;
 import project.study.ranking.engine.StandingsCache;
 import project.study.room.support.MutableClock;
 import project.study.studysession.service.MemberStudySource;
+import project.study.studysession.service.MemberStudySource.WeekSec;
 
 /** 공개 그룹 이번 주 순공 (BY-1124, 합계 BY-1221) — 합계와 합 ÷ 멤버 수(버림), 60초 캐시, 주가 바뀌면 버림, 많은 사람은 쪼개 읽기. DB 없이 본다. */
 class GroupWeeklyFocusTest {
@@ -54,8 +55,15 @@ class GroupWeeklyFocusTest {
         when(members.findLiveOfPublicGroups()).thenReturn(List.of(refs));
     }
 
+    /** 관리 모드만 한 사람들이라 정렬용 합계가 표시 합계와 같다. */
     private void weekFocus(Map<Long, Long> weekFocus) {
-        when(studySource.weekFocus(anyCollection(), any())).thenReturn(weekFocus);
+        when(studySource.weekFocus(anyCollection(), any())).thenReturn(measuredOnly(weekFocus));
+    }
+
+    private static Map<Long, WeekSec> measuredOnly(Map<Long, Long> weekFocus) {
+        Map<Long, WeekSec> weekSec = new HashMap<>();
+        weekFocus.forEach((userId, sec) -> weekSec.put(userId, new WeekSec(sec, sec)));
+        return weekSec;
     }
 
     @Test
@@ -70,9 +78,18 @@ class GroupWeeklyFocusTest {
         Map<Long, WeekFocus> result = focus.byGroup(WEDNESDAY);
 
         assertThat(result)
-                .containsEntry(1L, new WeekFocus(1000, 333))
-                .containsEntry(2L, new WeekFocus(59, 59))
+                .containsEntry(1L, new WeekFocus(1000, 333, 1000))
+                .containsEntry(2L, new WeekFocus(59, 59, 59))
                 .hasSize(2);
+    }
+
+    @Test
+    void 정렬용_합계는_관리_모드_순공만_더한다() {
+        membership(new PublicMemberRef(1, 10), new PublicMemberRef(1, 11));
+        when(studySource.weekFocus(anyCollection(), any()))
+                .thenReturn(Map.of(10L, new WeekSec(700, 100), 11L, new WeekSec(300, 300)));
+
+        assertThat(focus.byGroup(WEDNESDAY)).containsEntry(1L, new WeekFocus(1000, 500, 400));
     }
 
     @Test
@@ -82,7 +99,9 @@ class GroupWeeklyFocusTest {
 
         Map<Long, WeekFocus> result = focus.byGroup(WEDNESDAY);
 
-        assertThat(result).containsEntry(1L, new WeekFocus(600, 600)).containsEntry(2L, new WeekFocus(600, 300));
+        assertThat(result)
+                .containsEntry(1L, new WeekFocus(600, 600, 600))
+                .containsEntry(2L, new WeekFocus(600, 300, 600));
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<Long>> ids = ArgumentCaptor.forClass(Collection.class);
         verify(studySource).weekFocus(ids.capture(), any());
@@ -148,7 +167,7 @@ class GroupWeeklyFocusTest {
             weekFocus.put(userId, 60L);
         }
         when(members.findLiveOfPublicGroups()).thenReturn(refs);
-        when(studySource.weekFocus(anyCollection(), any())).thenReturn(weekFocus);
+        when(studySource.weekFocus(anyCollection(), any())).thenReturn(measuredOnly(weekFocus));
 
         Map<Long, WeekFocus> result = focus.byGroup(WEDNESDAY);
 
@@ -156,6 +175,6 @@ class GroupWeeklyFocusTest {
         ArgumentCaptor<Collection<Long>> ids = ArgumentCaptor.forClass(Collection.class);
         verify(studySource, times(3)).weekFocus(ids.capture(), any());
         assertThat(ids.getAllValues()).extracting(Collection::size).containsExactly(10_000, 10_000, 5_000);
-        assertThat(result).hasSize(25_000).containsEntry(25_000L, new WeekFocus(60, 60));
+        assertThat(result).hasSize(25_000).containsEntry(25_000L, new WeekFocus(60, 60, 60));
     }
 }

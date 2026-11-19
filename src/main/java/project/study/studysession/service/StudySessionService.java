@@ -38,6 +38,7 @@ import project.study.studysession.dto.SubjectSegmentRequest;
 import project.study.studysession.entity.EventStatus;
 import project.study.studysession.entity.StatusEvent;
 import project.study.studysession.entity.StudySession;
+import project.study.studysession.entity.StudySessionSource;
 import project.study.studysession.entity.StudySessionSubjectSegment;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRepository;
@@ -94,9 +95,8 @@ public class StudySessionService {
                 events,
                 new SessionAttachments(
                         request.subjectSegmentsOrEmpty(), completedTasks, request.observationsOrEmpty()));
-        if (autoFinalized) {
-            sessions.forEach(StudySession::markAutoFinalized);
-        }
+        if (request.sourceOrMeasured() == StudySessionSource.TIMER) sessions.forEach(StudySession::markTimer);
+        if (autoFinalized) sessions.forEach(StudySession::markAutoFinalized);
         try {
             List<StudySession> saved = studySessionRepository.saveAll(sessions);
             studySessionRepository.flush();
@@ -159,9 +159,10 @@ public class StudySessionService {
                 sessions.stream().mapToLong(StudySession::getStudySec).sum();
         long totalFocusSec =
                 sessions.stream().mapToLong(StudySession::getFocusSec).sum();
-        // 수동 기록은 합계에만 더한다 — 집중률·최대 집중은 측정한 세션만으로 낸다
-        List<StudySession> measured =
-                sessions.stream().filter(session -> !session.isManual()).toList();
+        // 수동 기록과 기본 모드 기록은 합계에만 더한다. 집중률·최대 집중은 관리 모드 세션만으로 낸다
+        List<StudySession> measured = sessions.stream()
+                .filter(session -> session.getSource() == StudySessionSource.MEASURED)
+                .toList();
         long longestFocusSec = measured.stream()
                 .mapToLong(StudySessionStatsCalculator::longestFocusStreakSec)
                 .max()

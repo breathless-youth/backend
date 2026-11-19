@@ -15,6 +15,7 @@ import project.study.studysession.dto.RankingDaysRow;
 import project.study.studysession.dto.RankingProfile;
 import project.study.studysession.dto.RankingStreakRow;
 import project.study.studysession.dto.RankingTotalRow;
+import project.study.studysession.entity.StudySessionSource;
 import project.study.studysession.entity.TimeSlot;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.StudySessionRankingQueries;
@@ -54,13 +55,20 @@ public class RankingSource {
         return queries.activeProfiles(userIds);
     }
 
+    /** 랭킹은 관리 모드 순공만 세서 진행 중 조각도 관리 모드 draft의 것만 준다 (ADR-0049). */
     public List<LivePiece> livePieces(Instant asOf) {
-        return activeStudySessionService.livePieces(asOf);
+        return measured(activeStudySessionService.livePieces(asOf));
     }
 
     /** 마감 확정용 진행 중 조각 — 집중 중 보정 없이 보고된 스냅샷 그대로 나눈다(ADR-0029). */
     public List<LivePiece> settledPieces(Instant asOf) {
-        return activeStudySessionService.livePieces(asOf, false);
+        return measured(activeStudySessionService.livePieces(asOf, false));
+    }
+
+    private static List<LivePiece> measured(List<LivePiece> pieces) {
+        return pieces.stream()
+                .filter(piece -> piece.source() == StudySessionSource.MEASURED)
+                .toList();
     }
 
     /**

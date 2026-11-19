@@ -137,6 +137,34 @@ class SessionRecoveryServiceTest {
     }
 
     @Test
+    void TIMER_draft가_있으면_확정하고_요약을_반환한다() {
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
+        Instant reported = started.plusSeconds(1800);
+        insertDraft(started, reported, Instant.now().minusSeconds(600), 1800, 1800);
+        jdbcTemplate.update("UPDATE active_study_session SET source = 'TIMER' WHERE user_id = ?", userId);
+
+        SessionRecoveryResponse response = sessionRecoveryService.recover(userId);
+
+        assertThat(response.studySec()).isEqualTo(1800);
+        assertThat(response.startedAt()).isEqualTo(started);
+        assertThat(response.endedAt()).isEqualTo(reported);
+        assertThat(acknowledgedRows()).isEqualTo(1);
+    }
+
+    @Test
+    void draft가_없고_최근_TIMER_자동확정본이_미확인이면_요약을_반환한다() {
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
+        insertSession(started, started.plusSeconds(3600), started, 3600, 3600, true, null);
+        jdbcTemplate.update("UPDATE study_session SET source = 'TIMER' WHERE user_id = ?", userId);
+
+        SessionRecoveryResponse response = sessionRecoveryService.recover(userId);
+
+        assertThat(response.startedAt()).isEqualTo(started);
+        assertThat(response.studySec()).isEqualTo(3600);
+        assertThat(acknowledgedRows()).isEqualTo(1);
+    }
+
+    @Test
     void 이미_확인된_자동확정본이면_404() {
         Instant started = Instant.parse("2026-08-20T03:00:00Z");
         insertSession(

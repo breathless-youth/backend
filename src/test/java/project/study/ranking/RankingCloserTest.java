@@ -124,6 +124,18 @@ class RankingCloserTest extends RankingIntegrationTestBase {
     }
 
     @Test
+    void 마감_확정은_기본_모드_draft를_세지_않는다() {
+        long a = user("a");
+        activeStudySessionRepository.upsertSnapshot(
+                a, kst(10, 9, 23, 0), kst(10, 9, 23, 59), kst(10, 9, 23, 59), 3540, 3540, "[]");
+        markDraftTimer(a);
+
+        closer.closeDue(kst(10, 10, 0, 1));
+
+        assertThat(records()).isEmpty();
+    }
+
+    @Test
     void 탈퇴한_사용자는_마감에서_빠지고_다음_사람이_1위다() {
         long a = user("a");
         long b = user("b");

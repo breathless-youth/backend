@@ -187,6 +187,46 @@ class PlannerRecordUserDataHandlerTest {
     }
 
     @Test
+    void timerRecordWhoseOriginalIsDroppedBySessionMergeIsNotKeptAsOrphan() {
+        long source = user();
+        long target = user();
+        jdbc.update("""
+                INSERT INTO study_session(user_id,stat_date,started_at,submission_started_at,ended_at,study_sec,focus_sec,source)
+                VALUES(?,DATE '2026-10-01',?,?,?,10800,10800,'TIMER')
+                """, source, Timestamp.from(at("10:00")), Timestamp.from(at("10:00")), Timestamp.from(at("13:00")));
+        jdbc.update(
+                """
+                INSERT INTO planner_record_edit(user_id,record_key,source,started_at,ended_at,pieces,revision)
+                VALUES(?,'c:2026-10-01T10:00:00Z','TIMER',?,?,CAST(? AS jsonb),2)
+                """,
+                source,
+                Timestamp.from(at("10:00")),
+                Timestamp.from(at("13:00")),
+                "[{\"startedAt\":\"2026-10-01T10:00:00Z\",\"endedAt\":\"2026-10-01T11:00:00Z\",\"subjectId\":null},"
+                        + "{\"startedAt\":\"2026-10-01T12:00:00Z\",\"endedAt\":\"2026-10-01T13:00:00Z\",\"subjectId\":null}]");
+        jdbc.update("""
+                INSERT INTO study_session(user_id,stat_date,started_at,submission_started_at,ended_at,study_sec,focus_sec)
+                VALUES(?,DATE '2026-10-01',?,?,?,3600,3600)
+                """, target, Timestamp.from(at("11:00")), Timestamp.from(at("11:00")), Timestamp.from(at("12:00")));
+
+        handler().merge(source, target);
+        handlers.stream()
+                .filter(h -> h.columns().contains("study_session.user_id"))
+                .findFirst()
+                .orElseThrow()
+                .merge(source, target);
+
+        assertThat(records.records(target, at("00:00"), at("23:00")))
+                .singleElement()
+                .satisfies(record -> assertThat(record.key()).isEqualTo("c:2026-10-01T11:00:00Z"));
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM planner_record_edit WHERE user_id=? AND NOT deleted",
+                        Integer.class,
+                        target))
+                .isZero();
+    }
+
+    @Test
     void eraseRemovesEveryNewUserColumn() {
         long source = user();
         edit(source, "m:2026-10-01T10:00:00Z", "MANUAL", "10:00", "11:00", false);

@@ -123,6 +123,19 @@ class ActiveSessionFinalizeTest {
     }
 
     @Test
+    void TIMER_draft는_TIMER_세션으로_자동_확정된다() {
+        Long draftId = insertDraft(startedAt, startedAt.plusSeconds(1800), staleLastSeen(), 1800, 1800, "[]");
+        jdbcTemplate.update("UPDATE active_study_session SET source = 'TIMER' WHERE id = ?", draftId);
+
+        activeStudySessionService.finalizeDraft(draftId);
+
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT source FROM study_session WHERE user_id = ?", String.class, userId))
+                .containsExactly("TIMER");
+        assertThat(draftRows()).isEqualTo(0);
+    }
+
+    @Test
     void 자정을_걸친_draft는_두_조각으로_확정된다() {
         Instant midnight = LocalDate.now(KST).atStartOfDay(KST).toInstant();
         Long draftId =

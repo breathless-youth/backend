@@ -3,6 +3,7 @@ package project.study.studysession.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
+import project.study.studysession.entity.StudySessionSource;
 
 /**
  * 재접속 복구용 진행중 세션 스냅샷 (BY-448) — 하트비트 요청(ActiveSessionSnapshotRequest)과 같은 모양이라
@@ -24,4 +25,7 @@ public record ActiveSessionSnapshotResponse(
         @Schema(description = "마지막 스냅샷까지의 비공부 이벤트 전체") List<StatusEventRequest> events,
 
         @Schema(description = "마지막 스냅샷까지의 과목 구간 — 보고 요청과 같은 모양, 시작 시각 오름차순. 마지막 원소의 과목으로 선택 상태를 복원한다. 없으면 []")
-        List<SubjectSegmentRequest> subjectSegments) {}
+        List<SubjectSegmentRequest> subjectSegments,
+
+        @Schema(description = "마지막 스냅샷의 세션 출처 — MEASURED(관리 모드)·TIMER(기본 모드)", example = "TIMER")
+        StudySessionSource source) {}
