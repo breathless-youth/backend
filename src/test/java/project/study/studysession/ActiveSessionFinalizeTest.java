@@ -104,6 +104,38 @@ class ActiveSessionFinalizeTest {
     }
 
     @Test
+    void draft의_관찰_기록이_확정_세션으로_옮겨진다() {
+        Long draftId = insertDraft(startedAt, startedAt.plusSeconds(1800), staleLastSeen(), 1800, 1700, "[]");
+        jdbcTemplate.update(
+                "UPDATE active_study_session SET observations = ?::jsonb WHERE id = ?",
+                """
+                [{"type":"YAWN","startedAt":"%s","endedAt":"%s"}]""".formatted(startedAt.plusSeconds(100), startedAt.plusSeconds(104)),
+                draftId);
+
+        activeStudySessionService.finalizeDraft(draftId);
+
+        Integer observationRows = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM study_session_observation o JOIN study_session s ON o.session_id = s.id"
+                        + " WHERE s.user_id = ? AND o.type = 'YAWN'",
+                Integer.class,
+                userId);
+        assertThat(observationRows).isEqualTo(1);
+    }
+
+    @Test
+    void TIMER_draft는_TIMER_세션으로_자동_확정된다() {
+        Long draftId = insertDraft(startedAt, startedAt.plusSeconds(1800), staleLastSeen(), 1800, 1800, "[]");
+        jdbcTemplate.update("UPDATE active_study_session SET source = 'TIMER' WHERE id = ?", draftId);
+
+        activeStudySessionService.finalizeDraft(draftId);
+
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT source FROM study_session WHERE user_id = ?", String.class, userId))
+                .containsExactly("TIMER");
+        assertThat(draftRows()).isEqualTo(0);
+    }
+
+    @Test
     void 자정을_걸친_draft는_두_조각으로_확정된다() {
         Instant midnight = LocalDate.now(KST).atStartOfDay(KST).toInstant();
         Long draftId =

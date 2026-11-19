@@ -115,6 +115,21 @@ class PublicGroupsApiTest {
     }
 
     @Test
+    void 기본_모드_순공도_합계와_평균에_들어간다() {
+        long group = kit.group("-기본");
+        long a = kit.member(group);
+        long b = kit.member(group);
+        // 그룹장(기록 없음) + a + b = 3명. 확정 900 + 진행 중 600 = 1500
+        study.timerSession(a, MONDAY_NOON, 900);
+        study.timerStudying(b, 590);
+
+        PublicGroupCard card = kit.mine().getFirst();
+
+        assertThat(card.weeklyTotalFocusSec()).isEqualTo(1500);
+        assertThat(card.weeklyAverageFocusSec()).isEqualTo(500);
+    }
+
+    @Test
     void 기록이_없는_그룹의_합계와_평균은_0이다() {
         kit.group("-빈");
 
@@ -158,6 +173,22 @@ class PublicGroupsApiTest {
         assertThat(cards.getLast().memberCount()).isEqualTo(6);
         // 다 찬 그룹의 합계 6000은 가장 크지만 뒤로 간다
         assertThat(cards.getLast().weeklyTotalFocusSec()).isEqualTo(6000);
+    }
+
+    @Test
+    void 정렬은_관리_모드_순공_합계로_한다() {
+        // timer는 기본 모드로 합계가 더 크지만 관리 모드 합계는 measured가 크다
+        long timer = kit.group("-timer");
+        long timerOwner = probe.group(timer).orElseThrow().ownerId();
+        study.timerSession(timerOwner, MONDAY_NOON, 5000);
+        study.session(timerOwner, MONDAY_NOON.plusSeconds(6000), 100);
+        long measured = kit.group("-measured");
+        study.session(probe.group(measured).orElseThrow().ownerId(), MONDAY_NOON, 1000);
+
+        List<PublicGroupCard> cards = kit.mine();
+
+        assertThat(PublicGroupKit.ids(cards)).containsExactly(measured, timer);
+        assertThat(cards.getLast().weeklyTotalFocusSec()).isEqualTo(5100);
     }
 
     @Test

@@ -68,7 +68,7 @@ class MemberStudyQueriesTest {
                 Instant.parse("2026-11-05T02:00:00Z"),
                 "America/New_York");
 
-        assertThat(memberStudyQueries.lastMeasuredEndedAt(List.of(userId)))
+        assertThat(memberStudyQueries.lastStudiedEndedAt(List.of(userId)))
                 .containsEntry(userId, Instant.parse("2026-11-05T02:00:00Z"));
     }
 
@@ -85,7 +85,7 @@ class MemberStudyQueriesTest {
                 Instant.parse("2026-11-04T03:00:00Z"),
                 "Asia/Seoul");
 
-        assertThat(memberStudyQueries.lastMeasuredEndedAt(List.of(userId)))
+        assertThat(memberStudyQueries.lastStudiedEndedAt(List.of(userId)))
                 .containsEntry(userId, Instant.parse("2026-11-04T05:00:00Z"));
     }
 
@@ -100,11 +100,11 @@ class MemberStudyQueriesTest {
 
         assertThat(memberStudyQueries.focusTotals(
                         List.of(userId), LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 2)))
-                .containsEntry(userId, new MemberStudyQueries.FocusTotals(3000, 3000));
+                .containsEntry(userId, new MemberStudyQueries.FocusTotals(3000, 3000, 3000));
     }
 
     @Test
     void 측정_세션이_없으면_결과에_넣지_않는다() {
-        assertThat(memberStudyQueries.lastMeasuredEndedAt(List.of(userId))).doesNotContainKey(userId);
+        assertThat(memberStudyQueries.lastStudiedEndedAt(List.of(userId))).doesNotContainKey(userId);
     }
 }

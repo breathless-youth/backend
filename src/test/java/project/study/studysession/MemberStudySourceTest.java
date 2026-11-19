@@ -34,9 +34,10 @@ import project.study.studysession.dto.MemberStudy.Presence;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.service.ActiveStudySessionService;
 import project.study.studysession.service.MemberStudySource;
+import project.study.studysession.service.MemberStudySource.WeekSec;
 
 /**
- * 그룹 멤버 책상이 읽는 앱 전체 공부 상태·순공 (BY-1124). 기준은 랭킹과 같다 — 측정 세션만, 1초 미만 조각 제외, 진행 중 draft 포함. 상태는 마지막
+ * 그룹 멤버 책상이 읽는 앱 전체 공부 상태·순공 (BY-1124). 관리 모드와 기본 모드 세션을 넣고 직접 입력은 빼며, 1초 미만 조각 제외, 진행 중 draft 포함. 상태는 마지막
  * 수신이 가장 최근인 draft 하나로 60초 창 안에서 판단한다.
  */
 @SpringBootTest
@@ -379,10 +380,12 @@ class MemberStudySourceTest {
         session(me, kst(11, 20, 0, 0), 3600, "MEASURED");
         draft(me, AS_OF.minusSeconds(600), AS_OF.minusSeconds(10), 590, "[]");
 
-        Map<Long, Long> week = source.weekFocus(List.of(me, nothing), AS_OF);
+        Map<Long, WeekSec> week = source.weekFocus(List.of(me, nothing), AS_OF);
 
-        assertThat(week).containsExactlyInAnyOrderEntriesOf(Map.of(me, 1200L + 600L, nothing, 0L));
-        assertThat(week.get(me)).isEqualTo(of(me).weekFocusSec());
+        assertThat(week)
+                .containsExactlyInAnyOrderEntriesOf(
+                        Map.of(me, new WeekSec(1200L + 600L, 1200L + 600L), nothing, new WeekSec(0, 0)));
+        assertThat(week.get(me).totalSec()).isEqualTo(of(me).weekFocusSec());
     }
 
     @Test

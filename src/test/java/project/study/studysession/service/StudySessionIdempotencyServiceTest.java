@@ -67,7 +67,7 @@ class StudySessionIdempotencyServiceTest {
     }
 
     private static StudySessionCreateRequest request(Instant startedAt, Instant endedAt) {
-        return new StudySessionCreateRequest(startedAt, endedAt, 7200, 6600, List.of(), null, null, null);
+        return new StudySessionCreateRequest(startedAt, endedAt, 7200, 6600, List.of(), null, null, null, null, null);
     }
 
     private static StudySession session(Instant startedAt, Instant endedAt) {

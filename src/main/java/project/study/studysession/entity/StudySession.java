@@ -97,6 +97,14 @@ public class StudySession {
     private Set<SessionSlot> slots = new HashSet<>();
 
     // BY-447: 자동 확정본 표시 — true인 세션은 잠정 기록이라 늦은 최종 제출·재확정이 대체할 수 있다
+    // 관찰 기록(하품 등) — 순공 계산에 쓰지 않는 값 컬렉션. 자정 분할이면 시작 시각이 속한 조각 하나에만 붙는다
+    @ElementCollection
+    @CollectionTable(
+            name = "study_session_observation",
+            joinColumns = @JoinColumn(name = "session_id", nullable = false))
+    @BatchSize(size = 64)
+    private List<SessionObservation> observations = new ArrayList<>();
+
     @Column(name = "auto_finalized", nullable = false)
     private boolean autoFinalized;
 
@@ -161,6 +169,11 @@ public class StudySession {
         this.completedTaskIds = new HashSet<>(taskIds);
     }
 
+    /** 조각별로 귀속된 관찰 기록을 붙인다 — 분할 직후 서비스만 호출한다. */
+    public void attachObservations(Collection<SessionObservation> observations) {
+        this.observations = new ArrayList<>(observations);
+    }
+
     /** 조각의 구간별 순공을 붙인다 — 분할 직후 서비스(또는 백필)만 호출한다. */
     public void attachSlots(Collection<SessionSlot> slots) {
         this.slots = new HashSet<>(slots);
@@ -169,6 +182,11 @@ public class StudySession {
     /** 사용자가 직접 넣은 기록임을 표시한다 — 저장 직전 수동 기록 서비스만 호출한다. */
     public void markManual() {
         this.source = StudySessionSource.MANUAL;
+    }
+
+    /** 기본 모드로 잰 세션임을 표시한다. 저장 직전 서비스만 호출한다. */
+    public void markTimer() {
+        this.source = StudySessionSource.TIMER;
     }
 
     public boolean isManual() {

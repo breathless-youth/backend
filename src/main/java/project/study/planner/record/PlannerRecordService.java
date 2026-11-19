@@ -66,7 +66,7 @@ public class PlannerRecordService {
             }
             return visible(edit, PlannerRecordViews.edited(edit, bundle, from, to));
         } catch (NotFoundException orphan) {
-            // 계정 병합에서 원본 충돌로 버린 측정 수정본도 함께 숨긴다.
+            // 계정 병합에서 원본 충돌로 버린 관리 모드·기본 모드 수정본도 함께 숨긴다.
             return Optional.empty();
         }
     }
@@ -86,11 +86,13 @@ public class PlannerRecordService {
                 found = sessions.findByIdAndUserId(Long.valueOf(key.substring(5)), userId)
                         .map(List::of)
                         .orElse(List.of());
-            } else {
-                StudySessionSource source =
-                        key.startsWith("m:") ? StudySessionSource.MANUAL : StudySessionSource.MEASURED;
+            } else if (key.startsWith("m:")) {
                 found = sessions.findByUserIdAndSubmissionStartedAtAndSourceOrderByStartedAtAsc(
-                        userId, Instant.parse(key.substring(2)), source);
+                        userId, Instant.parse(key.substring(2)), StudySessionSource.MANUAL);
+            } else {
+                // c: 키는 관리 모드와 기본 모드 제출 묶음을 함께 찾는다
+                found = sessions.findByUserIdAndSubmissionStartedAtOrderByStartedAtAsc(
+                        userId, Instant.parse(key.substring(2)));
             }
         } catch (DateTimeParseException | NumberFormatException e) {
             throw new BadRequestException("기록 키가 올바르지 않습니다");

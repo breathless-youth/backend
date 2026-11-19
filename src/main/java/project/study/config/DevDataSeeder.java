@@ -276,7 +276,8 @@ public class DevDataSeeder implements ApplicationRunner {
         int focusSec = (int) (totalSec - nonFocusSec);
         studySessionService.create(
                 userId,
-                new StudySessionCreateRequest(startedAt, endedAt, studySec, focusSec, events, segments, null, null),
+                new StudySessionCreateRequest(
+                        startedAt, endedAt, studySec, focusSec, events, segments, null, null, null, null),
                 false);
     }
 

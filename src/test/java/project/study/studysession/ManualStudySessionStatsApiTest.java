@@ -86,6 +86,73 @@ class ManualStudySessionStatsApiTest {
                 .hasStatus(HttpStatus.CREATED);
     }
 
+    /** 기본 모드 세션 제출. 순공은 길이 전체이고, subjectId가 있으면 세션 전체가 그 과목 구간이다. */
+    private void timer(Instant start, Instant end, Long subjectId) {
+        int length = (int) (end.getEpochSecond() - start.getEpochSecond());
+        String segments = subjectId == null ? "[]" : """
+                        [{"subjectId": %d, "startedAt": "%s", "endedAt": "%s"}]""".formatted(subjectId, start, end);
+        String request = """
+                {"startedAt": "%s", "endedAt": "%s", "studySec": %d, "focusSec": %d, "events": [], "subjectSegments": %s, "source": "TIMER"}""".formatted(start, end, length, length, segments);
+        assertThat(mvc.post()
+                        .uri("/api/study-sessions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)
+                        .with(asUser(userId)))
+                .hasStatus(HttpStatus.CREATED);
+    }
+
+    @Test
+    void 과목_누적과_기간_통계에는_기본_모드_기록이_들어간다() {
+        long math = jdbc.queryForObject(
+                "INSERT INTO study_subject (user_id, name) VALUES (?, ?) RETURNING id", Long.class, userId, "수학");
+        measured(at(10, 0), at(11, 0), 1800);
+        timer(at(13, 0), at(15, 0), math);
+
+        assertThat(mvc.get()
+                        .uri("/api/subjects")
+                        .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
+                        .with(asUser(userId)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$[0].studySec", v -> assertThat(v).isEqualTo(7200))
+                .hasPathSatisfying("$[0].focusSec", v -> assertThat(v).isEqualTo(7200));
+        assertThat(mvc.get()
+                        .uri("/api/stats/period")
+                        .param("from", day.toString())
+                        .param("to", day.toString())
+                        .with(asUser(userId)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.dailyList[0].studySec", v -> assertThat(v).isEqualTo(3600 + 7200))
+                .hasPathSatisfying("$.dailyList[0].focusSec", v -> assertThat(v).isEqualTo(1800 + 7200));
+    }
+
+    @Test
+    void 기본_모드_기록만_있는_날은_연속_공부에_세지_않는다() {
+        LocalDate yesterday = LocalDate.now(KST).minusDays(1);
+        timer(at(yesterday, 10, 0), at(yesterday, 12, 0), null);
+
+        assertThat(mvc.get()
+                        .uri("/api/stats/streak")
+                        .param("from", yesterday.toString())
+                        .param("to", yesterday.toString())
+                        .with(asUser(userId)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.streak", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.maxStreak", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying(
+                        "$.studiedDatesInRange.length()", v -> assertThat(v).isEqualTo(0));
+        // 누적 공부일도 관리 모드만 센다
+        assertThat(mvc.get()
+                        .uri("/api/stats/study-days")
+                        .header(ApiVersionConfig.HEADER, ApiVersionConfig.DEFAULT_VERSION)
+                        .with(asUser(userId)))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.totalDays", v -> assertThat(v).isEqualTo(0));
+    }
+
     @Test
     void 일간_조회는_합계에_수동을_넣고_집중률과_최대_집중은_측정만_본다() {
         measured(at(10, 0), at(11, 0), 1800);

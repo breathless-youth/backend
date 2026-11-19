@@ -18,6 +18,7 @@ import project.study.group.repository.GroupMemberRepository;
 import project.study.group.repository.GroupMemberRepository.PublicMemberRef;
 import project.study.ranking.engine.StandingsCache;
 import project.study.studysession.service.MemberStudySource;
+import project.study.studysession.service.MemberStudySource.WeekSec;
 
 /**
  * 공개 그룹의 이번 주 순공 합계·평균 (BY-1124, 합계 BY-1221) — 합계는 지금 멤버들의 이번 주 순공 합, 평균은 그 합 ÷ 지금 멤버 수(정수 나눗셈,
@@ -43,15 +44,22 @@ public class GroupWeeklyFocus {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
+    private static final WeekSec NO_STUDY = new WeekSec(0, 0);
+
     private final GroupMemberRepository members;
     private final MemberStudySource studySource;
     private final StandingsCache cache;
 
-    /** 한 그룹의 이번 주 순공 — 합계와 평균(초). */
-    public record WeekFocus(long totalSec, long averageSec) {
+    /**
+     * 한 그룹의 이번 주 순공 합계와 평균(초), 정렬용 관리 모드 합계
+     *
+     * 합계와 평균은 기본 모드를 포함해 카드에 보인다.
+     * 목록 순서는 경쟁이라 measuredTotalSec로 정하고 응답에는 싣지 않는다.
+     */
+    public record WeekFocus(long totalSec, long averageSec, long measuredTotalSec) {
 
-        /** 맵에 없는 그룹의 값 — 둘 다 0이다. */
-        public static final WeekFocus NONE = new WeekFocus(0, 0);
+        /** 맵에 없는 그룹의 값. 모두 0이다. */
+        public static final WeekFocus NONE = new WeekFocus(0, 0, 0);
     }
 
     /** 그룹 ID → 이번 주 순공. 공개·살아 있는 그룹 전부이고, 멤버가 하나도 없는 그룹은 없다(값이 없으면 {@link WeekFocus#NONE}으로 본다). */
@@ -63,7 +71,7 @@ public class GroupWeeklyFocus {
         List<PublicMemberRef> refs = members.findLiveOfPublicGroups();
         Set<Long> userIds = new LinkedHashSet<>();
         refs.forEach(ref -> userIds.add(ref.userId()));
-        Map<Long, Long> weekFocus = new HashMap<>();
+        Map<Long, WeekSec> weekFocus = new HashMap<>();
         List<Long> chunk = new ArrayList<>(Math.min(userIds.size(), USER_CHUNK));
         for (Long userId : userIds) {
             chunk.add(userId);
@@ -76,14 +84,17 @@ public class GroupWeeklyFocus {
             weekFocus.putAll(studySource.weekFocus(chunk, now));
         }
 
+        // 합계, 멤버 수, 관리 모드 합계
         Map<Long, long[]> sumAndCount = new HashMap<>();
         for (PublicMemberRef ref : refs) {
-            long[] acc = sumAndCount.computeIfAbsent(ref.groupId(), id -> new long[2]);
-            acc[0] += weekFocus.getOrDefault(ref.userId(), 0L);
+            long[] acc = sumAndCount.computeIfAbsent(ref.groupId(), id -> new long[3]);
+            WeekSec sec = weekFocus.getOrDefault(ref.userId(), NO_STUDY);
+            acc[0] += sec.totalSec();
             acc[1]++;
+            acc[2] += sec.measuredSec();
         }
         Map<Long, WeekFocus> byGroup = new HashMap<>();
-        sumAndCount.forEach((groupId, acc) -> byGroup.put(groupId, new WeekFocus(acc[0], acc[0] / acc[1])));
+        sumAndCount.forEach((groupId, acc) -> byGroup.put(groupId, new WeekFocus(acc[0], acc[0] / acc[1], acc[2])));
         return Map.copyOf(byGroup);
     }
 

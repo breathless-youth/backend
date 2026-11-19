@@ -88,6 +88,19 @@ class MascotApiTest {
     }
 
     @Test
+    void 기본_모드_순공으로는_마스코트가_열리지_않는다() {
+        long user = fixture.member();
+        jdbc.sql("""
+                INSERT INTO study_session (user_id, stat_date, started_at, ended_at, study_sec, focus_sec, source)
+                VALUES (:u, DATE '2026-01-11', TIMESTAMPTZ '2026-01-11T01:00:00Z', TIMESTAMPTZ '2026-01-11T21:00:00Z', 72000, 72000, 'TIMER')""").param("u", user).update();
+
+        assertThat(list(user))
+                .bodyJson()
+                .hasPathSatisfying("$.totalFocusSec", v -> assertThat(v).isEqualTo(0))
+                .hasPathSatisfying("$.mascots[1].unlocked", v -> assertThat(v).isEqualTo(false));
+    }
+
+    @Test
     void 열린_마스코트만_선택할_수_있다() {
         long user = fixture.member();
         fixture.measuredSession(user, "2026-01-10", 1, 7200);

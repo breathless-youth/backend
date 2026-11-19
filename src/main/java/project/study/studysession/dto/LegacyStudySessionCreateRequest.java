@@ -22,6 +22,8 @@ public record LegacyStudySessionCreateRequest(
 
     public StudySessionCreateRequest toRequest() {
         // 구 앱은 과목 시트가 없다 — 과목 구간은 항상 비어 있다
-        return new StudySessionCreateRequest(startedAt, endedAt, studySec, focusSec, events, null, null, null);
+        // 구 앱에는 기본 모드가 없어 출처는 비워 관리 모드로 저장한다
+        return new StudySessionCreateRequest(
+                startedAt, endedAt, studySec, focusSec, events, null, null, null, null, null);
     }
 }

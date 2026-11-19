@@ -204,6 +204,71 @@ class ActiveSessionSnapshotApiTest {
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
 
+    // ── 세션 출처 ──────────────────────────────────────────
+
+    private MvcTestResult reportWithSource(Instant reported, int studySec, String source, boolean durable) {
+        String body = """
+				{"startedAt": "%s", "reportedAt": "%s", "studySec": %d, "focusSec": %d, "events": [], "source": "%s"}""".formatted(startedAt, reported, studySec, studySec, source);
+        MvcTestResult result = mvc.put()
+                .uri("/api/study-sessions/active" + (durable ? "?durable=true" : ""))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(asUser(userId))
+                .exchange();
+        buffer.flush();
+        return result;
+    }
+
+    private String draftSource(Long uid) {
+        return jdbcTemplate.queryForObject(
+                "SELECT source FROM active_study_session WHERE user_id = ?", String.class, uid);
+    }
+
+    @Test
+    void TIMER_스냅샷은_draft에_TIMER로_저장되고_재접속_조회에_실린다() {
+        assertThat(reportWithSource(startedAt.plusSeconds(30), 30, "TIMER", false))
+                .hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(draftSource(userId)).isEqualTo("TIMER");
+        assertThat(restore(userId))
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.source")
+                .isEqualTo("TIMER");
+    }
+
+    @Test
+    void durable_보고도_source를_저장한다() {
+        assertThat(reportWithSource(startedAt.plusSeconds(30), 30, "TIMER", true))
+                .hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(draftSource(userId)).isEqualTo("TIMER");
+    }
+
+    @Test
+    void 나중_스냅샷의_source가_앞의_값을_덮어쓴다() {
+        reportWithSource(startedAt.plusSeconds(30), 30, "TIMER", false);
+        reportWithSource(startedAt.plusSeconds(60), 60, "MEASURED", false);
+        assertThat(draftSource(userId)).isEqualTo("MEASURED");
+
+        reportWithSource(startedAt.plusSeconds(90), 90, "TIMER", false);
+        assertThat(draftSource(userId)).isEqualTo("TIMER");
+
+        // 늦게 도착한 옛 스냅샷은 출처도 덮어쓰지 않는다
+        reportWithSource(startedAt.plusSeconds(45), 45, "MEASURED", false);
+        assertThat(draftSource(userId)).isEqualTo("TIMER");
+    }
+
+    @Test
+    void MANUAL_스냅샷은_400이다() {
+        assertThat(reportWithSource(startedAt.plusSeconds(30), 30, "MANUAL", false))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .bodyJson()
+                .extractingPath("$.code")
+                .isEqualTo("VALIDATION_FAILED");
+        assertThat(draftRows(userId)).isEqualTo(0);
+    }
+
     // ── 복구 조회 (BY-448) ──────────────────────────────────────────
 
     private MvcTestResult restore(Long uid) {

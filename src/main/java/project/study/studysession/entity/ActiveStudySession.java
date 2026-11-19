@@ -2,6 +2,8 @@ package project.study.studysession.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -57,4 +59,14 @@ public class ActiveStudySession {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "subject_segments", nullable = false)
     private String subjectSegments;
+
+    // 관찰 기록 스냅샷(ObservationRequest 배열의 JSON) — 확정 시 study_session_observation 행이 된다
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "observations", nullable = false)
+    private String observations;
+
+    // 확정한 세션이 이 출처를 이어받는다
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false)
+    private StudySessionSource source = StudySessionSource.MEASURED;
 }

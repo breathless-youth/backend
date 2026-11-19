@@ -21,6 +21,6 @@ public record LegacyActiveSessionSnapshotRequest(
         @NotNull @Valid List<StatusEventRequest> events) {
 
     public ActiveSessionSnapshotRequest toRequest() {
-        return new ActiveSessionSnapshotRequest(startedAt, reportedAt, studySec, focusSec, events, null);
+        return new ActiveSessionSnapshotRequest(startedAt, reportedAt, studySec, focusSec, events, null, null, null);
     }
 }
