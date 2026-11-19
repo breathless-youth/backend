@@ -121,6 +121,10 @@ public class ActiveStudySessionService {
                 parseSubjectSegments(draft).stream()
                         .sorted(Comparator.comparing(SubjectSegmentRequest::startedAt))
                         .toList(),
+                // 이어받은 앱이 다음 보고에서 통째로 덮어쓰므로, 빠뜨리면 이어받기 전 기록이 지워진다
+                parseObservations(draft).stream()
+                        .sorted(Comparator.comparing(ObservationRequest::startedAt))
+                        .toList(),
                 draft.getSource());
     }
 
@@ -160,7 +164,7 @@ public class ActiveStudySessionService {
                 parseSubjectSegments(draft),
                 null, // 자동 확정본에는 완료 할 일이 없다 — 앱이 최종 제출에만 싣는다 (ADR-0022)
                 null, // 시간대가 없으면 사용자 시간대 — 하트비트 검증과 같은 기준이다
-                objectMapper.readValue(draft.getObservations(), new TypeReference<List<ObservationRequest>>() {}),
+                parseObservations(draft),
                 draft.getSource());
         try {
             studySessionService.create(draft.getUserId(), request, true);
@@ -181,6 +185,10 @@ public class ActiveStudySessionService {
     /** V20 이전 draft는 없다(배포 전 교체) — 컬럼 기본값 '[]'라 항상 파싱된다. */
     private List<SubjectSegmentRequest> parseSubjectSegments(ActiveStudySession draft) {
         return objectMapper.readValue(draft.getSubjectSegments(), new TypeReference<List<SubjectSegmentRequest>>() {});
+    }
+
+    private List<ObservationRequest> parseObservations(ActiveStudySession draft) {
+        return objectMapper.readValue(draft.getObservations(), new TypeReference<List<ObservationRequest>>() {});
     }
 
     /**
