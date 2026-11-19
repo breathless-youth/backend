@@ -34,10 +34,11 @@ public record ShopItemResponse(
 
         @Schema(description = "등급. 1·2·3", example = "1") int grade,
 
-        @Schema(description = "가격(P). 포인트로 사는 상품이 아니면(보상 상품·결제 상품) null", example = "600")
+        @Schema(description = "가격(P). 포인트로 사는 상품이 아니면(보상 상품·결제 상품·무료 상품) null", example = "600")
         Integer price,
 
-        @Schema(description = "가졌는지. 보상 상품은 조건을 채우면 true") boolean owned,
+        @Schema(description = "가졌는지. 보상 상품은 조건을 채우면 true, 무료 상품은 판매 중인 동안 모두 true")
+        boolean owned,
 
         @Schema(description = "쓰는 중인지(착용·적용)") boolean inUse,
 
@@ -59,4 +60,12 @@ public record ShopItemResponse(
         @Schema(
                 description = "그림 없이 앱이 코드로 그리는 빛 효과의 종류(aurora·glow·rainbow 등). 이때 imageUrl은 null. 아니면 null",
                 example = "aurora")
-        String effectType) {}
+        String effectType,
+
+        @Schema(
+                description = "공간 파일 위치. 앱이 종류(assetType)와 함께 기기별 파일 주소를 만든다. 공간이 아니면 null",
+                example = "watcher/9c8d9f19")
+        String assetKey,
+
+        @Schema(description = "공간 파일의 종류(IMAGE·VIDEO). 공간이 아니면 null", example = "VIDEO")
+        AssetType assetType) {}

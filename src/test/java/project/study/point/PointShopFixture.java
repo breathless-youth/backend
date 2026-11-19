@@ -82,6 +82,25 @@ public class PointShopFixture {
                 .single();
     }
 
+    /** 얻는 방법 없이 모두가 가지는 무료 공간. */
+    public long freeItem(String assetKey, String assetType) {
+        return jdbc.sql("""
+                        INSERT INTO shop_item (code, category, name, asset_key, asset_type)
+                        VALUES (:code, 'TIMER_BACKGROUND', '무료', :key, :type) RETURNING id""")
+                .param("code", "ITEM_" + UUID.randomUUID())
+                .param("key", assetKey)
+                .param("type", assetType)
+                .query(Long.class)
+                .single();
+    }
+
+    /** 판매를 멈춘다. */
+    public void deactivate(long itemId) {
+        jdbc.sql("UPDATE shop_item SET active = false WHERE id = :id")
+                .param("id", itemId)
+                .update();
+    }
+
     /** 측정한 세션 한 조각을 바로 넣는다. day는 'YYYY-MM-DD', 시작은 그날 UTC 01시에서 hourOffset시간 뒤다. */
     public void measuredSession(long userId, String day, int hourOffset, int focusSec) {
         jdbc.sql("""

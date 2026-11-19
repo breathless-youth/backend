@@ -35,7 +35,9 @@ public class ShopService {
         ShopProgress progress = progressOf(userId);
         List<AccessoryRow> accessories = repository.accessories(userId);
         DecorationRow decoration = repository.decoration(userId);
-        List<ShopItemResponse> items = repository.findActive(language).stream()
+        // 판매를 멈춘 상품은 이미 가진 사람에게만 보인다. 가진 상품은 내린 뒤에도 다시 끼거나 적용할 수 있어야 한다
+        List<ShopItemResponse> items = repository.findAll(language).stream()
+                .filter(item -> item.active() || progress.owns(item))
                 .map(item -> new ShopItemResponse(
                         item.id(),
                         item.code(),
@@ -54,7 +56,9 @@ public class ShopService {
                         item.storeProductId(),
                         item.effectImageUrl(),
                         item.effectPieces(),
-                        item.effectType()))
+                        item.effectType(),
+                        item.assetKey(),
+                        item.assetType()))
                 .toList();
         return new ShopItemListResponse(items);
     }
@@ -69,7 +73,7 @@ public class ShopService {
         pointService.lock(userId);
         ShopItem item = repository
                 .findById(itemId)
-                .filter(found -> repository.isActive(found.id()))
+                .filter(ShopItem::active)
                 .orElseThrow(() -> new NotFoundException(ErrorCode.SHOP_ITEM_NOT_FOUND, "없는 상품입니다: " + itemId));
         if (!item.isPriced()) {
             throw new ConflictException(ErrorCode.ITEM_NOT_PURCHASABLE, "포인트로 살 수 없는 상품입니다");
