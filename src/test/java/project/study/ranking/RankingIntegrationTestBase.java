@@ -19,6 +19,7 @@ import project.study.TestcontainersConfiguration;
 import project.study.ranking.engine.StandingsCache;
 import project.study.room.support.MutableClock;
 import project.study.studysession.dto.StudySessionCreateRequest;
+import project.study.studysession.entity.StudySessionSource;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.service.StudySessionService;
 
@@ -90,8 +91,33 @@ public abstract class RankingIntegrationTestBase {
         Instant end = start.plusSeconds(minutes * 60L);
         studySessionService.create(
                 userId,
-                new StudySessionCreateRequest(start, end, minutes * 60, focusSec, List.of(), null, null, null, null),
+                new StudySessionCreateRequest(
+                        start, end, minutes * 60, focusSec, List.of(), null, null, null, null, null),
                 false);
+    }
+
+    /** 기본 모드 확정 세션. session과 같은 제출 경로에 출처만 TIMER로 보낸다. */
+    protected void timerSession(long userId, Instant start, int minutes, int focusSec) {
+        Instant end = start.plusSeconds(minutes * 60L);
+        studySessionService.create(
+                userId,
+                new StudySessionCreateRequest(
+                        start,
+                        end,
+                        minutes * 60,
+                        focusSec,
+                        List.of(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        StudySessionSource.TIMER),
+                false);
+    }
+
+    /** 이 사용자의 draft를 기본 모드로 바꾼다. */
+    protected void markDraftTimer(long userId) {
+        jdbc.update("UPDATE active_study_session SET source = 'TIMER' WHERE user_id = ?", userId);
     }
 
     /** 진행 중 스냅샷 — lastSeenAt = reportedAt, 총공부는 길이 전체. events는 JSON 배열 문자열 */

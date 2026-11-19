@@ -78,6 +78,21 @@ class StudyPointApiTest {
     }
 
     @Test
+    void 기본_모드_기록은_포인트로_인정하지_않는다() {
+        long user = fixture.member();
+
+        submit(user, "2026-01-10T01:00:00Z", 4200, "TIMER");
+        assertThat(balance(user)).isZero();
+
+        submit(user, "2026-01-10T05:00:00Z", 1800);
+
+        assertThat(balance(user)).isEqualTo(10);
+        assertThat(reward(user, "2026-01-10T05:00:00Z"))
+                .bodyJson()
+                .hasPathSatisfying("$.recognizedFocusSec", v -> assertThat(v).isEqualTo(1800));
+    }
+
+    @Test
     void 자동_확정본이_받은_뒤_더_긴_최종_제출이_오면_차액만_더_받는다() {
         long user = fixture.member();
         Instant start = Instant.parse("2026-01-10T01:00:00Z");
@@ -284,9 +299,13 @@ class StudyPointApiTest {
     }
 
     private void submit(long user, String startedAt, int focusSec) {
+        submit(user, startedAt, focusSec, "MEASURED");
+    }
+
+    private void submit(long user, String startedAt, int focusSec, String source) {
         Instant start = Instant.parse(startedAt);
         String body = """
-                {"startedAt":"%s","endedAt":"%s","studySec":%d,"focusSec":%d,"events":[],"timeZone":"Asia/Seoul"}""".formatted(start, start.plusSeconds(focusSec), focusSec, focusSec);
+                {"startedAt":"%s","endedAt":"%s","studySec":%d,"focusSec":%d,"events":[],"timeZone":"Asia/Seoul","source":"%s"}""".formatted(start, start.plusSeconds(focusSec), focusSec, focusSec, source);
         assertThat(mvc.post()
                         .uri("/api/study-sessions")
                         .with(asUser(user))

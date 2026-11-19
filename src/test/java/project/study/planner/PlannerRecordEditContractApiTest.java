@@ -82,7 +82,13 @@ class PlannerRecordEditContractApiTest extends PlannerApiSupport {
     }
 
     @ParameterizedTest
-    @CsvSource({"MEASURED,true,5000,3210", "MEASURED,false,5000,3210", "MANUAL,true,5433,5433", "MANUAL,false,5433,5433"
+    @CsvSource({
+        "MEASURED,true,5000,3210",
+        "MEASURED,false,5000,3210",
+        "MANUAL,true,5433,5433",
+        "MANUAL,false,5433,5433",
+        "TIMER,true,5000,3210",
+        "TIMER,false,5000,3210"
     })
     void subjectOnlySavePreservesPreciseTimesAndDailySubjectPeriodAndRankingTotals(
             String source, boolean includeTimes, int study, int focus) {
@@ -90,7 +96,7 @@ class PlannerRecordEditContractApiTest extends PlannerApiSupport {
         JsonNode beforePrevious = day(DAY.minusDays(1));
         JsonNode beforeCurrent = day(DAY);
         long target = otherSubject();
-        String key = (source.equals("MEASURED") ? "c:" : "m:") + START;
+        String key = (source.equals("MANUAL") ? "m:" : "c:") + START;
         JsonNode result = save(key, includeTimes ? START : null, includeTimes ? END : null, target);
         assertThat(result.get("success").asBoolean()).as(result.toString()).isTrue();
         for (LocalDate date : new LocalDate[] {DAY.minusDays(1), DAY}) {
@@ -122,10 +128,10 @@ class PlannerRecordEditContractApiTest extends PlannerApiSupport {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"MEASURED", "MANUAL"})
+    @ValueSource(strings = {"MEASURED", "MANUAL", "TIMER"})
     void editedRangeRemainsCompleteAndChangingOneEdgePreservesTheOtherPreciseEdge(String source) {
         seed(source, START, END, 5000, 3210);
-        String key = (source.equals("MEASURED") ? "c:" : "m:") + START;
+        String key = (source.equals("MANUAL") ? "m:" : "c:") + START;
         Instant changedStart = Instant.parse("2026-10-03T19:40:29Z");
         JsonNode result = save(key, changedStart, END, subject);
         assertThat(result.get("success").asBoolean()).isTrue();

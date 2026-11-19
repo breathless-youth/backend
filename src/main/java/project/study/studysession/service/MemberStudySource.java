@@ -10,6 +10,7 @@ import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import project.study.studysession.dto.LivePiece;
 import project.study.studysession.dto.MemberStudy;
 import project.study.studysession.dto.MemberStudy.Presence;
 import project.study.studysession.entity.EventStatus;
+import project.study.studysession.entity.StudySessionSource;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.repository.MemberStudyQueries;
 import project.study.studysession.repository.MemberStudyQueries.FocusTotals;
@@ -43,6 +45,15 @@ public class MemberStudySource {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
+    private static final FocusTotals NO_TOTALS = new FocusTotals(0, 0, 0);
+
+    /** 그룹 공부 시간에 넣는 출처(ADR-0049). 확정 집계의 IN ('MEASURED', 'TIMER')와 같다. */
+    private static final Set<StudySessionSource> GROUP_SOURCES =
+            EnumSet.of(StudySessionSource.MEASURED, StudySessionSource.TIMER);
+
+    /** 공개 그룹 정렬처럼 경쟁에 쓰는 출처. */
+    private static final Set<StudySessionSource> MEASURED_ONLY = EnumSet.of(StudySessionSource.MEASURED);
+
     private final MemberStudyQueries queries;
     private final ActiveStudySessionRepository activeStudySessionRepository;
     private final ActiveStudySessionService activeStudySessionService;
@@ -57,13 +68,13 @@ public class MemberStudySource {
         }
         Week week = Week.of(asOf);
         Map<Long, FocusTotals> finalized = queries.focusTotals(ids, week.monday(), week.today());
-        Map<Long, Instant> lastEnded = queries.lastMeasuredEndedAt(ids);
+        Map<Long, Instant> lastEnded = queries.lastStudiedEndedAt(ids);
         Map<Long, List<LiveDraft>> drafts = openDrafts(ids, asOf);
 
         Map<Long, MemberStudy> studies = new HashMap<>();
         for (long userId : ids) {
             List<LiveDraft> mine = drafts.getOrDefault(userId, List.of());
-            FocusTotals done = finalized.getOrDefault(userId, new FocusTotals(0, 0));
+            FocusTotals done = finalized.getOrDefault(userId, NO_TOTALS);
             LiveDraft latest = mine.stream()
                     .max(Comparator.comparing(LiveDraft::lastSeenAt))
                     .orElse(null);
@@ -73,16 +84,19 @@ public class MemberStudySource {
                             userId,
                             presence(latest, asOf),
                             latest != null && latest.focusing(),
-                            done.todaySec() + liveFocus(mine, week.today(), week.today()),
-                            done.weekSec() + liveFocus(mine, week.monday(), week.today()),
+                            done.todaySec() + liveFocus(mine, week.today(), week.today(), GROUP_SOURCES),
+                            done.weekSec() + liveFocus(mine, week.monday(), week.today(), GROUP_SOURCES),
                             later(lastEnded.get(userId), latest == null ? null : latest.lastSeenAt())));
         }
         return studies;
     }
 
+    /** 이번 주 순공. totalSec는 기본 모드를 포함한 표시용 합, measuredSec는 관리 모드만 센 정렬용 합이다. */
+    public record WeekSec(long totalSec, long measuredSec) {}
+
     /** 이번 주 순공만 — 상태·마지막 공부는 계산하지 않는다(공개 그룹 평균용). 모든 userId에 값이 있다. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public Map<Long, Long> weekFocus(Collection<Long> userIds, Instant asOf) {
+    public Map<Long, WeekSec> weekFocus(Collection<Long> userIds, Instant asOf) {
         requireRepeatableRead();
         Set<Long> ids = Set.copyOf(userIds);
         if (ids.isEmpty()) {
@@ -91,11 +105,15 @@ public class MemberStudySource {
         Week week = Week.of(asOf);
         Map<Long, FocusTotals> finalized = queries.focusTotals(ids, week.monday(), week.today());
         Map<Long, List<LiveDraft>> drafts = openDrafts(ids, asOf);
-        Map<Long, Long> weekFocus = new HashMap<>();
+        Map<Long, WeekSec> weekFocus = new HashMap<>();
         for (long userId : ids) {
-            long done = finalized.containsKey(userId) ? finalized.get(userId).weekSec() : 0;
+            FocusTotals done = finalized.getOrDefault(userId, NO_TOTALS);
+            List<LiveDraft> mine = drafts.getOrDefault(userId, List.of());
             weekFocus.put(
-                    userId, done + liveFocus(drafts.getOrDefault(userId, List.of()), week.monday(), week.today()));
+                    userId,
+                    new WeekSec(
+                            done.weekSec() + liveFocus(mine, week.monday(), week.today(), GROUP_SOURCES),
+                            done.weekMeasuredSec() + liveFocus(mine, week.monday(), week.today(), MEASURED_ONLY)));
         }
         return weekFocus;
     }
@@ -115,12 +133,14 @@ public class MemberStudySource {
                 .collect(Collectors.groupingBy(LiveDraft::userId));
     }
 
-    /** 진행 중 조각 중 날짜가 from~to이고 순공 1초 이상인 것의 합 — 랭킹이 진행 중 조각을 더하는 기준과 같다. */
-    private static long liveFocus(List<LiveDraft> drafts, LocalDate from, LocalDate to) {
+    /** 진행 중 조각 중 출처가 sources에 들고 날짜가 from~to이며 순공 1초 이상인 것의 합. 랭킹이 진행 중 조각을 더하는 기준과 같다. */
+    private static long liveFocus(
+            List<LiveDraft> drafts, LocalDate from, LocalDate to, Set<StudySessionSource> sources) {
         long sum = 0;
         for (LiveDraft draft : drafts) {
             for (LivePiece piece : draft.pieces()) {
-                if (piece.focusSec() >= MIN_LIST_FOCUS_SEC
+                if (sources.contains(piece.source())
+                        && piece.focusSec() >= MIN_LIST_FOCUS_SEC
                         && !piece.statDate().isBefore(from)
                         && !piece.statDate().isAfter(to)) {
                     sum += piece.focusSec();

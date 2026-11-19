@@ -21,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import project.study.TestcontainersConfiguration;
 import project.study.studysession.dto.LivePiece;
 import project.study.studysession.entity.SessionSlot;
+import project.study.studysession.entity.StudySessionSource;
 import project.study.studysession.entity.TimeSlot;
 import project.study.studysession.repository.ActiveStudySessionRepository;
 import project.study.studysession.service.ActiveStudySessionService;
@@ -97,6 +98,18 @@ class ActiveSessionLivePiecesTest {
             assertThat(p.achievedAt()).isEqualTo(asOf);
             assertThat(p.statDate()).isEqualTo(LocalDate.of(2026, 9, 15));
         });
+    }
+
+    @Test
+    void 조각은_draft의_source를_싣는다() {
+        Instant asOf = at(15, 15, 0, 0);
+        long timerUser = user();
+        draft(userId, asOf.minusSeconds(600), asOf.minusSeconds(10), 590, "[]");
+        draft(timerUser, asOf.minusSeconds(600), asOf.minusSeconds(10), 590, "[]");
+        jdbc.update("UPDATE active_study_session SET source = 'TIMER' WHERE user_id = ?", timerUser);
+
+        assertThat(mine(asOf, userId)).extracting(LivePiece::source).containsExactly(StudySessionSource.MEASURED);
+        assertThat(mine(asOf, timerUser)).extracting(LivePiece::source).containsExactly(StudySessionSource.TIMER);
     }
 
     @Test

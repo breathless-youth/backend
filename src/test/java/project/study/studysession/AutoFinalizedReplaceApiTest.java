@@ -119,6 +119,29 @@ class AutoFinalizedReplaceApiTest {
     }
 
     @Test
+    void TIMER_자동_확정본은_늦은_최종_제출로_대체된다() {
+        insertAutoFinalizedSession(startedAt, startedAt.plusSeconds(1800), 1800, 1800);
+        jdbcTemplate.update("UPDATE study_session SET source = 'TIMER' WHERE user_id = ?", userId);
+
+        String body = """
+                {"startedAt": "%s", "endedAt": "%s", "studySec": 3600, "focusSec": 3600, "events": [], "source": "TIMER"}""".formatted(startedAt, startedAt.plusSeconds(3600));
+        assertThat(mvc.post()
+                        .uri("/api/study-sessions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(asUser(userId)))
+                .hasStatus(HttpStatus.CREATED)
+                .bodyJson()
+                .hasPathSatisfying("$[0].studySec", sec -> assertThat(sec).isEqualTo(3600));
+
+        assertThat(sessionRows()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForMap(
+                        "SELECT auto_finalized, source FROM study_session WHERE user_id = ?", userId))
+                .containsEntry("auto_finalized", false)
+                .containsEntry("source", "TIMER");
+    }
+
+    @Test
     void 클라_제출본은_재제출이_와도_대체되지_않는다() {
         assertThat(submit(startedAt, startedAt.plusSeconds(3600), 3600, 3400)).hasStatus(HttpStatus.CREATED);
 

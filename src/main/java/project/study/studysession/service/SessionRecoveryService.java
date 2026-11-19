@@ -42,9 +42,9 @@ public class SessionRecoveryService {
             return acknowledgeAndSummarize(userId, submissionStartedAt); // 미확인 확정본이 맞는지
         }
         // 2. draft가 없으면 가장 최근 세션의 제출을 기준으로 판별한다
-        //    수동 기록은 복구 대상이 아니라서, 그 뒤에 넣어도 최근 측정 세션의 판정을 가리지 않게 뺀다
+        //    수동 기록은 복구 대상이 아니라서, 그 뒤에 넣어도 최근 제출 세션의 판정을 가리지 않게 뺀다
         StudySession recent = studySessionRepository
-                .findFirstByUserIdAndSourceOrderByStartedAtDesc(userId, StudySessionSource.MEASURED)
+                .findFirstByUserIdAndSourceNotOrderByStartedAtDesc(userId, StudySessionSource.MANUAL)
                 .orElseThrow(() -> new NotFoundException("복구할 세션이 없습니다"));
         return acknowledgeAndSummarize(userId, recent.getSubmissionStartedAt());
     }
