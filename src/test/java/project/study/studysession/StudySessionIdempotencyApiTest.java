@@ -101,6 +101,32 @@ class StudySessionIdempotencyApiTest {
     }
 
     @Test
+    void TIMER_세션을_같은_시각으로_재제출하면_409가_아니라_기존_세션을_돌려준다() {
+        String body = """
+                {"startedAt": "%s", "endedAt": "%s", "studySec": 7200, "focusSec": 7200, "events": [], "source": "TIMER"}""".formatted(sessionStart, sessionEnd);
+        MvcTestResult first = mvc.post()
+                .uri("/api/study-sessions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(asUser(userId))
+                .exchange();
+        assertThat(first).hasStatus(HttpStatus.CREATED);
+
+        MvcTestResult second = mvc.post()
+                .uri("/api/study-sessions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(asUser(userId))
+                .exchange();
+        assertThat(second)
+                .hasStatus(HttpStatus.CREATED)
+                .bodyJson()
+                .hasPathSatisfying("$[0].source", v -> assertThat(v).isEqualTo("TIMER"));
+        assertThat(firstSessionId(second)).isEqualTo(firstSessionId(first));
+        assertThat(sessionRows(userId)).isEqualTo(1);
+    }
+
+    @Test
     void 자정을_넘는_세션을_재제출하면_두_조각을_그대로_반환한다() {
         MvcTestResult first = submit(userId, midnight.minusSeconds(3600), midnight.plusSeconds(3600), 7200, 6000);
         assertThat(first).hasStatus(HttpStatus.CREATED);

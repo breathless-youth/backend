@@ -58,7 +58,7 @@ class PersonalRecordProjection {
         });
         overrides.stream().filter(edit -> !edit.deleted()).forEach(edit -> {
             List<StudySession> bundle = bundles.getOrDefault(edit.key(), List.of());
-            if (edit.source() == project.study.studysession.entity.StudySessionSource.MEASURED && bundle.isEmpty())
+            if (edit.source() != project.study.studysession.entity.StudySessionSource.MANUAL && bundle.isEmpty())
                 return;
             result.addAll(
                     edit.preserveOriginalTotals()

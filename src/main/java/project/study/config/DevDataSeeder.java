@@ -277,7 +277,7 @@ public class DevDataSeeder implements ApplicationRunner {
         studySessionService.create(
                 userId,
                 new StudySessionCreateRequest(
-                        startedAt, endedAt, studySec, focusSec, events, segments, null, null, null),
+                        startedAt, endedAt, studySec, focusSec, events, segments, null, null, null, null),
                 false);
     }
 

@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 진행중 세션 스냅샷 벌크 UPSERT (BY-470) — 버퍼가 코얼레싱한 최신본들을 한 배치(한 왕복)로 쓴다.
  *
- * <p>SQL은 {@link ActiveStudySessionRepository#upsertSnapshot}와 동일하다 — 동시 첫 스냅샷
+ * <p>SQL은 {@link ActiveStudySessionRepository#upsertSnapshot}와 동일하다(source 열은 이 배치만 쓴다) — 동시 첫 스냅샷
  * 레이스(ON CONFLICT)와 역순 도착 가드(WHERE reported_at &lt; excluded)를 그대로 유지한다.
  * 버퍼가 이미 세션당 최신본만 남기지만, 여러 앱 인스턴스가 동시에 flush해도 DB에서 순서가 보장된다.
  */
@@ -22,8 +22,9 @@ public class ActiveStudySessionBatchRepository {
 
     private static final String UPSERT_SQL = """
             INSERT INTO active_study_session
-                (user_id, started_at, reported_at, last_seen_at, study_sec, focus_sec, events, subject_segments, observations)
-            VALUES (?, ?, ?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), cast(? as jsonb))
+                (user_id, started_at, reported_at, last_seen_at, study_sec, focus_sec, events, subject_segments,
+                 observations, source)
+            VALUES (?, ?, ?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), ?)
             ON CONFLICT (user_id, started_at) DO UPDATE
             SET reported_at = excluded.reported_at,
                 last_seen_at = excluded.last_seen_at,
@@ -31,7 +32,8 @@ public class ActiveStudySessionBatchRepository {
                 focus_sec = excluded.focus_sec,
                 events = excluded.events,
                 subject_segments = excluded.subject_segments,
-                observations = excluded.observations
+                observations = excluded.observations,
+                source = excluded.source
             WHERE active_study_session.reported_at < excluded.reported_at""";
 
     private final JdbcTemplate jdbcTemplate;
@@ -60,6 +62,7 @@ public class ActiveStudySessionBatchRepository {
                 ps.setString(7, r.eventsJson());
                 ps.setString(8, r.subjectSegmentsJson());
                 ps.setString(9, r.observationsJson());
+                ps.setString(10, r.source());
             }
 
             @Override
@@ -69,7 +72,7 @@ public class ActiveStudySessionBatchRepository {
         });
     }
 
-    /** 벌크 UPSERT 한 행. events·subjectSegments·observations는 이미 JSON 문자열로 직렬화된 상태다. */
+    /** 벌크 UPSERT 한 행. events·subjectSegments·observations는 이미 JSON 문자열로 직렬화된 상태이고 source는 출처 이름이다. */
     public record SnapshotRow(
             Long userId,
             Instant startedAt,
@@ -79,5 +82,6 @@ public class ActiveStudySessionBatchRepository {
             int focusSec,
             String eventsJson,
             String subjectSegmentsJson,
-            String observationsJson) {}
+            String observationsJson,
+            String source) {}
 }

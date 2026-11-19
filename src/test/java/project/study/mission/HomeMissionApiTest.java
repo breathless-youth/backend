@@ -105,6 +105,25 @@ class HomeMissionApiTest {
     }
 
     @Test
+    void 기본_모드_순공은_미션에_합산하지_않는다() {
+        long user = insertUser();
+        jdbc.sql("INSERT INTO study_subject (user_id, name) VALUES (:u, '수학')")
+                .param("u", user)
+                .update();
+        assertThat(post(user, "/api/home/mission/steps/1/complete")).hasStatusOk();
+        insertSession(user, "2026-11-07T01:00:00Z", "2026-11-07T01:00:00Z", 1800, "TIMER");
+
+        assertThat(mvc.get()
+                        .uri("/api/home/mission")
+                        .header(ApiVersionConfig.HEADER, "1")
+                        .with(asUser(user))
+                        .exchange())
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.eligible", v -> assertThat(v).isEqualTo(false));
+    }
+
+    @Test
     void 시작일_자정을_넘긴_측정은_시작일의_분할_조각을_인정한다() {
         long user = insertUser();
         jdbc.sql("INSERT INTO study_subject (user_id, name) VALUES (:u, '수학')")

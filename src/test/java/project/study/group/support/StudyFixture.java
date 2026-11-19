@@ -24,11 +24,21 @@ public class StudyFixture {
 
     /** 확정 측정 세션 한 조각 — 날짜는 시작 시각의 KST 날짜, 끝은 시작 + 순공. */
     public void session(long userId, Instant start, int focusSec) {
+        session(userId, start, focusSec, "MEASURED");
+    }
+
+    /** 기본 모드로 확정한 세션 한 조각. session과 출처만 다르다. */
+    public void timerSession(long userId, Instant start, int focusSec) {
+        session(userId, start, focusSec, "TIMER");
+    }
+
+    private void session(long userId, Instant start, int focusSec, String source) {
         jdbc.sql("""
                         insert into study_session (user_id, stat_date, started_at, submission_started_at, ended_at,
                                                    study_sec, focus_sec, source)
-                        values (:userId, :statDate, :start, :start, :end, :focusSec, :focusSec, 'MEASURED')""")
+                        values (:userId, :statDate, :start, :start, :end, :focusSec, :focusSec, :source)""")
                 .param("userId", userId)
+                .param("source", source)
                 .param("statDate", Date.valueOf(LocalDate.ofInstant(start, GroupDeskTestConfig.KST)))
                 .param("start", Timestamp.from(start))
                 .param("end", Timestamp.from(start.plusSeconds(focusSec)))
@@ -39,6 +49,14 @@ public class StudyFixture {
     /** NOW 10초 전에 받은, 진행 중인 이벤트가 없는 draft — 집중 중이라 NOW까지 10초를 늘려 센다. */
     public void studying(long userId, int reportedFocusSec) {
         draft(userId, NOW.minusSeconds(reportedFocusSec + 10), NOW.minusSeconds(10), reportedFocusSec, "[]");
+    }
+
+    /** studying과 같은 draft를 기본 모드로 만든다. */
+    public void timerStudying(long userId, int reportedFocusSec) {
+        studying(userId, reportedFocusSec);
+        jdbc.sql("update active_study_session set source = 'TIMER' where user_id = :userId")
+                .param("userId", userId)
+                .update();
     }
 
     /** NOW 10초 전에 받은, 일시정지가 진행 중인 draft. */
