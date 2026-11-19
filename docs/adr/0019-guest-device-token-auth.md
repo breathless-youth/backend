@@ -49,7 +49,7 @@ ADR-0013으로 소셜 로그인과 JWT를 재도입했다가 2026-09-06 사업 �
 - userId만으로는 아무것도 할 수 없다. 사칭하려면 access 토큰(30분)이나 refresh(기기 보안 저장소)가
   필요하고, refresh가 새면 재사용 감지가 전량 폐기로 끊는다. deviceId는 여전히 재등록 자격증명이다 —
   기기 보안 저장소 밖으로 내보내지 않는 것은 FE 규칙(BY-509).
-  PC 브라우저에는 기기 보안 저장소가 없어 refresh를 스크립트가 못 읽는 쿠키에 둔다. 자세한 내용은 [ADR-0049](0049-browser-refresh-cookie.md)에 있다.
+  PC 브라우저에는 기기 보안 저장소가 없어 refresh와 deviceId를 스크립트가 못 읽는 쿠키에 둔다. 자세한 내용은 [ADR-0050](0050-browser-refresh-cookie.md)에 있다.
 - **`JWT_SECRET` 환경변수(32자 이상)가 dev `.env`와 prod 태스크 정의(SSM)에 있어야 한다.**
   `JwtUtil`이 `@Value`로 읽으므로 누락 = 기동 실패. 그동안은 읽는 코드가 없어 빠져도 떴다.
 - `refresh_token` 행은 회전마다 tombstone 1개가 남고(30일 만료) 정리 잡은 없다. 재등록·재사용

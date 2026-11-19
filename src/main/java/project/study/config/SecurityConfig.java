@@ -108,7 +108,7 @@ public class SecurityConfig {
         }
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
-        // 브라우저가 refresh 쿠키를 싣고 받으려면 필요하다 (ADR-0049). origin은 패턴 목록으로만 열어 둔다
+        // 브라우저가 refresh 쿠키를 싣고 받으려면 필요하다 (ADR-0050). origin은 패턴 목록으로만 열어 둔다
         config.setAllowCredentials(true);
         config.setMaxAge(PREFLIGHT_CACHE_SECONDS);
 
