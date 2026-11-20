@@ -27,7 +27,8 @@ public record ShopItem(
         String effectType,
         boolean active,
         String assetKey,
-        AssetType assetType) {
+        AssetType assetType,
+        VideoMode videoMode) {
 
     /** 조건을 채우면 받는 보상 상품인지. */
     public boolean isReward() {

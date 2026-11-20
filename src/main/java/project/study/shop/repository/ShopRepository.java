@@ -21,7 +21,9 @@ import project.study.shop.dto.DecorationRow;
 import project.study.shop.dto.EffectPiece;
 import project.study.shop.dto.ShopCategory;
 import project.study.shop.dto.ShopItem;
+import project.study.shop.dto.ShopTagResponse;
 import project.study.shop.dto.UnlockType;
+import project.study.shop.dto.VideoMode;
 import project.study.studysession.StudySessionThresholds;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -33,7 +35,7 @@ public class ShopRepository {
 
     private static final String ITEM_COLUMNS =
             "id, code, category, mascot_code, slot, tag, name, image_url, back_image_url, grade, price, unlock_type, unlock_value, "
-                    + "store_product_id, effect_image_url, effect_pieces, effect_type, active, asset_key, asset_type";
+                    + "store_product_id, effect_image_url, effect_pieces, effect_type, active, asset_key, asset_type, video_mode";
 
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;
@@ -153,6 +155,26 @@ public class ShopRepository {
         return byUser;
     }
 
+    /**
+     * 상품별로 묶은 사용 중인 분류
+     *
+     * 상품 목록이 판매를 멈춘 상품까지 모두 읽으므로 상품으로 거르지 않고 연결 전체를 읽는다.
+     * 분류 순서대로 담고, 이름은 language 번역이 있으면 그것, 없으면 한국어다.
+     */
+    public Map<Long, List<ShopTagResponse>> tagsByItem(String language) {
+        Map<Long, List<ShopTagResponse>> byItem = new HashMap<>();
+        jdbc.sql("""
+                        SELECT it.item_id, t.code, COALESCE(t.names ->> :lang, t.name) AS name
+                        FROM shop_item_tag it JOIN shop_tag t ON t.id = it.tag_id
+                        WHERE t.active
+                        ORDER BY it.item_id, t.sort_order, t.id""")
+                .param("lang", language)
+                .query((rs, n) -> byItem.computeIfAbsent(rs.getLong("item_id"), id -> new ArrayList<>())
+                        .add(new ShopTagResponse(rs.getString("code"), rs.getString("name"))))
+                .list();
+        return byItem;
+    }
+
     public void saveAccessory(long userId, String mascotCode, AccessorySlot slot, long itemId) {
         jdbc.sql("""
                 INSERT INTO user_mascot_accessory (user_id, mascot_code, slot, item_id) VALUES (:u, :m, :s, :i)
@@ -223,6 +245,7 @@ public class ShopRepository {
         String slot = rs.getString("slot");
         String unlockType = rs.getString("unlock_type");
         String assetType = rs.getString("asset_type");
+        String videoMode = rs.getString("video_mode");
         return new ShopItem(
                 rs.getLong("id"),
                 rs.getString("code"),
@@ -243,7 +266,8 @@ public class ShopRepository {
                 rs.getString("effect_type"),
                 rs.getBoolean("active"),
                 rs.getString("asset_key"),
-                assetType == null ? null : AssetType.valueOf(assetType));
+                assetType == null ? null : AssetType.valueOf(assetType),
+                videoMode == null ? null : VideoMode.valueOf(videoMode));
     }
 
     private List<EffectPiece> effectPieces(String json) {
