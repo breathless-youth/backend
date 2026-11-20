@@ -44,7 +44,13 @@ public interface ActiveStudySessionRepository extends JpaRepository<ActiveStudyS
     Optional<ActiveStudySession> findFirstByUserIdOrderByLastSeenAtDesc(Long userId);
 
     // 확정 스케줄러용 — 서버 시계 기준 무응답 draft. 테이블 크기가 동시 공부 세션 수라 인덱스 불필요
-    List<ActiveStudySession> findByLastSeenAtBefore(Instant cutoff);
+    // TIMER 세션은 앱을 벗어나 있는 동안에도 타이머가 돌고 보고만 끊기므로, 출처마다 기준 시각을 따로 받는다
+    @Query("""
+            select d from ActiveStudySession d
+            where (d.source <> project.study.studysession.entity.StudySessionSource.TIMER and d.lastSeenAt < :measuredCutoff)
+               or (d.source = project.study.studysession.entity.StudySessionSource.TIMER and d.lastSeenAt < :timerCutoff)""")
+    List<ActiveStudySession> findStaleDrafts(
+            @Param("measuredCutoff") Instant measuredCutoff, @Param("timerCutoff") Instant timerCutoff);
 
     // 최종 제출 성공 시 같은 트랜잭션에서 draft 정리 — 없으면 no-op
     void deleteByUserIdAndStartedAt(Long userId, Instant startedAt);

@@ -5,15 +5,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import project.study.TestcontainersConfiguration;
+import project.study.room.support.MutableClock;
+import project.study.studysession.dto.ActiveSessionSnapshotRequest;
+import project.study.studysession.entity.StudySessionSource;
 import project.study.studysession.scheduler.ActiveSessionFinalizeScheduler;
 import project.study.studysession.service.ActiveStudySessionService;
 
@@ -22,8 +30,20 @@ import project.study.studysession.service.ActiveStudySessionService;
 @Import(TestcontainersConfiguration.class)
 class ActiveSessionFinalizeTest {
 
+    @TestConfiguration
+    static class FrozenClockConfig {
+        @Bean
+        @Primary
+        MutableClock frozenClock() {
+            return MutableClock.at(Instant.now());
+        }
+    }
+
     @Autowired
     private ActiveStudySessionService activeStudySessionService;
+
+    @Autowired
+    private MutableClock clock;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -36,6 +56,9 @@ class ActiveSessionFinalizeTest {
 
     @BeforeEach
     void createUser() {
+        // 경계 테스트는 유예 시간과 정확히 같은 간격을 넣으므로, 테스트 도중 시계가 흐르면 판정이 바뀐다.
+        // PostgreSQL이 마이크로초까지만 저장해서 그 단위로 잘라 둔다.
+        clock.set(Instant.now().truncatedTo(ChronoUnit.MICROS));
         userId = jdbcTemplate.queryForObject(
                 "INSERT INTO users (provider, provider_user_id, nickname) VALUES ('test', ?, ?) RETURNING id",
                 Long.class,
@@ -43,7 +66,7 @@ class ActiveSessionFinalizeTest {
                 "tester-" + UUID.randomUUID());
     }
 
-    // findByLastSeenAtBefore가 전 유저 대상 풀스캔이라, 여기서 만든 draft가 커밋된 채 남으면
+    // findStaleDrafts가 전 유저 대상 풀스캔이라, 여기서 만든 draft가 커밋된 채 남으면
     // 다른 테스트 클래스의 같은 쿼리 결과를 오염시킨다(특히 신선한_draft 테스트는 확정/폐기 호출이
     // 없어 그대로 남는다) — 매 테스트 뒤 이 유저의 draft를 직접 정리해 격리한다.
     @AfterEach
@@ -133,6 +156,112 @@ class ActiveSessionFinalizeTest {
                         "SELECT source FROM study_session WHERE user_id = ?", String.class, userId))
                 .containsExactly("TIMER");
         assertThat(draftRows()).isEqualTo(0);
+    }
+
+    private Long insertDraftWithSource(String source, Instant started, Instant reported, Instant lastSeen) {
+        Long draftId = insertDraft(started, reported, lastSeen, 600, 600, "[]");
+        jdbcTemplate.update("UPDATE active_study_session SET source = ? WHERE id = ?", source, draftId);
+        return draftId;
+    }
+
+    @Test
+    void MEASURED_draft는_5분_넘게_보고가_없으면_확정_대상이다() {
+        Instant now = Instant.now();
+        Long draftId = insertDraftWithSource(
+                "MEASURED", now.minusSeconds(1200), now.minusSeconds(600), now.minusSeconds(6 * 60));
+
+        assertThat(activeStudySessionService.findStaleDraftIds()).contains(draftId);
+    }
+
+    @Test
+    void TIMER_draft는_5분이_지나도_2시간_전이면_확정_대상이_아니다() {
+        Instant now = Instant.now();
+        Long draftId = insertDraftWithSource(
+                "TIMER", now.minusSeconds(3600), now.minusSeconds(30 * 60), now.minusSeconds(30 * 60));
+
+        assertThat(activeStudySessionService.findStaleDraftIds()).doesNotContain(draftId);
+    }
+
+    @Test
+    void TIMER_draft는_2시간_넘게_보고가_없으면_마지막_보고_시각으로_확정된다() {
+        Instant now = Instant.now();
+        Instant lastReported = now.minusSeconds(2 * 3600 + 60);
+        Long draftId = insertDraftWithSource("TIMER", now.minusSeconds(3 * 3600), lastReported, lastReported);
+
+        assertThat(activeStudySessionService.findStaleDraftIds()).contains(draftId);
+        activeStudySessionService.finalizeDraft(draftId);
+
+        java.sql.Timestamp endedAt = jdbcTemplate.queryForObject(
+                "SELECT max(ended_at) FROM study_session WHERE user_id = ?", java.sql.Timestamp.class, userId);
+        assertThat(endedAt.toInstant()).isEqualTo(lastReported.truncatedTo(java.time.temporal.ChronoUnit.MICROS));
+        assertThat(draftRows()).isEqualTo(0);
+    }
+
+    @Test
+    void TIMER_draft에_2시간이_되기_직전_새_보고가_오면_확정_대상이_아니다() {
+        Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Instant started = now.minusSeconds(2 * 3600 + 600);
+        Instant previousSeen = now.minusSeconds(2 * 3600 - 60);
+        Long draftId = insertDraftWithSource("TIMER", started, started.plusSeconds(660), previousSeen);
+
+        activeStudySessionService.reportSnapshot(
+                userId,
+                new ActiveSessionSnapshotRequest(
+                        started, now, 7800, 7800, List.of(), null, null, StudySessionSource.TIMER),
+                true);
+
+        java.sql.Timestamp lastSeen = jdbcTemplate.queryForObject(
+                "SELECT last_seen_at FROM active_study_session WHERE id = ?", java.sql.Timestamp.class, draftId);
+        assertThat(lastSeen.toInstant()).isAfter(previousSeen);
+        assertThat(activeStudySessionService.findStaleDraftIds()).doesNotContain(draftId);
+    }
+
+    @Test
+    void MEASURED_draft는_보고가_끊긴_지_정확히_5분이면_확정_대상이_아니고_1초_더_지나면_대상이다() {
+        Instant now = clock.instant();
+        Instant atGrace = now.minusSeconds(5 * 60);
+        Instant pastGrace = atGrace.minusSeconds(1);
+        Long atGraceDraft = insertDraftWithSource("MEASURED", now.minusSeconds(1200), atGrace, atGrace);
+        Long pastGraceDraft = insertDraftWithSource("MEASURED", now.minusSeconds(1300), pastGrace, pastGrace);
+
+        assertThat(activeStudySessionService.findStaleDraftIds())
+                .doesNotContain(atGraceDraft)
+                .contains(pastGraceDraft);
+    }
+
+    @Test
+    void TIMER_draft는_보고가_끊긴_지_정확히_2시간이면_확정_대상이_아니고_1초_더_지나면_대상이다() {
+        Instant now = clock.instant();
+        Instant atGrace = now.minusSeconds(2 * 3600);
+        Instant pastGrace = atGrace.minusSeconds(1);
+        Long atGraceDraft = insertDraftWithSource("TIMER", now.minusSeconds(3 * 3600), atGrace, atGrace);
+        Long pastGraceDraft = insertDraftWithSource("TIMER", now.minusSeconds(3 * 3600 + 60), pastGrace, pastGrace);
+
+        assertThat(activeStudySessionService.findStaleDraftIds())
+                .doesNotContain(atGraceDraft)
+                .contains(pastGraceDraft);
+    }
+
+    @Test
+    void 같은_유저의_오래된_TIMER_draft만_확정되고_새로_시작한_draft는_남는다() {
+        Instant now = clock.instant();
+        Instant oldReported = now.minusSeconds(2 * 3600 + 60);
+        insertDraftWithSource("TIMER", now.minusSeconds(3 * 3600), oldReported, oldReported);
+        Long freshDraft =
+                insertDraftWithSource("MEASURED", now.minusSeconds(600), now.minusSeconds(30), now.minusSeconds(30));
+
+        new ActiveSessionFinalizeScheduler(activeStudySessionService).finalizeStaleDrafts();
+
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT id FROM active_study_session WHERE user_id = ?", Long.class, userId))
+                .containsExactly(freshDraft);
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT source FROM study_session WHERE user_id = ?", String.class, userId))
+                .isNotEmpty()
+                .containsOnly("TIMER");
+        java.sql.Timestamp endedAt = jdbcTemplate.queryForObject(
+                "SELECT max(ended_at) FROM study_session WHERE user_id = ?", java.sql.Timestamp.class, userId);
+        assertThat(endedAt.toInstant()).isEqualTo(oldReported);
     }
 
     @Test
