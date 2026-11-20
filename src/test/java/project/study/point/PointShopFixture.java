@@ -82,16 +82,52 @@ public class PointShopFixture {
                 .single();
     }
 
-    /** 얻는 방법 없이 모두가 가지는 무료 공간. */
+    /**
+     * 얻는 방법 없이 모두가 가지는 무료 공간
+     *
+     * 영상 공간은 재생 방식이 있어야 하므로 일반 반복 영상(LOOP)으로 넣는다.
+     */
     public long freeItem(String assetKey, String assetType) {
         return jdbc.sql("""
-                        INSERT INTO shop_item (code, category, name, asset_key, asset_type)
-                        VALUES (:code, 'TIMER_BACKGROUND', '무료', :key, :type) RETURNING id""")
+                        INSERT INTO shop_item (code, category, name, asset_key, asset_type, video_mode)
+                        VALUES (:code, 'TIMER_BACKGROUND', '무료', :key, :type,
+                                CASE WHEN CAST(:type AS varchar) = 'VIDEO' THEN 'LOOP' END) RETURNING id""")
                 .param("code", "ITEM_" + UUID.randomUUID())
                 .param("key", assetKey)
                 .param("type", assetType)
                 .query(Long.class)
                 .single();
+    }
+
+    /**
+     * 공간 분류
+     *
+     * 코드는 겹치지 않게 만든다.
+     * names는 jsonb 문자열이다.
+     */
+    public long tag(String name, String names, int sortOrder) {
+        return jdbc.sql("""
+                        INSERT INTO shop_tag (code, name, names, sort_order)
+                        VALUES (:code, :name, CAST(:names AS jsonb), :sort) RETURNING id""")
+                .param("code", "TAG_" + UUID.randomUUID())
+                .param("name", name)
+                .param("names", names)
+                .param("sort", sortOrder)
+                .query(Long.class)
+                .single();
+    }
+
+    public void tagItem(long itemId, long tagId) {
+        jdbc.sql("INSERT INTO shop_item_tag (item_id, tag_id) VALUES (:i, :t)")
+                .param("i", itemId)
+                .param("t", tagId)
+                .update();
+    }
+
+    public void deactivateTag(long tagId) {
+        jdbc.sql("UPDATE shop_tag SET active = false WHERE id = :id")
+                .param("id", tagId)
+                .update();
     }
 
     /** 판매를 멈춘다. */
