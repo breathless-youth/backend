@@ -20,6 +20,7 @@ import project.study.TestcontainersConfiguration;
 import project.study.config.ApiVersionConfig;
 import project.study.point.PointShopFixture;
 import project.study.shop.dto.AssetType;
+import project.study.shop.dto.ShopCategory;
 import project.study.shop.dto.ShopItemResponse;
 import project.study.shop.service.ShopService;
 
@@ -134,6 +135,37 @@ class ShopSpaceItemApiTest {
         assertThatThrownBy(() -> jdbc.sql("""
                         INSERT INTO shop_item (code, category, name, asset_key)
                         VALUES ('HALF_ASSET', 'TIMER_BACKGROUND', '배경', 'bg/1')""").update()).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void 독서실_감독관은_처음부터_카탈로그에_있는_무료_영상_공간이다() {
+        long proctor = jdbc.sql("SELECT id FROM shop_item WHERE code = 'SPACE_PROCTOR'")
+                .query(Long.class)
+                .single();
+        long user = fixture.member();
+
+        ShopItemResponse ko = item(user, proctor);
+        assertThat(ko.category()).isEqualTo(ShopCategory.TIMER_BACKGROUND);
+        assertThat(ko.tag()).isEqualTo("STUDY_SPACE");
+        assertThat(ko.name()).isEqualTo("독서실 감독관");
+        assertThat(ko.owned()).isTrue();
+        assertThat(ko.price()).isNull();
+        assertThat(ko.unlock()).isNull();
+        assertThat(ko.storeProductId()).isNull();
+        assertThat(ko.assetKey()).isEqualTo("watcher/9c8d9f19");
+        assertThat(ko.assetType()).isEqualTo(AssetType.VIDEO);
+        // 앱 카탈로그(study-session.json의 proctor)와 같은 이름이어야 상점과 세션 화면이 같은 이름을 보여 준다
+        assertThat(nameIn(user, proctor, "en")).isEqualTo("Study hall proctor");
+        assertThat(nameIn(user, proctor, "ja")).isEqualTo("自習室の監督");
+        assertThat(nameIn(user, proctor, "zh")).isEqualTo("自習室監督");
+    }
+
+    private String nameIn(long user, long itemId, String lang) {
+        return shopService.list(user, lang).items().stream()
+                .filter(item -> item.id() == itemId)
+                .findFirst()
+                .orElseThrow()
+                .name();
     }
 
     /** 상품 목록에 그 상품이 있으면 그것. */
