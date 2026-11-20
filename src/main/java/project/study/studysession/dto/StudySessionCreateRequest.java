@@ -83,7 +83,7 @@ public record StudySessionCreateRequest(
         List<@NotNull @Valid ObservationRequest> observations,
 
         @Schema(
-                description = "세션 출처(선택) — MEASURED(관리 모드)·TIMER(기본 모드). 없으면 MEASURED다. MANUAL은 400이다",
+                description = "세션 출처(선택) — MEASURED(관리 모드)·TIMER(자율 모드). 없으면 MEASURED다. MANUAL은 400이다",
                 allowableValues = {"MEASURED", "TIMER"},
                 example = "TIMER")
         StudySessionSource source) {

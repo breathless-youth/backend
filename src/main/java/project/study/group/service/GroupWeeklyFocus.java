@@ -53,7 +53,7 @@ public class GroupWeeklyFocus {
     /**
      * 한 그룹의 이번 주 순공 합계와 평균(초), 정렬용 관리 모드 합계
      *
-     * 합계와 평균은 기본 모드를 포함해 카드에 보인다.
+     * 합계와 평균은 자율 모드를 포함해 카드에 보인다.
      * 목록 순서는 경쟁이라 measuredTotalSec로 정하고 응답에는 싣지 않는다.
      */
     public record WeekFocus(long totalSec, long averageSec, long measuredTotalSec) {

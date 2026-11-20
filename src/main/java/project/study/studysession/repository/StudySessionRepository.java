@@ -30,7 +30,7 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
 
     // 멱등 재제출 판별·응답용 — 루트 제출 시각이 같은 조각 세션들(자정 분할 포함). 분할 조각의
     // started_at(자정)은 루트가 아니므로 별개 제출의 멱등 키와 혼동되지 않는다.
-    // 수동이 아닌 제출 묶음만 본다. 세션 API로 제출한 묶음은 관리 모드와 기본 모드다.
+    // 수동이 아닌 제출 묶음만 본다. 세션 API로 제출한 묶음은 관리 모드와 자율 모드다.
     // 수동 묶음 키는 첫 조각의 시작이라 제출 키와 겹치지 않지만, 출처가 섞이지 않게 방어로 건다
     @Query("""
             select s from StudySession s

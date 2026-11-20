@@ -27,7 +27,7 @@ public class StudyFixture {
         session(userId, start, focusSec, "MEASURED");
     }
 
-    /** 기본 모드로 확정한 세션 한 조각. session과 출처만 다르다. */
+    /** 자율 모드로 확정한 세션 한 조각. session과 출처만 다르다. */
     public void timerSession(long userId, Instant start, int focusSec) {
         session(userId, start, focusSec, "TIMER");
     }
@@ -51,7 +51,7 @@ public class StudyFixture {
         draft(userId, NOW.minusSeconds(reportedFocusSec + 10), NOW.minusSeconds(10), reportedFocusSec, "[]");
     }
 
-    /** studying과 같은 draft를 기본 모드로 만든다. */
+    /** studying과 같은 draft를 자율 모드로 만든다. */
     public void timerStudying(long userId, int reportedFocusSec) {
         studying(userId, reportedFocusSec);
         jdbc.sql("update active_study_session set source = 'TIMER' where user_id = :userId")
