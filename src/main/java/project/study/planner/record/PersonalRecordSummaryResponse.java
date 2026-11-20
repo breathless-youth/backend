@@ -43,7 +43,7 @@ public record PersonalRecordSummaryResponse(
         @Schema(description = "연결을 확인한 원본의 완료한 할 일 참조. 시간 변경 시 첫 표시 조각에 한 번만 제공하며 원본 연결을 잃은 이전 수동 기록은 복원을 추측하지 않는다")
         List<CompletedTaskResponse> completedTasks,
 
-        @Schema(description = "기록 출처 — MEASURED(관리 모드)·TIMER(기본 모드)·MANUAL(직접 입력)", example = "MEASURED")
+        @Schema(description = "기록 출처 — MEASURED(관리 모드)·TIMER(자율 모드)·MANUAL(직접 입력)", example = "MEASURED")
         StudySessionSource source,
 
         @Schema(description = "원본 제출 묶음 시각. 원본이 없으면 개인 기록 전체 시작")

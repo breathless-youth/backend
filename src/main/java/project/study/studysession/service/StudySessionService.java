@@ -159,7 +159,7 @@ public class StudySessionService {
                 sessions.stream().mapToLong(StudySession::getStudySec).sum();
         long totalFocusSec =
                 sessions.stream().mapToLong(StudySession::getFocusSec).sum();
-        // 수동 기록과 기본 모드 기록은 합계에만 더한다. 집중률·최대 집중은 관리 모드 세션만으로 낸다
+        // 수동 기록과 자율 모드 기록은 합계에만 더한다. 집중률·최대 집중은 관리 모드 세션만으로 낸다
         List<StudySession> measured = sessions.stream()
                 .filter(session -> session.getSource() == StudySessionSource.MEASURED)
                 .toList();

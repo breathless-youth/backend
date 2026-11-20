@@ -96,7 +96,7 @@ public abstract class RankingIntegrationTestBase {
                 false);
     }
 
-    /** 기본 모드 확정 세션. session과 같은 제출 경로에 출처만 TIMER로 보낸다. */
+    /** 자율 모드 확정 세션. session과 같은 제출 경로에 출처만 TIMER로 보낸다. */
     protected void timerSession(long userId, Instant start, int minutes, int focusSec) {
         Instant end = start.plusSeconds(minutes * 60L);
         studySessionService.create(
@@ -115,7 +115,7 @@ public abstract class RankingIntegrationTestBase {
                 false);
     }
 
-    /** 이 사용자의 draft를 기본 모드로 바꾼다. */
+    /** 이 사용자의 draft를 자율 모드로 바꾼다. */
     protected void markDraftTimer(long userId) {
         jdbc.update("UPDATE active_study_session SET source = 'TIMER' WHERE user_id = ?", userId);
     }
