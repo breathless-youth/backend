@@ -1,4 +1,4 @@
-# BY-1322 기본 모드 세션 출처(TIMER) 서버 설계
+# BY-1322 자율 모드 세션 출처(TIMER) 서버 설계
 
 2026-11-19 작성. [지라 BY-1322](https://breathless-youth.atlassian.net/browse/BY-1322), 브랜치 `feature/BY-1322-timer-session-source`, 스토리 BY-1321.
 결정 기록은 ADR-0049, 그룹 쪽 변경은 ADR-0040 끝의 2026-11-19 갱신이다.
@@ -6,15 +6,15 @@
 ## 배경
 
 BY-1321은 카메라 없이 공부하는 모드를 더한다.
-제품 이름은 카메라 없는 모드가 "기본 모드", AI 카메라로 재는 모드가 "관리 모드"다.
-서버는 기본 모드 세션을 `StudySessionSource.TIMER`로 저장한다.
+제품 이름은 카메라 없는 모드가 "자율 모드", AI 카메라로 재는 모드가 "관리 모드"다. 처음에는 "기본 모드"라고 썼고 2026-11-20에 바꿨다.
+서버는 자율 모드 세션을 `StudySessionSource.TIMER`로 저장한다.
 지금 enum은 `MEASURED`·`MANUAL` 두 값이고, ADR-0031이 수동 타이머 모드가 생기면 `TIMER`를 더한다고 미리 적어 두었다.
 
 웹은 이미 `POST /api/study-sessions`와 `PUT /api/study-sessions/active` 본문에 선택 필드 `source`(`MEASURED`·`TIMER`)를 보낸다.
 지금 서버는 이 필드를 모르는 필드로 무시해서 모두 `MEASURED`로 저장한다.
 웹은 `GET /api/study-sessions/active`와 세션 응답에서 `source`를 읽는다.
 
-기본 모드는 공부 시간을 잰 것이 아니라 켜 둔 시간이다.
+자율 모드는 공부 시간을 잰 것이 아니라 켜 둔 시간이다.
 그래서 경쟁과 보상에는 넣지 않고, 개인 기록과 그룹의 함께 공부한 시간에는 넣는다.
 
 ## 결정 표
@@ -75,7 +75,7 @@ BY-1321은 카메라 없이 공부하는 모드를 더한다.
 
 ### 응답 DTO
 
-- `StudySessionResponse`와 `StudySessionSummaryResponse`의 `source` 설명을 "MEASURED(관리 모드)·TIMER(기본 모드)·MANUAL(직접 입력)"로 바꾼다.
+- `StudySessionResponse`와 `StudySessionSummaryResponse`의 `source` 설명을 "MEASURED(관리 모드)·TIMER(자율 모드)·MANUAL(직접 입력)"로 바꾼다.
 - 두 응답은 이미 `session.getSource()`를 싣고 있어 값은 바뀌지 않는다.
 - `ActiveSessionSnapshotResponse`에 마지막 성분 `source`를 더한다.
 - 구 앱 `GET /active`도 같은 응답이라 필드가 하나 늘지만, 구 앱은 모르는 필드를 읽지 않는다.
@@ -86,7 +86,7 @@ BY-1321은 카메라 없이 공부하는 모드를 더한다.
 - `StudySessionService.create`는 `validateAndBuildSessions` 뒤에 `request.sourceOrMeasured() == TIMER`이면 조각마다 `markTimer()`를 부른다.
 - 자리와 방식은 바로 아래 `markAutoFinalized`와 같다.
 - `StudySessionService.list`의 집중률·최대 집중 필터를 `!session.isManual()`에서 `session.getSource() == MEASURED`로 바꾼다.
-- 그 위 주석을 "수동 기록과 기본 모드 기록은 합계에만 더한다"로 고친다.
+- 그 위 주석을 "수동 기록과 자율 모드 기록은 합계에만 더한다"로 고친다.
 - `StudySessionController.create`의 Swagger 설명에 `source` 한 줄을 더한다.
 
 ### 제출 묶음 조회
@@ -146,7 +146,7 @@ BY-1321은 카메라 없이 공부하는 모드를 더한다.
 - `GroupWeeklyFocus.compute`는 두 합을 함께 더한다.
 - `PublicGroupService.listOrder`는 `totalSec` 대신 `measuredTotalSec`로 정렬한다.
 - 카드와 공개 보기의 `averageSec`·`totalSec`는 TIMER를 포함한 값이다.
-- 그룹 공부 시작 알림(`GroupStartAlerts`)은 draft를 읽으므로 기본 모드로 시작해도 나간다.
+- 그룹 공부 시작 알림(`GroupStartAlerts`)은 draft를 읽으므로 자율 모드로 시작해도 나간다.
 - 그룹 공부 시간에 TIMER를 넣는 결정과 맞으므로 바꾸지 않는다.
 
 ### 플래너
@@ -224,10 +224,10 @@ ALTER TABLE planner_record_edit
 
 - 구 앱은 `API-Version` 없음 또는 1로 Legacy 컨트롤러에 온다.
 - Legacy 요청 record에는 `source`가 없고 변환이 null을 넘기므로 모두 `MEASURED`로 저장된다.
-- 구 앱에는 기본 모드가 없다.
+- 구 앱에는 자율 모드가 없다.
 - 새 웹이 옛 서버에 `source`를 보내는 경우는 서버가 모르는 필드로 무시해 `MEASURED`로 저장된다.
 - 이 경우의 화면 처리는 BY-1321 쪽에서 다룬다.
-- 옛 서버가 이 배포 전에 받은 기본 모드 세션은 `MEASURED`로 남는다.
+- 옛 서버가 이 배포 전에 받은 자율 모드 세션은 `MEASURED`로 남는다.
 - 그 기록은 고치지 않는다.
 - 서버 안에서는 마이그레이션과 코드가 한 배포다. 서버와 웹의 순서는 아래 "배포 순서와 롤백"을 따른다.
 - ECS 롤링 배포 중 옛 태스크는 `source` 열을 모르는 INSERT를 쓰고, 열 기본값이 `MEASURED`라 실패하지 않는다.
@@ -265,15 +265,17 @@ ALTER TABLE planner_record_edit
 | 삭제하기 | 세션과 이벤트·구간 행을 함께 삭제한다. | 옛 서버가 만날 행이 없다. | 사용자의 공부 기록이 사라진다. 딸린 표가 많아 SQL도 가장 길다. |
 
 수동 기록으로 바꾸는 방법을 권한다.
-기본 모드를 경쟁·보상에서 빼고 개인 기록에는 남긴다는 결정을 옛 서버에서도 지킬 수 있는 값이 `MANUAL`뿐이다.
+자율 모드를 경쟁·보상에서 빼고 개인 기록에는 남긴다는 결정을 옛 서버에서도 지킬 수 있는 값이 `MANUAL`뿐이다.
 배지가 바뀌는 비용은 되돌릴 수 있다.
 바꾸기 전에 대상 id를 남겨 두면, 다시 배포할 때 TIMER로 돌려놓을 수 있다.
 
 ```sql
 -- 1. 웹을 되돌린 뒤, 남은 TIMER draft가 비기를 기다린다.
---    마지막 수신 뒤 5분(FINALIZE_GRACE)이 지나면 새 서버가 TIMER 세션으로 확정한다.
+--    TIMER draft는 마지막 수신 뒤 2시간(TIMER_FINALIZE_GRACE)이 지나야 새 서버가 TIMER 세션으로 확정한다.
+--    웹을 되돌리고 2시간이 지나기 전에는 아래 DELETE를 실행하지 않는다. 앱 밖에 있는 사용자의 진행 중 기록이 삭제된다.
 SELECT count(*) FROM active_study_session WHERE source = 'TIMER';
--- 오래 열린 탭 때문에 남는 draft는 옛 서버가 관리 모드로 확정하지 않게 삭제한다. 그 세션의 진행 중 기록은 잃는다.
+-- 2시간을 기다린 뒤에도 남은 draft는 오래 열린 탭이 보고를 계속 보내는 경우다.
+-- 옛 서버가 관리 모드로 확정하지 않게 삭제한다. 그 세션의 진행 중 기록은 잃는다.
 DELETE FROM active_study_session WHERE source = 'TIMER';
 
 -- 2. 되돌릴 때 쓸 백업을 남긴다.
@@ -351,7 +353,7 @@ Flyway 기록은 이렇게 다룬다.
 | `RankingCloserTest` | `마감_확정은_기본_모드_draft를_세지_않는다` | `RankingSource.settledPieces` 필터 |
 | `ActiveSessionLivePiecesTest` | `조각은_draft의_source를_싣는다` | `toLivePieces`의 출처 |
 
-`RankingExcludesManualApiTest`의 클래스 Javadoc은 "수동 기록과 기본 모드 기록은"으로 고친다.
+`RankingExcludesManualApiTest`의 클래스 Javadoc은 "수동 기록과 자율 모드 기록은"으로 고친다.
 
 ### 그룹
 
@@ -362,7 +364,7 @@ Flyway 기록은 이렇게 다룬다.
 | `MemberStudySourceTest` | `weekFocus는_관리_모드_순공을_따로_센다` | 확정·진행 중 각각의 `measuredSec` |
 | `GroupWeeklyFocusTest` | 기존 케이스의 목 반환값을 `WeekSec`로 바꾸고 `정렬용_합계는_관리_모드_순공만_더한다`를 더한다 | `measuredTotalSec` |
 | `PublicGroupsApiTest` | `기본_모드_순공도_합계와_평균에_들어간다` | 카드 표시값 |
-| `PublicGroupsApiTest` | `정렬은_관리_모드_순공_합계로_한다` | 기본 모드로 합계가 커도 앞에 오지 않음 |
+| `PublicGroupsApiTest` | `정렬은_관리_모드_순공_합계로_한다` | 자율 모드로 합계가 커도 앞에 오지 않음 |
 
 ### 개인 기록
 
@@ -399,6 +401,6 @@ V84의 열 추가는 위 체크포인트·확정 테스트가, CHECK 교체는 �
 ## 남은 질문
 
 - 누적 공부일(`GET /api/stats/study-days`)과 공부 리듬(`GET /api/stats/rhythm`, 플래너 리듬)은 2026-11-19에 지금 동작을 유지하기로 했다.
-- 둘 다 `MEASURED`만 세고 기본 모드(TIMER)는 빠진다.
+- 둘 다 `MEASURED`만 세고 자율 모드(TIMER)는 빠진다.
 - 사용자가 모드별 시간을 어떻게 보는지는 뒤의 프론트엔드 티켓에서 정한다.
-- 그룹 공부 시작 알림은 기본 모드 draft에도 나간다. 지금 동작 그대로다.
+- 그룹 공부 시작 알림은 자율 모드 draft에도 나간다. 지금 동작 그대로다.

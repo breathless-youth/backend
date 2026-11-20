@@ -37,7 +37,7 @@ import project.study.studysession.service.MemberStudySource;
 import project.study.studysession.service.MemberStudySource.WeekSec;
 
 /**
- * 그룹 멤버 책상이 읽는 앱 전체 공부 상태·순공 (BY-1124). 관리 모드와 기본 모드 세션을 넣고 직접 입력은 빼며, 1초 미만 조각 제외, 진행 중 draft 포함. 상태는 마지막
+ * 그룹 멤버 책상이 읽는 앱 전체 공부 상태·순공 (BY-1124). 관리 모드와 자율 모드 세션을 넣고 직접 입력은 빼며, 1초 미만 조각 제외, 진행 중 draft 포함. 상태는 마지막
  * 수신이 가장 최근인 draft 하나로 60초 창 안에서 판단한다.
  */
 @SpringBootTest

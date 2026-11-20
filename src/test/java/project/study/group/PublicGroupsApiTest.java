@@ -177,7 +177,7 @@ class PublicGroupsApiTest {
 
     @Test
     void 정렬은_관리_모드_순공_합계로_한다() {
-        // timer는 기본 모드로 합계가 더 크지만 관리 모드 합계는 measured가 크다
+        // timer는 자율 모드로 합계가 더 크지만 관리 모드 합계는 measured가 크다
         long timer = kit.group("-timer");
         long timerOwner = probe.group(timer).orElseThrow().ownerId();
         study.timerSession(timerOwner, MONDAY_NOON, 5000);

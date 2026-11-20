@@ -184,7 +184,7 @@ public class StudySession {
         this.source = StudySessionSource.MANUAL;
     }
 
-    /** 기본 모드로 잰 세션임을 표시한다. 저장 직전 서비스만 호출한다. */
+    /** 자율 모드로 잰 세션임을 표시한다. 저장 직전 서비스만 호출한다. */
     public void markTimer() {
         this.source = StudySessionSource.TIMER;
     }

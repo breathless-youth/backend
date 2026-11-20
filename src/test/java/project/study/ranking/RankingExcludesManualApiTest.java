@@ -12,7 +12,7 @@ import project.study.config.ApiVersionConfig;
 import project.study.studysession.dto.ManualStudySessionRequest;
 import project.study.studysession.service.ManualStudySessionService;
 
-/** 수동 기록과 기본 모드 기록은 랭킹 어느 판에도 들어가지 않는다 — 랭킹은 측정한 순공만 센다 (ADR-0031, ADR-0049). */
+/** 수동 기록과 자율 모드 기록은 랭킹 어느 판에도 들어가지 않는다 — 랭킹은 측정한 순공만 센다 (ADR-0031, ADR-0049). */
 class RankingExcludesManualApiTest extends RankingIntegrationTestBase {
 
     @Autowired

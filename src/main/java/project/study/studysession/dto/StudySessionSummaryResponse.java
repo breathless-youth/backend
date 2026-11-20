@@ -50,7 +50,7 @@ public record StudySessionSummaryResponse(
 
         @Schema(
                 description =
-                        "기록 출처 — MEASURED(관리 모드)·TIMER(기본 모드)·MANUAL(직접 입력). 수동 기록은 studySec = focusSec이고 이벤트가 없다",
+                        "기록 출처 — MEASURED(관리 모드)·TIMER(자율 모드)·MANUAL(직접 입력). 수동 기록은 studySec = focusSec이고 이벤트가 없다",
                 example = "MEASURED")
         StudySessionSource source,
 
