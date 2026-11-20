@@ -3,6 +3,7 @@ package project.study.studysession.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;
+import project.study.studysession.entity.StudySessionSource;
 
 /**
  * 복구 판별·확인 API 응답 (BY-455) — 비정상 종료 후 홈 재진입 시, 자동 확정됐거나 방금 확정한 세션의 요약.
@@ -21,4 +22,10 @@ public record SessionRecoveryResponse(
         @Schema(description = "총 공부 시간(초)", example = "6600")
         Integer studySec,
 
-        @Schema(description = "순공 시간(초)", example = "6000") Integer focusSec) {}
+        @Schema(description = "순공 시간(초)", example = "6000") Integer focusSec,
+
+        @Schema(
+                description = "세션 출처. MEASURED는 카메라로 측정한 세션, TIMER는 카메라 없이 타이머로 잰 세션이다.",
+                allowableValues = {"MEASURED", "TIMER"},
+                example = "TIMER")
+        StudySessionSource source) {}

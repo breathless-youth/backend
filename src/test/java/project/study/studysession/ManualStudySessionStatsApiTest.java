@@ -86,7 +86,7 @@ class ManualStudySessionStatsApiTest {
                 .hasStatus(HttpStatus.CREATED);
     }
 
-    /** 기본 모드 세션 제출. 순공은 길이 전체이고, subjectId가 있으면 세션 전체가 그 과목 구간이다. */
+    /** 자율 모드 세션 제출. 순공은 길이 전체이고, subjectId가 있으면 세션 전체가 그 과목 구간이다. */
     private void timer(Instant start, Instant end, Long subjectId) {
         int length = (int) (end.getEpochSecond() - start.getEpochSecond());
         String segments = subjectId == null ? "[]" : """

@@ -91,7 +91,7 @@ public class MemberStudySource {
         return studies;
     }
 
-    /** 이번 주 순공. totalSec는 기본 모드를 포함한 표시용 합, measuredSec는 관리 모드만 센 정렬용 합이다. */
+    /** 이번 주 순공. totalSec는 자율 모드를 포함한 표시용 합, measuredSec는 관리 모드만 센 정렬용 합이다. */
     public record WeekSec(long totalSec, long measuredSec) {}
 
     /** 이번 주 순공만 — 상태·마지막 공부는 계산하지 않는다(공개 그룹 평균용). 모든 userId에 값이 있다. */

@@ -73,6 +73,6 @@ public class SessionRecoveryService {
         int studySec = group.stream().mapToInt(StudySession::getStudySec).sum();
         int focusSec = group.stream().mapToInt(StudySession::getFocusSec).sum();
         return new SessionRecoveryResponse(
-                first.getStatDate(), first.getStartedAt(), last.getEndedAt(), studySec, focusSec);
+                first.getStatDate(), first.getStartedAt(), last.getEndedAt(), studySec, focusSec, first.getSource());
     }
 }

@@ -27,7 +27,7 @@ import project.study.studysession.service.MemberStudySource;
 import project.study.studysession.service.MemberStudySource.WeekSec;
 
 /**
- * 그룹 멤버 책상은 기본 모드 세션도 순공에 넣고, 공개 그룹 정렬용으로 관리 모드 순공을 따로 센다 (ADR-0049).
+ * 그룹 멤버 책상은 자율 모드 세션도 순공에 넣고, 공개 그룹 정렬용으로 관리 모드 순공을 따로 센다 (ADR-0049).
  * 파일 400줄 제한으로 MemberStudySourceTest에서 분리했다.
  */
 @SpringBootTest

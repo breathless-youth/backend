@@ -88,6 +88,41 @@ class SessionRecoveryApiTest {
         assertThat(acknowledged).isEqualTo(1);
     }
 
+    private MvcTestResult recoverAutoFinalizedSessionOf(String source) {
+        Instant started = Instant.parse("2026-08-20T03:00:00Z");
+        jdbcTemplate.update(
+                "INSERT INTO study_session (user_id, stat_date, started_at, submission_started_at, ended_at,"
+                        + " study_sec, focus_sec, auto_finalized, source) VALUES (?, ?, ?, ?, ?, ?, ?, true, ?)",
+                userId,
+                java.sql.Date.valueOf(LocalDate.ofInstant(started, KST)),
+                Timestamp.from(started),
+                Timestamp.from(started),
+                Timestamp.from(started.plusSeconds(3600)),
+                3600,
+                3600,
+                source);
+        return mvc.post()
+                .uri("/api/study-sessions/recovery")
+                .with(asUser(userId))
+                .exchange();
+    }
+
+    @Test
+    void TIMER_세션의_복구_응답에는_source가_TIMER로_온다() {
+        assertThat(recoverAutoFinalizedSessionOf("TIMER"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.source", source -> assertThat(source).isEqualTo("TIMER"));
+    }
+
+    @Test
+    void MEASURED_세션의_복구_응답에는_source가_MEASURED로_온다() {
+        assertThat(recoverAutoFinalizedSessionOf("MEASURED"))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.source", source -> assertThat(source).isEqualTo("MEASURED"));
+    }
+
     @Test
     void 복구할_세션이_없으면_404() {
         assertThat(mvc.post()

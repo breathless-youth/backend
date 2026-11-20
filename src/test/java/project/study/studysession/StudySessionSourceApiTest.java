@@ -22,7 +22,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import project.study.TestcontainersConfiguration;
 
 /**
- * 세션 제출의 출처(source) 기본값, 기본 모드 저장, 수동 거절, 일간 조회의 출처별 집계 (ADR-0049).
+ * 세션 제출의 출처(source) 기본값, 자율 모드 저장, 수동 거절, 일간 조회의 출처별 집계 (ADR-0049).
  * 파일 400줄 제한으로 StudySessionApiTest에서 분리했다.
  */
 @SpringBootTest
@@ -117,7 +117,7 @@ class StudySessionSourceApiTest {
         Instant timerStart = sessionStart.plusSeconds(3 * 3600);
         assertThat(submitWithSource(timerStart, 7200, 7200, "[]", "TIMER")).hasStatus(HttpStatus.CREATED);
 
-        // 기본 모드만 한 날도 달력에 보인다
+        // 자율 모드만 한 날도 달력에 보인다
         assertThat(listRequest(day))
                 .hasStatusOk()
                 .bodyJson()
@@ -136,7 +136,7 @@ class StudySessionSourceApiTest {
         assertThat(submitWithSource(sessionStart, 7200, 6300, events, null)).hasStatus(HttpStatus.CREATED);
 
         // 집중률·최대 집중은 관리 모드만 보아 87.5와 5100이다.
-        // 기본 모드까지 섞었다면 93.8과 7200이 나온다.
+        // 자율 모드까지 섞었다면 93.8과 7200이 나온다.
         assertThat(listRequest(day))
                 .hasStatusOk()
                 .bodyJson()

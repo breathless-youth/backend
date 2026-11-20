@@ -18,7 +18,7 @@ import project.study.studysession.repository.ActiveStudySessionRepository;
 /** BY-447 draft 테이블 라운드트립 — jsonb 매핑과 파생 쿼리가 실제 PostgreSQL에서 동작하는지 검증한다. */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
-// findByLastSeenAtBefore가 전 유저 대상 풀스캔이라 다른 테스트가 커밋한 draft가 섞인다 — 롤백 격리 필수
+// findStaleDrafts가 전 유저 대상 풀스캔이라 다른 테스트가 커밋한 draft가 섞이므로 롤백 격리가 필수다
 @Transactional
 class ActiveStudySessionRepositoryTest {
 
@@ -70,7 +70,8 @@ class ActiveStudySessionRepositoryTest {
         ActiveStudySession updated =
                 repository.findFirstByUserIdOrderByLastSeenAtDesc(userId).orElseThrow();
         assertThat(updated.getStudySec()).isEqualTo(60);
-        assertThat(repository.findByLastSeenAtBefore(Instant.parse("2026-08-27T02:00:00Z")))
+        assertThat(repository.findStaleDrafts(
+                        Instant.parse("2026-08-27T02:00:00Z"), Instant.parse("2026-08-27T02:00:00Z")))
                 .hasSize(1);
     }
 
@@ -89,9 +90,11 @@ class ActiveStudySessionRepositoryTest {
     void lastSeenAt이_기준보다_오래된_draft만_조회된다() {
         upsert(startedAt.plusSeconds(30), 30, 30, "[]");
 
-        assertThat(repository.findByLastSeenAtBefore(Instant.parse("2026-08-27T01:10:06Z")))
+        assertThat(repository.findStaleDrafts(
+                        Instant.parse("2026-08-27T01:10:06Z"), Instant.parse("2026-08-27T01:10:06Z")))
                 .hasSize(1);
-        assertThat(repository.findByLastSeenAtBefore(Instant.parse("2026-08-27T01:10:05Z")))
+        assertThat(repository.findStaleDrafts(
+                        Instant.parse("2026-08-27T01:10:05Z"), Instant.parse("2026-08-27T01:10:05Z")))
                 .isEmpty();
     }
 }

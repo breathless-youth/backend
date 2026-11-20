@@ -124,13 +124,22 @@ public class ActiveStudySessionService {
                 draft.getSource());
     }
 
-    /** 이 시간 넘게 하트비트가 없으면 죽었다고 본다 — 30초 주기 기준 10회 연속 유실. 판정은 서버 시계(lastSeenAt). */
+    /** TIMER가 아닌 draft는 이 시간 넘게 하트비트가 없으면 죽었다고 본다. 30초 주기 기준 10회 연속 유실이고, 판정은 서버 시계(lastSeenAt) 기준이다. */
     static final Duration FINALIZE_GRACE = Duration.ofMinutes(5);
+
+    /**
+     * TIMER draft의 자동 확정 유예 시간
+     *
+     * 앱을 벗어나 있는 동안에도 타이머가 돌기 때문에, 보고가 끊겨도 2시간까지는 공부 중으로 본다.
+     * 2시간 상한은 웹이 지키고, 서버는 이보다 긴 제출을 막지 않는다.
+     */
+    static final Duration TIMER_FINALIZE_GRACE = Duration.ofHours(2);
 
     @Transactional(readOnly = true)
     public List<Long> findStaleDraftIds() {
+        Instant now = clock.instant();
         return activeStudySessionRepository
-                .findByLastSeenAtBefore(clock.instant().minus(FINALIZE_GRACE))
+                .findStaleDrafts(now.minus(FINALIZE_GRACE), now.minus(TIMER_FINALIZE_GRACE))
                 .stream()
                 .map(ActiveStudySession::getId)
                 .toList();
