@@ -271,9 +271,11 @@ ALTER TABLE planner_record_edit
 
 ```sql
 -- 1. 웹을 되돌린 뒤, 남은 TIMER draft가 비기를 기다린다.
---    마지막 수신 뒤 5분(FINALIZE_GRACE)이 지나면 새 서버가 TIMER 세션으로 확정한다.
+--    TIMER draft는 마지막 수신 뒤 2시간(TIMER_FINALIZE_GRACE)이 지나야 새 서버가 TIMER 세션으로 확정한다.
+--    웹을 되돌리고 2시간이 지나기 전에는 아래 DELETE를 실행하지 않는다. 앱 밖에 있는 사용자의 진행 중 기록이 삭제된다.
 SELECT count(*) FROM active_study_session WHERE source = 'TIMER';
--- 오래 열린 탭 때문에 남는 draft는 옛 서버가 관리 모드로 확정하지 않게 삭제한다. 그 세션의 진행 중 기록은 잃는다.
+-- 2시간을 기다린 뒤에도 남은 draft는 오래 열린 탭이 보고를 계속 보내는 경우다.
+-- 옛 서버가 관리 모드로 확정하지 않게 삭제한다. 그 세션의 진행 중 기록은 잃는다.
 DELETE FROM active_study_session WHERE source = 'TIMER';
 
 -- 2. 되돌릴 때 쓸 백업을 남긴다.
