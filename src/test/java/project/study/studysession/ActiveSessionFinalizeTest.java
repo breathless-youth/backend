@@ -184,7 +184,7 @@ class ActiveSessionFinalizeTest {
 
     @Test
     void TIMER_draft는_2시간_넘게_보고가_없으면_마지막_보고_시각으로_확정된다() {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         Instant lastReported = now.minusSeconds(2 * 3600 + 60);
         Long draftId = insertDraftWithSource("TIMER", now.minusSeconds(3 * 3600), lastReported, lastReported);
 
