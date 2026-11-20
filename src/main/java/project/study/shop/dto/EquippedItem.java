@@ -30,7 +30,13 @@ public record EquippedItem(
         String assetKey,
 
         @Schema(description = "공간 파일의 종류(IMAGE·VIDEO). 공간이 아니면 null", example = "VIDEO")
-        AssetType assetType) {
+        AssetType assetType,
+
+        @Schema(
+                description = "영상 공간의 재생 방식. LOOP는 계속 반복하는 영상, WATCH는 들어오기·머무르기·나가기 장면과 소리를 따로 재생하는 감시 방식이다."
+                        + " 영상 공간이 아니면 null",
+                example = "WATCH")
+        VideoMode videoMode) {
 
     public static EquippedItem from(ShopItem item) {
         return item == null
@@ -44,6 +50,7 @@ public record EquippedItem(
                         item.effectPieces(),
                         item.effectType(),
                         item.assetKey(),
-                        item.assetType());
+                        item.assetType(),
+                        item.videoMode());
     }
 }

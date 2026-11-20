@@ -8,6 +8,7 @@ import project.study.shop.dto.AssetType;
 import project.study.shop.dto.ShopCategory;
 import project.study.shop.dto.ShopItem;
 import project.study.shop.dto.UnlockType;
+import project.study.shop.dto.VideoMode;
 
 class ShopProgressTest {
 
@@ -31,6 +32,7 @@ class ShopProgressTest {
                 null,
                 null,
                 true,
+                null,
                 null,
                 null);
     }
@@ -56,6 +58,7 @@ class ShopProgressTest {
                 null,
                 true,
                 null,
+                null,
                 null);
     }
 
@@ -80,7 +83,8 @@ class ShopProgressTest {
                 null,
                 active,
                 "watcher/9c8d9f19",
-                AssetType.VIDEO);
+                AssetType.VIDEO,
+                VideoMode.LOOP);
     }
 
     @Test

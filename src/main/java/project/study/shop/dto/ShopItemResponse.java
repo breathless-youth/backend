@@ -21,7 +21,10 @@ public record ShopItemResponse(
                 example = "HEAD")
         AccessorySlot slot,
 
-        @Schema(description = "화면에서 거르는 분류 코드(타이머 배경의 NATURE 등). 보여 줄 이름은 앱이 정한다. 없으면 null", example = "NATURE")
+        @Schema(
+                description = "옛 분류 코드. tags로 대체했고 다음 릴리즈에 뺀다. 새 코드는 읽지 않는다",
+                example = "STUDY_SPACE",
+                deprecated = true)
         String tag,
 
         @Schema(description = "이름. Accept-Language의 언어, 번역이 없으면 한국어", example = "왕관")
@@ -68,4 +71,13 @@ public record ShopItemResponse(
         String assetKey,
 
         @Schema(description = "공간 파일의 종류(IMAGE·VIDEO). 공간이 아니면 null", example = "VIDEO")
-        AssetType assetType) {}
+        AssetType assetType,
+
+        @Schema(
+                description = "영상 공간의 재생 방식. LOOP는 계속 반복하는 영상, WATCH는 들어오기·머무르기·나가기 장면과 소리를 따로 재생하는 감시 방식이다."
+                        + " 영상 공간이 아니면 null",
+                example = "WATCH")
+        VideoMode videoMode,
+
+        @Schema(description = "공간 분류. 분류 순서대로 오고, 쓰지 않는 분류는 빠진다. 없으면 빈 배열")
+        List<ShopTagResponse> tags) {}
