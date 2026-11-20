@@ -33,7 +33,7 @@ public class ActiveSessionFinalizeScheduler {
 
     @Scheduled(initialDelay = 60_000, fixedDelay = 60_000)
     public void finalizeStaleDrafts() {
-        for (Long draftId : activeStudySessionService.findStaleDraftIds()) { // 5분이 지난 draft 순회
+        for (Long draftId : activeStudySessionService.findStaleDraftIds()) { // 유예 시간이 지난 draft 순회
             try {
                 activeStudySessionService.finalizeDraft(draftId);
             } catch (InvalidSessionException | NotFoundException | JacksonException e) {

@@ -3,6 +3,7 @@ package project.study.studysession;
 import static org.assertj.core.api.Assertions.assertThat;
 import static project.study.support.AuthTestSupport.asUser;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -20,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import project.study.TestcontainersConfiguration;
+import project.study.studysession.scheduler.ActiveSessionFinalizeScheduler;
 
 /** BY-447 대체 정책 — auto_finalized 세션은 잠정 기록이라 늦은 최종 제출이 대체하고, 클라 제출본은 불가침이다. */
 @SpringBootTest
@@ -32,6 +34,12 @@ class AutoFinalizedReplaceApiTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private ActiveSessionFinalizeScheduler finalizeScheduler;
+
+    @Autowired
+    private Clock clock;
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -48,7 +56,7 @@ class AutoFinalizedReplaceApiTest {
                 "tester-" + UUID.randomUUID());
     }
 
-    // findByLastSeenAtBefore(스케줄러 조회)가 전 유저 대상 풀스캔이라, 이 테스트가 남긴 draft가 커밋된 채
+    // findStaleDrafts(스케줄러 조회)가 전 유저 대상 풀스캔이라, 이 테스트가 남긴 draft가 커밋된 채
     // 남으면 다른 테스트 클래스(특히 ActiveSessionFinalizeTest)의 스캔 결과를 오염시킨다 — 매 테스트 뒤 정리한다.
     @AfterEach
     void cleanUpDraft() {
@@ -139,6 +147,39 @@ class AutoFinalizedReplaceApiTest {
                         "SELECT auto_finalized, source FROM study_session WHERE user_id = ?", userId))
                 .containsEntry("auto_finalized", false)
                 .containsEntry("source", "TIMER");
+    }
+
+    @Test
+    void 두_시간_넘게_보고가_없어_자동_확정된_TIMER_세션은_더_늦게_끝나는_최종_제출로_대체된다() {
+        insertDraft(startedAt, startedAt.plusSeconds(1800), 1800, 1800);
+        jdbcTemplate.update(
+                "UPDATE active_study_session SET source = 'TIMER', last_seen_at = ? WHERE user_id = ?",
+                java.sql.Timestamp.from(clock.instant().minusSeconds(2 * 3600 + 60)),
+                userId);
+
+        finalizeScheduler.finalizeStaleDrafts();
+
+        assertThat(draftRows()).isEqualTo(0);
+        assertThat(jdbcTemplate.queryForMap(
+                        "SELECT auto_finalized, source FROM study_session WHERE user_id = ?", userId))
+                .containsEntry("auto_finalized", true)
+                .containsEntry("source", "TIMER");
+
+        String body = """
+                {"startedAt": "%s", "endedAt": "%s", "studySec": 9000, "focusSec": 9000, "events": [], "source": "TIMER"}""".formatted(startedAt, startedAt.plusSeconds(9000));
+        assertThat(mvc.post()
+                        .uri("/api/study-sessions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(asUser(userId)))
+                .hasStatus(HttpStatus.CREATED);
+
+        assertThat(sessionRows()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForMap(
+                        "SELECT auto_finalized, source, study_sec FROM study_session WHERE user_id = ?", userId))
+                .containsEntry("auto_finalized", false)
+                .containsEntry("source", "TIMER")
+                .containsEntry("study_sec", 9000);
     }
 
     @Test

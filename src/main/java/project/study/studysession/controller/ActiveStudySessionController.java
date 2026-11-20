@@ -52,7 +52,7 @@ public class ActiveStudySessionController {
 
 				`durable=true`이면 DB 커밋 후 성공을 반환한다. 생략하면 기존 메모리 버퍼 경로다.
 
-				**자동 확정** — 마지막 보고가 서버 기준 5분 넘게 끊기면 스케줄러가 reportedAt을 종료 시각으로 \
+				**자동 확정** — 마지막 보고가 서버 기준으로 끊긴 뒤 TIMER 세션은 2시간, 그 밖의 세션은 5분이 넘으면 스케줄러가 reportedAt을 종료 시각으로 \
 				세션을 확정한다(자정 분할 포함, 길이 무관). 자동 확정본은 잠정 기록이라, 이후 같은 startedAt으로 \
 				최종 제출이 도착하면 그것으로 대체된다. 정상 최종 제출 시 draft는 함께 삭제되므로 \
 				앱은 확정 여부를 신경 쓸 필요 없이 늘 하던 대로 제출하면 된다.""")
@@ -107,7 +107,7 @@ public class ActiveStudySessionController {
 
 					**주의:** 사용자가 '이어하기 아님'으로 판단했을 때만 호출해야 한다 — 무조건 호출하면 이어하려던\
 					draft까지 확정된다.""")
-    @ApiResponse(responseCode = "200", description = "복구 대상 요약 — statDate/startedAt/endedAt/studySec/focusSec")
+    @ApiResponse(responseCode = "200", description = "복구 대상 요약 — statDate/startedAt/endedAt/studySec/focusSec/source")
     @ApiResponse(
             responseCode = "404",
             description = "복구할 세션 없음 — 마지막이 정상 종료됐거나, 이미 확인했거나, 기록이 없다",
