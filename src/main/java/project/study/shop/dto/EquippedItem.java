@@ -22,7 +22,21 @@ public record EquippedItem(
         @Schema(
                 description = "그림 없이 앱이 코드로 그리는 빛 효과의 종류(aurora·glow·rainbow 등). 이때 imageUrl은 null. 아니면 null",
                 example = "aurora")
-        String effectType) {
+        String effectType,
+
+        @Schema(
+                description = "공간 파일 위치. 앱이 종류(assetType)와 함께 기기별 파일 주소를 만든다. 공간이 아니면 null",
+                example = "watcher/9c8d9f19")
+        String assetKey,
+
+        @Schema(description = "공간 파일의 종류(IMAGE·VIDEO). 공간이 아니면 null", example = "VIDEO")
+        AssetType assetType,
+
+        @Schema(
+                description = "영상 공간의 재생 방식. LOOP는 계속 반복하는 영상, WATCH는 들어오기·머무르기·나가기 장면과 소리를 따로 재생하는 감시 방식이다."
+                        + " 영상 공간이 아니면 null",
+                example = "WATCH")
+        VideoMode videoMode) {
 
     public static EquippedItem from(ShopItem item) {
         return item == null
@@ -34,6 +48,9 @@ public record EquippedItem(
                         item.backImageUrl(),
                         item.effectImageUrl(),
                         item.effectPieces(),
-                        item.effectType());
+                        item.effectType(),
+                        item.assetKey(),
+                        item.assetType(),
+                        item.videoMode());
     }
 }

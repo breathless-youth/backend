@@ -488,7 +488,7 @@ Table shop_item {
   category varchar(24) [not null, note: 'MASCOT_ACCESSORY | TIMER_BACKGROUND']
   mascot_code varchar(32) [ref: > mascot.code, note: '소품일 때만']
   slot varchar(16) [note: 'HEAD | FACE | BODY | WINGS | HELD | UNDERFOOT | EFFECT | SET, 소품일 때만. SET은 결제로만 판다']
-  tag varchar(32)
+  tag varchar(32) [note: 'deprecated. shop_item_tag로 대체, V88에서 삭제한다']
   name varchar(60) [not null]
   image_url varchar(500)
   back_image_url varchar(500) [note: '마스코트 뒤에 그리는 조각. 없으면 NULL']
@@ -500,8 +500,30 @@ Table shop_item {
   unlock_type varchar(24) [note: 'STREAK_DAYS | TOTAL_FOCUS_HOURS, 보상 상품일 때만']
   unlock_value integer
   store_product_id varchar(100) [unique, note: '스토어 결제로 사는 상품의 스토어 상품 ID. 아니면 NULL']
+  asset_key varchar(100) [note: '공간 파일 위치(끝은 파일 내용 해시). 타이머 배경만, asset_type과 함께 있거나 함께 NULL']
+  asset_type varchar(8) [note: 'IMAGE | VIDEO']
+  video_mode varchar(8) [note: 'LOOP | WATCH. 영상 공간이면 반드시 있고 아니면 NULL']
   sort_order integer [not null, default: 0]
-  active boolean [not null, default: true]
+  active boolean [not null, default: true, note: 'false면 판매를 멈춘 상품. 가진 사람에게만 보인다. price·unlock·store_product_id가 모두 NULL인 타이머 배경은 무료 상품이고 판매 중인 동안 모두가 가진다']
+}
+
+Table shop_tag {
+  id bigserial [primary key]
+  code varchar(64) [not null, unique]
+  name varchar(60) [not null]
+  names jsonb [not null, default: '{}', note: '다른 언어 이름. 없는 언어는 name(한국어)']
+  sort_order integer [not null, default: 0]
+  active boolean [not null, default: true, note: 'false면 응답에서 뺀다']
+}
+
+Table shop_item_tag {
+  item_id bigint [not null, ref: > shop_item.id]
+  tag_id bigint [not null, ref: > shop_tag.id]
+
+  indexes {
+    (item_id, tag_id) [pk]
+    tag_id
+  }
 }
 
 Table user_item {

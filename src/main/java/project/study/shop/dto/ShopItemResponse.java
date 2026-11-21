@@ -21,7 +21,10 @@ public record ShopItemResponse(
                 example = "HEAD")
         AccessorySlot slot,
 
-        @Schema(description = "화면에서 거르는 분류 코드(타이머 배경의 NATURE 등). 보여 줄 이름은 앱이 정한다. 없으면 null", example = "NATURE")
+        @Schema(
+                description = "옛 분류 코드. tags로 대체했고 다음 릴리즈에 뺀다. 새 코드는 읽지 않는다",
+                example = "STUDY_SPACE",
+                deprecated = true)
         String tag,
 
         @Schema(description = "이름. Accept-Language의 언어, 번역이 없으면 한국어", example = "왕관")
@@ -34,10 +37,11 @@ public record ShopItemResponse(
 
         @Schema(description = "등급. 1·2·3", example = "1") int grade,
 
-        @Schema(description = "가격(P). 포인트로 사는 상품이 아니면(보상 상품·결제 상품) null", example = "600")
+        @Schema(description = "가격(P). 포인트로 사는 상품이 아니면(보상 상품·결제 상품·무료 상품) null", example = "600")
         Integer price,
 
-        @Schema(description = "가졌는지. 보상 상품은 조건을 채우면 true") boolean owned,
+        @Schema(description = "가졌는지. 보상 상품은 조건을 채우면 true, 무료 상품은 판매 중인 동안 모두 true")
+        boolean owned,
 
         @Schema(description = "쓰는 중인지(착용·적용)") boolean inUse,
 
@@ -59,4 +63,21 @@ public record ShopItemResponse(
         @Schema(
                 description = "그림 없이 앱이 코드로 그리는 빛 효과의 종류(aurora·glow·rainbow 등). 이때 imageUrl은 null. 아니면 null",
                 example = "aurora")
-        String effectType) {}
+        String effectType,
+
+        @Schema(
+                description = "공간 파일 위치. 앱이 종류(assetType)와 함께 기기별 파일 주소를 만든다. 공간이 아니면 null",
+                example = "watcher/9c8d9f19")
+        String assetKey,
+
+        @Schema(description = "공간 파일의 종류(IMAGE·VIDEO). 공간이 아니면 null", example = "VIDEO")
+        AssetType assetType,
+
+        @Schema(
+                description = "영상 공간의 재생 방식. LOOP는 계속 반복하는 영상, WATCH는 들어오기·머무르기·나가기 장면과 소리를 따로 재생하는 감시 방식이다."
+                        + " 영상 공간이 아니면 null",
+                example = "WATCH")
+        VideoMode videoMode,
+
+        @Schema(description = "공간 분류. 분류 순서대로 오고, 쓰지 않는 분류는 빠진다. 없으면 빈 배열")
+        List<ShopTagResponse> tags) {}
