@@ -130,7 +130,7 @@ class GroupNotificationsTest {
         assertThat(message.ko().title()).isEqualTo("포메님이 공부를 시작했어요");
         assertThat(message.ko().body()).isEqualTo("새벽 공시반에 같이 공부하러 가 볼까요?");
         assertThat(message.en()).isEqualTo(new PushText("포메 started studying", "Study together in 새벽 공시반."));
-        assertThat(message.link()).isEqualTo("/groups/10");
+        assertThat(message.link()).isEqualTo("/social/groups/10");
     }
 
     @Test
