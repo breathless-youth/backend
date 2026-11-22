@@ -15,6 +15,11 @@ public final class GroupPushLinks {
         return "/groups/" + groupId;
     }
 
+    /** 공부 시작 알림을 눌렀을 때 소셜 탭의 그룹 홈으로 간다. */
+    public static String groupStudyStart(long groupId) {
+        return "/social/groups/" + groupId;
+    }
+
     /** 그룹장의 신청 목록 */
     public static String applications(long groupId) {
         return group(groupId) + "/applications";

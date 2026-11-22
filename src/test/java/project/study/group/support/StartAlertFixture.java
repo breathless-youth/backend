@@ -28,7 +28,7 @@ public class StartAlertFixture {
      * @param confirmed 구독까지 마쳐 확정된 자리인가 — false면 예약만 한 자리
      * @param disconnected 연결이 끊겨 유예 중인가
      */
-    public void seatInGroupRoom(long groupId, long userId, boolean confirmed, boolean disconnected) {
+    public long seatInGroupRoom(long groupId, long userId, boolean confirmed, boolean disconnected) {
         long roomId = jdbc.sql("select id from rooms where group_id = :groupId and closed_at is null")
                 .param("groupId", groupId)
                 .query(Long.class)
@@ -46,6 +46,7 @@ public class StartAlertFixture {
                 .param("joinedAt", confirmed ? now : null)
                 .param("disconnectedAt", disconnected ? now : null)
                 .update();
+        return roomId;
     }
 
     private long openRoom(long groupId) {
