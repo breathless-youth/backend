@@ -1,7 +1,6 @@
 package project.study.group;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.after;
@@ -12,6 +11,8 @@ import static project.study.group.support.GroupDeskTestConfig.NOW;
 import static project.study.group.support.PushAssert.noPush;
 import static project.study.group.support.PushAssert.notPushedTo;
 import static project.study.group.support.PushAssert.pushedOnceTo;
+import static project.study.group.support.RoomSessions.accessor;
+import static project.study.group.support.RoomSessions.principal;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -34,15 +35,18 @@ import project.study.group.service.GroupStartAlerts;
 import project.study.group.support.BlockProbe;
 import project.study.group.support.GroupDeskTestConfig;
 import project.study.group.support.GroupProbe;
+import project.study.group.support.RoomSessions;
 import project.study.group.support.StartAlertFixture;
 import project.study.group.support.StudyFixture;
 import project.study.push.dto.PushMessage;
 import project.study.push.service.PushSender;
+import project.study.room.dto.StateUpdatePayload;
+import project.study.room.service.RoomService;
+import project.study.room.websocket.RoomStompHandler;
+import project.study.room.websocket.SessionRegistry;
+import project.study.room.websocket.StompEventListener;
 
-/**
- * 멤버 공부 시작 알림 (BY-1124) — 새 draft를 한 번만 꺼내, 시작한 사람이 든 그룹마다 알림을 켠 다른 멤버에게 보낸다. 서비스 메서드를 직접 부른다(스케줄러
- * 빈은 테스트에서 꺼져 있다). 시계는 2026-10-14(수) 15:00 KST로 고정이다.
- */
+/** 그룹 공부방의 실제 공부 시작부터 푸시 발송까지 검증한다 (BY-1382). */
 @SpringBootTest
 @Import({TestcontainersConfiguration.class, GroupDeskTestConfig.class})
 class GroupStartAlertsTest {
@@ -58,12 +62,25 @@ class GroupStartAlertsTest {
     @Autowired
     private ApplicationContext context;
 
+    @Autowired
+    private RoomService rooms;
+
+    @Autowired
+    private RoomStompHandler handler;
+
+    @Autowired
+    private SessionRegistry registry;
+
+    @Autowired
+    private StompEventListener listener;
+
     @MockitoBean
     private PushSender pushSender;
 
     private GroupProbe probe;
     private StudyFixture study;
     private StartAlertFixture fixture;
+    private RoomSessions sessions;
     private final List<Long> users = new ArrayList<>();
     private long starter;
     private long owner;
@@ -71,12 +88,10 @@ class GroupStartAlertsTest {
 
     @BeforeEach
     void setUp() {
-        // 같은 컨텍스트의 다른 테스트가 남긴 새 draft를 알리지 않고 치운다 — process는 DB 전체의 새 draft를 꺼내므로 남아 있으면 건수가 어긋난다
-        jdbc.sql("update active_study_session set start_notified = true where not start_notified")
-                .update();
         probe = new GroupProbe(jdbc);
         study = new StudyFixture(jdbc);
         fixture = new StartAlertFixture(jdbc, probe);
+        sessions = new RoomSessions(registry, listener);
         starter = user("공부왕");
         owner = user("그룹장");
         group = probe.insertGroup(owner, "PUBLIC");
@@ -85,6 +100,7 @@ class GroupStartAlertsTest {
 
     @AfterEach
     void tearDown() {
+        sessions.close();
         fixture.closeRooms();
         fixture.clearAlerts(users);
         study.clear(users);
@@ -125,10 +141,40 @@ class GroupStartAlertsTest {
         study.draft(userId, startedAt, startedAt.plusSeconds(30), 25, "[]");
     }
 
+    private record ConnectionInRoom(long roomId, long userId, String sessionId) {}
+
+    private ConnectionInRoom joinRoom(long groupId, long userId) {
+        long roomId = fixture.seatInGroupRoom(groupId, userId, false, false);
+        return new ConnectionInRoom(roomId, userId, sessions.subscribe(userId, roomId));
+    }
+
+    private void camera(ConnectionInRoom connection, boolean on) {
+        handler.handleState(
+                connection.roomId(),
+                new StateUpdatePayload(on, null, null),
+                principal(connection.userId()),
+                accessor(connection.sessionId()));
+    }
+
+    private void startStudy(long groupId, long userId) {
+        camera(joinRoom(groupId, userId), true);
+    }
+
     @Test
-    void 첫_draft는_알림을_켠_다른_멤버에게_한_번_간다() {
+    void 개인_공부를_시작한_그룹_멤버는_그룹_알림을_보내지_않는다() {
         long receiver = member(group);
         firstCheckpoint(starter, SESSION_START);
+
+        assertThat(alerts.process(NOW)).isZero();
+
+        noPush(pushSender);
+        assertThat(fixture.lastSentAt(receiver, group)).isNull();
+    }
+
+    @Test
+    void 그룹_공부방에서_공부하면_알림을_켠_다른_멤버에게_한_번_간다() {
+        long receiver = member(group);
+        startStudy(group, starter);
 
         assertThat(alerts.process(NOW)).isEqualTo(1);
 
@@ -137,7 +183,7 @@ class GroupStartAlertsTest {
         assertThat(message.ko().title()).isEqualTo(GroupProbe.nickname("공부왕", starter) + "님이 공부를 시작했어요");
         assertThat(message.ko().body())
                 .isEqualTo(probe.group(group).orElseThrow().name() + "에 같이 공부하러 가 볼까요?");
-        assertThat(message.link()).isEqualTo("/groups/" + group);
+        assertThat(message.link()).isEqualTo("/social/groups/" + group);
         assertThat(fixture.lastSentAt(receiver, group)).isEqualTo(NOW);
     }
 
@@ -147,7 +193,7 @@ class GroupStartAlertsTest {
         long off = user("꺼둔멤버");
         probe.insertMember(group, off, "APPLICATION");
         probe.setNotify(group, starter, true);
-        firstCheckpoint(starter, SESSION_START);
+        startStudy(group, starter);
 
         assertThat(alerts.process(NOW)).isEqualTo(1);
 
@@ -175,7 +221,7 @@ class GroupStartAlertsTest {
         // 자리를 이미 비운 사람은 자리가 없는 사람이다
         fixture.seatInGroupRoom(group, left, true, false);
         fixture.leaveSeat(left);
-        firstCheckpoint(starter, SESSION_START);
+        startStudy(group, starter);
 
         // 자리 있음(확정·예약만·유예 중)은 모두 뺀다. 다른 그룹 방에 앉은 사람과 자리를 비운 사람은 이 그룹 방에 자리가 없어 받는다
         assertThat(alerts.process(NOW)).isEqualTo(3);
@@ -192,7 +238,7 @@ class GroupStartAlertsTest {
         BlockProbe blocks = new BlockProbe(jdbc);
         blocks.insertBlock(starter, blockedByStarter, NOW);
         blocks.insertBlock(blockerOfStarter, starter, NOW);
-        firstCheckpoint(starter, SESSION_START);
+        startStudy(group, starter);
 
         assertThat(alerts.process(NOW)).isEqualTo(1);
 
@@ -203,30 +249,35 @@ class GroupStartAlertsTest {
     }
 
     @Test
-    void 같은_draft는_두_번_처리해도_한_번만_간다() {
+    void 카메라를_끄고_켜거나_같은_자리에_다시_연결해도_한_번만_간다() {
         long receiver = member(group);
-        firstCheckpoint(starter, SESSION_START);
+        ConnectionInRoom room = joinRoom(group, starter);
+        camera(room, true);
 
         assertThat(alerts.process(NOW)).isEqualTo(1);
-        assertThat(alerts.process(NOW.plusSeconds(10))).isZero();
+        camera(room, false);
+        camera(room, true);
+        String reconnected = sessions.subscribe(starter, room.roomId());
+        camera(new ConnectionInRoom(room.roomId(), starter, reconnected), true);
 
+        assertThat(alerts.process(NOW.plus(Duration.ofHours(2)))).isZero();
         pushedOnceTo(pushSender, receiver);
     }
 
     @Test
-    void 한_시간_안의_두_번째_세션_시작은_보내지_않고_한_시간이_지나면_보낸다() {
+    void 한_시간_안의_새_공부_시작은_보내지_않고_한_시간이_지나면_보낸다() {
         long receiver = member(group);
-        firstCheckpoint(starter, SESSION_START);
-        alerts.process(NOW);
+        startStudy(group, starter);
+        assertThat(alerts.process(NOW)).isEqualTo(1);
 
-        Instant secondStart = NOW.plus(Duration.ofMinutes(30));
-        firstCheckpoint(starter, secondStart);
-        assertThat(alerts.process(secondStart.plusSeconds(30))).isZero();
+        fixture.leaveSeat(starter);
+        startStudy(group, starter);
+        assertThat(alerts.process(NOW.plus(Duration.ofHours(1)).minusSeconds(1)))
+                .isZero();
         assertThat(fixture.lastSentAt(receiver, group)).isEqualTo(NOW);
 
-        // 1시간이 꼭 지난 때부터 다시 보낸다
-        Instant thirdStart = NOW.plus(Duration.ofHours(1)).minusSeconds(30);
-        firstCheckpoint(starter, thirdStart);
+        fixture.leaveSeat(starter);
+        startStudy(group, starter);
         Instant exactlyAnHour = NOW.plus(Duration.ofHours(1));
         assertThat(alerts.process(exactlyAnHour)).isEqualTo(1);
 
@@ -235,46 +286,31 @@ class GroupStartAlertsTest {
     }
 
     @Test
-    void 한_시간에_1초_모자라면_보내지_않는다() {
-        long receiver = member(group);
-        firstCheckpoint(starter, SESSION_START);
-        alerts.process(NOW);
-
-        Instant secondStart = NOW.plus(Duration.ofHours(1)).minusSeconds(31);
-        firstCheckpoint(starter, secondStart);
-        assertThat(alerts.process(NOW.plus(Duration.ofHours(1)).minusSeconds(1)))
-                .isZero();
-
-        assertThat(fixture.lastSentAt(receiver, group)).isEqualTo(NOW);
-        verify(pushSender, timeout(3000).times(1)).send(eq(List.of(receiver)), any());
-    }
-
-    @Test
-    void 시작한_사람이_그룹_둘에_들어_있으면_그룹마다_보낸다() {
+    void 시작한_사람이_그룹_둘에_들어_있어도_공부를_시작한_그룹에만_보낸다() {
         long secondGroup = probe.insertGroup(user("둘째그룹장"), "PUBLIC");
         probe.insertMember(secondGroup, starter, "APPLICATION");
         long both = member(group);
         probe.insertMember(secondGroup, both, "APPLICATION");
         probe.setNotify(secondGroup, both, true);
         long onlyFirst = member(group);
-        firstCheckpoint(starter, SESSION_START);
+        long onlySecond = member(secondGroup);
+        startStudy(group, starter);
 
-        assertThat(alerts.process(NOW)).isEqualTo(3);
+        assertThat(alerts.process(NOW)).isEqualTo(2);
 
-        // 그룹마다 한 번씩 — 첫 그룹은 둘에게, 둘째 그룹은 둘 다 든 사람에게만
-        List<Sent> sent = sent(2);
-        assertThat(sent)
-                .extracting(entry -> entry.message().link(), Sent::receivers)
-                .containsExactlyInAnyOrder(
-                        tuple("/groups/" + group, List.of(both, onlyFirst)),
-                        tuple("/groups/" + secondGroup, List.of(both)));
+        assertThat(sent(1)).singleElement().satisfies(entry -> {
+            assertThat(entry.message().link()).isEqualTo("/social/groups/" + group);
+            assertThat(entry.receivers()).containsExactly(both, onlyFirst);
+        });
+        assertThat(fixture.lastSentAt(both, secondGroup)).isNull();
+        assertThat(fixture.lastSentAt(onlySecond, secondGroup)).isNull();
     }
 
     @Test
     void 받을_사람이_여럿이면_한_그룹에_한_번에_보낸다() {
         long first = member(group);
         long second = member(group);
-        firstCheckpoint(starter, SESSION_START);
+        startStudy(group, starter);
 
         assertThat(alerts.process(NOW)).isEqualTo(2);
 
@@ -282,44 +318,47 @@ class GroupStartAlertsTest {
     }
 
     @Test
-    void 시작한_지_10분이_넘은_draft는_알리지_않고_정확히_10분이면_알린다() {
+    void 방에_입장만_했거나_옛_소켓이_카메라를_켜면_보내지_않는다() {
         long receiver = member(group);
-        long lateStarter = user("늦은사람");
-        probe.insertMember(group, lateStarter, "APPLICATION");
-        long exactStarter = user("딱10분");
-        probe.insertMember(group, exactStarter, "APPLICATION");
-        firstCheckpoint(lateStarter, NOW.minus(Duration.ofMinutes(10)).minusSeconds(1));
-        firstCheckpoint(exactStarter, NOW.minus(Duration.ofMinutes(10)));
-
-        assertThat(alerts.process(NOW)).isEqualTo(1);
-
-        PushMessage message = pushedOnceTo(pushSender, receiver);
-        assertThat(message.ko().title()).startsWith(GroupProbe.nickname("딱10분", exactStarter));
-        // 늦게 올라온 draft는 알리지 않을 뿐 꺼낸 것으로 표시돼 다음 번에 다시 보이지 않는다
-        assertThat(alerts.process(NOW.plusSeconds(10))).isZero();
-    }
-
-    @Test
-    void 이미_확정된_세션의_draft는_알리지_않는다() {
-        long receiver = member(group);
-        study.session(starter, SESSION_START, 600);
-        firstCheckpoint(starter, SESSION_START);
+        ConnectionInRoom room = joinRoom(group, starter);
+        camera(room, false);
+        camera(new ConnectionInRoom(room.roomId(), starter, "old-session"), true);
 
         assertThat(alerts.process(NOW)).isZero();
 
         noPush(pushSender);
         assertThat(fixture.lastSentAt(receiver, group)).isNull();
+
+        camera(room, true);
+        assertThat(alerts.process(NOW.plusSeconds(10))).isEqualTo(1);
+        pushedOnceTo(pushSender, receiver);
     }
 
     @Test
-    void 그룹을_나간_멤버와_그룹_멤버가_아닌_사람의_draft는_조용히_넘어간다() {
+    void 그룹_멤버가_초대코드_방에서_공부하면_보내지_않는다() {
+        long receiver = member(group);
+        String code = rooms.create(starter).inviteCode();
+        long roomId = rooms.join(starter, code, "공부왕", null, null).response().roomId();
+        try {
+            String session = sessions.subscribe(starter, roomId);
+            camera(new ConnectionInRoom(roomId, starter, session), true);
+            firstCheckpoint(starter, SESSION_START);
+
+            assertThat(alerts.process(NOW)).isZero();
+
+            noPush(pushSender);
+            assertThat(fixture.lastSentAt(receiver, group)).isNull();
+        } finally {
+            rooms.leave(roomId, starter);
+        }
+    }
+
+    @Test
+    void 그룹을_나간_멤버에게는_보내지_않는다() {
         long leaver = member(group);
         probe.leaveGroup(group, leaver);
-        long lonely = user("그룹없는사람");
-        firstCheckpoint(lonely, SESSION_START);
+        startStudy(group, starter);
 
-        assertThat(alerts.process(NOW)).isZero();
-        firstCheckpoint(starter, SESSION_START);
         assertThat(alerts.process(NOW)).isZero();
 
         noPush(pushSender);
@@ -327,12 +366,13 @@ class GroupStartAlertsTest {
 
     @Test
     void 푸시_발송이_실패해도_처리는_끝나고_다른_그룹_알림은_나간다() {
-        long secondGroup = probe.insertGroup(user("둘째그룹장"), "PUBLIC");
-        probe.insertMember(secondGroup, starter, "APPLICATION");
+        long secondStarter = user("둘째그룹장");
+        long secondGroup = probe.insertGroup(secondStarter, "PUBLIC");
         long failing = member(group);
         long fine = member(secondGroup);
         doThrow(new IllegalStateException("fcm down")).when(pushSender).send(eq(List.of(failing)), any());
-        firstCheckpoint(starter, SESSION_START);
+        startStudy(group, starter);
+        startStudy(secondGroup, secondStarter);
 
         assertThat(alerts.process(NOW)).isEqualTo(2);
 

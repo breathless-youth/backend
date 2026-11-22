@@ -106,7 +106,7 @@ public class GroupNotifications {
                 receiverIds,
                 new PushText(starterNickname + "님이 공부를 시작했어요", groupName + "에 같이 공부하러 가 볼까요?"),
                 new PushText(starterNickname + " started studying", "Study together in " + groupName + "."),
-                GroupPushLinks.group(groupId),
+                GroupPushLinks.groupStudyStart(groupId),
                 MEMBER_STARTED);
     }
 
