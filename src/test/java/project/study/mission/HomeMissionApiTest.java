@@ -190,16 +190,16 @@ class HomeMissionApiTest {
         try (var executor = Executors.newFixedThreadPool(2)) {
             var first = executor.submit(() -> {
                 start.await();
-                return service.complete(user, 1);
+                return service.complete(user, 1, false);
             });
             var second = executor.submit(() -> {
                 start.await();
-                return service.complete(user, 1);
+                return service.complete(user, 1, false);
             });
             start.countDown();
             assertThat(first.get(10, TimeUnit.SECONDS).completedSteps()).isEqualTo(1);
             assertThat(second.get(10, TimeUnit.SECONDS).completedSteps()).isEqualTo(1);
-            assertThat(service.get(user).currentStep()).isEqualTo(2);
+            assertThat(service.get(user, false).currentStep()).isEqualTo(2);
         }
     }
 
@@ -230,7 +230,7 @@ class HomeMissionApiTest {
                         .with(asUser(user))
                         .exchange())
                 .hasStatus(org.springframework.http.HttpStatus.BAD_REQUEST);
-        assertThat(service.get(user).completedSteps()).isZero();
+        assertThat(service.get(user, false).completedSteps()).isZero();
     }
 
     @Test
@@ -240,13 +240,13 @@ class HomeMissionApiTest {
                 .param("u", user)
                 .update();
         insertSession(user, "2026-11-06T15:15:00Z", "2026-11-06T15:15:00Z", 300, "MEASURED");
-        service.complete(user, 1);
-        service.complete(user, 2);
+        service.complete(user, 1, false);
+        service.complete(user, 2, false);
         jdbc.sql("UPDATE study_subject SET deleted_at=now() WHERE user_id=:u")
                 .param("u", user)
                 .update();
         jdbc.sql("DELETE FROM study_session WHERE user_id=:u").param("u", user).update();
-        assertThat(service.get(user).completedSteps()).isEqualTo(2);
+        assertThat(service.get(user, false).completedSteps()).isEqualTo(2);
     }
 
     @Test
