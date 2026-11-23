@@ -124,6 +124,8 @@ app:
     # 정기 맞춤 알림 (ADR-0042). dev는 실기기 확인용으로 켠다. 운영은 dev에서 확인한 뒤 켠다
     rhythm-reminder:
       enabled: true
+    points-shop-reminder:
+      enabled: ${POINTS_SHOP_REMINDER_ENABLED:false}
   # 메타 설치 정보 복호화 키 (BY-1066, ADR-0036). 값이 없으면 복호화만 꺼진 채 기동한다 — dev는 서버 .env에 넣는다
   acquisition:
     meta-install-referrer-key: ${META_INSTALL_REFERRER_KEY:}
