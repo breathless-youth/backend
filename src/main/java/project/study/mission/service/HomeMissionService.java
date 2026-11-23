@@ -101,13 +101,14 @@ public class HomeMissionService {
                                 .query(Boolean.class)
                                 .single();
                     case 2 -> seconds >= 300;
-                    case 3 -> purchasedAccessory(userId);
+                    case 3 -> hasPurchasedAccessory(userId);
                     default -> false;
                 };
         return new HomeMissionResponse(VERSION, startsOn, completed, current, eligible, seconds, 0, 0, List.of());
     }
 
-    private boolean purchasedAccessory(long userId) {
+    @Transactional(readOnly = true)
+    public boolean hasPurchasedAccessory(long userId) {
         // 보유만 한 소품과 타이머 배경을 제외하며, 판매 중지 전 포인트로 산 소품도 인정한다.
         return jdbc.sql("""
                 SELECT EXISTS (

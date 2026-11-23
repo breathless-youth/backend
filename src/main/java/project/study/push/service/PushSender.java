@@ -58,7 +58,18 @@ public class PushSender {
         if (messaging == null || userIds.isEmpty()) {
             return PushResult.NONE;
         }
-        Map<Boolean, List<String>> tokensByKorean = pushTokenRepository.findTokenLocalesByUserIdIn(userIds).stream()
+        return sendToTokens(pushTokenRepository.findTokenLocalesByUserIdIn(userIds), message);
+    }
+
+    public PushResult sendToEnabledDevices(Collection<Long> userIds, PushMessage message) {
+        if (messaging == null || userIds.isEmpty()) {
+            return PushResult.NONE;
+        }
+        return sendToTokens(pushTokenRepository.findEnabledTokenLocalesByUserIdIn(userIds), message);
+    }
+
+    private PushResult sendToTokens(List<TokenLocale> recipients, PushMessage message) {
+        Map<Boolean, List<String>> tokensByKorean = recipients.stream()
                 .collect(Collectors.partitioningBy(
                         token -> isKorean(token.locale()),
                         Collectors.mapping(TokenLocale::token, Collectors.toList())));
