@@ -16,7 +16,7 @@ class HomeMissionServiceTest {
         JdbcClient jdbc = mock(JdbcClient.class);
         StudySubjectLockRepository locks = mock(StudySubjectLockRepository.class);
         HomeMissionService service = new HomeMissionService(jdbc, locks, java.time.LocalDate.parse("2026-11-07"));
-        assertThatThrownBy(() -> service.complete(1, 3)).isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> service.complete(1, 3, false)).isInstanceOf(BadRequestException.class);
         verifyNoInteractions(jdbc, locks);
     }
 }

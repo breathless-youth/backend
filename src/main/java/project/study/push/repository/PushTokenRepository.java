@@ -37,6 +37,10 @@ public interface PushTokenRepository extends JpaRepository<PushToken, Long> {
             + " FROM PushToken t WHERE t.userId IN :userIds")
     List<TokenLocale> findTokenLocalesByUserIdIn(@Param("userIds") Collection<Long> userIds);
 
+    @Query("SELECT new project.study.push.repository.PushTokenRepository$TokenLocale(t.token, t.locale)"
+            + " FROM PushToken t WHERE t.userId IN :userIds AND t.notificationsEnabled")
+    List<TokenLocale> findEnabledTokenLocalesByUserIdIn(@Param("userIds") Collection<Long> userIds);
+
     record TokenLocale(String token, String locale) {}
 
     /** 발송 결과 처리에서 부른다 — 발송은 트랜잭션 밖(네트워크)이라 삭제가 스스로 트랜잭션을 연다. */

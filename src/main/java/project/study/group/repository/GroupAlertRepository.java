@@ -2,11 +2,8 @@ package project.study.group.repository;
 
 import java.time.Instant;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -46,23 +43,67 @@ public class GroupAlertRepository {
                 .list();
     }
 
+    public record StudyStart(long participationId, long roomId, long starterId) {}
+
+    public record AlertGroup(long id, String name, boolean studying) {}
+
     /**
-     * 그룹마다 그 그룹의 열린 공부방에 자리가 있는 사람 — 예약만 한 자리와 끊김 유예 중인 자리도 자리다({@code left_at IS NULL}). 이미 방에
-     * 있거나 곧 들어올 사람에게는 "같이 공부하러 가 볼까요?"를 보내지 않는다. 다른 그룹 방이나 초대코드 방에 앉은 사람은 이 그룹 방에는 자리가
-     * 없으므로 들지 않는다. 자리가 없는 그룹은 맵에 키가 없다.
+     * 아직 알리지 않은 그룹 공부방 자리 중 현재 연결되어 실제 공부 중인 자리만 가져온다.
+     * 카메라가 꺼진 입장 상태에서는 대기하고, 같은 자리에 복귀하거나 카메라를 다시 켜도 한 번만 꺼낸다.
      */
-    public Map<Long, Set<Long>> findSeatHolders(Collection<Long> groupIds) {
-        if (groupIds.isEmpty()) {
-            return Map.of();
-        }
-        Map<Long, Set<Long>> seats = new HashMap<>();
-        jdbc.sql("""
-                        SELECT r.group_id, p.user_id
+    public List<StudyStart> claimStudyStarts() {
+        return jdbc.sql("""
+                        WITH ready AS (
+                            SELECT p.id
+                              FROM room_participations p
+                              JOIN rooms r ON r.id = p.room_id
+                             WHERE NOT p.group_start_notified AND p.left_at IS NULL
+                               AND p.stomp_confirmed AND p.stomp_session_id IS NOT NULL
+                               AND p.camera_on AND NOT p.on_break
+                               AND r.group_id IS NOT NULL AND r.closed_at IS NULL
+                             ORDER BY p.id
+                               FOR UPDATE OF p SKIP LOCKED
+                        )
+                        UPDATE room_participations p SET group_start_notified = true
+                          FROM ready
+                         WHERE ready.id = p.id
+                        RETURNING p.id, p.room_id, p.user_id""")
+                .query((rs, n) -> new StudyStart(rs.getLong("id"), rs.getLong("room_id"), rs.getLong("user_id")))
+                .list();
+    }
+
+    /** 시작을 꺼낸 뒤 방을 옮기거나 멤버십이 끝났으면 보낼 대상 그룹이 없다. */
+    public Optional<AlertGroup> findStudyGroup(StudyStart start) {
+        return jdbc.sql("""
+                        SELECT g.id, g.name,
+                               (p.stomp_confirmed AND p.stomp_session_id IS NOT NULL
+                                AND p.camera_on AND NOT p.on_break) AS studying
                           FROM rooms r
-                          JOIN room_participations p ON p.room_id = r.id AND p.left_at IS NULL
-                         WHERE r.group_id IN (:groupIds) AND r.closed_at IS NULL""").param("groupIds", groupIds).query(rs -> {
-            seats.computeIfAbsent(rs.getLong("group_id"), id -> new HashSet<>()).add(rs.getLong("user_id"));
-        });
-        return seats;
+                          JOIN study_group g ON g.id = r.group_id AND g.deleted_at IS NULL
+                          JOIN study_group_member m ON m.group_id = g.id AND m.user_id = :starterId
+                           AND m.left_at IS NULL
+                          JOIN room_participations p ON p.id = :participationId AND p.room_id = r.id AND p.user_id = m.user_id
+                           AND p.left_at IS NULL
+                         WHERE r.id = :roomId AND r.closed_at IS NULL""")
+                .param("participationId", start.participationId())
+                .param("roomId", start.roomId())
+                .param("starterId", start.starterId())
+                .query((rs, n) -> new AlertGroup(rs.getLong("id"), rs.getString("name"), rs.getBoolean("studying")))
+                .optional();
+    }
+
+    /** 잠깐 멈췄거나 연결이 끊긴 자리의 시작을 다음 공부 시점에 다시 확인한다. */
+    public void releaseStudyStart(long participationId) {
+        jdbc.sql("UPDATE room_participations SET group_start_notified = false WHERE id = :id AND left_at IS NULL")
+                .param("id", participationId)
+                .update();
+    }
+
+    /** 예약과 끊김 유예 중인 자리도 포함한다. */
+    public List<Long> findSeatHolders(long roomId) {
+        return jdbc.sql("SELECT user_id FROM room_participations WHERE room_id = :roomId AND left_at IS NULL")
+                .param("roomId", roomId)
+                .query(Long.class)
+                .list();
     }
 }
