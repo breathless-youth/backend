@@ -23,6 +23,7 @@ import project.study.point.PointShopFixture;
 import project.study.shop.dto.AssetType;
 import project.study.shop.dto.ShopCategory;
 import project.study.shop.dto.ShopItemResponse;
+import project.study.shop.dto.ShopTagResponse;
 import project.study.shop.dto.VideoMode;
 import project.study.shop.service.ShopService;
 
@@ -148,9 +149,9 @@ class ShopSpaceItemApiTest {
 
         ShopItemResponse ko = item(user, proctor);
         assertThat(ko.category()).isEqualTo(ShopCategory.TIMER_BACKGROUND);
-        // 감시는 분류가 아니라 방식이라 분류가 없다
+        // 딴짓하면 화면이 바뀌는 공간이라 다이나믹 분류에 들어간다
         // tag는 V88까지 남기는 옛 필드다
-        assertThat(ko.tags()).isEmpty();
+        assertThat(ko.tags()).containsExactly(new ShopTagResponse("DYNAMIC", "다이나믹"));
         assertThat(ko.tag()).isEqualTo("STUDY_SPACE");
         assertThat(ko.name()).isEqualTo("독서실 감독관");
         assertThat(ko.owned()).isTrue();
@@ -164,6 +165,36 @@ class ShopSpaceItemApiTest {
         assertThat(listedIn(user, proctor, "en").name()).isEqualTo("Study hall proctor");
         assertThat(listedIn(user, proctor, "ja").name()).isEqualTo("自習室の監督");
         assertThat(listedIn(user, proctor, "zh").name()).isEqualTo("自習室監督");
+    }
+
+    @Test
+    void 기내_창가는_처음부터_카탈로그에_있는_다이나믹_분류의_무료_반복_영상_공간이다() {
+        long cabin = jdbc.sql("SELECT id FROM shop_item WHERE code = 'SPACE_AIRPLANE_CABIN'")
+                .query(Long.class)
+                .single();
+        long user = fixture.member();
+
+        ShopItemResponse ko = item(user, cabin);
+        assertThat(ko.category()).isEqualTo(ShopCategory.TIMER_BACKGROUND);
+        assertThat(ko.name()).isEqualTo("해 질 녘의 기내 창가");
+        assertThat(ko.owned()).isTrue();
+        assertThat(ko.price()).isNull();
+        assertThat(ko.assetKey()).isEqualTo("airplane-cabin/1ff8ae4d");
+        assertThat(ko.assetType()).isEqualTo(AssetType.VIDEO);
+        // 비집중 장면은 매니페스트에 있어서 재생 방식은 반복이다 (frontend ADR-0004)
+        assertThat(ko.videoMode()).isEqualTo(VideoMode.LOOP);
+        assertThat(ko.tags()).containsExactly(new ShopTagResponse("DYNAMIC", "다이나믹"));
+        assertThat(listedIn(user, cabin, "en").name()).isEqualTo("Window Seat at Dusk");
+        assertThat(listedIn(user, cabin, "en").tags()).containsExactly(new ShopTagResponse("DYNAMIC", "Dynamic"));
+        assertThat(listedIn(user, cabin, "ja").name()).isEqualTo("夕暮れの窓側席");
+        assertThat(listedIn(user, cabin, "ja").tags()).containsExactly(new ShopTagResponse("DYNAMIC", "ダイナミック"));
+        assertThat(listedIn(user, cabin, "zh").name()).isEqualTo("黃昏的靠窗座位");
+        assertThat(listedIn(user, cabin, "zh").tags()).containsExactly(new ShopTagResponse("DYNAMIC", "動態"));
+        // 같은 다이나믹 섹션 안에서 감독관 다음에 보인다
+        assertThat(shopService.list(user, "ko").items().stream()
+                        .map(ShopItemResponse::code)
+                        .filter(code -> code.equals("SPACE_PROCTOR") || code.equals("SPACE_AIRPLANE_CABIN")))
+                .containsExactly("SPACE_PROCTOR", "SPACE_AIRPLANE_CABIN");
     }
 
     @Test
@@ -200,6 +231,7 @@ class ShopSpaceItemApiTest {
     void 공간의_분류는_분류_순서대로_언어에_맞는_이름으로_오고_쓰지_않는_분류는_빠진다() {
         long user = fixture.member();
         long space = fixture.freeItem("nature/abc12345", "IMAGE");
+        long untagged = fixture.freeItem("plain/abc12345", "IMAGE");
         long cafe = fixture.tag("카페", "{\"en\": \"Cafe\"}", 2);
         long nature = fixture.tag("자연", "{}", 1);
         long hidden = fixture.tag("숨김", "{}", 0);
@@ -209,7 +241,7 @@ class ShopSpaceItemApiTest {
         fixture.deactivateTag(hidden);
 
         String spaceItem = "$.items[?(@.id == " + space + ")]";
-        String proctorItem = "$.items[?(@.code == 'SPACE_PROCTOR')]";
+        String untaggedItem = "$.items[?(@.id == " + untagged + ")]";
         assertThat(mvc.get()
                         .uri("/api/shop/items")
                         .header(ApiVersionConfig.HEADER, "1")
@@ -226,9 +258,7 @@ class ShopSpaceItemApiTest {
                                 .asArray()
                                 .allSatisfy(code -> assertThat((String) code).startsWith("TAG_")))
                 // 분류가 없는 상품도 tags 칸을 빈 배열로 받아야 앱이 null을 따로 다루지 않는다
-                .hasPathSatisfying(proctorItem + ".tags", v -> assertThat(v).isEqualTo(List.of(List.of())))
-                .hasPathSatisfying(
-                        proctorItem + ".videoMode", v -> assertThat(v).isEqualTo(List.of("WATCH")));
+                .hasPathSatisfying(untaggedItem + ".tags", v -> assertThat(v).isEqualTo(List.of(List.of())));
     }
 
     @Test
