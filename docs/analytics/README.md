@@ -37,5 +37,6 @@ Metabase에서 질문을 고치면 이 파일도 같이 고친다. 결정 배경
 | `first_day_events_detail.sql` ⑦ | ⑥의 사람별 이벤트 횟수 |
 | `manual_record_detail.sql` ⑧ | 수동기록을 쓴 사람과 그 뒤 활동 |
 | `manual_record_summary.sql` ⑨ | 수동기록을 쓴 사람과 안 쓴 사람의 재방문 비교 |
+| `premium_waitlist.sql` | 프리미엄 사전 신청 실험 집계(가격·위치·나이·기대 기능)와 TURN 중계 비율·바이트 (BY-1394, ADR-0051) |
 
 > 2026-11-06 배포부터 화면 기준이 순공 60초에서 1초로 바뀌었다(BY-1177). 이 SQL은 새 기준(`focus_sec >= 1`)이라, 그 전후 숫자는 그대로 비교할 수 없다.

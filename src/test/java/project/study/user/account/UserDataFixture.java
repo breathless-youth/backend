@@ -26,6 +26,7 @@ public class UserDataFixture {
     private final JdbcClient jdbc;
     private final project.study.planner.record.PlannerRecordFixture plannerRecordFixture;
     private final project.study.point.PointShopFixture pointShopFixture;
+    private final project.study.premiumwaitlist.PremiumWaitlistFixture premiumWaitlistFixture;
     private final List<UserDataHandler> handlers;
 
     public long seedUser() {
@@ -356,10 +357,7 @@ public class UserDataFixture {
                 .single();
     }
 
-    /**
-     * users를 가리키는 모든 테이블에 user의 행을 심는다. other는 신고·RTC 통계처럼 상대가 필요한 행의 상대다. users를 참조하는 테이블이
-     * 늘면 여기에 한 줄을 더한다 — 병합·탈퇴 테스트가 모두 이 시드를 쓴다.
-     */
+    /** users를 가리키는 모든 테이블에 user의 행을 심는다(other는 신고·RTC 통계의 상대). 참조 테이블이 늘면 여기에 한 줄을 더한다. */
     public void seedEverything(long user, long other) {
         Instant t0 = Instant.parse("2030-03-01T10:00:00Z");
         Instant t1 = Instant.parse("2030-03-01T11:00:00Z");
@@ -368,6 +366,7 @@ public class UserDataFixture {
         seedPlannerGoals(user, day);
         plannerRecordFixture.seed(user);
         pointShopFixture.seedEverything(user);
+        premiumWaitlistFixture.seed(user);
         seedAcquisition(user, "s");
         seedPushToken(user, "tok-" + user);
         seedPushSend(user, day);
