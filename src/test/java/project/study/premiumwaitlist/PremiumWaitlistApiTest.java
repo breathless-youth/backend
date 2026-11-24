@@ -122,6 +122,15 @@ class PremiumWaitlistApiTest {
     }
 
     @Test
+    void 세션_화면에서_연_신청도_저장한다() {
+        String body = body(2900, true, "a@example.com", null).replace("\"RESULT\"", "\"SESSION\"");
+
+        assertThat(put(body)).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row().get("placement")).isEqualTo("SESSION");
+    }
+
+    @Test
     void 전화_알림을_기대_기능으로_저장한다() {
         assertThat(put(body(5900, true, "a@example.com", "PHONE_CALL"))).hasStatus(HttpStatus.NO_CONTENT);
 
