@@ -115,6 +115,13 @@ class PremiumWaitlistApiTest {
     }
 
     @Test
+    void 강력한_앱_잠금을_기대_기능으로_저장한다() {
+        assertThat(put(body(2900, true, "a@example.com", "APP_LOCK"))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row().get("expected_feature")).isEqualTo("APP_LOCK");
+    }
+
+    @Test
     void 허용되지_않은_가격은_400이다() {
         assertThat(put(body(4900, true, "a@example.com", null))).hasStatus(HttpStatus.BAD_REQUEST);
         assertThat(rows()).isZero();
