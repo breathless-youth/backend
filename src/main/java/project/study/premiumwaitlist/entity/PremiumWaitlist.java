@@ -29,12 +29,12 @@ public class PremiumWaitlist {
 
     private boolean ageOver14;
 
-    /** 14세 이상일 때만 평문으로 저장한다. 14세 미만이거나 파기했으면 null. */
+    /** 14세 이상이 보낸 때만 평문으로 저장한다. 안 보냈거나 14세 미만이거나 파기했으면 null. */
     private String email;
 
     private String expectedFeature;
 
-    /** 이메일을 저장한 시각. 이메일이 바뀌면 갱신하고, 14세 미만이면 null. */
+    /** 이메일을 저장한 시각. 이메일이 바뀌면 갱신하고, 이메일이 없으면 null. */
     private Instant consentedAt;
 
     private Instant createdAt;
