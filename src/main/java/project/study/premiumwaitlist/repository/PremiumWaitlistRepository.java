@@ -13,7 +13,8 @@ public interface PremiumWaitlistRepository extends JpaRepository<PremiumWaitlist
      *
      * <ul>
      *   <li>기대 기능은 null로 오면 기존 값을 유지한다.
-     *   <li>이메일이 null이면 email·consented_at을 비우고, 같은 이메일이면 consented_at을 그대로 둔다.
+     *   <li>14세 이상이 이메일 없이 오면 먼저 받은 email·consented_at을 유지하고, 같은 이메일이면 consented_at을 그대로 둔다.
+     *   <li>14세 미만으로 오면 email·consented_at을 비운다.
      * </ul>
      */
     @Modifying
@@ -26,10 +27,12 @@ public interface PremiumWaitlistRepository extends JpaRepository<PremiumWaitlist
                 price = EXCLUDED.price,
                 placement = EXCLUDED.placement,
                 age_over14 = EXCLUDED.age_over14,
-                email = EXCLUDED.email,
+                email = CASE WHEN EXCLUDED.age_over14
+                    THEN COALESCE(EXCLUDED.email, premium_waitlist.email) END,
                 expected_feature = COALESCE(EXCLUDED.expected_feature, premium_waitlist.expected_feature),
                 consented_at = CASE
-                    WHEN EXCLUDED.email IS NULL THEN NULL
+                    WHEN NOT EXCLUDED.age_over14 THEN NULL
+                    WHEN EXCLUDED.email IS NULL THEN premium_waitlist.consented_at
                     WHEN premium_waitlist.email IS NOT DISTINCT FROM EXCLUDED.email
                          AND premium_waitlist.consented_at IS NOT NULL THEN premium_waitlist.consented_at
                     ELSE EXCLUDED.consented_at
