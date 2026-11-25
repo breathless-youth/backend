@@ -149,9 +149,42 @@ class PremiumWaitlistApiTest {
     }
 
     @Test
-    void 열네_살_이상인데_이메일이_없으면_400이다() {
-        assertThat(put(body(2900, true, null, null))).hasStatus(HttpStatus.BAD_REQUEST);
-        assertThat(rows()).isZero();
+    void 열네_살_이상은_이메일_없이도_204이고_이메일과_동의_시각은_null이다() {
+        assertThat(put(body(2900, true, null, null))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row().get("age_over14")).isEqualTo(true);
+        assertThat(row().get("email")).isNull();
+        assertThat(row().get("consented_at")).isNull();
+    }
+
+    @Test
+    void 빈_이메일은_없는_것으로_저장한다() {
+        assertThat(put(body(2900, true, "", null))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row().get("email")).isNull();
+        assertThat(row().get("consented_at")).isNull();
+    }
+
+    @Test
+    void 이메일_없이_다시_저장해도_먼저_받은_이메일과_동의_시각을_유지한다() {
+        put(body(2900, true, "a@example.com", null));
+        Object consentedAt = row().get("consented_at");
+
+        assertThat(put(body(2900, true, null, "AI_PLANNER"))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row().get("email")).isEqualTo("a@example.com");
+        assertThat(row().get("consented_at")).isEqualTo(consentedAt);
+        assertThat(row().get("expected_feature")).isEqualTo("AI_PLANNER");
+    }
+
+    @Test
+    void 열네_살_미만으로_다시_저장하면_먼저_받은_이메일을_지운다() {
+        put(body(2900, true, "a@example.com", null));
+
+        assertThat(put(body(2900, false, null, null))).hasStatus(HttpStatus.NO_CONTENT);
+
+        assertThat(row().get("email")).isNull();
+        assertThat(row().get("consented_at")).isNull();
     }
 
     @Test
