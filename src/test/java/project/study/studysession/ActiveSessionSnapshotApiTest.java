@@ -8,6 +8,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -148,19 +150,20 @@ class ActiveSessionSnapshotApiTest {
         assertThat(stored).contains("PHONE");
     }
 
-    @Test
-    void SLEEP_이벤트가_실린_스냅샷도_저장되고_재접속_조회에_그대로_내려온다() {
+    @ParameterizedTest
+    @ValueSource(strings = {"SLEEP", "SCREEN", "POSTURE"})
+    void 순공_정지_이벤트가_실린_스냅샷도_저장되고_재접속_조회에_그대로_내려온다(String status) {
         // DB(마이크로초)·JSON 직렬화 왕복에서 표기가 어긋나지 않도록 초 단위로 자른 시각을 쓴다
         Instant started = startedAt.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
         String events = """
-				[{"status":"SLEEP","startedAt":"%s","endedAt":"%s"}]""".formatted(started.plusSeconds(10), started.plusSeconds(20));
+				[{"status":"%s","startedAt":"%s","endedAt":"%s"}]""".formatted(status, started.plusSeconds(10), started.plusSeconds(20));
         assertThat(report(userId, started, started.plusSeconds(30), 20, 10, events))
                 .hasStatus(HttpStatus.NO_CONTENT);
 
         assertThat(restore(userId))
                 .hasStatus(HttpStatus.OK)
                 .bodyJson()
-                .hasPathSatisfying("$.events[0].status", v -> assertThat(v).isEqualTo("SLEEP"));
+                .hasPathSatisfying("$.events[0].status", v -> assertThat(v).isEqualTo(status));
     }
 
     @Test
@@ -294,6 +297,47 @@ class ActiveSessionSnapshotApiTest {
                 .hasPathSatisfying("$.studySec", v -> assertThat(v).isEqualTo(50))
                 .hasPathSatisfying("$.focusSec", v -> assertThat(v).isEqualTo(40))
                 .hasPathSatisfying("$.events[0].status", v -> assertThat(v).isEqualTo("PHONE"));
+    }
+
+    @Test
+    void 재접속_조회는_스냅샷의_관찰_기록을_시작_순으로_돌려준다() {
+        Instant started = startedAt.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Instant late = started.plusSeconds(40);
+        Instant early = started.plusSeconds(10);
+        String body = """
+                {"startedAt":"%s","reportedAt":"%s","studySec":60,"focusSec":60,"events":[],
+                 "observations":[{"type":"YAWN","startedAt":"%s","endedAt":"%s"},{"type":"YAWN","startedAt":"%s"}]}
+                """.formatted(started, started.plusSeconds(60), late, late.plusSeconds(4), early);
+        mvc.put()
+                .uri("/api/study-sessions/active")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(asUser(userId))
+                .exchange();
+        buffer.flush();
+
+        assertThat(restore(userId))
+                .hasStatus(HttpStatus.OK)
+                .bodyJson()
+                .hasPathSatisfying("$.observations.length()", v -> assertThat(v).isEqualTo(2))
+                .hasPathSatisfying("$.observations[0].type", v -> assertThat(v).isEqualTo("YAWN"))
+                .hasPathSatisfying(
+                        "$.observations[0].startedAt", v -> assertThat(v).isEqualTo(early.toString()))
+                .hasPathSatisfying(
+                        "$.observations[1].startedAt", v -> assertThat(v).isEqualTo(late.toString()))
+                .hasPathSatisfying(
+                        "$.observations[1].endedAt",
+                        v -> assertThat(v).isEqualTo(late.plusSeconds(4).toString()));
+    }
+
+    @Test
+    void 관찰_기록_없이_보고하면_재접속_조회의_관찰_기록은_빈_배열이다() {
+        report(userId, startedAt, startedAt.plusSeconds(30), 30, 30);
+
+        assertThat(restore(userId))
+                .hasStatus(HttpStatus.OK)
+                .bodyJson()
+                .hasPathSatisfying("$.observations.length()", v -> assertThat(v).isEqualTo(0));
     }
 
     @Test

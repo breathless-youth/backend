@@ -5,7 +5,7 @@ package project.study.studysession.entity;
  * PAUSE(일시정지)는 총 공부시간 타이머도 함께 멈춘다 — 나머지는 순공시간 타이머만 멈춘다.
  * 자정 분할 배분 가중치 계산 시 이 구분이 반영된다(StudySessionService).
  *
- * <p>선언 순서가 그대로 eventCounts(EnumMap) 응답의 키 순서가 된다 — 성격이 같은 SLEEP을 AWAY 옆에 두고,
+ * <p>선언 순서가 그대로 eventCounts(EnumMap) 응답의 키 순서가 된다 — 성격이 같은 SLEEP·SCREEN·POSTURE를 AWAY 옆에 두고,
  * 혼자 총공부 타이머까지 멈추는 PAUSE를 맨 뒤에 남겨 둔다. 값 추가에 마이그레이션은 필요 없다
  * (status는 varchar이고 CHECK 제약이 없다 — V6 참고).
  */
@@ -15,5 +15,9 @@ public enum EventStatus {
     AWAY,
     /** 졸음 — 판정은 단말이 하고(눈 감김·엎드림) 서버는 결과만 받는다. 계산상 AWAY와 완전히 같다 (BY-706). */
     SLEEP,
+    /** 화면 응시 — 단말이 시선으로 폰 화면을 오래 보는 것을 판정한다. 계산상 AWAY와 같다. */
+    SCREEN,
+    /** 자세 이탈 — 단말이 공부 흔적(도구 쪽 시선·손, 얼굴)을 찾지 못한 상태가 이어지면 판정한다. 계산상 AWAY와 같다. */
+    POSTURE,
     PAUSE
 }

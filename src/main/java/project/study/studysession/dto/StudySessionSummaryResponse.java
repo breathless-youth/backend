@@ -35,7 +35,8 @@ public record StudySessionSummaryResponse(
 
         @Schema(
                 description = "이 세션에서 발생한 상태별 이벤트 건수 — 이벤트가 없던 상태는 0으로 내려간다(키 누락 없음)",
-                example = "{\"PHONE\": 2, \"DEVICE\": 0, \"AWAY\": 1, \"SLEEP\": 1, \"PAUSE\": 0}")
+                example =
+                        "{\"PHONE\": 2, \"DEVICE\": 0, \"AWAY\": 1, \"SLEEP\": 1, \"SCREEN\": 0, \"POSTURE\": 0, \"PAUSE\": 0}")
         Map<EventStatus, Long> eventCounts,
 
         @Schema(description = "비공부 상태 이벤트 원본(시각) — 시작 시각 오름차순. 타임테이블의 휴식 칸을 그린다 (BY-734)")

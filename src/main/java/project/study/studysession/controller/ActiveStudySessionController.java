@@ -79,7 +79,7 @@ public class ActiveStudySessionController {
 					보고·제출하면 대체 정책이 더 완전한 기록으로 수렴시키므로 클라이언트가 따로 처리할 것은 없다.""")
     @ApiResponse(
             responseCode = "200",
-            description = "진행중 스냅샷 — startedAt/reportedAt/studySec/focusSec/events/subjectSegments")
+            description = "진행중 스냅샷 — startedAt/reportedAt/studySec/focusSec/events/subjectSegments/observations/source")
     @ApiResponse(
             responseCode = "404",
             description = "진행중 세션 없음 — 이미 자동 확정됐거나 애초에 없던 경우. 확정본은 통계 조회에 이미 반영돼 있으므로 새로 시작하면 된다",

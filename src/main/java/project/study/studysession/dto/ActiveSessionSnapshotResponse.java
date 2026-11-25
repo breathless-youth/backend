@@ -27,5 +27,10 @@ public record ActiveSessionSnapshotResponse(
         @Schema(description = "마지막 스냅샷까지의 과목 구간 — 보고 요청과 같은 모양, 시작 시각 오름차순. 마지막 원소의 과목으로 선택 상태를 복원한다. 없으면 []")
         List<SubjectSegmentRequest> subjectSegments,
 
+        @Schema(
+                description =
+                        "마지막 스냅샷까지의 관찰 기록(하품 등) — 보고 요청과 같은 모양, 시작 시각 오름차순. 앱이 이어받은 뒤 다음 보고·최종 제출에 그대로 다시 싣는다. 없으면 []")
+        List<ObservationRequest> observations,
+
         @Schema(description = "마지막 스냅샷의 세션 출처 — MEASURED(관리 모드)·TIMER(자율 모드)", example = "TIMER")
         StudySessionSource source) {}
