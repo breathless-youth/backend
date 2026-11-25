@@ -16,7 +16,10 @@ public record PremiumWaitlistRequest(
         @Schema(description = "카드가 노출된 위치") @NotNull PremiumPlacement placement,
         @Schema(description = "만 14세 이상 여부") @NotNull Boolean ageOver14,
 
-        @Schema(description = "ageOver14=true면 필수. false면 보내도 저장하지 않는다", example = "user@example.com", nullable = true)
+        @Schema(
+                description = "선택. 없으면 먼저 받은 이메일을 유지한다. ageOver14=false면 보내도 저장하지 않는다",
+                example = "user@example.com",
+                nullable = true)
         @Email
         @Size(max = 254)
         String email,
@@ -30,14 +33,8 @@ public record PremiumWaitlistRequest(
         return price == null || price == 2900 || price == 5900;
     }
 
-    @Schema(hidden = true)
-    @AssertTrue(message = "ageOver14가 true면 email이 필요합니다")
-    public boolean isEmailPresentWhenOver14() {
-        return !Boolean.TRUE.equals(ageOver14) || (email != null && !email.isBlank());
-    }
-
-    /** 저장할 이메일. 14세 미만이면 보내도 버린다. */
+    /** 저장할 이메일. 14세 미만이면 보내도 버리고, 비어 있으면 없는 것으로 본다. */
     public String emailToStore() {
-        return Boolean.TRUE.equals(ageOver14) ? email.strip() : null;
+        return Boolean.TRUE.equals(ageOver14) && email != null && !email.isBlank() ? email.strip() : null;
     }
 }

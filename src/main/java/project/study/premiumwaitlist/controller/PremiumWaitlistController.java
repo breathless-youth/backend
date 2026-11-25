@@ -25,10 +25,11 @@ public class PremiumWaitlistController {
 
     @Operation(
             summary = "프리미엄 사전 신청 저장",
-            description = "사용자당 한 행으로 덮어쓴다. 신청 완료와 기대 기능 선택이 같은 본문으로 두 번 온다."
-                    + " expectedFeature가 null이면 이미 저장된 값을 유지한다. 14세 미만이면 email을 저장하지 않는다.")
+            description =
+                    "사용자당 한 행으로 덮어쓴다. 신청 완료와 기대 기능 선택이 같은 본문으로 두 번 온다."
+                            + " expectedFeature가 null이면 이미 저장된 값을 유지한다. email은 선택이고 없으면 먼저 받은 값을 유지한다. 14세 미만이면 email을 저장하지 않는다.")
     @ApiResponse(responseCode = "204", description = "저장 성공")
-    @ApiResponse(responseCode = "400", description = "허용되지 않은 price·placement·expectedFeature, 이메일 누락·형식 오류")
+    @ApiResponse(responseCode = "400", description = "허용되지 않은 price·placement·expectedFeature, 이메일 형식 오류")
     @ApiResponse(responseCode = "401", description = "토큰 없음")
     @PutMapping("/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
