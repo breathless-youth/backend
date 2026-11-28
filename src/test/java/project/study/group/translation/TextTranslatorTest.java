@@ -117,6 +117,19 @@ class TextTranslatorTest {
     }
 
     @Test
+    void azureLeavesTextWhoseLanguageItCouldNotDetectUntranslated() {
+        // 문언문은 감지 확신도 0으로 원문이 거의 그대로 돌아온다
+        response = "[{\"detectedLanguage\":{\"language\":\"en\",\"score\":0.0},"
+                + "\"translations\":[{\"text\":\"夫學海無涯。 唯勤是岸\",\"to\":\"ko\"}]},"
+                + "{\"detectedLanguage\":{\"language\":\"zh-Hant\",\"score\":1.0},"
+                + "\"translations\":[{\"text\":\"가난한 학생\",\"to\":\"ko\"}]}]";
+        var reply = new AzureTextTranslator(base, "key", "koreacentral")
+                .translate(List.of("夫學海無涯。唯勤是岸", "貧窮的學生"), TranslationLanguage.KO, Duration.ofSeconds(1));
+        assertThat(reply.failure()).isEqualTo(NONE);
+        assertThat(reply.texts()).containsExactly(null, "가난한 학생");
+    }
+
+    @Test
     void deepLVerifiesFreeBalanceAndTargetsBeforeTranslation() {
         response = "{\"translations\":[{\"text\":\"一起學習\",\"detected_source_language\":\"KO\"}]}";
         var reply = new DeepLTextTranslator(base, "fake-key:fx")
