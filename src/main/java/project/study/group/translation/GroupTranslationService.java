@@ -75,10 +75,13 @@ public class GroupTranslationService {
         for (TranslationProvider provider : TranslationProvider.values()) {
             TextTranslator translator = translators.get(provider);
             if (translator == null || !settings.active(provider)) continue;
+            // 이 공급자가 옮기지 못한 필드는 같은 공급자에 다시 보내지 않고 다음 공급자에 넘긴다
+            List<Lease> rejected = new ArrayList<>();
             while (!pending.isEmpty() && !Thread.currentThread().isInterrupted()) {
                 if (TranslationHttp.remaining(deadline).isZero()) return;
-                if (!attempt(provider, language, pending, results, deadline)) break;
+                if (!attempt(provider, language, pending, rejected, results, deadline)) break;
             }
+            pending.addAll(rejected);
         }
     }
 
@@ -86,6 +89,7 @@ public class GroupTranslationService {
             TranslationProvider provider,
             TranslationLanguage language,
             List<Lease> pending,
+            List<Lease> rejected,
             Map<CacheKey, String> results,
             long deadline) {
         List<Lease> batch = batch(pending, budget.available(provider));
@@ -107,13 +111,13 @@ public class GroupTranslationService {
             return false;
         }
         if (!valid(reply, batch.size())) return false;
-        publish(batch, language, provider, reply.texts(), results);
+        publish(batch, language, provider, reply.texts(), rejected, results);
         pending.removeAll(batch);
         return true;
     }
 
     private static boolean valid(TextTranslator.TranslationReply reply, int count) {
-        return reply.texts().size() == count && reply.texts().stream().noneMatch(t -> t == null || t.isBlank());
+        return reply.texts().size() == count && reply.texts().stream().noneMatch(t -> t != null && t.isBlank());
     }
 
     private void publish(
@@ -121,10 +125,16 @@ public class GroupTranslationService {
             TranslationLanguage language,
             TranslationProvider provider,
             List<String> texts,
+            List<Lease> rejected,
             Map<CacheKey, String> results) {
         for (int i = 0; i < batch.size(); i++) {
             Lease lease = batch.get(i);
-            if (cache.complete(lease, texts.get(i), provider)) results.put(key(lease.source(), language), texts.get(i));
+            String text = texts.get(i);
+            if (text == null) {
+                rejected.add(lease);
+                metrics.counter("group.translation.untranslated", "provider", provider.name())
+                        .increment();
+            } else if (cache.complete(lease, text, provider)) results.put(key(lease.source(), language), text);
         }
     }
 

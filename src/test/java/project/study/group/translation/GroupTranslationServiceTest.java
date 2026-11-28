@@ -240,6 +240,30 @@ class GroupTranslationServiceTest {
     }
 
     @Test
+    void textOneProviderCannotTranslateGoesToNextProviderWithoutRetryingTheSameOne() {
+        TextTranslator azure = new TextTranslator() {
+            public TranslationProvider provider() {
+                return AZURE;
+            }
+
+            public TranslationReply translate(List<String> input, TranslationLanguage language, Duration timeout) {
+                calls.add(AZURE);
+                var texts = new ArrayList<String>();
+                for (String t : input) texts.add(t.equals("함께 공부") ? null : "azure:" + t);
+                return new TranslationReply(texts, Failure.NONE, null);
+            }
+        };
+        var service = service(List.of(azure, translator(GOOGLE, TextTranslator.Failure.NONE)));
+
+        var results = service.translate(texts, TranslationLanguage.EN);
+
+        assertThat(results.values()).containsExactlyInAnyOrder("azure:새벽", "translated:함께 공부");
+        assertThat(calls).containsExactly(AZURE, GOOGLE);
+        assertThat(service.translate(texts, TranslationLanguage.EN)).hasSize(2);
+        assertThat(calls).hasSize(2);
+    }
+
+    @Test
     void sourceAlreadyInTargetLanguageIsNotReservedCalledOrServedFromOldCache() {
         for (var lease : cache.claim(texts, TranslationLanguage.KO)) {
             assertThat(cache.complete(lease, "old:" + lease.source().source(), DEEPL))
@@ -289,5 +313,34 @@ class GroupTranslationServiceTest {
         }
         assertThat(calls).containsExactly(GOOGLE);
         assertThat(budget.available(GOOGLE)).isEqualTo(12993);
+    }
+
+    @Test
+    void migrationClearsOnlyAzureResultsWithoutTargetLanguageLetters() throws Exception {
+        for (var lease : cache.claim(texts, TranslationLanguage.KO)) {
+            String text = lease.source().field() == TranslationField.NAME ? "夫學海無涯。 唯勤是岸" : "함께 공부해요";
+            assertThat(cache.complete(lease, text, AZURE)).isTrue();
+        }
+        for (var lease : cache.claim(texts, TranslationLanguage.JA)) {
+            String text = lease.source().field() == TranslationField.NAME ? "夫學海無涯" : "一緒に勉強";
+            assertThat(cache.complete(lease, text, AZURE)).isTrue();
+        }
+        for (var lease : cache.claim(texts, TranslationLanguage.EN)) {
+            assertThat(cache.complete(lease, "夫學海無涯", DEEPL)).isTrue();
+        }
+        String sql;
+        try (var in = getClass().getResourceAsStream("/db/migration/V92__clear_untranslated_azure_cache.sql")) {
+            sql = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+
+        for (String statement : sql.replaceAll("(?m)^--.*$", "").split(";")) {
+            if (!statement.isBlank()) jdbc.sql(statement).update();
+        }
+
+        assertThat(jdbc.sql("select target_locale || ':' || field from group_translation_cache where group_id=:g")
+                        .param("g", group)
+                        .query(String.class)
+                        .list())
+                .containsExactlyInAnyOrder("ko:DESCRIPTION", "ja:DESCRIPTION", "en:NAME", "en:DESCRIPTION");
     }
 }
